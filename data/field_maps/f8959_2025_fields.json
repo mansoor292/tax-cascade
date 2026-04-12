@@ -1,0 +1,132 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_1",
+    "label": "Name(s) shown on return"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_10",
+    "label": "8 Self-employment income from Schedule SE (Form 1040), Part I, line 6. If you had a loss, enter -0- 8"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_11",
+    "label": "9 Enter the following amount for your filing status: Married filing jointly $250,000 Married filing separately $125,000 Single, Head of household, or Qualifying surviving spouse $200,000 9"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_12",
+    "label": "10 Enter the amount from line 4 10"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_13",
+    "label": "11 Subtract line 10 from line 9. If zero or less, enter -0- 11"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_14",
+    "label": "12 Subtract line 11 from line 8. If zero or less, enter -0- 12"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "13 Additional Medicare Tax on self-employment income. Multiply line 12 by 0.9% (0.009). Enter here and go to Part III 13"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "14 Railroad retirement (RRTA) compensation and tips from Form(s) W-2, box 14 (see instructions) 14"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "15 Enter the following amount for your filing status: Married filing jointly $250,000 Married filing separately $125,000 Single, Head of household, or Qualifying surviving spouse $200,000 15"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "16 Subtract line 15 from line 14. If zero or less, enter -0- 16"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_19",
+    "label": "17 Additional Medicare Tax on railroad retirement (RRTA) compensation. Multiply line 16 by 0.9% (0.009). Enter here and go to Part IV 17"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_2",
+    "label": "Your social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "18 Add lines 7, 13, and 17. Also include this amount on Schedule 2 (Form 1040), line 11 (Form 1040-SS filers, see instructions), and go to Part V 18"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_21",
+    "label": "19 Medicare tax withheld from Form W-2, box 6. If you have more than one Form W-2, enter the total of the amounts from box 6 19"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "20 Enter the amount from line 1 20"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_23",
+    "label": "21 Multiply line 20 by 1.45% (0.0145). This is your regular Medicare tax withholding on Medicare wages 21"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "22 Subtract line 21 from line 19. If zero or less, enter -0-. This is your Additional Medicare Tax withholding on Medicare wages 22"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_25",
+    "label": "23 Additional Medicare Tax withholding on railroad retirement (RRTA) compensation from Form W-2, box 14 (see instructions) 23"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_26",
+    "label": "24 Total Additional Medicare Tax withholding. Add lines 22 and 23. Also include this amount with federal income tax withholding on Form 1040, 1040-SR, or 1040-NR, line 25c (Form 1040-SS filers, see instructions) 24"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_3",
+    "label": "1 Medicare wages and tips from Form W-2, box 5. If you have more than one Form W-2, enter the total of the amounts from box 5 1"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_4",
+    "label": "2 Unreported tips from Form 4137, line 6 2"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_5",
+    "label": "3 Wages from Form 8919, line 6 3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_6",
+    "label": "4 Add lines 1 through 3 4"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_7",
+    "label": "5 Enter the following amount for your filing status: Married filing jointly $250,000 Married filing separately $125,000 Single, Head of household, or Qualifying surviving spouse $200,000 5"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_8",
+    "label": "6 Subtract line 5 from line 4. If zero or less, enter -0- 6"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_9",
+    "label": "7 Additional Medicare Tax on Medicare wages. Multiply line 6 by 0.9% (0.009). Enter here and go to Part II 7"
+  }
+]

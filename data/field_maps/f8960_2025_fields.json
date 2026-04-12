@@ -1,0 +1,177 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_1",
+    "label": "Name(s) shown on your tax return"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_10",
+    "label": "b Net gain or loss from disposition of property that is not subject to net investment income tax (see instructions) 5b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_11",
+    "label": "c Adjustment from disposition of partnership interest or S corporation stock (see instructions) 5c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_12",
+    "label": "d Combine lines 5a through 5c 5d"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_13",
+    "label": "6 Adjustments to investment income for certain CFCs and PFICs (see instructions) 6"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_14",
+    "label": "7 Other modifications to investment income (see instructions) 7"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "8 Total investment income. Combine lines 1, 2, 3, 4c, 5d, 6, and 7 8"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "9a Investment interest expenses (see instructions) 9a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "b State, local, and foreign income tax (see instructions) 9b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "c Miscellaneous investment expenses (see instructions) 9c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_19",
+    "label": "d Add lines 9a, 9b, and 9c 9d"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_2",
+    "label": "Your social security number or EIN"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "10 Additional modifications (see instructions) 10"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_21",
+    "label": "11 Total deductions and modifications. Add lines 9d and 10 11"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "12 Net investment income. Subtract Part II, line 11, from Part I, line 8. Individuals, complete lines 13-17. Estates and trusts, complete lines 18a-21. If zero or less, enter -0- 12"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_23",
+    "label": "13 Modified adjusted gross income (see instructions) 13"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "14 Threshold based on filing status (see instructions) 14"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_25",
+    "label": "15 Subtract line 14 from line 13. If zero or less, enter -0- 15"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_26",
+    "label": "16 Enter the smaller of line 12 or line 15 16"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_27",
+    "label": "17 Net investment income tax for individuals. Multiply line 16 by 3.8% (0.038). Enter here and include on your tax return (see instructions) 17"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_28",
+    "label": "18a Net investment income (line 12 above) 18a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_29",
+    "label": "b Deductions for distributions of net investment income and charitable deductions (see instructions) 18b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_3",
+    "label": "1 Taxable interest (see instructions) 1"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_30",
+    "label": "c Undistributed net investment income. Subtract line 18b from line 18a (see instructions). If zero or less, enter -0- 18c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_31",
+    "label": "19a Adjusted gross income (see instructions) 19a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_32",
+    "label": "b Highest tax bracket for estates and trusts for the year (see instructions) 19b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_33",
+    "label": "c Subtract line 19b from line 19a. If zero or less, enter -0- 19c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_34",
+    "label": "20 Enter the smaller of line 18c or line 19c 20"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_35",
+    "label": "21 Net investment income tax for estates and trusts. Multiply line 20 by 3.8% (0.038). Enter here and include on your tax return (see instructions) 21"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_4",
+    "label": "2 Ordinary dividends (see instructions) 2"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_5",
+    "label": "3 Annuities (see instructions) 3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_6",
+    "label": "4a Rental real estate, royalties, partnerships, S corporations, trusts, trades or businesses, etc. (see instructions) 4a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_7",
+    "label": "b Adjustment for net income or loss derived in the ordinary course of a non- section 1411 trade or business (see instructions) 4b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_8",
+    "label": "c Combine lines 4a and 4b 4c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_9",
+    "label": "5a Net gain or loss from disposition of property (see instructions) 5a"
+  }
+]

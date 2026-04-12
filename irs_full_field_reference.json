@@ -1,0 +1,3713 @@
+{
+  "1120": [
+    {
+      "field": "@filedPursuantToSect30191002Cd",
+      "line": "",
+      "label": "Form 1120, Top left margin - FILED PURSUANT TO SECTION 301.9100-2"
+    },
+    {
+      "field": "@section1291InterestAmt",
+      "line": "",
+      "label": "Form 1120, Top Left Margin - Section 1291 Interest Amount"
+    },
+    {
+      "field": "@section1291InterestCd",
+      "line": "",
+      "label": "Form 1120, Top Left Margin - Section 1291 Interest Indicator"
+    },
+    {
+      "field": "@section1294InterestAmt",
+      "line": "",
+      "label": "Form 1120, Top Left Margin - Section 1294 Interest Amount"
+    },
+    {
+      "field": "@section1294InterestCd",
+      "line": "",
+      "label": "Form 1120, Top Left Margin - Section 1294 Interest Indicator"
+    },
+    {
+      "field": "@section501dCd",
+      "line": "",
+      "label": "Form 1120, Top Left Margin - Section 501d Indicator"
+    },
+    {
+      "field": "@shortPeriodReasonCd",
+      "line": "",
+      "label": "Form 1120, Top left margin - Short Period Reason 1120 1120F Indicator"
+    },
+    {
+      "field": "@subchapterTCoopIndicator",
+      "line": "",
+      "label": "Form 1120, Top Left Margin - Subchapter T Cooperative Indicator"
+    },
+    {
+      "field": "@suprtStmtToCnsldtReturnInd",
+      "line": "",
+      "label": "Form 1120, Top left margin - Support Statement to Consolidated Return Indicator"
+    },
+    {
+      "field": "AccountsPayableBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccountsPayableEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedAmortizationBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedAmortizationEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedDepletionBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedDepletionEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedDepreciationBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedDepreciationEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AcquireForeignCorpStockInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdditionalPaidInCapitalBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdditionalPaidInCapitalEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AddressChangeInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdjustmentToShrEqtyBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdjustmentToShrEqtyEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdvertisingAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AlternativeTaxQlfyShipActyAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AmendedReturnInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ApplicableCorpSect59k1CYInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ApplicableCorpSect59k1PYInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AqrOrRepurchasePubTradedStkInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BadDebtAllowanceBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BadDebtAllowanceEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BadDebtExpenseAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BalanceAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BalanceDueAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BalanceIncomeOtherIncreasesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BaseErosionMinimumTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BeginningYearBalanceAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BuildingOtherDeprecAstBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BuildingOtherDeprecAstEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CYGenBusinessCreditAllowedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CYRefundableMinimumTaxCrAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CapitalCommonStockBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CapitalCommonStockEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CapitalGainNetIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CapitalPreferredStockBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CapitalPreferredStockEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CapitalStockBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CapitalStockEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CashBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CashDistributionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CashEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CertainAffltCompanyDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CertainAffltCompanyDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CertainFSCDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CertainFSCDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CharitableContriExpnssAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CharitableContributionsDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CharitableContributionsTotAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CnsldtRetGroSlsSpcfdBssAdjInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ConsolidatedReturnInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ControlledGroupMemberInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CooperativeBasisInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CorpAlternativeMinimumTaxAmt",
+      "line": "13",
+      "label": ""
+    },
+    {
+      "field": "CorpAlternativeMinimumTaxAmt/@IRS4626",
+      "line": "3",
+      "label": "Schedule J Line 3 - Form 4626 Indicator"
+    },
+    {
+      "field": "CorpOwnPercentPartnershipInfo",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CorpOwnPercentVotingStockInfo",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CorporationOwnPctPrtshpInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CorporationOwnedPctVtngStkInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CostOfGoodsSoldAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CostOfTreasuryStockBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CostOfTreasuryStockEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CurrentYearAllowableCreditAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CurrentYearMinimumTaxCreditAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DebtFincdStockCorpDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DebtFincdStockCorpDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepletableAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepletableAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepletionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepreciationAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepreciationDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepreciationExpensesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DisposOver65PctAstTxblTransInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DistributionsOtherDecreasesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DivRcvdDedLimitationAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DivRcvdLimitationAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DomCorp20OrMoreOwnDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DomCorp20OrMoreOwnDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DomCorpBelow20OwnDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DomCorpBelow20OwnDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DomSmallBusInvstCoDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DomSmallBusInvstCoDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ElectivePaymentAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EmployeeBenefitProgramAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EndYearBalanceAmt",
+      "line": "7",
+      "label": ""
+    },
+    {
+      "field": "EnergyEffcntCmrclBldgDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EsPenaltyAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EstimatedTaxPaymentsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EstimatedTaxPaymentsAmt/@beneficiaryTrustAmt",
+      "line": "14",
+      "label": "Line 14 - Beneficiary Of Trust Amount"
+    },
+    {
+      "field": "EstimatedTaxPaymentsAmt/@beneficiaryTrustCd",
+      "line": "14",
+      "label": "Line 14 - Beneficiary Of Trust Indicator"
+    },
+    {
+      "field": "EstimatedTaxPaymentsAmt/@form8816Amt",
+      "line": "14",
+      "label": "Form 1120, Page 3, Schedule J, Part III, Line 14 - Form 8816 Amount"
+    },
+    {
+      "field": "EstimatedTaxPaymentsAmt/@form8816Cd",
+      "line": "14",
+      "label": "Form 1120, Page 3, Schedule J, Part III, Line 14 - Form 8816 Indicator"
+    },
+    {
+      "field": "EstimatedTaxPaymentsAmt/@section847DeductionCd",
+      "line": "14",
+      "label": ""
+    },
+    {
+      "field": "ExcessCapLossesOverCapGainsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ExcessDividendsPaidInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FederalIncomeTaxPerBooksAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FederalIncomeTaxWithheldAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FinalReturnInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ForeignDivGrossUpTotRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ForeignEntityRepurchasesInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ForeignOwnStockCountryCd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ForeignTaxCreditAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Form2220AttachedInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Form8996AttachedInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FrgnCorp20OrMoreOwnDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FrgnCorp20OrMoreOwnDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FrgnCorpBelow20OwnDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FrgnCorpBelow20OwnDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FrgnOwn25PctTotVotingPowerInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FrgnSrceDiv10PctOwnDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FrgnSrceDiv10PctOwnDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "GILTIReceivedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "GrossProfitAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "GrossReceiptsLast3YearsInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "GrossReceiptsOrSalesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "GrossRentsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "GrossRoyaltiesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ICDISCFormerDISCDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InactivePrincipalBusActyCd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IncmTxBaseErosionTxCAMTSumAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IncomeDeductionsSubtotalAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IncomeExpensesSubtotalAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IncomeTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IncomeTaxAmt/@form8978Amt",
+      "line": "1",
+      "label": "Schedule J Line 1 - Section 8978 Amount"
+    },
+    {
+      "field": "IncomeTaxAmt/@form8978Cd",
+      "line": "1",
+      "label": "Schedule J Line 1 - Section 8978 Indicator"
+    },
+    {
+      "field": "IncomeTaxAmt/@section1291Amt",
+      "line": "1",
+      "label": "Schedule J Line 1 - Section 1291 Amount"
+    },
+    {
+      "field": "IncomeTaxAmt/@section1291Cd",
+      "line": "1",
+      "label": "Schedule J Line 1 - Section 1291 Indicator"
+    },
+    {
+      "field": "IncomeTaxAmt/@section197Amt",
+      "line": "1",
+      "label": "Schedule J Line 1 - Section 197 Amount"
+    },
+    {
+      "field": "IncomeTaxAmt/@section197Cd",
+      "line": "1",
+      "label": "Schedule J Line 1 - Section 197 Indicator"
+    },
+    {
+      "field": "IncorporationDt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IndivEstTrOwnPctVtngStkInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InitialReturnInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IntDueUndLkbckMthdIncmFrcstAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IntDueUndLkbckMthdLTCntrctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IntangibleAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IntangibleAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InterestDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InterestTaxDueSection453AcAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InterestTaxDueSection453IAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InventoriesBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InventoriesEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LandBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LandEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LifeNonlifeConsolidatedRetInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LoansFromShareholdersBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LoansFromShareholdersEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LoansToShareholdersBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LoansToShareholdersEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LongTermPayableBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LongTermPayableEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MemberOfControlledGroupInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MethodOfAccountingAccrualInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MethodOfAccountingCashInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MethodOfAccountingOtherInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MethodOfAccountingOtherInd/",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MissingEINReasonCd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MortgageRealEstateLoansBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MortgageRealEstateLoansEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NOLCarryoverFromPriorYearAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NOLForegoCarrybackInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NameChangeInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetDepletableAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetDepletableAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetDepreciableAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetDepreciableAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetGrossReceiptsOrSalesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetIncomeLossPerBooksAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetIntangibleAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetIntangibleAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetOperatingLossDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetSection965TaxLiabPaidAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetTradeNotesAcctRcvblBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetTradeNotesAcctRcvblEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NondedIntRoyaltyUndSect267AAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NondedIntRoyaltyUndSect267AInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OfferedDebtInstrumentsInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OfficersCompensationAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherCurrentAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherCurrentAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherCurrentLiabilitiesBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherCurrentLiabilitiesEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherDeductionsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherDivForeignCorpTotRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherDividendsTotRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherIncomeAmt/@otherIncomeDesc",
+      "line": "10",
+      "label": "Line 10 - Other Income Item"
+    },
+    {
+      "field": "OtherInvestmentsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherInvestmentsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherLiabilitiesBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherLiabilitiesEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherRefundableCreditsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherSubpartFNotIncludedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherTaxesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OverpaymentOfEstimatedTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OverpaymentSection/AppliedToEsTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OverpaymentSection/OverpaymentAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OverpaymentSection/RefundAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OwnershipByValuePct",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OwnershipByVotePct",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OwnershipChg80PctOrMoreInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OwnershipPctVoteVlGrtr50PctInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ParentCorporationEIN",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ParentCorporationName/BusinessNameLine1Txt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ParentCorporationName/BusinessNameLine2Txt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ParentReturnInd",
+      "line": "1a",
+      "label": "Form 1120, Section A, Line 1a - Is Parent Return"
+    },
+    {
+      "field": "PensionProfitSharingPlansAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PersonalHoldingCompanyInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PersonalHoldingCompanyTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PersonalServiceCorporationInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrincipalBusinessActivityCd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrincipalBusinessActivityDesc",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrincipalProductDesc",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PriorYearOverpaymentCreditAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrntCorporationNameControlTxt",
+      "line": "3",
+      "label": "Schedule K Line 3 - Name control of the parent corporation"
+    },
+    {
+      "field": "PropertyDistributionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrtshpCorpTrOwnPctVtngStkInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PubUtility20OrMoreDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PubUtility20OrMoreDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PubUtilityBelow20DedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PubUtilityBelow20DivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PubUtilityPrefStockDivDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QlfyElecMotorVehCrAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QlfyElecMotorVehCrAmt/@form5735Amt",
+      "line": "5b",
+      "label": "Schedule J Line 5b - Form 5735 Amount"
+    },
+    {
+      "field": "QlfyElecMotorVehCrAmt/@form5735Cd",
+      "line": "5b",
+      "label": "Schedule J Line 5b - Form 5735 Indicator"
+    },
+    {
+      "field": "QlfyOpportunityFundPenaltyAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RecaptureTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RecaptureTaxAmt/@form8693ApprovedCd",
+      "line": "9b",
+      "label": ""
+    },
+    {
+      "field": "RecaptureTaxAmt/@form8693ApprovedDt",
+      "line": "9b",
+      "label": "Form 1120, Page 3, Schedule J, Part I, Line 9b - Form 8693 Approval Date"
+    },
+    {
+      "field": "RepairsAndMaintenanceAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RequiredForms1099FiledInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RequiredToFileForms1042Ind",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RequiredToFileForms1099Ind",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RetainedEarningsApprBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RetainedEarningsApprEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RetainedEarningsUnapprBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RetainedEarningsUnapprEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ReturnsAndAllowancesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SalariesAndWagesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SatisfyOneOrMoreConditionsInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SatisfyRqrSect59k3ACYInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ScheduleM3AttachedInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Sect351TrnsfrFMVFMBOverLmtInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Section163jElectionInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Section250DeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Section965aInclusionRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Section965cDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ShareholderCnt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ShortTermPayableBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ShortTermPayableEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SpecialConditionDesc",
+      "line": "",
+      "label": "Form 1120, Top Left Margin - Special Condition Description"
+    },
+    {
+      "field": "StockDistributionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SubpartFHybridDivRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SubpartFLowTierCFCDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SubpartFLowTierCFCRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SubsidiaryReturnInd",
+      "line": "1a",
+      "label": "Form 1120, Section A, Line 1a - Is Subsidiary Return"
+    },
+    {
+      "field": "SupersededReturnInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxExemptInterestAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxExemptSecuritiesBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxExemptSecuritiesEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxLessCreditsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxPaidForm7004Amt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxableIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxableIncomeAmt/@capitalConstructionFundAmt",
+      "line": "30",
+      "label": "Line 30 - CCF Amount"
+    },
+    {
+      "field": "TaxableIncomeAmt/@capitalConstructionFundCd",
+      "line": "30",
+      "label": "Line 30 - CCF Indicator"
+    },
+    {
+      "field": "TaxableIncomeBfrNOLSpclDedAmt",
+      "line": "11",
+      "label": ""
+    },
+    {
+      "field": "TaxableInterestAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxesAndLicensesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotDividendsInclusionsRcvdAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotIncmRecordedNotIncludedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalAssetsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalCashDistribtionsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalCreditAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalCreditAmt/@form8978Amt",
+      "line": "6",
+      "label": "Schedule J Line 6 - Section 8978 Amount"
+    },
+    {
+      "field": "TotalCreditAmt/@form8978Cd",
+      "line": "6",
+      "label": "Schedule J Line 6 - Section 8978 Indicator"
+    },
+    {
+      "field": "TotalCreditAmt/@otherRefundableCreditsAmount",
+      "line": "32f",
+      "label": "Form 1120, Page 1, Line 32f - Other Refundable Credits Amount"
+    },
+    {
+      "field": "TotalCreditAmt/@otherRefundableCreditsInd",
+      "line": "32f",
+      "label": "Form 1120, Page 1, Line 32f - Other Refundable Credits Indicator"
+    },
+    {
+      "field": "TotalDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalDeductionsNotChargedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalExpensesNotDeductedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalForm5472FiledCnt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalFuelTaxCreditAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalFuelTaxCreditAmt/@ozoneDepletingChemicalCd",
+      "line": "19b",
+      "label": ""
+    },
+    {
+      "field": "TotalIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalIncreaseInTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalIncreaseInTaxAmt/@section1260BAmt",
+      "line": "9a",
+      "label": "Line 9a - Section 1260B Amount"
+    },
+    {
+      "field": "TotalIncreaseInTaxAmt/@section1260BCd",
+      "line": "9a",
+      "label": "Line 9a - Section 1260B Indicator"
+    },
+    {
+      "field": "TotalLiabilitiesShrEqtyBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalLiabilitiesShrEqtyEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalNOLSpecialDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalOrdinaryGainLossAmt",
+      "line": "17",
+      "label": ""
+    },
+    {
+      "field": "TotalOrdinaryGainLossAmt/@form4684Cd",
+      "line": "9",
+      "label": "Line 9 - Form 4684 Indicator"
+    },
+    {
+      "field": "TotalOtherDecreasesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalOtherIncreasesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalOtherTaxesAndInterestAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalPaymentsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalPaymentsAmt/@backupWithholdingAmount",
+      "line": "32h",
+      "label": "Form 1120, Page 1, Line 32h - Backup Withholding Amount"
+    },
+    {
+      "field": "TotalPaymentsAmt/@backupWithholdingIndicator",
+      "line": "32h",
+      "label": "Form 1120, Page 1, Line 32h - Backup Withholding Indicator"
+    },
+    {
+      "field": "TotalPaymentsAndCreditsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalRcptsAssetsLessThanLmtInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalRefundableCreditsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalRentOrLeaseExpenseAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalSpecialDeductionsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalTaxableIncmNotRecOnBksAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalUndistributedLTCapGainAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TradeNotesAccountsRcvblBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TradeNotesAccountsRcvblEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TravelEntertainmentAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "USGovernmentObligationsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "USGovernmentObligationsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "UncertainTaxPositionStmtInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "VirtualCurAcquiredDurTYInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "VotingStockForeignOwnedPct",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "WhollyOwnFrgnSbsdryDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "WhollyOwnFrgnSbsdryDivRcvdAmt",
+      "line": "",
+      "label": ""
+    }
+  ],
+  "1120S": [
+    {
+      "field": "@changeAnnualAccountingPeriodCd",
+      "line": "",
+      "label": "Form 1120S, Top Left Margin - Change Annual Accounting Period2"
+    },
+    {
+      "field": "@filedPursuantToSect30191002Cd",
+      "line": "",
+      "label": "Form 1120S, Top Left Margin - Section 30191002 Election Ind"
+    },
+    {
+      "field": "@section501dCd",
+      "line": "",
+      "label": "Form 1120&#8211;S, Top Left Margin - Section 501d Indicator"
+    },
+    {
+      "field": "@shortPeriodReasonCd",
+      "line": "",
+      "label": "Form 1120S, Top Left Margin - Short Period  Reason Ind"
+    },
+    {
+      "field": "AccountsPayableBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccountsPayableEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedAmortizationBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedAmortizationEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedDepletionBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedDepletionEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedDepreciationBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedDepreciationEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedEPNotDivDistriAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedEarnProfitsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AccumulatedEarnProfitsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdditionalPaidInCapitalBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdditionalPaidInCapitalEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AddressChangeInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdjustedGainOrLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdjustmentToShrEqtyBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdjustmentToShrEqtyEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdvertisingAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AlcoholFuelCreditAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AmendedReturnInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AttachmentIndicatorCd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BadDebtAllowanceBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BadDebtAllowanceEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BadDebtExpenseAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BalBOYShrUndistrTxblIncmAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BalEOYShrUndistrTxblIncmAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BalanceBOYAccumAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BalanceBOYOtherAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BalanceDueAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BalanceEOYAccumAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BalanceEOYOtherAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BuildingOtherDeprecAstBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BuildingOtherDeprecAstEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BuiltInGainsTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CapitalStockBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CapitalStockEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CashBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CashEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CharitableContributionsTotAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CollectiblesGainLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CorpOwnPctFrgnDomPrtshpGrp",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CorpOwnPctFrgnDomPrtshpGrp/EntityNm",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CorpOwnPctStkIssdOutstdGrp",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CorpOwnPctStkIssdOutstdGrp/CorporationNm",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CorporationOwnPctPrtshpInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CorporationOwnedPctStkIssdInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CostOfGoodsSoldAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CostOfTreasuryStockBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CostOfTreasuryStockEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DebtCancelledForgivenModifInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepletableAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepletableAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepletionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepletionOtherThanOilAndGasAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepreciationAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepreciationDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepreciationExpensesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DistributionsOtherThanDivAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DivDistriPaidAccumEarnPrftAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Elec1141110gFlowThruEntStatement",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ElectionEffectiveDt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ElectionTerminationInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ElectivePaymentAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EmployeeBenefitProgramAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EnergyEffcntCmrclBldgDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EsPenaltyAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ExcessNetPassiveIncmLIFOTxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ExcessNetPassiveIncmLIFOTxAmt/@lIFOTaxAmt",
+      "line": "23a",
+      "label": "Line 23a - LIFO Tax Amount"
+    },
+    {
+      "field": "ExcessNetPassiveIncmLIFOTxAmt/@lIFOTaxCd",
+      "line": "23a",
+      "label": "Line 23a - LIFO Tax Indicator"
+    },
+    {
+      "field": "ExpensesFromOtherRentalActyAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FiledOrRequiredFileForm8918Ind",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FinalReturnInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "FirstYearSCorporationInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Form2220AttachedInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Form8996AttachedInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "GrossProfitAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "GrossReceiptsOrSalesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InactivePrincipalBusActyCd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IncomeDeductionsSubtotalAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IncomeExpensesSubtotalAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IncomeLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IncomeLossReconciliationAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IncorporationDt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IntangibleAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IntangibleAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InterestDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InterestExpenseOnInvstDbAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InterestIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IntntlTaxRelevanceRptgInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InventoriesBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InventoriesEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InvestmentExpenseAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "InvestmentIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LandBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LandEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LoansFromShareholdersBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LoansFromShareholdersEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LoansToShareholdersBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LoansToShareholdersEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LongTermPayableBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LongTermPayableEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LowIncmHsngCrSect42j5PrtshpAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LowIncomeHousingCrOthPrtshpAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MethodOfAccountingAccrualInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MethodOfAccountingCashInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MethodOfAccountingOtherInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MethodOfAccountingOtherInd/@methodOfAccountingOtherDesc",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MortgageRealEstateLoansBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MortgageRealEstateLoansEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NameChangeInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetDepletableAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetDepletableAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetDepreciableAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetDepreciableAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetGrossReceiptsOrSalesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetIncmLossFromOthRntlActyAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetIncomeLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetIncomeLossPerBooksAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetIntangibleAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetIntangibleAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetLTCapitalGainOrLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetSTCapitalGainOrLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetSection1231GainLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetTradeNotesAcctRcvblBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetTradeNotesAcctRcvblEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NetUnrlzdRedPYNetRcgnzGainAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NondeductibleExpensesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NotDivDistriAccumAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NotDivDistriOtherAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NotDivShrUndistrTxblIncmAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OfferedDebtInstrumentsInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OfficersCompensationAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OilGasAndGeothermalDedsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OilGasAndGeothermalGroIncmAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OrdinaryBusinessIncomeAmt",
+      "line": "22",
+      "label": ""
+    },
+    {
+      "field": "OrdinaryBusinessIncomeLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OrdinaryBusinessLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OrdinaryDividendsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherAMTItemsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherCreditsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherCreditsAmt/@emplrCrPdFamilyMedLeaveAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherCreditsAmt/@otherCreditsTotalDesc",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherCurrentAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherCurrentAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherCurrentLiabilitiesBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherCurrentLiabilitiesEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherDeductionsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherDeductionsAmt/@form4684Cd",
+      "line": "12d",
+      "label": "Schedule K, Line 12d - Form 4684 Indicator"
+    },
+    {
+      "field": "OtherDeductionsAmt/@otherDeductionsDesc",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherGrossRentalIncomeLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherIncomeLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherIncomeLossAmt/@globalIntangibleLowTxIncmAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherIncomeLossAmt/@otherIncomeLossDesc",
+      "line": "5",
+      "label": "Line 5 - otherIncomeLossItem"
+    },
+    {
+      "field": "OtherIncomeLossAmt/@otherIncomeTyp",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherInvestmentsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherInvestmentsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherLiabilitiesBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherLiabilitiesEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherReductionsAccumAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherReductionsOtherAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherRentalCreditsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherRentalCreditsAmt/@otherRentalCreditDesc",
+      "line": "13e",
+      "label": "Schedule K, Line 13e - OtherRentalCreditsAmt"
+    },
+    {
+      "field": "OtherRentalRealEstateAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherRentalRealEstateAmt/@otherRentalRealEstateCrDesc",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherTaxExemptIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OutstandingRestrictedStockInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OutstandingStkOptWarrantsInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OverpaymentSection/AppliedToEsTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OverpaymentSection/OverpaymentAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OverpaymentSection/RefundAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PensionProfitSharingPlansAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Post1986DepreciationAdjAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrincipalBusinessActivityCd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrincipalBusinessActivityDesc",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrincipalProductDesc",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrincipalReductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QSubElectionTerminatedRvkdInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QlfyOpportunityFundPenaltyAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QlfyRehbltExpendRntlREActyAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QualifiedDividendsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RepairsAndMaintenanceAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RequiredForms1099FiledInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RequiredToFileForms1099Ind",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RetainedEarningBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RetainedEarningEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ReturnsAndAllowancesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RoyaltiesReceivedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SalariesAndWagesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SatisfyOneConditionInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SatisfyOneOrMoreConditionsInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SchLAndSchM1NotRequiredInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ScheduleM3AttachedInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Sect465AtRiskAggregatedActyInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Sect469PALGroupedActyInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Section163jElectionInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Section179ExpenseDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Section59e2ExpenditureAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Section59e2ExpenditureAmt/@sect59e2ExpenditureDesc",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ShareholderCnt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ShareholderLoanRepaymentAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ShortTermPayableBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ShortTermPayableEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ShrEntTrEstNomneSmlrPrsnInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SpecialConditionDesc",
+      "line": "",
+      "label": "Form 1120S, Top Left Margin - Special Condition Description"
+    },
+    {
+      "field": "SubtotalAccumAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SubtotalAccumEarnProfitsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SubtotalOtherAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SubtotalShrUndistrTxblIncmAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SupersededReturnInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TT",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxExemptInterestAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxExemptInterestIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxExemptSecuritiesBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxExemptSecuritiesEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxPaidForm7004Amt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxesAndLicensesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotIncmRecordedNotIncludedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotNonrestrictedStockOutsdtNum",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotOvpmtCrAndEstTxPaymentsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotShareStockOutstandingEOYCnt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotShrStkOutstdAllExecutedCnt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalAssetsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalAssetsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalAssetsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalDeductionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalDeductionsNotChargedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalExpensesNotDeductedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalForeignTaxesPaidOrAccrAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalFuelTaxCreditAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalIncmNotRecordedOnBooksAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalIncomeOrLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalLiabilitiesShrEqtyBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalLiabilitiesShrEqtyEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalOrdinaryGainLossAmt",
+      "line": "17",
+      "label": ""
+    },
+    {
+      "field": "TotalOrdinaryGainLossAmt/@form4684Cd",
+      "line": "4",
+      "label": "Line 4 - Form 4684 Indicator"
+    },
+    {
+      "field": "TotalOtherAddnAccumAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalOtherAddnOtherAdjAcctAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalPaymentsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalPaymentsAmt/@beneficiaryTrustAmt",
+      "line": "24z",
+      "label": "Line 24z - Beneficiary Of Trust Amount"
+    },
+    {
+      "field": "TotalPaymentsAmt/@beneficiaryTrustCd",
+      "line": "24z",
+      "label": "Line 24z - Beneficiary Of Trust Indicator"
+    },
+    {
+      "field": "TotalRentOrLeaseExpenseAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalRestrictedStockOutstdNum",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalTaxAmt/@bBAImputeUnderpaymentAmt",
+      "line": "23c",
+      "label": "Line 23c - Bipartisan Budget Act Imputed Underpayment Amount"
+    },
+    {
+      "field": "TotalTaxAmt/@bBAImputeUnderpaymentCd",
+      "line": "23c",
+      "label": "Line 23c - Bipartisan Budget Act Imputed Underpayment Indicator"
+    },
+    {
+      "field": "TotalTaxAmt/@form8697Amt",
+      "line": "23c",
+      "label": "Line 23c - From Form 8697 Amount"
+    },
+    {
+      "field": "TotalTaxAmt/@form8697Cd",
+      "line": "23c",
+      "label": "Line 23c - From Form 8697 Indicator"
+    },
+    {
+      "field": "TotalTaxAmt/@form8866Amt",
+      "line": "23c",
+      "label": "Line 23c - From Form 8866 Amount"
+    },
+    {
+      "field": "TotalTaxAmt/@form8866Cd",
+      "line": "23c",
+      "label": "Line 23c - From Form 8866 Indicator"
+    },
+    {
+      "field": "TotalTaxAmt/@lIFOTaxAmt",
+      "line": "23c",
+      "label": "Line 23c - LIFO Tax Amount"
+    },
+    {
+      "field": "TotalTaxAmt/@lIFOTaxCd",
+      "line": "23c",
+      "label": "Line 23c - LIFO Tax Indicator"
+    },
+    {
+      "field": "TotalTaxAmt/@taxFromForm4255Amt",
+      "line": "23c",
+      "label": "Line 23c - Tax From Form 4255 Amount"
+    },
+    {
+      "field": "TotalTaxAmt/@taxFromForm4255Cd",
+      "line": "23c",
+      "label": "Line 23c - Tax From Form 4255 Indicator"
+    },
+    {
+      "field": "TradeNotesAccountsRcvblBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TradeNotesAccountsRcvblEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TravelEntertainmentAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "USGovernmentObligationsBOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "USGovernmentObligationsEOYAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "UnrecapturedSection1250GainAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "VirtualCurAcquiredDurTYInd",
+      "line": "",
+      "label": ""
+    }
+  ],
+  "1040": [
+    {
+      "field": "AdditionalChildTaxCreditAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdditionalTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AddressChangeInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AdjustedGrossIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AmendedReturnInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "AppliedToEsTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "BankAccountTypeCd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CTCODCAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CapitalDistributionInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "CapitalGainLossAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ChldWhoLivedWithYouCnt",
+      "line": "",
+      "label": "Dependents - Children Who Lived You Count"
+    },
+    {
+      "field": "CombatZoneCd",
+      "line": "",
+      "label": "Top Right Margin - Combat Zone Code"
+    },
+    {
+      "field": "CombatZoneCd/@combatZoneDt",
+      "line": "",
+      "label": "Top Right Margin - Combat Zone Date"
+    },
+    {
+      "field": "CommPropStateRtnInd",
+      "line": "",
+      "label": "Top Right Margin - Community Property Return Indicator"
+    },
+    {
+      "field": "DependentDetail",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "DepositorAccountNum",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EICEligibilityLiteralCd",
+      "line": "27",
+      "label": "Line 27 - Earned Income Credit Eligibility Literal Code"
+    },
+    {
+      "field": "EarnedIncomeCreditAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EsPenaltyAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EstimatedTaxPaymentsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "EstimatedTaxPaymentsAmt/@divorcedLiteralCd",
+      "line": "26",
+      "label": "Line 26 - Divorced Literal Cd"
+    },
+    {
+      "field": "EstimatedTaxPaymentsAmt/@divorcedSpouseSSN",
+      "line": "26",
+      "label": "Line 26 - Divorced Spouse SSN"
+    },
+    {
+      "field": "ExcldSect933PuertoRicoIncmAmt",
+      "line": "11",
+      "label": "Line 11 - Excluded Section 933 Puerto Rico Income Amount"
+    },
+    {
+      "field": "ExcldSect933PuertoRicoIncmAmt/@excldSect933PuertoRicoIncmCd",
+      "line": "11",
+      "label": "Line 11 - Excluded Section 933 Puerto Rico Income Code"
+    },
+    {
+      "field": "ExemptSpouseNameControlTxt",
+      "line": "",
+      "label": "Standard Deduction - Exempt Spouse Name Control"
+    },
+    {
+      "field": "ExemptSpouseNm",
+      "line": "",
+      "label": "Standard Deduction - Exempt Spouse Name"
+    },
+    {
+      "field": "FiledPursuantToSect30191002Cd",
+      "line": "",
+      "label": "Top Right Margin - Filed Pursuant To Section 30191002 Code"
+    },
+    {
+      "field": "ForeignEmployerPensionCd",
+      "line": "5b",
+      "label": "Line 5b - Foreign Employer Pension Code"
+    },
+    {
+      "field": "Form1040SRInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Form1099WithheldTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Form4972Ind",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Form8814Amt",
+      "line": "7",
+      "label": "Line 7 - Form 8814 Amount"
+    },
+    {
+      "field": "Form8814Cd",
+      "line": "7",
+      "label": "Line 7 - Form 8814 Code"
+    },
+    {
+      "field": "Form8814Ind",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "Form8814Ind/@childInterestAndDividendTaxAmt",
+      "line": "16",
+      "label": "Line 16(1) - Child Interest and Dividend Tax Amount"
+    },
+    {
+      "field": "Form8854DeferredTaxGrp",
+      "line": "23",
+      "label": "Line 23 - Deferred Tax 1 Total Tax Deferred Amount"
+    },
+    {
+      "field": "Form8888Ind",
+      "line": "34",
+      "label": ""
+    },
+    {
+      "field": "FormW2WithheldTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "HouseholdEmployeeWagesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IRADistributionsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "IRADistributionsLiteralCd",
+      "line": "4b",
+      "label": "Line 4b - IRA Distributions Literal Code"
+    },
+    {
+      "field": "IndividualReturnFilingStatusCd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "LumpSumElectionMethodInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MedicaidWaiverPymtNotRptW2Amt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MoreDependentsInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "MustItemizeInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "NRALiteralCd",
+      "line": "",
+      "label": "Filing Status - Non-Resident Alien Literal Code"
+    },
+    {
+      "field": "NonPaidPreparerCd",
+      "line": "",
+      "label": "Top Right Margin - Non Paid Preparer Code"
+    },
+    {
+      "field": "NontxCombatPayElectionAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OrdinaryDividendsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OrdinaryF8814Amt",
+      "line": "3b",
+      "label": "Line 3b - Ordinary Dividends Form 8814 Amount"
+    },
+    {
+      "field": "OrdinaryF8814Cd",
+      "line": "3b",
+      "label": "Line 3b - Ordinary Dividends Form 8814 Code"
+    },
+    {
+      "field": "OtherDependentsListedCnt",
+      "line": "",
+      "label": "Dependents - Other Dependents Listed Count"
+    },
+    {
+      "field": "OtherEarnedIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OtherEarnedIncomeAmt/@wagesNotShownLitOnlyCd",
+      "line": "1h",
+      "label": "Line 1h - Wages Not Shown Lit Only Code"
+    },
+    {
+      "field": "OtherTaxAmtGrp",
+      "line": "16",
+      "label": "Line 16(3) - Other Tax Groups"
+    },
+    {
+      "field": "OtherTaxAmtGrp/OtherTaxAmt",
+      "line": "16",
+      "label": "Line 16(3) - Other Tax Amount"
+    },
+    {
+      "field": "OtherTaxAmtGrp/OtherTaxAmtCd",
+      "line": "16",
+      "label": "Line 16(3) - Other Tax Amount Code"
+    },
+    {
+      "field": "OtherTaxAmtGrp/OtherTaxTxt",
+      "line": "16",
+      "label": "Line 16(3) - Other Tax Amount Code"
+    },
+    {
+      "field": "OtherTaxAmtInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OverpaidAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "OwedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PECFPrimaryInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PECFSpouseInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PensionsAnnuitiesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PersonalRepresentativeInd",
+      "line": "",
+      "label": "Top Right Margin - Personal Representative"
+    },
+    {
+      "field": "PowerOfAttorneyNm",
+      "line": "",
+      "label": "Top Right Margin - Power Of Attorney Name"
+    },
+    {
+      "field": "PowerOfAttorneySignedByInd",
+      "line": "",
+      "label": "Top Right Margin - Signed by Power Of Attorney Checkbox"
+    },
+    {
+      "field": "Primary65OrOlderInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrimaryBlindInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrimaryClaimAsDependentInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "PrimaryDeathDt",
+      "line": "",
+      "label": "Top Right Margin - Primary Date Of Death"
+    },
+    {
+      "field": "PrimaryOccupationTxt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QualifiedBusinessIncomeDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QualifiedDividendsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QualifiedF8814Amt",
+      "line": "3a",
+      "label": "Line 3a - Qualified Dividends Form 8814 Amount"
+    },
+    {
+      "field": "QualifiedF8814Cd",
+      "line": "3a",
+      "label": "Line 3a -  Qualified Dividends Form 8814 Code"
+    },
+    {
+      "field": "QualifyingHOHNm",
+      "line": "",
+      "label": "Filing Status - Qualifying HOH SSN"
+    },
+    {
+      "field": "QualifyingHOHSSN",
+      "line": "",
+      "label": "Filing Status - Qualifying HOH SSN"
+    },
+    {
+      "field": "QualifyingPersonName",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QualifyingPersonName/PersonFirstNm",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QualifyingPersonName/PersonLastNm",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "QualifyingPersonSSN",
+      "line": "",
+      "label": "Filing Status - Qualifying Person SSN"
+    },
+    {
+      "field": "RefundAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RefundProductCd",
+      "line": "",
+      "label": "Top Right Margin - Refund Product Code"
+    },
+    {
+      "field": "RefundProductCodeTxt",
+      "line": "",
+      "label": "Top Right Margin - Refund Product Code Text"
+    },
+    {
+      "field": "RefundableAmerOppCreditAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RefundableCreditsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "RoutingTransitNum",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ScheduleQCd",
+      "line": "15",
+      "label": "Line 15 - Schedule Q Code"
+    },
+    {
+      "field": "SocSecBnftAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SocSecBnftAmt/@socSecBnftCd",
+      "line": "6a",
+      "label": "Line 6a - Social Security Benefits Code"
+    },
+    {
+      "field": "SpecialConditionDesc",
+      "line": "",
+      "label": "Top Right Margin - Special Condition Description"
+    },
+    {
+      "field": "SpecialProcessingCodeTxt",
+      "line": "",
+      "label": "Top Right Margin - Special Processing Code Text"
+    },
+    {
+      "field": "SpecialProcessingLiteralCd",
+      "line": "",
+      "label": "Top Right Margin - Special Processing Literal Code"
+    },
+    {
+      "field": "Spouse65OrOlderInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SpouseBlindInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SpouseClaimAsDependentInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SpouseDeathDt",
+      "line": "",
+      "label": "Top Right Margin - Spouse Date Of Death"
+    },
+    {
+      "field": "SpouseNm",
+      "line": "",
+      "label": "Filing Status - Spouse's Name"
+    },
+    {
+      "field": "SpouseOccupationTxt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SupersededReturnInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "SurvivingSpouseInd",
+      "line": "",
+      "label": "Top Right Margin - Surviving Spouse Indicator"
+    },
+    {
+      "field": "TaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxExemptInterestAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxLessCreditsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxWithheldOtherAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxableBenefitsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxableBenefitsForm8839Amt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxableForeignPensionsTotalAmt",
+      "line": "5b",
+      "label": "Line 5b - Taxable Foreign Pensions Total Amount"
+    },
+    {
+      "field": "TaxableIRAAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxableIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxableIncomeAmt/@capitalConstructionFundAmt",
+      "line": "15",
+      "label": "Line 15 - Capital Construction Fund Amount"
+    },
+    {
+      "field": "TaxableIncomeAmt/@capitalConstructionFundCd",
+      "line": "15",
+      "label": "Line 15 - Capital Construction Fund Code"
+    },
+    {
+      "field": "TaxableInterestAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TaxableSocSecAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ThirdPartyDesigneeInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ThirdPartyDesigneeNm",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ThirdPartyDesigneePIN",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "ThirdPartyDesigneePhoneNum",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TipIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalAdditionalIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalAdjustmentsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalBoxesCheckedCnt",
+      "line": "",
+      "label": "Age/Blindness - Total Boxes Checked Count"
+    },
+    {
+      "field": "TotalCreditsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalDeductionsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalExemptPrimaryAndSpouseCnt",
+      "line": "",
+      "label": "Standard Deduction - Total Exempt Primary And Spouse Cnt"
+    },
+    {
+      "field": "TotalExemptionsCnt",
+      "line": "",
+      "label": "Dependents - Total Exemptions Count"
+    },
+    {
+      "field": "TotalIncomeAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalItemizedOrStandardDedAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalItemizedOrStandardDedAmt/@modifiedStandardDeductionInd",
+      "line": "12a",
+      "label": "Line 12a - Modified Standard Deduction Ind"
+    },
+    {
+      "field": "TotalNonrefundableCreditsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalOtherPaymentsRfdblCrAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalOtherTaxesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalPaymentsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalPaymentsAmt/@form8689Amt",
+      "line": "33",
+      "label": "Line 33 - Form 8689 Amount"
+    },
+    {
+      "field": "TotalPaymentsAmt/@form8689Cd",
+      "line": "33",
+      "label": "Line 33 - Form 8689 Code"
+    },
+    {
+      "field": "TotalTaxAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalTaxBeforeCrAndOthTaxesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalTaxablePensionsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "TotalTaxablePensionsAmt/@pensionsAnnuitiesLiteralCd",
+      "line": "5b",
+      "label": "Line 5b - Pensions and Annuities Literal Code"
+    },
+    {
+      "field": "TotalWagesWithNoWithholdingAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "VirtualCurAcquiredDurTYInd",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "WagesAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "WagesSalariesAndTipsAmt",
+      "line": "",
+      "label": ""
+    },
+    {
+      "field": "WithholdingTaxAmt",
+      "line": "",
+      "label": ""
+    }
+  ]
+}

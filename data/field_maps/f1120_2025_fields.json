@@ -1,0 +1,652 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_1 , 2025,",
+    "label": "beginning"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_11",
+    "label": "B Employer identification number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_12",
+    "label": "C Date incorporated"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_14",
+    "label": "1a Gross receipts or sales 1a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "b Returns and allowances 1b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "c Balance. Subtract line 1b from line 1a 1c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "2 Cost of goods sold (attach Form 1125-A) 2"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "3 Gross profit. Subtract line 2 from line 1c 3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_19",
+    "label": "4 Dividends and inclusions (Schedule C, line 23) 4"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_2 , 20f1_3",
+    "label": "ending"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "5 Interest 5"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_21",
+    "label": "6 Gross rents 6"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "7 Gross royalties 7"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_23",
+    "label": "8 Capital gain net income (attach Schedule D (Form 1120)) 8"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "9 Net gain or (loss) from Form 4797, Part II, line 17 (attach Form 4797) 9"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_25",
+    "label": "10 Other income (see instructions-attach statement) 10"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_26",
+    "label": "11 Total income. Add lines 3 through 10 11"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_27",
+    "label": "12 Compensation of officers (see instructions-attach Form 1125-E) 12"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_28",
+    "label": "13 Salaries and wages (less employment credits) 13"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_29",
+    "label": "14 Repairs and maintenance 14"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_30",
+    "label": "15 Bad debts 15"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_31",
+    "label": "16 Rents 16"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_32",
+    "label": "17 Taxes and licenses 17"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_33",
+    "label": "18 Interest (see instructions) 18"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_34",
+    "label": "19 Charitable contributions 19"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_35",
+    "label": "20 Depreciation from Form 4562 not claimed on Form 1125-A or elsewhere on return (attach Form 4562) 20"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_36",
+    "label": "21 Depletion 21"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_37",
+    "label": "22 Advertising 22"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_38",
+    "label": "23 Pension, profit-sharing, etc., plans 23"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_39",
+    "label": "24 Employee benefit programs 24"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_4",
+    "label": "Name"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_41",
+    "label": "26 Other deductions (attach statement) 26"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_42",
+    "label": "27 Total deductions. Add lines 12 through 26 27"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_43",
+    "label": "28 Taxable income before net operating loss deduction and special deductions. Subtract line 27 from line 11 28"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_44",
+    "label": "29a Net operating loss deduction (see instructions) 29a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_45",
+    "label": "b Special deductions (Schedule C, line 24) 29b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_46",
+    "label": "c Add lines 29a and 29b 29c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_47",
+    "label": "30 Taxable income. Subtract line 29c from line 28. See instructions 30"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_48",
+    "label": "31 Total tax (Schedule J, line 12) 31"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_51",
+    "label": "34 Estimated tax penalty. See instructions. Check if Form 2220 is attached 34"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_52",
+    "label": "35 Amount owed. If line 33 is smaller than the total of lines 31, 32, and 34, enter amount owed 35"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_53",
+    "label": "36 Overpayment. If line 33 is larger than the total of lines 31, 32, and 34, enter amount overpaid 36"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_54",
+    "label": "37 Enter amount from line 36 you want: a Credited to 2026 estimated tax"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_55",
+    "label": "Refunded"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_60",
+    "label": "PTIN"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_62",
+    "label": "Firm's EIN"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_63",
+    "label": "Firm's address"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_64",
+    "label": "Phone no."
+  },
+  {
+    "page": 3,
+    "field_id": "f3_1",
+    "label": "1a Income tax (see instructions) 1a"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_10",
+    "label": "3 Corporate alternative minimum tax from Form 4626, Part II, line 13 (attach Form 4626) 3"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_11",
+    "label": "4 Add lines 2 and 3 4"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_12",
+    "label": "5a Foreign tax credit (attach Form 1118) 5a"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_13",
+    "label": "b Credit from Form 8834 (see instructions) 5b"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_14",
+    "label": "c General business credit (see instructions-attach Form 3800) 5c"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_15",
+    "label": "d Credit for prior year minimum tax (attach Form 8827) 5d"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_16",
+    "label": "e Bond credits from Form 8912 5e"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_17",
+    "label": "f Adjustment from Form 8978 5f"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_18",
+    "label": "6 Total credits. Add lines 5a through 5f 6"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_19",
+    "label": "7 Subtract line 6 from line 4 7"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_2",
+    "label": "b Tax from Form 1120-L (see instructions) 1b"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_20",
+    "label": "8 Personal holding company tax (attach Schedule PH (Form 1120)) 8"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_21",
+    "label": "9a Amount from Form 4255, Part I, line 3, column (r) 9a"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_22",
+    "label": "b Recapture of low-income housing credit (attach Form 8611) 9b"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_23",
+    "label": "c Completed long-term contract look-back interest due (attach Form 8697) 9c"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_24",
+    "label": "d Interest due under the look-back method-income forecast method (attach Form 8866) 9d"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_25",
+    "label": "e Alternative tax on qualifying shipping activities (attach Form 8902) 9e"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_26",
+    "label": "f Interest/tax due under section 453A(c) 9f"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_27",
+    "label": "g Interest/tax due under section 453(I) 9g"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_28",
+    "label": "Z Other (see instructions-attach statement) 9z"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_29",
+    "label": "10 Total. Add lines 9a through 9z 10"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_3",
+    "label": "c Section 1291 tax from Form 8621 1c"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_30",
+    "label": "11a Total tax before deferred taxes. Add lines 7, 8, and 10 11a"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_31",
+    "label": "b Deferred tax on the corporation's share of undistributed earnings of a qualified electing fund 11b"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_32",
+    "label": "c Deferred LIFO recapture tax (section 1363(d)) 11c"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_33",
+    "label": "12 Total tax. Subtract the sum of lines 11b and 11c from 11a. Enter here and on page 1, line 31 12"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_34",
+    "label": "13 Preceding year's overpayment credited to the current year 13"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_35",
+    "label": "14 Current year's estimated tax payments 14"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_37",
+    "label": "16 Reserved for future use 16"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_38",
+    "label": "17 Tax deposited with Form 7004 17"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_39",
+    "label": "18 Withholding (see instructions) 18"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_4",
+    "label": "d Tax adjustment from Form 8978 1d"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_40",
+    "label": "19 Total payments. Combine lines 13 through 18 19"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_41",
+    "label": "a Form 2439 20a"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_42",
+    "label": "b Form 4136 20b"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_43",
+    "label": "c Credit for tax withheld under chapter 3 or 4 from Form 1042-S, Form 8805, or Form 8288 (attach the applicable form) 20c"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_44",
+    "label": "Z Other (attach statement-see instructions) 20z"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_45",
+    "label": "21 Total credits. Add lines 20a through 20z 21"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_46",
+    "label": "22a Elective payment election amount from Form 3800 22a"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_47",
+    "label": "b Section 1062 applicable net tax liability. Enter amount from Form 1062, line 14 22b"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_48",
+    "label": "23 Total payments, credits, and section 1062 net tax liability. Add lines 19, 21, 22a, and 22b. Enter here and on page 1, line 33 23"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_5",
+    "label": "e Additional tax under section 197(f) 1e"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_6",
+    "label": "f Base erosion minimum tax from Form 8991 1f"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_7",
+    "label": "g Amount from Form 4255, Part I, line 3, column (q) 1g"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_8",
+    "label": "Z Other chapter 1 tax 1z"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_9",
+    "label": "2 Total income tax. Add lines 1a through 1z 2"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_2",
+    "label": "a Business activity code no."
+  },
+  {
+    "page": 4,
+    "field_id": "f4_3",
+    "label": "b Business activity"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_31",
+    "label": "Percentage owned"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_32",
+    "label": "(b) Owner's country"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_33",
+    "label": "(c) The corporation may have to file Form 5472, Information Return of a 25% Foreign-Owned U.S. Corporation or a Foreign Corporation Engaged in a U.S. Trade or Business. Enter the number of Forms 5472 attached"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_35",
+    "label": "10 Enter the number of shareholders at the end of the tax year (if 100 or fewer)"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_36",
+    "label": "12 Enter the available NOL carryover from prior tax years (do not reduce it by any deduction reported on page 1, line 29a) $"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_5",
+    "label": "3 Is the corporation a subsidiary in an affiliated group or a parent-subsidiary controlled group?"
+  },
+  {
+    "page": 5,
+    "field_id": "f5_4",
+    "label": "By Vote"
+  },
+  {
+    "page": 5,
+    "field_id": "f5_5",
+    "label": "By Value"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_133",
+    "label": "1 Net income (loss) per books"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_134",
+    "label": "2 Federal income tax per books"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_135",
+    "label": "3 Excess of capital losses over capital gains"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_138",
+    "label": "4 Income subject to tax not recorded on books"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_139",
+    "label": "a Depreciation"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_140",
+    "label": "b Charitable contributions"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_143",
+    "label": "5 Expenses recorded on books this year not deducted on this return (itemize):"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_144",
+    "label": "6 Add lines 1 through 5"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_148",
+    "label": "7 Income recorded on books this year not included on this return (itemize):"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_149",
+    "label": "a Depreciation"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_153",
+    "label": "8 Deductions on this return not charged against book income this year (itemize):"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_154",
+    "label": "9 Add lines 7 and 8"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_155",
+    "label": "10 Income (page 1, line 28)-line 6 less line 9"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_156",
+    "label": "1 Balance at beginning of year"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_157",
+    "label": "2 Net income (loss) per books"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_158 f6_159 f6_160",
+    "label": "(itemize):"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_161",
+    "label": "3 Other increases"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_162",
+    "label": "4 Add lines 1, 2, and 3"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_163",
+    "label": "a Cash"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_164",
+    "label": "b Stock"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_165",
+    "label": "C Property"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_166",
+    "label": "(itemize):"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_167",
+    "label": "6 Other decreases"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_168",
+    "label": "7 Add lines 5 and 6"
+  },
+  {
+    "page": 6,
+    "field_id": "f6_169",
+    "label": "8 Balance at end of year (line 4 less line 7)"
+  }
+]

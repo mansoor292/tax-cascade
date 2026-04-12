@@ -1,0 +1,302 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_01",
+    "label": "Name(s) shown on Form 1040, 1040-SR, or 1040-NR"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_02",
+    "label": "Your social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_03",
+    "label": "For 2025, enter the amount reported to you on Form(s) 1099-K that was included in error or for personal items sold at a loss"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_04",
+    "label": "1 Taxable refunds, credits, or offsets of state and local income taxes 1"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_05",
+    "label": "2a Alimony received 2a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_06",
+    "label": "b Date of original divorce or separation agreement (see instructions):"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_07",
+    "label": "3 Business income or (loss). Attach Schedule C 3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_09",
+    "label": "5 Rental real estate, royalties, partnerships, S corporations, trusts, etc. Attach Schedule E 5"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_10",
+    "label": "6 Farm income or (loss). Attach Schedule F 6"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_11",
+    "label": "enter amount repaid:"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_14",
+    "label": "b Gambling 8b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "c Cancellation of debt 8c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "e Income from Form 8853 8e"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "f Income from Form 8889 8f"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_19",
+    "label": "g Alaska Permanent Fund dividends 8g"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "h Jury duty pay 8h"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_21",
+    "label": "i Prizes and awards 8i"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "j Activity not engaged in for profit income 8j"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_23",
+    "label": "k Stock options 8k"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "I Income from the rental of personal property if you engaged in the rental for profit but were not in the business of renting such property 8I"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_25",
+    "label": "m Olympic and Paralympic medals and USOC prize money (see instructions) 8m"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_26",
+    "label": "n Section 951(a) inclusion (see instructions) 8n"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_27",
+    "label": "o Section 951A(a) inclusion (see instructions) 80"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_28",
+    "label": "p Section 461(I) excess business loss adjustment 8p"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_29",
+    "label": "q Taxable distributions from an ABLE account (see instructions) 8q"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_30",
+    "label": "r Scholarship and fellowship grants not reported on Form W-2 8r"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_32",
+    "label": "t Pension or annuity from a nonqualifed deferred compensation plan or a nongovernmental section 457 plan 8t"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_33",
+    "label": "u Wages earned while incarcerated 8u"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_34",
+    "label": "V Digital assets received as ordinary income not reported elsewhere. See instructions 8v"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_36",
+    "label": "Z Other income. f1_35 8z"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_37",
+    "label": "9 Total other income. Add lines 8a through 8z 9"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_38",
+    "label": "10 Combine lines 1 through 7 and 9. This is your additional income. Enter here and on Form 1040, 1040-SR, or 1040-NR, line 8 10"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_01",
+    "label": "11 Educator expenses 11"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_02",
+    "label": "12 Certain business expenses of reservists, performing artists, and fee-basis government officials. Attach Form 2106 12"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_03",
+    "label": "13 Health savings account deduction. Attach Form 8889 13"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_04",
+    "label": "14 Moving expenses for members of the Armed Forces. Attach Form 3903. If claiming only storage fees (see instructions), check here 14"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_05",
+    "label": "15 Deductible part of self-employment tax. Attach Schedule SE 15"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_06",
+    "label": "16 Self-employed SEP, SIMPLE, and qualified plans 16"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_07",
+    "label": "17 Self-employed health insurance deduction 17"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_08",
+    "label": "18 Penalty on early withdrawal of savings 18"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_09",
+    "label": "19a Alimony paid 19a"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_11",
+    "label": "c Date of original divorce or separation agreement (see instructions):"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_12",
+    "label": "20 IRA deduction. If you are married filing separately and lived apart from your spouse for the entire year (see instructions), check here 20"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_13",
+    "label": "21 Student loan interest deduction 21"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_14",
+    "label": "22 Reserved for future use 22"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_15",
+    "label": "23 Archer MSA deduction 23"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_16",
+    "label": "a Jury duty pay (see instructions) 24a"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_17",
+    "label": "b Deductible expenses related to income reported on line 8I from the rental of personal property engaged in for profit 24b"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_18",
+    "label": "c Nontaxable amount of the value of Olympic and Paralympic medals and USOC prize money reported on line 8m 24c"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_19",
+    "label": "d Reforestation amortization and expenses 24d"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_20",
+    "label": "e Repayment of supplemental unemployment benefits under the Trade Act of 1974 24e"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_21",
+    "label": "f Contributions to section 501(c)(18)(D) pension plans 24f"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_22",
+    "label": "g Contributions by certain chaplains to section 403(b) plans 24g"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_23",
+    "label": "h Attorney fees and court costs for actions involving certain unlawful discrimination claims (see instructions) 24h"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_24",
+    "label": "i Attorney fees and court costs you paid in connection with an award from the IRS for information you provided that helped the IRS detect tax law violations 24i"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_25",
+    "label": "j Housing deduction from Form 2555 24j"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_26",
+    "label": "k Excess deductions of section 67(e) expenses from Schedule K-1 (Form 1041) 24k"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_28",
+    "label": "Z Other adjustments. List type and amount: f2_27 24z"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_29",
+    "label": "25 Total other adjustments. Add lines 24a through 24z 25"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_30",
+    "label": "26 Add lines 11 through 23 and 25. These are your adjustments to income. Enter here and on Form 1040, 1040-SR, or 1040-NR, line 10 26"
+  }
+]

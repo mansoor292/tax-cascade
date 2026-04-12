@@ -1,0 +1,62 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_1",
+    "label": "Name"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_11",
+    "label": "5 Other costs (attach schedule) 5"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_13",
+    "label": "6 Total. Add lines 1 through 5 6"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "7 Inventory at end of year 7"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "8 Cost of goods sold. Subtract line 7 from line 6. Enter here and on Form 1120, page 1, line 2, or the appropriate line of your tax return. See instructions 8"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_2",
+    "label": "Employer identification number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "d (i) If the LIFO inventory method was used for this tax year, enter amount of closing inventory figured under LIFO 9d(i)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "(ii) If the LIFO inventory method was used for this tax year, enter amount of the closing LIFO Reserve 9d(ii)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_3",
+    "label": "1 Inventory at beginning of year 1"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_5",
+    "label": "2 Purchases 2"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_7",
+    "label": "3 Cost of labor 3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_9",
+    "label": "4 Additional section 263A costs (attach schedule) 4"
+  }
+]

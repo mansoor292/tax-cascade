@@ -1,0 +1,172 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_1",
+    "label": "Name(s) shown on return"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "8 Other (describe) Properties:"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_2",
+    "label": "Your social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_3",
+    "label": "A"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_4",
+    "label": "B"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_5",
+    "label": "C"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_6",
+    "label": "A"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_64",
+    "label": "Other (list)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_7",
+    "label": "B"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_77",
+    "label": "23a Total of all amounts reported on line 3 for all rental properties 23a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_78",
+    "label": "b Total of all amounts reported on line 4 for all royalty properties 23b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_79",
+    "label": "c Total of all amounts reported on line 12 for all properties 23c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_8",
+    "label": "C"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_80",
+    "label": "d Total of all amounts reported on line 18 for all properties 23d"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_81",
+    "label": "e Total of all amounts reported on line 20 for all properties 23e"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_82",
+    "label": "24 Income. Add positive amounts shown on line 21. Do not include any losses 24"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_84",
+    "label": "26 Total rental real estate and royalty income or (loss). Combine lines 24 and 25. Enter the result here. If Parts II, III, and IV, and line 40 on page 2 do not apply to you, also enter this amount on Schedule 1 (Form 1040), line 5. Otherwise, include this amount in the total on line 41 on page 2 26"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_1",
+    "label": "Name(s) shown on return. Do not enter name and social security number if shown on other side."
+  },
+  {
+    "page": 2,
+    "field_id": "f2_2",
+    "label": "Your social security number"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_45",
+    "label": "30 Add columns (h) and (k) of line 29a 30"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_47",
+    "label": "32 Total partnership and S corporation income or (loss). Combine lines 30 and 31 32"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_48",
+    "label": "A"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_68",
+    "label": "35 Add columns (d) and (f) of line 34a 35"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_70",
+    "label": "37 Total estate and trust income or (loss). Combine lines 35 and 36 37"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_71",
+    "label": "(a) Name"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_72",
+    "label": "(b) Employer identification number"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_73",
+    "label": "(c) Excess inclusion from Schedules Q, line 2c (see instructions)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_74",
+    "label": "(d) Taxable income (net loss) from Schedules Q, line 1b"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_75",
+    "label": "(e) Income from Schedules Q, line 3b"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_76",
+    "label": "39 Combine columns (d) and (e) only. Enter the result here and include in the total on line 41 below 39"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_77",
+    "label": "40 Net farm rental income or (loss) from Form 4835. Also, complete line 42 below 40"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_78",
+    "label": "41 Total income or (loss). Combine lines 26, 32, 37, 39, and 40. Enter the result here and on Schedule 1 (Form 1040), line 5 41"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_79",
+    "label": "42 Reconciliation of farming and fishing income. Enter your gross farming and fishing income reported on Form 4835, line 7; Schedule K-1 (Form 1065), box 14, code B; Schedule K-1 (Form 1120-S), box 17, code AN; and Schedule K-1 (Form 1041), box 14, code F. See instructions 42"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_80",
+    "label": "43 Reconciliation for real estate professionals. If you were a real estate professional (see instructions), enter the net income or (loss) you reported anywhere on Form 1040, Form 1040-SR, or Form 1040-NR from all rental real estate activities in which you materially participated under the passive activity loss rules 43"
+  }
+]

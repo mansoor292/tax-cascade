@@ -1,0 +1,8 @@
+node_modules/
+dist/
+output/
+_archive/
+*.js
+*.d.ts
+*.js.map
+.DS_Store

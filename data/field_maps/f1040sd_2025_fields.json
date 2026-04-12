@@ -1,0 +1,57 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_1",
+    "label": "Name(s) shown on return"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_2",
+    "label": "Your social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "4 Short-term gain from Form 6252 and short-term gain or (loss) from Forms 4684, 6781, and 8824 4 5 Net short-term gain or (loss) from partnerships, S corporations, estates, and trusts from Schedule(s) K-1 5"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "7 Net short-term capital gain or (loss). Combine lines 1a through 6 in column (h). If you have any long-term capital gains or losses, go to Part Il below. Otherwise, go to Part III on the back 7"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_39",
+    "label": "11 Gain from Form 4797, Part I; long-term gain from Forms 2439 and 6252; and long-term gain or (loss) from Forms 4684, 6781, and 8824 11"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_40",
+    "label": "12 Net long-term gain or (loss) from partnerships, S corporations, estates, and trusts from Schedule(s) K-1 12"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_41",
+    "label": "13 Capital gain distributions. See the instructions 13"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_43",
+    "label": "15 Net long-term capital gain or (loss). Combine lines 8a through 14 in column (h). Then, go to Part III on the back 15"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_1",
+    "label": "16 Combine lines 7 and 15 and enter the result 16"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_2",
+    "label": "18 If you are required to complete the 28% Rate Gain Worksheet (see instructions), enter the amount, if any, from line 7 of that worksheet 18"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_3",
+    "label": "19 If you are required to complete the Unrecaptured Section 1250 Gain Worksheet (see instructions), enter the amount, if any, from line 18 of that worksheet 19"
+  }
+]

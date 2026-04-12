@@ -1,0 +1,442 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_02 , 201_03",
+    "label": "For the year Jan. 1-Dec. 31, 2025, or other tax year beginning f1_01 , 2025, ending"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_14",
+    "label": "Your first name and middle initial"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "Last name"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "Your social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "If joint return, spouse's first name and middle initial"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "Last name"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_19",
+    "label": "Spouse's social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "Home address (number and street). If you have a P.O. box, see instructions."
+  },
+  {
+    "page": 1,
+    "field_id": "f1_21",
+    "label": "Apt. no."
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "City, town, or post office. If you have a foreign address, also complete spaces below."
+  },
+  {
+    "page": 1,
+    "field_id": "f1_23",
+    "label": "State"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "ZIP code"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_25",
+    "label": "Foreign country name"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_26",
+    "label": "Foreign province/state/county"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_27",
+    "label": "Foreign postal code"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_43",
+    "label": "(4) Relationship"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_47",
+    "label": "1a Total amount from Form(s) W-2, box 1 (see instructions) 1a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_48",
+    "label": "b Household employee wages not reported on Form(s) W-2 1b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_49",
+    "label": "c Tip income not reported on line 1a (see instructions) 1c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_50",
+    "label": "d Medicaid waiver payments not reported on Form(s) W-2 (see instructions) 1d"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_51",
+    "label": "e Taxable dependent care benefits from Form 2441, line 26 1e"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_52",
+    "label": "f Employer-provided adoption benefits from Form 8839, line 31 1f"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_53",
+    "label": "g Wages from Form 8919, line 6 1g"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_55",
+    "label": "h Other earned income (see instructions). Enter type and amount: f1_54 1h"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_56",
+    "label": "i Nontaxable combat pay election (see instructions) 1i"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_57",
+    "label": "Z Add lines 1a through 1h 1z"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_58",
+    "label": "2a Tax-exempt interest 2a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_59",
+    "label": "b Taxable interest 2b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_60",
+    "label": "3a Qualified dividends 3a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_61",
+    "label": "b Ordinary dividends 3b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_62",
+    "label": "4a IRA distributions 4a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_63",
+    "label": "b Taxable amount 4b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_64",
+    "label": "3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_65",
+    "label": "5a Pensions and annuities 5a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_66",
+    "label": "b Taxable amount 5b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_67",
+    "label": "3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_68",
+    "label": "6a Social security benefits 6a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_69",
+    "label": "b Taxable amount 6b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_70",
+    "label": "7a Capital gain or (loss). Attach Schedule D if required"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_72",
+    "label": "8 Additional income from Schedule 1, line 10 8"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_73",
+    "label": "9 Add lines 1z, 2b, 3b, 4b, 5b, 6b, 7a, and 8. This is your total income 9"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_74",
+    "label": "10 Adjustments to income from Schedule 1, line 26 10"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_75",
+    "label": "11a Subtract line 10 from line 9. This is your adjusted gross income 11a"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_01",
+    "label": "11b Amount from line 11a (adjusted gross income) 11b"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_02",
+    "label": "e Standard deduction or itemized deductions (from Schedule A) 12e"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_03",
+    "label": "13a Qualified business income deduction from Form 8995 or Form 8995-A 13a"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_04",
+    "label": "b Additional deductions from Schedule 1-A, line 38 13b"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_05",
+    "label": "14 Add lines 12e, 13a, and 13b 14"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_06",
+    "label": "15 Subtract line 14 from line 11b. If zero or less, enter -0-. This is your taxable income 15"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_07",
+    "label": ""
+  },
+  {
+    "page": 2,
+    "field_id": "f2_09",
+    "label": "17 Amount from Schedule 2, line 3 17"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_10",
+    "label": "18 Add lines 16 and 17 18"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_11",
+    "label": "19 Child tax credit or credit for other dependents from Schedule 8812 19"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_12",
+    "label": "20 Amount from Schedule 3, line 8 20"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_13",
+    "label": "21 Add lines 19 and 20 21"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_14",
+    "label": "22 Subtract line 21 from line 18. If zero or less, enter -0- 22"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_15",
+    "label": "23 Other taxes, including self-employment tax, from Schedule 2, line 21 23"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_16",
+    "label": "24 Add lines 22 and 23. This is your total tax 24"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_17",
+    "label": "a Form(s) W-2 25a"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_18",
+    "label": "b Form(s) 1099 25b"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_19",
+    "label": "c Other forms (see instructions) 25c"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_20",
+    "label": "d Add lines 25a through 25c 25d"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_21",
+    "label": "26 2025 estimated tax payments and amount applied from 2024 return 26"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_23",
+    "label": "27a Earned income credit (EIC) 27a"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_24",
+    "label": "28 Additional child tax credit (ACTC) from Schedule 8812. If you do not want to claim the ACTC, check here 28"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_25",
+    "label": "29 American opportunity credit from Form 8863, line 8 29"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_26",
+    "label": "30 Refundable adoption credit from Form 8839, line 13 30"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_27",
+    "label": "31 Amount from Schedule 3, line 15 31"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_28",
+    "label": "32 Add lines 27a, 28, 29, 30, and 31. These are your total other payments and refundable credits 32"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_29",
+    "label": "33 Add lines 25d, 26, and 32. These are your total payments 33"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_30",
+    "label": "34 If line 33 is more than line 24, subtract line 24 from line 33. This is the amount you overpaid 34"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_31",
+    "label": "35a Amount of line 34 you want refunded to you. If Form 8888 is attached, check here 35a"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_33",
+    "label": "d Account number"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_34",
+    "label": "36 Amount of line 34 you want applied to your 2026 estimated tax 36"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_35",
+    "label": "37 Subtract line 33 from line 24. This is the amount you owe. For details on how to pay, go to www.irs.gov/Payments or see instructions 37"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_36",
+    "label": "38 Estimated tax penalty (see instructions) 38"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_37",
+    "label": "Designee's"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_38",
+    "label": "Phone no."
+  },
+  {
+    "page": 2,
+    "field_id": "f2_40",
+    "label": "Your occupation"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_42",
+    "label": "Spouse's occupation"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_44",
+    "label": "Phone no."
+  },
+  {
+    "page": 2,
+    "field_id": "f2_45",
+    "label": "Email address"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_46",
+    "label": "Preparer's name"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_47",
+    "label": "PTIN"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_48",
+    "label": "Firm's name"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_49",
+    "label": "Phone no."
+  },
+  {
+    "page": 2,
+    "field_id": "f2_50",
+    "label": "Firm's address"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_51",
+    "label": "Firm's EIN"
+  }
+]

@@ -1,0 +1,28 @@
+{
+  "name": "@taxapi/tax-engine",
+  "version": "0.1.0",
+  "description": "IRS tax computation engine, PDF form filler, and MCP server",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/src/server.js",
+    "verify": "tsx scripts/verify_pipeline.ts",
+    "fill:1040": "tsx src/builders/build_1040.ts",
+    "fill:1120": "tsx src/builders/build_1120.ts",
+    "fill:1120s": "tsx src/builders/build_1120s.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "pdf-lib": "^1.17.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.2"
+  }
+}

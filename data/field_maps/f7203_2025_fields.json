@@ -1,0 +1,172 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_01",
+    "label": "Name of shareholder"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_02",
+    "label": "Identifying number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_03",
+    "label": "A Name of S corporation"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_04",
+    "label": "B Employer identification number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_05",
+    "label": "C Stock block (see instructions):"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_07",
+    "label": "1 Stock basis at the beginning of the corporation's tax year 1"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_08",
+    "label": "2 Basis from any capital contributions made or additional stock acquired during the tax year 2"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_09",
+    "label": "3a Ordinary business income (enter losses in Part III) 3a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_10",
+    "label": "b Net rental real estate income (enter losses in Part III) 3b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_11",
+    "label": "c Other net rental income (enter losses in Part III) 3c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_12",
+    "label": "d Interest income 3d"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_13",
+    "label": "e Ordinary dividends 3e"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_14",
+    "label": "f Royalties 3f"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "g Net capital gains (enter losses in Part III) 3g"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "h Net section 1231 gain (enter losses in Part III) 3h"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "i Other income (enter losses in Part III) 3i"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "j Excess depletion adjustment 3j"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_19",
+    "label": "k Tax-exempt income 3k"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "I Recapture of business credits 3I"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_21",
+    "label": "m Other items that increase stock basis 3m"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "4 Add lines 3a through 3m 4"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_23",
+    "label": "5 Stock basis before distributions. Add lines 1, 2, and 4 5"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "6 Distributions (excluding dividend distributions) 6"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_25",
+    "label": "7 Stock basis after distributions. Subtract line 6 from line 5. If the result is zero or less, enter -0-, skip lines 8 through 14, and enter -0- on line 15 7"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_26",
+    "label": "8a Nondeductible expenses 8a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_27",
+    "label": "b Depletion for oil and gas 8b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_28",
+    "label": "c Business credits (sections 50(c)(1) and (5)) 8c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_29",
+    "label": "9 Add lines 8a through 8c 9"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_30",
+    "label": "10 Stock basis before loss and deduction items. Subtract line 9 from line 7. If the result is zero or less, enter -0-, skip lines 11 through 14, and enter -0- on line 15 10"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_31",
+    "label": "11 Allowable loss and deduction items. Enter the amount from line 47, column (c) 11"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_32",
+    "label": "12 Debt basis restoration (see net increase in instructions for line 23) 12"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_33",
+    "label": "13 Other items that decrease stock basis 13"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_34",
+    "label": "14 Add lines 11, 12, and 13 14"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_35",
+    "label": "15 Stock basis at the end of the corporation's tax year. Subtract line 14 from line 10. If the result is zero or less, enter -0- 15"
+  }
+]

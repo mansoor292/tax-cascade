@@ -1,0 +1,3818 @@
+{
+  "1120": [
+    {
+      "form": "1120",
+      "field_id": "f1_1",
+      "line": "1",
+      "x_mm": "33.02mm",
+      "y_mm": "4.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Page 1. For calendar year 2024 or tax year beginning. Month and day"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_2",
+      "line": "",
+      "x_mm": "111.76mm",
+      "y_mm": "4.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": ", 2024, ending. Month and day"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_3",
+      "line": "20",
+      "x_mm": "149.86mm",
+      "y_mm": "4.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": ", 20. 2-digit year"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_5",
+      "line": "",
+      "x_mm": "12.7mm",
+      "y_mm": "8.467mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Number, street, and room or suite no. If a P.O. box, see instructions"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_6",
+      "line": "",
+      "x_mm": "12.7mm",
+      "y_mm": "16.933mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "City or town, state or province, country and Z I P or foreign postal code"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_8",
+      "line": "",
+      "x_mm": "160.02mm",
+      "y_mm": "33.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "C. Date incorporated"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_9",
+      "line": "",
+      "x_mm": "175.26mm",
+      "y_mm": "46.567mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "D. Total assets (see instructions). $"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_10",
+      "line": "1a",
+      "x_mm": "144.78mm",
+      "y_mm": "55.033mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1a. Gross receipts or sales"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_11",
+      "line": "1b",
+      "x_mm": "144.78mm",
+      "y_mm": "59.267mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1b. Returns and allowances"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_12",
+      "line": "1c",
+      "x_mm": "177.8mm",
+      "y_mm": "63.5mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1c. Balance. Subtract line 1b from line 1a"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_13",
+      "line": "2",
+      "x_mm": "177.8mm",
+      "y_mm": "67.733mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2. Cost of goods sold (attach Form 1125-A)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_14",
+      "line": "3",
+      "x_mm": "177.8mm",
+      "y_mm": "71.967mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. Gross profit. Subtract line 2 from line 1c"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_15",
+      "line": "4",
+      "x_mm": "177.8mm",
+      "y_mm": "76.2mm",
+      "type": "text",
+      "computed": "False",
+      "label": "4. Dividends and inclusions (Schedule C, line 23)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_16",
+      "line": "5",
+      "x_mm": "177.8mm",
+      "y_mm": "80.433mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5. Interest"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_17",
+      "line": "6",
+      "x_mm": "177.8mm",
+      "y_mm": "84.667mm",
+      "type": "text",
+      "computed": "False",
+      "label": "6. Gross rents"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_18",
+      "line": "7",
+      "x_mm": "177.8mm",
+      "y_mm": "88.9mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. Gross royalties"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_19",
+      "line": "8",
+      "x_mm": "177.8mm",
+      "y_mm": "93.133mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8. Capital gain net income (attach Schedule D (Form 1120))"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_20",
+      "line": "9",
+      "x_mm": "177.8mm",
+      "y_mm": "97.367mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9. Net gain or (loss) from Form 4797, Part I I, line 17 (attach Form 4797)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_21",
+      "line": "10",
+      "x_mm": "177.8mm",
+      "y_mm": "101.6mm",
+      "type": "text",
+      "computed": "False",
+      "label": "10. Other income (see instructions\u2014attach statement)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_22",
+      "line": "11",
+      "x_mm": "177.8mm",
+      "y_mm": "105.833mm",
+      "type": "text",
+      "computed": "False",
+      "label": "11. Total income. Add lines 3 through 10"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_24",
+      "line": "13",
+      "x_mm": "177.8mm",
+      "y_mm": "114.3mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13. Salaries and wages (less employment credits)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_25",
+      "line": "14",
+      "x_mm": "177.8mm",
+      "y_mm": "118.533mm",
+      "type": "text",
+      "computed": "False",
+      "label": "14. Repairs and maintenance"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_26",
+      "line": "15",
+      "x_mm": "177.8mm",
+      "y_mm": "122.767mm",
+      "type": "text",
+      "computed": "False",
+      "label": "15. Bad debts"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_27",
+      "line": "16",
+      "x_mm": "177.8mm",
+      "y_mm": "127mm",
+      "type": "text",
+      "computed": "False",
+      "label": "16. Rents"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_28",
+      "line": "17",
+      "x_mm": "177.8mm",
+      "y_mm": "131.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "17. Taxes and licenses"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_29",
+      "line": "18",
+      "x_mm": "177.8mm",
+      "y_mm": "135.467mm",
+      "type": "text",
+      "computed": "False",
+      "label": "18. Interest (see instructions)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_30",
+      "line": "19",
+      "x_mm": "177.8mm",
+      "y_mm": "139.7mm",
+      "type": "text",
+      "computed": "False",
+      "label": "19. Charitable contributions"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_31",
+      "line": "20",
+      "x_mm": "177.8mm",
+      "y_mm": "143.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "20. Depreciation from Form 4562 not claimed on Form 1125-A or elsewhere on return (attach Form 4562)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_32",
+      "line": "21",
+      "x_mm": "177.8mm",
+      "y_mm": "148.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "21. Depletion"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_33",
+      "line": "22",
+      "x_mm": "177.8mm",
+      "y_mm": "152.4mm",
+      "type": "text",
+      "computed": "False",
+      "label": "22. Advertising"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_34",
+      "line": "23",
+      "x_mm": "177.8mm",
+      "y_mm": "156.633mm",
+      "type": "text",
+      "computed": "False",
+      "label": "23. Pension, profit-sharing, etc., plans"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_35",
+      "line": "24",
+      "x_mm": "177.8mm",
+      "y_mm": "160.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "24. Employee benefit programs"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_36",
+      "line": "25",
+      "x_mm": "177.8mm",
+      "y_mm": "165.1mm",
+      "type": "text",
+      "computed": "False",
+      "label": "25. Energy efficient commercial buildings deduction (attach Form 7205)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_37",
+      "line": "26",
+      "x_mm": "177.8mm",
+      "y_mm": "169.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "26. Other deductions (attach statement)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_38",
+      "line": "27",
+      "x_mm": "177.8mm",
+      "y_mm": "173.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "27. Total deductions. Add lines 12 through 26"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_39",
+      "line": "28",
+      "x_mm": "177.8mm",
+      "y_mm": "177.8mm",
+      "type": "text",
+      "computed": "False",
+      "label": "28. Taxable income before net operating loss deduction and special deductions. Subtract line 27 from"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_40",
+      "line": "29a",
+      "x_mm": "144.78mm",
+      "y_mm": "182.033mm",
+      "type": "text",
+      "computed": "False",
+      "label": "29a. Net operating loss deduction (see instructions)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_41",
+      "line": "29b",
+      "x_mm": "144.78mm",
+      "y_mm": "186.267mm",
+      "type": "text",
+      "computed": "False",
+      "label": "29b. Special deductions (Schedule C, line 24)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_42",
+      "line": "29c",
+      "x_mm": "177.8mm",
+      "y_mm": "190.5mm",
+      "type": "text",
+      "computed": "False",
+      "label": "29c. Add lines 29a and 29b"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_44",
+      "line": "31",
+      "x_mm": "177.8mm",
+      "y_mm": "198.967mm",
+      "type": "text",
+      "computed": "False",
+      "label": "31. Total tax (Schedule J, line 12)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_45",
+      "line": "32",
+      "x_mm": "177.8mm",
+      "y_mm": "203.2mm",
+      "type": "text",
+      "computed": "False",
+      "label": "32. Reserved for future use"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_46",
+      "line": "33",
+      "x_mm": "177.8mm",
+      "y_mm": "207.433mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "33. Total payments and credits (Schedule J, line 23)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_47",
+      "line": "34",
+      "x_mm": "177.8mm",
+      "y_mm": "211.667mm",
+      "type": "text",
+      "computed": "False",
+      "label": "34. Amount"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_48",
+      "line": "35",
+      "x_mm": "177.8mm",
+      "y_mm": "215.9mm",
+      "type": "text",
+      "computed": "False",
+      "label": "35. Amount owed. If line 33 is smaller than the total of lines 31 and 34, enter amount owed"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_49",
+      "line": "36",
+      "x_mm": "177.8mm",
+      "y_mm": "220.133mm",
+      "type": "text",
+      "computed": "False",
+      "label": "36. Overpayment. If line 33 is larger than the total of lines 31 and 34, enter amount overpaid"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_50",
+      "line": "37",
+      "x_mm": "27.94mm",
+      "y_mm": "224.367mm",
+      "type": "text",
+      "computed": "False",
+      "label": "37. Enter amount from line 36 you want: Credited to 2025 estimated tax"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_51",
+      "line": "37",
+      "x_mm": "177.8mm",
+      "y_mm": "224.367mm",
+      "type": "text",
+      "computed": "False",
+      "label": "37. Refunded. Amount"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_52",
+      "line": "",
+      "x_mm": "114.3mm",
+      "y_mm": "237.067mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "Sign Here. Title"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_54",
+      "line": "",
+      "x_mm": "177.8mm",
+      "y_mm": "245.533mm",
+      "type": "text",
+      "computed": "False",
+      "label": "P T I N"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_55",
+      "line": "",
+      "x_mm": "30.48mm",
+      "y_mm": "254mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Firm\u2019s name"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_56",
+      "line": "",
+      "x_mm": "30.48mm",
+      "y_mm": "258.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Firm\u2019s address"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_57",
+      "line": "",
+      "x_mm": "152.4mm",
+      "y_mm": "254mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Firm's E I N"
+    },
+    {
+      "form": "1120",
+      "field_id": "f1_58",
+      "line": "",
+      "x_mm": "152.4mm",
+      "y_mm": "258.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Phone no"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_1",
+      "line": "3",
+      "x_mm": "144.78mm",
+      "y_mm": "21.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Page 3. Schedule J. Tax Computation and Payment (see instructions). 1a. Income tax (see instructions"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_2",
+      "line": "1b",
+      "x_mm": "144.78mm",
+      "y_mm": "25.4mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1b. Tax from Form 1120-L (see instructions)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_3",
+      "line": "1c",
+      "x_mm": "144.78mm",
+      "y_mm": "29.633mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1c. Section 1291 tax from Form 8621"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_4",
+      "line": "1d",
+      "x_mm": "144.78mm",
+      "y_mm": "33.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1d. Tax adjustment from Form 8978"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_5",
+      "line": "1e",
+      "x_mm": "144.78mm",
+      "y_mm": "38.1mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1e. Additional tax under section 197(f)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_6",
+      "line": "1f",
+      "x_mm": "144.78mm",
+      "y_mm": "42.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1f. Base erosion minimum tax from Form 8991"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_7",
+      "line": "1g",
+      "x_mm": "144.78mm",
+      "y_mm": "46.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1g. Amount from Form 4255, Part I, line 3, column (q)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_8",
+      "line": "1z",
+      "x_mm": "144.78mm",
+      "y_mm": "50.8mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1z. Other chapter 1 tax"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_9",
+      "line": "2",
+      "x_mm": "177.8mm",
+      "y_mm": "55.033mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2. Total income tax. Add lines 1a through 1z"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_10",
+      "line": "3",
+      "x_mm": "177.8mm",
+      "y_mm": "59.267mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. Corporate alternative minimum tax from Form 4626, Part I I, line 13 (attach Form 4626)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_11",
+      "line": "4",
+      "x_mm": "177.8mm",
+      "y_mm": "63.5mm",
+      "type": "text",
+      "computed": "False",
+      "label": "4. Add lines 2 and 3"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_12",
+      "line": "5a",
+      "x_mm": "144.78mm",
+      "y_mm": "67.733mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5a. Foreign tax credit (attach Form 1118)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_13",
+      "line": "5b",
+      "x_mm": "144.78mm",
+      "y_mm": "71.967mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5b. Credit from Form 8834 (see instructions)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_14",
+      "line": "5c",
+      "x_mm": "144.78mm",
+      "y_mm": "76.2mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5c. General business credit (see instructions\u2014attach Form 3800)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_15",
+      "line": "5d",
+      "x_mm": "144.78mm",
+      "y_mm": "80.433mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5d. Credit for prior year minimum tax (attach Form 8827)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_16",
+      "line": "5e",
+      "x_mm": "144.78mm",
+      "y_mm": "84.667mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5e. Bond credits from Form 8912"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_17",
+      "line": "5f",
+      "x_mm": "144.78mm",
+      "y_mm": "88.9mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5f. Adjustment from Form 8978"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_18",
+      "line": "6",
+      "x_mm": "177.8mm",
+      "y_mm": "93.133mm",
+      "type": "text",
+      "computed": "False",
+      "label": "6. Total credits. Add lines 5a through 5f"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_19",
+      "line": "7",
+      "x_mm": "177.8mm",
+      "y_mm": "97.367mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. Subtract line 6 from line 4"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_20",
+      "line": "8",
+      "x_mm": "177.8mm",
+      "y_mm": "101.6mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8. Personal holding company tax (attach Schedule P H (Form 1120))"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_21",
+      "line": "9a",
+      "x_mm": "144.78mm",
+      "y_mm": "105.833mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9a. Amount from Form 4255, Part I, line 3, column (r)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_22",
+      "line": "9b",
+      "x_mm": "144.78mm",
+      "y_mm": "110.067mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9b. Recapture of low-income housing credit (attach Form 8611)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_23",
+      "line": "9c",
+      "x_mm": "144.78mm",
+      "y_mm": "114.3mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9c. Completed long-term contract look-back interest due (attach Form 8697)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_24",
+      "line": "9d",
+      "x_mm": "144.78mm",
+      "y_mm": "118.533mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9d. Interest due under the look-back method\u2014income forecast method (attach Form 8866)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_25",
+      "line": "9e",
+      "x_mm": "144.78mm",
+      "y_mm": "122.767mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9e. Alternative tax on qualifying shipping activities (attach Form 8902)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_26",
+      "line": "9f",
+      "x_mm": "144.78mm",
+      "y_mm": "127mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9f. Interest/tax due under section 453A(c)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_27",
+      "line": "9g",
+      "x_mm": "144.78mm",
+      "y_mm": "131.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9g. Interest/tax due under section 453(l)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_28",
+      "line": "9z",
+      "x_mm": "144.78mm",
+      "y_mm": "135.467mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9z. Other (see instructions\u2014attach statement)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_29",
+      "line": "10",
+      "x_mm": "177.8mm",
+      "y_mm": "139.7mm",
+      "type": "text",
+      "computed": "False",
+      "label": "10. Total. Add lines 9a through 9z"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_30",
+      "line": "11a",
+      "x_mm": "144.78mm",
+      "y_mm": "143.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "11a. Total tax before deferred taxes. Add lines 7, 8, and 10"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_31",
+      "line": "11b",
+      "x_mm": "144.78mm",
+      "y_mm": "152.4mm",
+      "type": "text",
+      "computed": "False",
+      "label": "11b. Deferred tax on the corporation's share of undistributed earnings of a qualified electing fund"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_32",
+      "line": "11c",
+      "x_mm": "144.78mm",
+      "y_mm": "156.633mm",
+      "type": "text",
+      "computed": "False",
+      "label": "11c. Deferred L I F O recapture tax (section 1363(d))"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_33",
+      "line": "12",
+      "x_mm": "177.8mm",
+      "y_mm": "160.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "12. Total tax. Subtract the sum of lines 11b and 11c from 11a. Enter here and on page 1, line 31"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_34",
+      "line": "13",
+      "x_mm": "177.8mm",
+      "y_mm": "165.1mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13. Preceding year\u2019s overpayment credited to the current year"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_35",
+      "line": "14",
+      "x_mm": "177.8mm",
+      "y_mm": "169.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "14. Current year\u2019s estimated tax payments"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_36",
+      "line": "15",
+      "x_mm": "177.8mm",
+      "y_mm": "173.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "15. Open parenthesis. Current year\u2019s refund applied for on Form 4466. Close parenthesis"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_37",
+      "line": "16",
+      "x_mm": "177.8mm",
+      "y_mm": "177.8mm",
+      "type": "text",
+      "computed": "False",
+      "label": "16. Reserved for future use"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_38",
+      "line": "17",
+      "x_mm": "177.8mm",
+      "y_mm": "182.033mm",
+      "type": "text",
+      "computed": "False",
+      "label": "17. Tax deposited with Form 7004"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_39",
+      "line": "18",
+      "x_mm": "177.8mm",
+      "y_mm": "186.267mm",
+      "type": "text",
+      "computed": "False",
+      "label": "18. Withholding (see instructions)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_40",
+      "line": "19",
+      "x_mm": "177.8mm",
+      "y_mm": "190.5mm",
+      "type": "text",
+      "computed": "False",
+      "label": "19. Total payments. Combine lines 13 through 18"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_41",
+      "line": "20",
+      "x_mm": "144.78mm",
+      "y_mm": "198.967mm",
+      "type": "text",
+      "computed": "False",
+      "label": "20. Refundable credits from: a. Form 2439"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_42",
+      "line": "20b",
+      "x_mm": "144.78mm",
+      "y_mm": "203.2mm",
+      "type": "text",
+      "computed": "False",
+      "label": "20b. Form 4136"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_43",
+      "line": "20c",
+      "x_mm": "144.78mm",
+      "y_mm": "211.667mm",
+      "type": "text",
+      "computed": "False",
+      "label": "20c. Credit for tax withheld under chapter 3 or 4 from Form 1042-S, Form 8805, or Form 8288 (attach "
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_44",
+      "line": "20z",
+      "x_mm": "144.78mm",
+      "y_mm": "215.9mm",
+      "type": "text",
+      "computed": "False",
+      "label": "20z. Other (attach statement\u2014see instructions)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_45",
+      "line": "21",
+      "x_mm": "177.8mm",
+      "y_mm": "220.133mm",
+      "type": "text",
+      "computed": "False",
+      "label": "21. Total credits. Add lines 20a through 20z"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_46",
+      "line": "22",
+      "x_mm": "177.8mm",
+      "y_mm": "224.367mm",
+      "type": "text",
+      "computed": "False",
+      "label": "22. Elective payment election amount from Form 3800"
+    },
+    {
+      "form": "1120",
+      "field_id": "f3_47",
+      "line": "23",
+      "x_mm": "177.8mm",
+      "y_mm": "228.6mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "23. Total payments and credits. Add lines 19, 21, and 22. Enter here and on page 1, line 33"
+    },
+    {
+      "form": "1120",
+      "field_id": "f4_1",
+      "line": "1c",
+      "x_mm": "116.84mm",
+      "y_mm": "21.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1c. Other (specify)"
+    },
+    {
+      "form": "1120",
+      "field_id": "f4_2",
+      "line": "2",
+      "x_mm": "22.86mm",
+      "y_mm": "29.633mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2. See the instructions and enter the: a. Business activity code no"
+    },
+    {
+      "form": "1120",
+      "field_id": "f4_3",
+      "line": "2b",
+      "x_mm": "22.86mm",
+      "y_mm": "33.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2b. Business activity"
+    },
+    {
+      "form": "1120",
+      "field_id": "f4_4",
+      "line": "2c",
+      "x_mm": "22.86mm",
+      "y_mm": "38.1mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2c. Product or service"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_2",
+      "line": "3",
+      "x_mm": "187.96mm",
+      "y_mm": "42.333mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "3. Is the corporation a subsidiary in an affiliated group or a parent\u2013subsidiary controlled group? Y"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_2",
+      "line": "3",
+      "x_mm": "195.58mm",
+      "y_mm": "42.333mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "3. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "f4_5",
+      "line": "3",
+      "x_mm": "22.86mm",
+      "y_mm": "46.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. If \u201cYes,\u201d enter name and E I N of the parent corporation. Line 1 of 2"
+    },
+    {
+      "form": "1120",
+      "field_id": "f4_6",
+      "line": "3",
+      "x_mm": "22.86mm",
+      "y_mm": "50.8mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. Line 2 of 2"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_3",
+      "line": "4",
+      "x_mm": "187.96mm",
+      "y_mm": "67.733mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "4. At the end of the tax year: a. Did any foreign or domestic corporation, partnership (including an"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_3",
+      "line": "4a",
+      "x_mm": "195.58mm",
+      "y_mm": "67.733mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "4a. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_4",
+      "line": "4b",
+      "x_mm": "187.96mm",
+      "y_mm": "76.2mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "4b. Did any individual or estate own directly 20% or more, or own, directly or indirectly, 50% or mo"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_4",
+      "line": "4b",
+      "x_mm": "195.58mm",
+      "y_mm": "76.2mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "4b. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_5",
+      "line": "5",
+      "x_mm": "187.96mm",
+      "y_mm": "88.9mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "5. At the end of the tax year, did the corporation: a. Own directly 20% or more, or own, directly or"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_5",
+      "line": "5a",
+      "x_mm": "195.58mm",
+      "y_mm": "88.9mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "5a. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_6",
+      "line": "5b",
+      "x_mm": "187.96mm",
+      "y_mm": "135.467mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "5b. Own directly an interest of 20% or more, or own, directly or indirectly, an interest of 50% or m"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_6",
+      "line": "5b",
+      "x_mm": "195.58mm",
+      "y_mm": "135.467mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "5b. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_7",
+      "line": "6",
+      "x_mm": "187.96mm",
+      "y_mm": "182.033mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "6. During this tax year, did the corporation pay dividends (other than stock dividends and distribut"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_7",
+      "line": "6",
+      "x_mm": "195.58mm",
+      "y_mm": "182.033mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "6. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_8",
+      "line": "7",
+      "x_mm": "187.96mm",
+      "y_mm": "198.967mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "7. At any time during this tax year, did one foreign person own, directly or indirectly, at least 25"
+    },
+    {
+      "form": "1120",
+      "field_id": "c4_8",
+      "line": "7",
+      "x_mm": "195.58mm",
+      "y_mm": "198.967mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "7. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "f4_31",
+      "line": "7",
+      "x_mm": "22.86mm",
+      "y_mm": "207.433mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. For rules of attribution, see section 318. If \u201cYes,\u201d enter: (a) Percentage owned"
+    },
+    {
+      "form": "1120",
+      "field_id": "f4_32",
+      "line": "7",
+      "x_mm": "76.2mm",
+      "y_mm": "207.433mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. and (b) Owner\u2019s country"
+    },
+    {
+      "form": "1120",
+      "field_id": "f4_33",
+      "line": "7",
+      "x_mm": "142.24mm",
+      "y_mm": "215.9mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "7. (c) The corporation may have to file Form 5472, Information Return of a 25% Foreign-Owned U.S. Co"
+    },
+    {
+      "form": "1120",
+      "field_id": "f4_34",
+      "line": "9",
+      "x_mm": "22.86mm",
+      "y_mm": "228.6mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9. Enter the amount of tax-exempt interest received or accrued during this tax year. $"
+    },
+    {
+      "form": "1120",
+      "field_id": "f4_35",
+      "line": "10",
+      "x_mm": "22.86mm",
+      "y_mm": "232.833mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "10. Enter the number of shareholders at the end of the tax year (if 100 or fewer)"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_1",
+      "line": "5",
+      "x_mm": "187.96mm",
+      "y_mm": "25.4mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "Page 5. Schedule K. Other Information (continued from page 4). 13. Are the corporation\u2019s total recei"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_1",
+      "line": "13",
+      "x_mm": "195.58mm",
+      "y_mm": "25.4mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "13. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "f5_1",
+      "line": "13",
+      "x_mm": "152.4mm",
+      "y_mm": "33.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13. If \u201cYes,\u201d the corporation is not required to complete Schedules L, M-1, and M-2. Instead, enter "
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_2",
+      "line": "14",
+      "x_mm": "187.96mm",
+      "y_mm": "38.1mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "14. Is the corporation required to file Schedule U T P (Form 1120), Uncertain Tax Position Statement"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_2",
+      "line": "14",
+      "x_mm": "195.58mm",
+      "y_mm": "38.1mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "14. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_3",
+      "line": "15a",
+      "x_mm": "187.96mm",
+      "y_mm": "46.567mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "15a. Did the corporation make any payments that would require it to file Form(s) 1099? Yes"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_3",
+      "line": "15a",
+      "x_mm": "195.58mm",
+      "y_mm": "46.567mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "15a. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_4",
+      "line": "15b",
+      "x_mm": "187.96mm",
+      "y_mm": "50.8mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "15b. If \u201cYes,\u201d did or will the corporation file required Form(s) 1099? Yes"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_4",
+      "line": "15b",
+      "x_mm": "195.58mm",
+      "y_mm": "50.8mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "15b. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_5",
+      "line": "16",
+      "x_mm": "187.96mm",
+      "y_mm": "59.267mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "16. During this tax year, did the corporation have an 80%-or-more change in ownership, including a c"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_5",
+      "line": "16",
+      "x_mm": "195.58mm",
+      "y_mm": "59.267mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "16. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_6",
+      "line": "17",
+      "x_mm": "187.96mm",
+      "y_mm": "67.733mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "17. During or subsequent to this tax year, but before the filing of this return, did the corporation"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_6",
+      "line": "17",
+      "x_mm": "195.58mm",
+      "y_mm": "67.733mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "17. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_7",
+      "line": "18",
+      "x_mm": "187.96mm",
+      "y_mm": "76.2mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "18. Did this corporation receive assets in a section 351 transfer in which any of the transferred as"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_7",
+      "line": "18",
+      "x_mm": "195.58mm",
+      "y_mm": "76.2mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "18. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_8",
+      "line": "19",
+      "x_mm": "187.96mm",
+      "y_mm": "84.667mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "19. During this corporation's tax year, did the corporation make any payments that would require it "
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_8",
+      "line": "19",
+      "x_mm": "195.58mm",
+      "y_mm": "84.667mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "19. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_9",
+      "line": "20",
+      "x_mm": "187.96mm",
+      "y_mm": "88.9mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "20. Is the corporation operating on a cooperative basis? Yes"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_9",
+      "line": "20",
+      "x_mm": "195.58mm",
+      "y_mm": "88.9mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "20. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_10",
+      "line": "21",
+      "x_mm": "187.96mm",
+      "y_mm": "97.367mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "21. During this tax year, did the corporation pay or accrue any interest or royalty for which the de"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_10",
+      "line": "21",
+      "x_mm": "195.58mm",
+      "y_mm": "97.367mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "21. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "f5_2",
+      "line": "21",
+      "x_mm": "22.86mm",
+      "y_mm": "101.6mm",
+      "type": "text",
+      "computed": "False",
+      "label": "21. If \u201cYes,\u201d enter the total amount of the disallowed deductions. $"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_11",
+      "line": "22",
+      "x_mm": "187.96mm",
+      "y_mm": "105.833mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "22. Does this corporation have gross receipts of at least $500 million in any of the 3 preceding tax"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_11",
+      "line": "22",
+      "x_mm": "195.58mm",
+      "y_mm": "105.833mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "22. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_12",
+      "line": "23",
+      "x_mm": "187.96mm",
+      "y_mm": "118.533mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "23. Did the corporation have an election under section 163(j) for any real property trade or busines"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_12",
+      "line": "23",
+      "x_mm": "195.58mm",
+      "y_mm": "118.533mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "23. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_13",
+      "line": "24",
+      "x_mm": "187.96mm",
+      "y_mm": "122.767mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "24. Does the corporation satisfy one or more of the following? If \"Yes,\" complete and attach Form 89"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_13",
+      "line": "24",
+      "x_mm": "195.58mm",
+      "y_mm": "122.767mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "24. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_14",
+      "line": "25",
+      "x_mm": "187.96mm",
+      "y_mm": "143.933mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "25. Is the corporation attaching Form 8996 to certify as a Qualified Opportunity Fund? Yes"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_14",
+      "line": "25",
+      "x_mm": "195.58mm",
+      "y_mm": "143.933mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "25. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "f5_3",
+      "line": "25",
+      "x_mm": "22.86mm",
+      "y_mm": "148.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "25. If \u201cYes,\u201d enter amount from Form 8996, line 15. $"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_15",
+      "line": "26",
+      "x_mm": "187.96mm",
+      "y_mm": "165.1mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "26. Since December 22, 2017, did a foreign corporation directly or indirectly acquire substantially "
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_15",
+      "line": "26",
+      "x_mm": "195.58mm",
+      "y_mm": "165.1mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "26. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "f5_4",
+      "line": "26",
+      "x_mm": "22.86mm",
+      "y_mm": "169.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "26. Percentage: By Vote"
+    },
+    {
+      "form": "1120",
+      "field_id": "f5_5",
+      "line": "26",
+      "x_mm": "109.22mm",
+      "y_mm": "169.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "26. By Value"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_16",
+      "line": "27",
+      "x_mm": "187.96mm",
+      "y_mm": "177.8mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "27. At any time during this tax year, did the corporation (a) receive a digital asset (as a reward, "
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_16",
+      "line": "27",
+      "x_mm": "195.58mm",
+      "y_mm": "177.8mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "27. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_17",
+      "line": "28",
+      "x_mm": "187.96mm",
+      "y_mm": "182.033mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "28. Is the corporation a member of a controlled group? If \"Yes,\" attach Schedule O (Form 1120). See "
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_17",
+      "line": "28",
+      "x_mm": "195.58mm",
+      "y_mm": "182.033mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "28. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_18",
+      "line": "29a",
+      "x_mm": "187.96mm",
+      "y_mm": "194.733mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "29a. Corporate Alternative Minimum Tax: a. Was the corporation an applicable corporation under secti"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_18",
+      "line": "29a",
+      "x_mm": "195.58mm",
+      "y_mm": "194.733mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "29a. If \"No,\" skip to question 29c. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_19",
+      "line": "29b",
+      "x_mm": "187.96mm",
+      "y_mm": "207.433mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "29b. Is the corporation an applicable corporation under section 59(k)(1) in the current tax year bec"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_19",
+      "line": "29b",
+      "x_mm": "195.58mm",
+      "y_mm": "207.433mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "29b. If \u201cNo,\u201d continue to question 29c. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_20",
+      "line": "29c",
+      "x_mm": "187.96mm",
+      "y_mm": "220.133mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "29c. Does the corporation meet the requirements of the safe harbor method as provided under section "
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_20",
+      "line": "29c",
+      "x_mm": "195.58mm",
+      "y_mm": "220.133mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "29c. If \u201cNo,\u201d complete and attach Form 4626. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_21",
+      "line": "30",
+      "x_mm": "187.96mm",
+      "y_mm": "232.833mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "30. Is the corporation required to file Form 7208 relating to the excise tax on repurchase of corpor"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_21",
+      "line": "30a",
+      "x_mm": "195.58mm",
+      "y_mm": "232.833mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "30a. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_22",
+      "line": "30b",
+      "x_mm": "187.96mm",
+      "y_mm": "237.067mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "30b. Under the applicable foreign corporation rules? Yes"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_22",
+      "line": "30b",
+      "x_mm": "195.58mm",
+      "y_mm": "237.067mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "30b. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_23",
+      "line": "30c",
+      "x_mm": "187.96mm",
+      "y_mm": "241.3mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "30c. Under the covered surrogate foreign corporation rules? If \u201cYes\u201d to either 30a, 30b, or 30c, com"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_23",
+      "line": "30c",
+      "x_mm": "195.58mm",
+      "y_mm": "241.3mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "30c. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_24",
+      "line": "31",
+      "x_mm": "187.96mm",
+      "y_mm": "258.233mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "31. Is this a consolidated return with gross receipts or sales of $1 billion or more and a subchapte"
+    },
+    {
+      "form": "1120",
+      "field_id": "c5_24",
+      "line": "31",
+      "x_mm": "195.58mm",
+      "y_mm": "258.233mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "31. No"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_134",
+      "line": "2",
+      "x_mm": "73.66mm",
+      "y_mm": "4.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2. Federal income tax per books"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_135",
+      "line": "3",
+      "x_mm": "73.66mm",
+      "y_mm": "8.467mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. Excess of capital losses over capital gains"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_136",
+      "line": "4",
+      "x_mm": "33.02mm",
+      "y_mm": "16.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "4. Income subject to tax not recorded on books this year (itemize): Line 1 of 2"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_137",
+      "line": "4",
+      "x_mm": "10.16mm",
+      "y_mm": "21.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "4. Line 2 of 2"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_138",
+      "line": "4",
+      "x_mm": "73.66mm",
+      "y_mm": "21.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "4. Amount"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_139",
+      "line": "5",
+      "x_mm": "45.72mm",
+      "y_mm": "33.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5. Expenses recorded on books this year not deducted on this return (itemize): a. Depreciation. $"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_140",
+      "line": "5b",
+      "x_mm": "45.72mm",
+      "y_mm": "38.1mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5b. Charitable contributions. $"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_141",
+      "line": "5c",
+      "x_mm": "45.72mm",
+      "y_mm": "42.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5c. Travel and entertainment. Line 1 of 2. $"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_142",
+      "line": "5c",
+      "x_mm": "10.16mm",
+      "y_mm": "46.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5c. Line 2 of 2"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_143",
+      "line": "5",
+      "x_mm": "73.66mm",
+      "y_mm": "46.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5. Amount"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_144",
+      "line": "6",
+      "x_mm": "73.66mm",
+      "y_mm": "50.8mm",
+      "type": "text",
+      "computed": "False",
+      "label": "6. Add lines 1 through 5"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_145",
+      "line": "7",
+      "x_mm": "38.1mm",
+      "y_mm": "8.467mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. Income recorded on books this year not included on this return (itemize): Tax exempt interest. Li"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_146",
+      "line": "7",
+      "x_mm": "10.16mm",
+      "y_mm": "12.7mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. Line 2 of 3"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_147",
+      "line": "7",
+      "x_mm": "10.16mm",
+      "y_mm": "16.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. Line 3 of 3"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_148",
+      "line": "7",
+      "x_mm": "60.96mm",
+      "y_mm": "16.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. Amount"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_149",
+      "line": "8",
+      "x_mm": "38.1mm",
+      "y_mm": "29.633mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8. Deductions on this return not charged against book income this year (itemize): a. Depreciation. $"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_150",
+      "line": "8b",
+      "x_mm": "38.1mm",
+      "y_mm": "33.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8b. Charitable contributions. Line 1 of 3. $"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_151",
+      "line": "8b",
+      "x_mm": "10.16mm",
+      "y_mm": "38.1mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8b. Line 2 of 3"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_152",
+      "line": "8b",
+      "x_mm": "10.16mm",
+      "y_mm": "42.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8b. Line 3 of 3"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_153",
+      "line": "8",
+      "x_mm": "60.96mm",
+      "y_mm": "42.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8. Amount"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_154",
+      "line": "9",
+      "x_mm": "60.96mm",
+      "y_mm": "46.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9. Add lines 7 and 8"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_155",
+      "line": "10",
+      "x_mm": "60.96mm",
+      "y_mm": "50.8mm",
+      "type": "text",
+      "computed": "False",
+      "label": "10. Income (page 1, line 28)\u2014line 6 less line 9"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_157",
+      "line": "2",
+      "x_mm": "73.66mm",
+      "y_mm": "4.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2. Net income (loss) per books"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_158",
+      "line": "3",
+      "x_mm": "10.16mm",
+      "y_mm": "8.466mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. Other increases (itemize): Line 1 of 3"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_159",
+      "line": "3",
+      "x_mm": "10.16mm",
+      "y_mm": "12.7mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. Line 2 of 3"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_160",
+      "line": "3",
+      "x_mm": "10.16mm",
+      "y_mm": "16.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. Line 3 of 3"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_161",
+      "line": "3",
+      "x_mm": "73.66mm",
+      "y_mm": "16.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. Amount"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_162",
+      "line": "4",
+      "x_mm": "73.66mm",
+      "y_mm": "21.166mm",
+      "type": "text",
+      "computed": "False",
+      "label": "4. Add lines 1, 2, and 3"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_164",
+      "line": "5b",
+      "x_mm": "60.96mm",
+      "y_mm": "4.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5b. Stock"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_165",
+      "line": "5c",
+      "x_mm": "60.96mm",
+      "y_mm": "8.466mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5c. Property"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_166",
+      "line": "6",
+      "x_mm": "10.16mm",
+      "y_mm": "12.7mm",
+      "type": "text",
+      "computed": "False",
+      "label": "6. Other decreases (itemize):"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_167",
+      "line": "6",
+      "x_mm": "60.96mm",
+      "y_mm": "12.7mm",
+      "type": "text",
+      "computed": "False",
+      "label": "6. Amount"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_168",
+      "line": "7",
+      "x_mm": "60.96mm",
+      "y_mm": "16.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. Add lines 5 and 6"
+    },
+    {
+      "form": "1120",
+      "field_id": "f6_169",
+      "line": "8",
+      "x_mm": "60.96mm",
+      "y_mm": "21.166mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8. Balance at end of year (line 4 less line 7)"
+    }
+  ],
+  "1120S": [
+    {
+      "form": "1120S",
+      "field_id": "f1_5",
+      "line": "",
+      "x_mm": "48.26mm",
+      "y_mm": "12.7mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Number, street, and room or suite no. If a P.O. box, see instructions"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_6",
+      "line": "",
+      "x_mm": "48.26mm",
+      "y_mm": "21.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "City or town, state or province, country, and Z I P or foreign postal code"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_9",
+      "line": "",
+      "x_mm": "160.02mm",
+      "y_mm": "33.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "D. Employer identification number"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_10",
+      "line": "",
+      "x_mm": "160.02mm",
+      "y_mm": "42.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "E. Date incorporated"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_11",
+      "line": "",
+      "x_mm": "160.02mm",
+      "y_mm": "55.033mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "F. Total assets (see instructions). $"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_12",
+      "line": "",
+      "x_mm": "17.78mm",
+      "y_mm": "67.733mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "I. Enter the number of shareholders who were shareholders during any part of the tax year"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_13",
+      "line": "22",
+      "x_mm": "55.88mm",
+      "y_mm": "80.433mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Caution: Include only trade or business income and expenses on lines 1a through 22. See the instruct"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_14",
+      "line": "1b",
+      "x_mm": "121.92mm",
+      "y_mm": "80.433mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1b. Less returns and allowances"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_15",
+      "line": "1c",
+      "x_mm": "175.26mm",
+      "y_mm": "80.433mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1c. Balance. Subtract line 1b from line 1a"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_16",
+      "line": "2",
+      "x_mm": "175.26mm",
+      "y_mm": "84.667mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2. Cost of goods sold (attach Form 1125-A)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_17",
+      "line": "3",
+      "x_mm": "175.26mm",
+      "y_mm": "88.9mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. Gross profit. Subtract line 2 from line 1c"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_18",
+      "line": "4",
+      "x_mm": "175.26mm",
+      "y_mm": "93.133mm",
+      "type": "text",
+      "computed": "False",
+      "label": "4. Net gain (loss) from Form 4797, Part I I, line 17 (attach Form 4797)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_19",
+      "line": "5",
+      "x_mm": "175.26mm",
+      "y_mm": "97.367mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5. Other income (loss) (see instructions\u2014attach statement)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_20",
+      "line": "6",
+      "x_mm": "175.26mm",
+      "y_mm": "101.6mm",
+      "type": "text",
+      "computed": "False",
+      "label": "6. Total income (loss). Add lines 3 through 5"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_21",
+      "line": "7",
+      "x_mm": "175.26mm",
+      "y_mm": "105.833mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Deductions (see instructions for limitations). 7. Compensation of officers (see instructions\u2014attach "
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_22",
+      "line": "8",
+      "x_mm": "175.26mm",
+      "y_mm": "110.067mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8. Salaries and wages (less employment credits)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_23",
+      "line": "9",
+      "x_mm": "175.26mm",
+      "y_mm": "114.3mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9. Repairs and maintenance"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_24",
+      "line": "10",
+      "x_mm": "175.26mm",
+      "y_mm": "118.533mm",
+      "type": "text",
+      "computed": "False",
+      "label": "10. Bad debts"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_25",
+      "line": "11",
+      "x_mm": "175.26mm",
+      "y_mm": "122.767mm",
+      "type": "text",
+      "computed": "False",
+      "label": "11. Rents"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_26",
+      "line": "12",
+      "x_mm": "175.26mm",
+      "y_mm": "127mm",
+      "type": "text",
+      "computed": "False",
+      "label": "12. Taxes and licenses"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_27",
+      "line": "13",
+      "x_mm": "175.26mm",
+      "y_mm": "131.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13. Interest (see instructions)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_28",
+      "line": "14",
+      "x_mm": "175.26mm",
+      "y_mm": "135.467mm",
+      "type": "text",
+      "computed": "False",
+      "label": "14. Depreciation from Form 4562 not claimed on Form 1125-A or elsewhere on return (attach Form 4562)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_29",
+      "line": "15",
+      "x_mm": "175.26mm",
+      "y_mm": "139.7mm",
+      "type": "text",
+      "computed": "False",
+      "label": "15. Depletion (do not deduct oil and gas depletion)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_30",
+      "line": "16",
+      "x_mm": "175.26mm",
+      "y_mm": "143.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "16. Advertising"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_31",
+      "line": "17",
+      "x_mm": "175.26mm",
+      "y_mm": "148.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "17. Pension, profit-sharing, etc., plans"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_32",
+      "line": "18",
+      "x_mm": "175.26mm",
+      "y_mm": "152.4mm",
+      "type": "text",
+      "computed": "False",
+      "label": "18. Employee benefit programs"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_33",
+      "line": "19",
+      "x_mm": "175.26mm",
+      "y_mm": "156.633mm",
+      "type": "text",
+      "computed": "False",
+      "label": "19. Energy efficient commercial buildings deduction (attach Form 7205)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_34",
+      "line": "20",
+      "x_mm": "175.26mm",
+      "y_mm": "160.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "20. Other deductions (attach statement)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_35",
+      "line": "21",
+      "x_mm": "175.26mm",
+      "y_mm": "165.1mm",
+      "type": "text",
+      "computed": "False",
+      "label": "21. Total deductions. Add lines 7 through 20"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_36",
+      "line": "22",
+      "x_mm": "175.26mm",
+      "y_mm": "169.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "22. Ordinary business income (loss). Subtract line 21 from line 6"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_37",
+      "line": "23a",
+      "x_mm": "139.7mm",
+      "y_mm": "173.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "23a. Excess net passive income or L I F O recapture tax (see instructions)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_38",
+      "line": "23b",
+      "x_mm": "139.7mm",
+      "y_mm": "177.8mm",
+      "type": "text",
+      "computed": "False",
+      "label": "23b. Tax from Schedule D (Form 1120-S)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_39",
+      "line": "23c",
+      "x_mm": "175.26mm",
+      "y_mm": "182.033mm",
+      "type": "text",
+      "computed": "False",
+      "label": "23c. Add lines 23a and 23b (see instructions for additional taxes)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_40",
+      "line": "24a",
+      "x_mm": "139.7mm",
+      "y_mm": "190.5mm",
+      "type": "text",
+      "computed": "False",
+      "label": "24a. Current year\u2019s estimated tax payments and preceding year\u2019s overpayment credited to the current "
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_41",
+      "line": "24b",
+      "x_mm": "139.7mm",
+      "y_mm": "194.733mm",
+      "type": "text",
+      "computed": "False",
+      "label": "24b. Tax deposited with Form 7004"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_42",
+      "line": "24c",
+      "x_mm": "139.7mm",
+      "y_mm": "198.967mm",
+      "type": "text",
+      "computed": "False",
+      "label": "24c. Credit for federal tax paid on fuels (attach Form 4136)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_43",
+      "line": "24d",
+      "x_mm": "139.7mm",
+      "y_mm": "203.2mm",
+      "type": "text",
+      "computed": "False",
+      "label": "24d. Elective payment election amount from Form 3800"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_44",
+      "line": "24z",
+      "x_mm": "175.26mm",
+      "y_mm": "207.433mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "24z. Add lines 24a through 24d"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_45",
+      "line": "25",
+      "x_mm": "175.26mm",
+      "y_mm": "211.667mm",
+      "type": "text",
+      "computed": "False",
+      "label": "25. Amount"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_46",
+      "line": "26",
+      "x_mm": "175.26mm",
+      "y_mm": "215.9mm",
+      "type": "text",
+      "computed": "False",
+      "label": "26. Amount owed. If line 24z is smaller than the total of lines 23c and 25, enter amount owed"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_47",
+      "line": "27",
+      "x_mm": "175.26mm",
+      "y_mm": "220.133mm",
+      "type": "text",
+      "computed": "False",
+      "label": "27. Overpayment. If line 24z is larger than the total of lines 23c and 25, enter amount overpaid"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_48",
+      "line": "28",
+      "x_mm": "66.04mm",
+      "y_mm": "224.367mm",
+      "type": "text",
+      "computed": "False",
+      "label": "28. Enter amount from line 27: Credited to 2025 estimated tax"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_49",
+      "line": "28",
+      "x_mm": "175.26mm",
+      "y_mm": "224.367mm",
+      "type": "text",
+      "computed": "False",
+      "label": "28. Refunded"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_50",
+      "line": "",
+      "x_mm": "116.84mm",
+      "y_mm": "237.067mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Sign Here. Title"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_52",
+      "line": "",
+      "x_mm": "177.8mm",
+      "y_mm": "245.533mm",
+      "type": "text",
+      "computed": "False",
+      "label": "P T I N"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_53",
+      "line": "",
+      "x_mm": "30.48mm",
+      "y_mm": "254mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Firm\u2019s name"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_54",
+      "line": "",
+      "x_mm": "30.48mm",
+      "y_mm": "258.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Firm\u2019s address"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_55",
+      "line": "",
+      "x_mm": "160.02mm",
+      "y_mm": "254mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Firm's E I N"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f1_56",
+      "line": "",
+      "x_mm": "160.02mm",
+      "y_mm": "258.233mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "Phone no"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f2_1",
+      "line": "1",
+      "x_mm": "93.98mm",
+      "y_mm": "25.4mm",
+      "type": "text",
+      "computed": "False",
+      "label": "1. c. Other (specify)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f2_2",
+      "line": "2",
+      "x_mm": "22.86mm",
+      "y_mm": "33.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2. See the instructions and enter the: a. Business activity"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f2_3",
+      "line": "2",
+      "x_mm": "104.14mm",
+      "y_mm": "33.867mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "2. b. Product or service"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f2_44",
+      "line": "5a",
+      "x_mm": "30.48mm",
+      "y_mm": "143.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5a. (i). Total shares of restricted stock"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f2_45",
+      "line": "5a",
+      "x_mm": "30.48mm",
+      "y_mm": "148.167mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "5a. (i i). Total shares of non-restricted stock"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f2_46",
+      "line": "5b",
+      "x_mm": "30.48mm",
+      "y_mm": "160.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5b. (i). Total shares of stock outstanding at the end of the tax year"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f2_47",
+      "line": "5b",
+      "x_mm": "30.48mm",
+      "y_mm": "165.1mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "5b. (i i). Total shares of stock outstanding if all instruments were executed"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f2_48",
+      "line": "8",
+      "x_mm": "149.86mm",
+      "y_mm": "203.2mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "8. If the corporation (a) was a C corporation before it elected to be an S corporation or the corpor"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_1",
+      "line": "12",
+      "x_mm": "149.86mm",
+      "y_mm": "29.633mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "12. If \u201cYes,\u201d enter the amount of principal reduction. $"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_2",
+      "line": "15",
+      "x_mm": "149.86mm",
+      "y_mm": "50.8mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "15. If \u201cYes,\u201d enter the amount from Form 8996, line 15. $"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_3",
+      "line": "1",
+      "x_mm": "175.26mm",
+      "y_mm": "67.733mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Schedule K. Shareholders' Pro Rata Share Items. Income (Loss). 1. Ordinary business income (loss) (p"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_4",
+      "line": "2",
+      "x_mm": "175.26mm",
+      "y_mm": "71.967mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2. Net rental real estate income (loss) (attach Form 8825)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_5",
+      "line": "3a",
+      "x_mm": "139.7mm",
+      "y_mm": "76.2mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3a. Other gross rental income (loss)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_6",
+      "line": "3b",
+      "x_mm": "139.7mm",
+      "y_mm": "80.433mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3b. Expenses from other rental activities (attach statement)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_7",
+      "line": "3c",
+      "x_mm": "175.26mm",
+      "y_mm": "84.667mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3c. Other net rental income (loss). Subtract line 3b from line 3a"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_8",
+      "line": "4",
+      "x_mm": "175.26mm",
+      "y_mm": "88.9mm",
+      "type": "text",
+      "computed": "False",
+      "label": "4. Interest income"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_9",
+      "line": "5",
+      "x_mm": "175.26mm",
+      "y_mm": "93.133mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5. Dividends: a. Ordinary dividends"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_10",
+      "line": "5b",
+      "x_mm": "139.7mm",
+      "y_mm": "97.367mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5b. Qualified dividends"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_11",
+      "line": "6",
+      "x_mm": "175.26mm",
+      "y_mm": "101.6mm",
+      "type": "text",
+      "computed": "False",
+      "label": "6. Royalties"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_12",
+      "line": "7",
+      "x_mm": "175.26mm",
+      "y_mm": "105.833mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. Net short-term capital gain (loss) (attach Schedule D (Form 1120-S))"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_13",
+      "line": "8a",
+      "x_mm": "175.26mm",
+      "y_mm": "110.067mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8a. Net long-term capital gain (loss) (attach Schedule D (Form 1120-S))"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_14",
+      "line": "8b",
+      "x_mm": "139.7mm",
+      "y_mm": "114.3mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8b. Collectibles (28%) gain (loss)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_15",
+      "line": "8c",
+      "x_mm": "139.7mm",
+      "y_mm": "118.533mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8c. Unrecaptured section 1250 gain (attach statement)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_16",
+      "line": "9",
+      "x_mm": "175.26mm",
+      "y_mm": "122.767mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9. Net section 1231 gain (loss) (attach Form 4797)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_17",
+      "line": "10",
+      "x_mm": "101.6mm",
+      "y_mm": "127mm",
+      "type": "text",
+      "computed": "False",
+      "label": "10. Other income (loss) (see instructions). Type:"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_18",
+      "line": "10",
+      "x_mm": "175.26mm",
+      "y_mm": "127mm",
+      "type": "text",
+      "computed": "False",
+      "label": "10. Amount"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_19",
+      "line": "11",
+      "x_mm": "175.26mm",
+      "y_mm": "131.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "11. Section 179 deduction (attach Form 4562)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_20",
+      "line": "12a",
+      "x_mm": "175.26mm",
+      "y_mm": "135.467mm",
+      "type": "text",
+      "computed": "False",
+      "label": "12a. Cash charitable contributions"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_21",
+      "line": "12b",
+      "x_mm": "175.26mm",
+      "y_mm": "139.7mm",
+      "type": "text",
+      "computed": "False",
+      "label": "12b. Noncash charitable contributions"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_22",
+      "line": "12c",
+      "x_mm": "175.26mm",
+      "y_mm": "143.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "12c. Investment interest expense"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_23",
+      "line": "12d",
+      "x_mm": "101.6mm",
+      "y_mm": "148.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "12d. Section 59(e)(2) expenditures. Type:"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_24",
+      "line": "12d",
+      "x_mm": "175.26mm",
+      "y_mm": "148.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "12d. Amount"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_25",
+      "line": "12e",
+      "x_mm": "101.6mm",
+      "y_mm": "152.4mm",
+      "type": "text",
+      "computed": "False",
+      "label": "12e. Other deductions (see instructions). Type:"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_26",
+      "line": "12e",
+      "x_mm": "175.26mm",
+      "y_mm": "152.4mm",
+      "type": "text",
+      "computed": "False",
+      "label": "12e. Amount"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_27",
+      "line": "13a",
+      "x_mm": "175.26mm",
+      "y_mm": "156.633mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Credits. 13a. Low-income housing credit (section 42(j)(5))"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_28",
+      "line": "13b",
+      "x_mm": "175.26mm",
+      "y_mm": "160.866mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13b. Low-income housing credit (other)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_29",
+      "line": "13c",
+      "x_mm": "175.26mm",
+      "y_mm": "165.1mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13c. Qualified rehabilitation expenditures (rental real estate) (attach Form 3468, if applicable)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_30",
+      "line": "13d",
+      "x_mm": "101.6mm",
+      "y_mm": "169.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13d. Other rental real estate credits (see instructions). Type:"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_31",
+      "line": "13d",
+      "x_mm": "175.26mm",
+      "y_mm": "169.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13d. Amount"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_32",
+      "line": "13e",
+      "x_mm": "101.6mm",
+      "y_mm": "173.566mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13e. Other rental credits (see instructions). Type:"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_33",
+      "line": "13e",
+      "x_mm": "175.26mm",
+      "y_mm": "173.566mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13e. Amount"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_34",
+      "line": "13f",
+      "x_mm": "175.26mm",
+      "y_mm": "177.8mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13f. Biofuel producer credit (attach Form 6478)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_35",
+      "line": "13g",
+      "x_mm": "101.6mm",
+      "y_mm": "182.033mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13g. Other credits (see instructions). Type:"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_36",
+      "line": "13g",
+      "x_mm": "175.26mm",
+      "y_mm": "182.033mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "13g. Amount"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_37",
+      "line": "15a",
+      "x_mm": "175.26mm",
+      "y_mm": "198.966mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Alternative Minimum Tax (A M T) Items. 15a. Post-1986 depreciation adjustment"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_38",
+      "line": "15b",
+      "x_mm": "175.26mm",
+      "y_mm": "203.2mm",
+      "type": "text",
+      "computed": "False",
+      "label": "15b. Adjusted gain or loss"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_39",
+      "line": "15c",
+      "x_mm": "175.26mm",
+      "y_mm": "207.433mm",
+      "type": "text",
+      "computed": "False",
+      "label": "15c. Depletion (other than oil and gas)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_40",
+      "line": "15d",
+      "x_mm": "175.26mm",
+      "y_mm": "211.666mm",
+      "type": "text",
+      "computed": "False",
+      "label": "15d. Oil, gas, and geothermal properties\u2014gross income"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_41",
+      "line": "15e",
+      "x_mm": "175.26mm",
+      "y_mm": "215.9mm",
+      "type": "text",
+      "computed": "False",
+      "label": "15e. Oil, gas, and geothermal properties\u2014deductions"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_42",
+      "line": "15f",
+      "x_mm": "175.26mm",
+      "y_mm": "220.133mm",
+      "type": "text",
+      "computed": "False",
+      "label": "15f. Other A M T items (attach statement)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_43",
+      "line": "16a",
+      "x_mm": "175.26mm",
+      "y_mm": "224.367mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Items Affecting Shareholder Basis. 16a. Tax-exempt interest income"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_44",
+      "line": "16b",
+      "x_mm": "175.26mm",
+      "y_mm": "228.6mm",
+      "type": "text",
+      "computed": "False",
+      "label": "16b. Other tax-exempt income"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_45",
+      "line": "16c",
+      "x_mm": "175.26mm",
+      "y_mm": "232.833mm",
+      "type": "text",
+      "computed": "False",
+      "label": "16c. Nondeductible expenses"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_46",
+      "line": "16d",
+      "x_mm": "175.26mm",
+      "y_mm": "237.067mm",
+      "type": "text",
+      "computed": "False",
+      "label": "16d. Distributions (attach statement if required) (see instructions)"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_47",
+      "line": "16e",
+      "x_mm": "175.26mm",
+      "y_mm": "241.3mm",
+      "type": "text",
+      "computed": "False",
+      "label": "16e. Repayment of loans from shareholders"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f3_48",
+      "line": "16f",
+      "x_mm": "175.26mm",
+      "y_mm": "245.533mm",
+      "type": "text",
+      "computed": "False",
+      "label": "16f. Foreign taxes paid or accrued"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f4_1",
+      "line": "4",
+      "x_mm": "175.26mm",
+      "y_mm": "21.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Page 4. Schedule K. Shareholders' Pro Rata Share Items (continued). Other Information. 17a. Investme"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f4_2",
+      "line": "17b",
+      "x_mm": "175.26mm",
+      "y_mm": "25.4mm",
+      "type": "text",
+      "computed": "False",
+      "label": "17b. Investment expenses"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f4_3",
+      "line": "17c",
+      "x_mm": "175.26mm",
+      "y_mm": "29.633mm",
+      "type": "text",
+      "computed": "False",
+      "label": "17c. Dividend distributions paid from accumulated earnings and profits"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f4_4",
+      "line": "18",
+      "x_mm": "175.26mm",
+      "y_mm": "46.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Reconciliation. 18. Income (loss) reconciliation. Combine the total amounts on lines 1 through 10. F"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_2",
+      "line": "2",
+      "x_mm": "48.26mm",
+      "y_mm": "12.7mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2. Income included on Schedule K, lines 1, 2, 3c, 4, 5a, 6, 7, 8a, 9, and 10, not recorded on books "
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_3",
+      "line": "2",
+      "x_mm": "10.16mm",
+      "y_mm": "16.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2. Line 2 of 2"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_4",
+      "line": "2",
+      "x_mm": "68.58mm",
+      "y_mm": "16.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2. Amount"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_5",
+      "line": "3",
+      "x_mm": "10.16mm",
+      "y_mm": "33.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. Expenses recorded on books this year not included on Schedule K, lines 1 through 12e, and 16f (it"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_6",
+      "line": "3a",
+      "x_mm": "10.16mm",
+      "y_mm": "38.1mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3a. Line 2 of 2"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_7",
+      "line": "3b",
+      "x_mm": "10.16mm",
+      "y_mm": "42.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3b. Travel and entertainment. $. Line 1 of 2"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_8",
+      "line": "3b",
+      "x_mm": "10.16mm",
+      "y_mm": "46.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3b. Line 2 of 2"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_9",
+      "line": "3",
+      "x_mm": "68.58mm",
+      "y_mm": "46.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3. Amount"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_10",
+      "line": "4",
+      "x_mm": "68.58mm",
+      "y_mm": "50.8mm",
+      "type": "text",
+      "computed": "False",
+      "label": "4. Add lines 1 through 3"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_11",
+      "line": "5",
+      "x_mm": "10.16mm",
+      "y_mm": "12.7mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5. Income recorded on books this year not included on Schedule K, lines 1 through 10 (itemize): a. T"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_12",
+      "line": "5a",
+      "x_mm": "10.16mm",
+      "y_mm": "16.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5a. Line 2 of 2"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_13",
+      "line": "5",
+      "x_mm": "66.04mm",
+      "y_mm": "16.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5. Amount"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_14",
+      "line": "6",
+      "x_mm": "10.16mm",
+      "y_mm": "33.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "6. Deductions included on Schedule K, lines 1 through 12e, and 16f, not charged against book income "
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_15",
+      "line": "6a",
+      "x_mm": "10.16mm",
+      "y_mm": "38.1mm",
+      "type": "text",
+      "computed": "False",
+      "label": "6a. Line 2 of 2"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_16",
+      "line": "6",
+      "x_mm": "66.04mm",
+      "y_mm": "38.1mm",
+      "type": "text",
+      "computed": "False",
+      "label": "6. Amount"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_17",
+      "line": "7",
+      "x_mm": "66.04mm",
+      "y_mm": "42.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. Add lines 5 and 6"
+    },
+    {
+      "form": "1120S",
+      "field_id": "f5_18",
+      "line": "8",
+      "x_mm": "66.04mm",
+      "y_mm": "50.8mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8. Income (loss) (Schedule K, line 18). Subtract line 7 from line 4"
+    }
+  ],
+  "1040": [
+    {
+      "form": "1040",
+      "field_id": "f1_08",
+      "line": "",
+      "x_mm": "83.82mm",
+      "y_mm": "35.983mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Last name"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_18",
+      "line": "",
+      "x_mm": "101.6mm",
+      "y_mm": "86.783mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "If you checked the M F S box, enter the name of your spouse. If you checked the H O H or Q S S box, "
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_19",
+      "line": "",
+      "x_mm": "119.38mm",
+      "y_mm": "95.25mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "enter their name (see instructions and attach statement if required):"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_42",
+      "line": "2a",
+      "x_mm": "88.9mm",
+      "y_mm": "192.617mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2a. Tax-exempt interest"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_43",
+      "line": "2b",
+      "x_mm": "177.8mm",
+      "y_mm": "192.617mm",
+      "type": "text",
+      "computed": "False",
+      "label": "2b. Taxable interest. Attach Sch. B if required"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_44",
+      "line": "3a",
+      "x_mm": "88.9mm",
+      "y_mm": "196.85mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3a. Qualified dividends"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_45",
+      "line": "3b",
+      "x_mm": "177.8mm",
+      "y_mm": "196.85mm",
+      "type": "text",
+      "computed": "False",
+      "label": "3b. Ordinary dividends. Attach Sch. B if required"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_48",
+      "line": "5a",
+      "x_mm": "58.42mm",
+      "y_mm": "4.234mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5a. Pensions and annuities"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_49",
+      "line": "5b",
+      "x_mm": "147.32mm",
+      "y_mm": "4.234mm",
+      "type": "text",
+      "computed": "False",
+      "label": "5b. Taxable amount"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_50",
+      "line": "6a",
+      "x_mm": "58.42mm",
+      "y_mm": "8.467mm",
+      "type": "text",
+      "computed": "False",
+      "label": "6a. Social security benefits"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_51",
+      "line": "6b",
+      "x_mm": "147.32mm",
+      "y_mm": "8.467mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "6b. Taxable amount"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_52",
+      "line": "7",
+      "x_mm": "147.32mm",
+      "y_mm": "16.934mm",
+      "type": "text",
+      "computed": "False",
+      "label": "7. Capital gain or (loss)"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_53",
+      "line": "8",
+      "x_mm": "147.32mm",
+      "y_mm": "21.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "8. Additional income from Schedule 1, line 10"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_54",
+      "line": "9",
+      "x_mm": "147.32mm",
+      "y_mm": "25.4mm",
+      "type": "text",
+      "computed": "False",
+      "label": "9. Add lines 1z, 2b, 3b, 4b, 5b, 6b, 7, and 8. This is your total income"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_55",
+      "line": "10",
+      "x_mm": "147.32mm",
+      "y_mm": "29.634mm",
+      "type": "text",
+      "computed": "False",
+      "label": "10. Adjustments to income from Schedule 1, line 26"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_56",
+      "line": "11",
+      "x_mm": "147.32mm",
+      "y_mm": "33.867mm",
+      "type": "text",
+      "computed": "False",
+      "label": "11. Subtract line 10 from line 9. This is your adjusted gross income"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_57",
+      "line": "12",
+      "x_mm": "177.8mm",
+      "y_mm": "239.183mm",
+      "type": "text",
+      "computed": "False",
+      "label": "12. Standard deduction or itemized deductions (from Schedule A). Standard Deduction for\u2014 Single or M"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_58",
+      "line": "13",
+      "x_mm": "177.8mm",
+      "y_mm": "243.417mm",
+      "type": "text",
+      "computed": "False",
+      "label": "13. Qualified business income deduction from Form 8995 or Form 8995-A"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_59",
+      "line": "14",
+      "x_mm": "177.8mm",
+      "y_mm": "247.65mm",
+      "type": "text",
+      "computed": "False",
+      "label": "14. Add lines 12 and 13"
+    },
+    {
+      "form": "1040",
+      "field_id": "f1_60",
+      "line": "15",
+      "x_mm": "177.8mm",
+      "y_mm": "251.883mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "15. Subtract line 14 from line 11. If zero or less, enter 0. This is your taxable income"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_03",
+      "line": "17",
+      "x_mm": "177.8mm",
+      "y_mm": "16.933mm",
+      "type": "text",
+      "computed": "False",
+      "label": "17. Amount from Schedule 2, line 3"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_04",
+      "line": "18",
+      "x_mm": "177.8mm",
+      "y_mm": "21.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "18. Add lines 16 and 17"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_06",
+      "line": "20",
+      "x_mm": "177.8mm",
+      "y_mm": "29.633mm",
+      "type": "text",
+      "computed": "False",
+      "label": "20. Amount from Schedule 3, line 8"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_09",
+      "line": "23",
+      "x_mm": "177.8mm",
+      "y_mm": "42.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "23. Other taxes, including self-employment tax, from Schedule 2, line 21"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_10",
+      "line": "24",
+      "x_mm": "177.8mm",
+      "y_mm": "46.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "24. Add lines 22 and 23. This is your total tax"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_12",
+      "line": "25b",
+      "x_mm": "144.78mm",
+      "y_mm": "59.267mm",
+      "type": "text",
+      "computed": "False",
+      "label": "25b. Form(s) 1099"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_13",
+      "line": "25c",
+      "x_mm": "144.78mm",
+      "y_mm": "63.5mm",
+      "type": "text",
+      "computed": "False",
+      "label": "25c. Other forms (see instructions)"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_23",
+      "line": "34",
+      "x_mm": "177.8mm",
+      "y_mm": "105.833mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "Refund. 34. If line 33 is more than line 24, subtract line 24 from line 33. This is the amount you o"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_24",
+      "line": "35a",
+      "x_mm": "177.8mm",
+      "y_mm": "110.067mm",
+      "type": "text",
+      "computed": "False",
+      "label": "35a. Amount of line 34 you want refunded to you"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_27",
+      "line": "36",
+      "x_mm": "144.78mm",
+      "y_mm": "122.844mm",
+      "type": "text",
+      "computed": "False",
+      "label": "36. Amount of line 34 you want applied to your 2025 estimated tax"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_28",
+      "line": "37",
+      "x_mm": "177.8mm",
+      "y_mm": "131.233mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Amount You Owe. 37. Subtract line 33 from line 24. This is the amount you owe. For details on how to"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_29",
+      "line": "38",
+      "x_mm": "144.78mm",
+      "y_mm": "135.467mm",
+      "type": "checkbox",
+      "computed": "False",
+      "label": "38. Estimated tax penalty (see instructions)"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_30",
+      "line": "",
+      "x_mm": "50.8mm",
+      "y_mm": "148.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Designee's name"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_31",
+      "line": "",
+      "x_mm": "116.84mm",
+      "y_mm": "148.167mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Phone no"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_32",
+      "line": "",
+      "x_mm": "177.8mm",
+      "y_mm": "150.283mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Personal identification number (P I N)"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_33",
+      "line": "",
+      "x_mm": "114.3mm",
+      "y_mm": "162.983mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Sign Here. Joint return? See instructions. Keep a copy for your records. Your occupation"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_34",
+      "line": "",
+      "x_mm": "177.8mm",
+      "y_mm": "169.333mm",
+      "type": "text",
+      "computed": "False",
+      "label": "If the I R S sent you an Identity Protection P I N, enter it here (see inst.)"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_35",
+      "line": "",
+      "x_mm": "114.3mm",
+      "y_mm": "173.567mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Spouse's occupation"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_36",
+      "line": "",
+      "x_mm": "177.8mm",
+      "y_mm": "179.917mm",
+      "type": "text",
+      "computed": "False",
+      "label": "If the I R S sent your spouse an Identity Protection P I N, enter it here (see inst.)"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_37",
+      "line": "",
+      "x_mm": "32.314mm",
+      "y_mm": "184.15mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Phone no"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_38",
+      "line": "",
+      "x_mm": "96.52mm",
+      "y_mm": "184.15mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Email address"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_42",
+      "line": "",
+      "x_mm": "162.56mm",
+      "y_mm": "196.85mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Phone no"
+    },
+    {
+      "form": "1040",
+      "field_id": "f2_44",
+      "line": "",
+      "x_mm": "162.56mm",
+      "y_mm": "201.083mm",
+      "type": "text",
+      "computed": "False",
+      "label": "Firm's E I N"
+    }
+  ]
+}
