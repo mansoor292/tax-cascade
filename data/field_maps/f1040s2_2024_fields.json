@@ -1,0 +1,227 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_01",
+    "label": "Name(s) shown on Form 1040, 1040-SR, or 1040-NR"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_02",
+    "label": "Your social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_03",
+    "label": "a Excess advance premium tax credit repayment. Attach Form 8962 1a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_04",
+    "label": "b Repayment of new clean vehicle credit(s) transferred to a registered dealer from Schedule A (Form 8936), Part II. Attach Form 8936 and Schedule A (Form 8936) 1b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_05",
+    "label": "c Repayment of previously owned clean vehicle credit(s) transferred to a registered dealer from Schedule A (Form 8936), Part IV. Attach Form 8936 and Schedule A (Form 8936) 1c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_06",
+    "label": "d Recapture of net EPE from Form 4255, line 2a, column (I) 1d"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_10",
+    "label": "y Other additions to tax (see instructions): f1_09 1y"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_11",
+    "label": "Z Add lines 1a through 1y 1z"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_12",
+    "label": "2 Alternative minimum tax. Attach Form 6251 2"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_13",
+    "label": "3 Add lines 1z and 2. Enter here and on Form 1040, 1040-SR, or 1040-NR, line 17 3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_14",
+    "label": "4 Self-employment tax. Attach Schedule SE 4"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "5 Social security and Medicare tax on unreported tip income. Attach Form 4137 5"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "6 Uncollected social security and Medicare tax on wages. Attach Form 8919 6"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "7 Total additional social security and Medicare tax. Add lines 5 and 6 7"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "8 Additional tax on IRAs or other tax-favored accounts. Attach Form 5329 if required. If not required, check here 8"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_19",
+    "label": "9 Household employment taxes. Attach Schedule H 9"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "10 Repayment of first-time homebuyer credit. Attach Form 5405 if required 10"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_21",
+    "label": "11 Additional Medicare Tax. Attach Form 8959 11"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "12 Net investment income tax. Attach Form 8960 12"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_23",
+    "label": "13 Uncollected social security and Medicare or RRTA tax on tips or group-term life insurance from Form W-2, box 12 13"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "14 Interest on tax due on installment income from the sale of certain residential lots and timeshares 14"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_25",
+    "label": "15 Interest on the deferred tax on gain from certain installment sales with a sales price over $150,000 15"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_26",
+    "label": "16 Recapture of low-income housing credit. Attach Form 8611 16"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_02",
+    "label": "a Recapture of other credits. List type, form number, and amount: f2_01 17a"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_03",
+    "label": "b Recapture of federal mortgage subsidy, if you sold your home see instructions 17b"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_04",
+    "label": "c Additional tax on HSA distributions. Attach Form 8889 17c"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_05",
+    "label": "d Additional tax on an HSA because you didn't remain an eligible individual. Attach Form 8889 17d"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_06",
+    "label": "e Additional tax on Archer MSA distributions. Attach Form 8853 17e"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_07",
+    "label": "f Additional tax on Medicare Advantage MSA distributions. Attach Form 8853 17f"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_08",
+    "label": "g Recapture of a charitable contribution deduction related to a fractional interest in tangible personal property 17g"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_09",
+    "label": "h Income you received from a nonqualified deferred compensation plan that fails to meet the requirements of section 409A 17h"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_10",
+    "label": "i Compensation you received from a nonqualified deferred compensation plan described in section 457A 17i"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_11",
+    "label": "j Section 72(m)(5) excess benefits tax 17j"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_12",
+    "label": "k Golden parachute payments 17k"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_13",
+    "label": "I Tax on accumulation distribution of trusts 17I"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_14",
+    "label": "m Excise tax on insider stock compensation from an expatriated corporation 17m"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_15",
+    "label": "n Look-back interest under section 167(g) or 460(b) from Form 8697 or 8866 17n"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_16",
+    "label": "o Tax on non-effectively connected income for any part of the year you were a nonresident alien from Form 1040-NR 17o"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_17",
+    "label": "p Any interest from Form 8621, line 16f, relating to distributions from, and dispositions of, stock of a section 1291 fund 17p"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_18",
+    "label": "q Any interest from Form 8621, line 24 17q"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_21",
+    "label": "Z Any other taxes. List type and amount: f2_19 f2_20 17z"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_22",
+    "label": "18 Total additional taxes. Add lines 17a through 17z 18"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_23",
+    "label": "19 Recapture of net EPE from Form 4255, line 1d, column (I) 19"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_24",
+    "label": "20 Section 965 net tax liability installment from Form 965-A 20"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_25",
+    "label": "21 Add lines 4, 7 through 16, 18, and 19. These are your total other taxes. Enter here and on Form 1040 or 1040-SR, line 23, or Form 1040-NR, line 23b 21"
+  }
+]

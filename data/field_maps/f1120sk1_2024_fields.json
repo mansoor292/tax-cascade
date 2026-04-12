@@ -1,0 +1,117 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_06",
+    "label": "A Corporation's employer identification number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_07",
+    "label": "B Corporation's name, address, city, state, and ZIP code"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_08",
+    "label": "C IRS Center where corporation filed return"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_09",
+    "label": "Beginning of tax year"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_10",
+    "label": "End of tax year"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_11",
+    "label": "E Shareholder's identifying number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_12",
+    "label": "F1 Shareholder's name, address, city, state, and ZIP code"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16 %",
+    "label": "G Current year allocation percentage"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "Beginning of tax year"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "End of tax year"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_21",
+    "label": "1 Ordinary business income (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "2 Net rental real estate income (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_23",
+    "label": "3 Other net rental income (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "4 Interest income"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_25",
+    "label": "5a Ordinary dividends"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_26",
+    "label": "5b Qualified dividends"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_27",
+    "label": "6 Royalties"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_28",
+    "label": "7 Net short-term capital gain (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_29",
+    "label": "8a Net long-term capital gain (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_30",
+    "label": "8b Collectibles (28%) gain (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_31",
+    "label": "8c Unrecaptured section 1250 gain"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_32",
+    "label": "9 Net section 1231 gain (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_43",
+    "label": "11 Section 179 deduction"
+  }
+]

@@ -1,0 +1,72 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_01",
+    "label": "Name(s) shown on return"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_02",
+    "label": "Your taxpayer identification number"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_36",
+    "label": "27 Total qualified business income component from all qualified trades, businesses, or aggregations. Enter the amount from line 16 27"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_37",
+    "label": "28 Qualified REIT dividends and publicly traded partnership (PTP) income or (loss). See instructions 28"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_39",
+    "label": "30 Total qualified REIT dividends and PTP income. Combine lines 28 and 29. If less than zero, enter -0- 30"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_40",
+    "label": "31 REIT and PTP component. Multiply line 30 by 20% (0.20) 31"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_41",
+    "label": "32 Qualified business income deduction before the income limitation. Add lines 27 and 31 32"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_42",
+    "label": "33 Taxable income before qualified business income deduction 33"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_43",
+    "label": "34 Enter your net capital gain, if any, increased by any qualified dividends (see instructions) 34"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_44",
+    "label": "35 Subtract line 34 from line 33. If zero or less, enter -0- 35"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_45",
+    "label": "36 Income limitation. Multiply line 35 by 20% (0.20) 36"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_46",
+    "label": "37 Qualified business income deduction before the domestic production activities deduction (DPAD) under section 199A(g). Enter the smaller of line 32 or line 36 37"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_47",
+    "label": "38 DPAD under section 199A(g) allocated from an agricultural or horticultural cooperative. Don't enter more than line 33 minus line 37 38"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_48",
+    "label": "39 Total qualified business income deduction. Add lines 37 and 38 39"
+  }
+]

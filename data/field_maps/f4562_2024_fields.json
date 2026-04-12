@@ -1,0 +1,157 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_1",
+    "label": "Name(s) shown on return"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "7 Listed property. Enter the amount from line 29 7"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "8 Total elected cost of section 179 property. Add amounts in column (c), lines 6 and 7 8"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "9 Tentative deduction. Enter the smaller of line 5 or line 8 9"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "10 Carryover of disallowed deduction from line 13 of your 2024 Form 4562 10"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_19",
+    "label": "11 Business income limitation. Enter the smaller of business income (not less than zero) or line 5. See instructions 11"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_2",
+    "label": "Business or activity to which this form relates"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "12 Section 179 expense deduction. Add lines 9 and 10, but don't enter more than line 11 12"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_21",
+    "label": "13 Carryover of disallowed deduction to 2026. Add lines 9 and 10, less line 12 13"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "14 Special depreciation allowance for qualified property (other than listed property) placed in service during the tax year. See instructions 14"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_23",
+    "label": "15 Property subject to section 168(f)(1) election 15"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "16 Other depreciation (including ACRS) 16"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_25",
+    "label": "17 MACRS deductions for assets placed in service in tax years beginning before 2025 17"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_3",
+    "label": "Identifying number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_4",
+    "label": "1 Maximum amount (see instructions) 1"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_5",
+    "label": "2 Total cost of section 179 property placed in service (see instructions) 2"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_6",
+    "label": "3 Threshold cost of section 179 property before reduction in limitation (see instructions) 3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_7",
+    "label": "4 Reduction in limitation. Subtract line 3 from line 2. If zero or less, enter -0- 4"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_8",
+    "label": "5 Dollar limitation for tax year. Subtract line 4 from line 1. If zero or less, enter -0-. If married filing separately, see instructions 5"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_9",
+    "label": "(a) Description of property"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_1",
+    "label": "21 Listed property. Enter amount from line 28 21"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_14",
+    "label": "26 Property used more than 50% in a qualified business use:"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_2",
+    "label": "22 Total. Add amounts from line 12, lines 14 through 17, lines 19 and 20 in column (g), and line 21. Enter here and on the appropriate lines of your return. Partnerships and S corporations-see instructions 22"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_3",
+    "label": "23a For assets shown in Part III that are placed in service during the current tax year, and have costs capitalized under section 263A, enter the amount of the basis attributable to interest costs capitalized under section 263A(f) 23a"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_4",
+    "label": "b For assets shown in Part III that are placed in service during the current tax year, and have costs capitalized under section 263A, enter the amount of the basis attributable to costs capitalized under section 263A other than interest costs capitalized under section 263A(f) 23b"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_5",
+    "label": "25 Special depreciation allowance for qualified listed property placed in service during the tax year and used more than 50% in a qualified business use. See instructions 25"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_57",
+    "label": "28 Add amounts in column (h), lines 25 through 27. Enter here and on line 21 28"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_58",
+    "label": "29 Add amounts in column (i), line 26. Enter here and on line 7 29"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_12",
+    "label": "f3_7 f3_8 f3_9 f3_10 f3_11"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_13",
+    "label": "43 Amortization of costs that began before your 2025 tax year 43"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_14",
+    "label": "44 Total. Add amounts in column (f). See the instructions for where to report 44"
+  }
+]

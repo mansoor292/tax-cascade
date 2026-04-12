@@ -1,0 +1,127 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_01",
+    "label": "Name(s) shown on return"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_02",
+    "label": "Your social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_04",
+    "label": "f1_03"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_06",
+    "label": "f1_05"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_08",
+    "label": "f1_07"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_10",
+    "label": "f1_09"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_12",
+    "label": "f1_11"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "f1_15"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "f1_17"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "f1_19"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "f1_21"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "f1_23"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_26",
+    "label": "f1_25"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_28",
+    "label": "f1_27"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_30",
+    "label": "f1_29"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_31",
+    "label": "2 Add the amounts on line 1 2"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_32",
+    "label": "3 Excludable interest on series EE and I U.S. savings bonds issued after 1989. Attach Form 8815 3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_33",
+    "label": "4 Subtract line 3 from line 2. Enter the result here and on Form 1040 or 1040-SR, line 2b 4"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_35",
+    "label": "5 List name of payer: f1_34"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_39",
+    "label": "f1_38"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_41",
+    "label": "f1_40"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_43",
+    "label": "f1_42"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_45",
+    "label": "f1_44"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_47",
+    "label": "f1_46"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_64",
+    "label": "6 Add the amounts on line 5. Enter the total here and on Form 1040 or 1040-SR, line 3b 6"
+  }
+]
