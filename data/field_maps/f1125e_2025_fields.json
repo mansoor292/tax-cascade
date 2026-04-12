@@ -1,0 +1,27 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_1",
+    "label": "Name"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_123",
+    "label": "2 Total compensation of officers 2"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_124",
+    "label": "3 Compensation of officers claimed on Form 1125-A or elsewhere on return 3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_125",
+    "label": "4 Subtract line 3 from line 2. Enter the result here and on Form 1120, page 1, line 12 or the appropriate line of your tax return 4"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_2",
+    "label": "Employer identification number"
+  }
+]

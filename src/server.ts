@@ -17,6 +17,9 @@
  */
 
 import express from 'express'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { execSync } from 'child_process'
+import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib'
 import { calc1120, calc1120S, calc1040, calcCascade } from './engine/tax_engine.js'
 import {
   ordinaryTax, ltcgTax, niitTax, qbiDeduction, standardDeduction, TAX_TABLES
@@ -112,12 +115,209 @@ app.post('/api/compute/standard-deduction', (req, res) => {
 // ─── Get field map ───
 app.get('/api/field-map/:form/:year', (req, res) => {
   try {
-    const { readFileSync } = require('fs')
-    const path = `data/field_maps/${req.params.form}_${req.params.year}_fields.json`
-    const map = JSON.parse(readFileSync(path, 'utf-8'))
+    const mapPath = `data/field_maps/${req.params.form}_${req.params.year}_fields.json`
+    const map = JSON.parse(readFileSync(mapPath, 'utf-8'))
     res.json({ form: req.params.form, year: req.params.year, fields: map })
-  } catch {
-    res.status(404).json({ error: 'Field map not found' })
+  } catch (e: any) {
+    res.status(404).json({ error: 'Field map not found', detail: e.message })
+  }
+})
+
+// ─── Fill a PDF ───
+app.post('/api/fill/:form/:year', async (req, res) => {
+  try {
+    const { form: formName, year } = req.params
+    const { data, fieldMap } = req.body  // data = canonical values, fieldMap = optional override
+
+    // Load blank form
+    const blankPath = `data/irs_forms/${formName}_${year}.pdf`
+    if (!existsSync(blankPath)) {
+      res.status(404).json({ error: `Blank form not found: ${blankPath}` })
+      return
+    }
+
+    // Load field map
+    let map: Record<string, string> = fieldMap || {}
+    if (!fieldMap) {
+      // Try to load from canonical map files
+      try {
+        const mapPath = `data/field_maps/${formName}_${year}_fields.json`
+        const fields: Array<{field_id: string; label: string}> = JSON.parse(readFileSync(mapPath, 'utf-8'))
+        // Build a simple label → field_id lookup (caller provides canonical keys matching labels)
+        for (const f of fields) {
+          map[f.field_id] = f.field_id  // identity map — caller uses field_ids directly
+        }
+      } catch {}
+    }
+
+    const pdf = await PDFDocument.load(readFileSync(blankPath))
+    const form = pdf.getForm()
+
+    let filled = 0
+    const missed: string[] = []
+    for (const [key, value] of Object.entries(data)) {
+      // key can be a field_id (f1_47) or canonical key that maps to a field_id
+      const fieldId = fieldMap ? (fieldMap[key] || key) : key
+      let found = false
+      for (const f of form.getFields()) {
+        if (f.getName().includes(fieldId + '[') && f instanceof PDFTextField) {
+          const str = typeof value === 'number'
+            ? (value === 0 ? '' : (value as number).toLocaleString())
+            : String(value)
+          if (str) {
+            const ml = f.getMaxLength()
+            if (ml !== undefined && str.length > ml) f.setMaxLength(str.length)
+            f.setText(str)
+            filled++
+          }
+          found = true
+          break
+        }
+      }
+      if (!found) missed.push(key)
+    }
+
+    // Save
+    const outDir = 'output/api'
+    mkdirSync(outDir, { recursive: true })
+    const outPath = `${outDir}/${formName}_${year}_filled.pdf`
+    writeFileSync(outPath, await pdf.save())
+
+    res.json({
+      success: true,
+      filled,
+      missed,
+      path: outPath,
+      totalFields: form.getFields().length,
+    })
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message })
+  }
+})
+
+// ─── Label a PDF (for Textract verification) ───
+app.post('/api/label/:form/:year', async (req, res) => {
+  try {
+    const { form: formName, year } = req.params
+
+    const blankPath = `data/irs_forms/${formName}_${year}.pdf`
+    if (!existsSync(blankPath)) {
+      res.status(404).json({ error: `Blank form not found: ${blankPath}` })
+      return
+    }
+
+    const pdf = await PDFDocument.load(readFileSync(blankPath))
+    const form = pdf.getForm()
+    let count = 0
+    const allFields: string[] = []
+    for (const f of form.getFields()) {
+      if (f instanceof PDFTextField) {
+        const short = f.getName().match(/\.(f\d+_\d+)\[/)?.[1] || ''
+        if (short) {
+          try {
+            const ml = f.getMaxLength()
+            if (ml !== undefined) f.setMaxLength(50)
+            f.setText(short)
+            count++
+            allFields.push(short)
+          } catch {}
+        }
+      }
+    }
+
+    const outDir = 'output/api/labels'
+    mkdirSync(outDir, { recursive: true })
+    const outPath = `${outDir}/${formName}_${year}_LABELS.pdf`
+    writeFileSync(outPath, await pdf.save())
+
+    res.json({ success: true, labeled: count, fields: allFields, path: outPath })
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message })
+  }
+})
+
+// ─── Verify via Textract (sends PDF to Textract, extracts values) ───
+app.post('/api/verify', async (req, res) => {
+  try {
+    const { pdfPath, expected } = req.body  // pdfPath = local path, expected = {label: value}
+
+    const s3Key = `verify/${Date.now()}_${pdfPath.split('/').pop()}`
+    const script = `
+import boto3, json, time, re
+s3 = boto3.client("s3", region_name="us-east-1")
+textract = boto3.client("textract", region_name="us-east-1")
+BUCKET = "edgewater-textract-staging-2026"
+s3.upload_file("${pdfPath}", BUCKET, "${s3Key}")
+job = textract.start_document_analysis(DocumentLocation={"S3Object": {"Bucket": BUCKET, "Name": "${s3Key}"}}, FeatureTypes=["FORMS"])
+jid = job["JobId"]
+while True:
+    resp = textract.get_document_analysis(JobId=jid)
+    if resp["JobStatus"] == "SUCCEEDED":
+        blocks = resp.get("Blocks", []); nt = resp.get("NextToken")
+        while nt: resp = textract.get_document_analysis(JobId=jid, NextToken=nt); blocks.extend(resp.get("Blocks", [])); nt = resp.get("NextToken")
+        break
+    elif resp["JobStatus"] == "FAILED": print(json.dumps({"error":"FAILED"})); exit(0)
+    time.sleep(3)
+block_map = {b["Id"]: b for b in blocks}; key_map = {}; value_map = {}
+for b in blocks:
+    if b["BlockType"] == "KEY_VALUE_SET":
+        if "KEY" in b.get("EntityTypes", []): key_map[b["Id"]] = b
+        else: value_map[b["Id"]] = b
+def gt(block):
+    t = ""
+    for rel in block.get("Relationships", []):
+        if rel["Type"] == "CHILD":
+            for cid in rel["Ids"]:
+                c = block_map.get(cid, {})
+                if c.get("BlockType") == "WORD": t += c.get("Text","") + " "
+    return t.strip()
+kvs = []
+for kid, kb in key_map.items():
+    kt = gt(kb); vb = None
+    for rel in kb.get("Relationships", []):
+        if rel["Type"] == "VALUE":
+            for vid in rel["Ids"]:
+                if vid in value_map: vb = value_map[vid]; break
+    vt = gt(vb) if vb else ""
+    if kt or vt: kvs.append({"key": kt, "value": vt})
+print(json.dumps(kvs))
+`
+    const result = execSync(`../scripts/.venv/bin/python -c '${script.replace(/'/g, "\\'")}'`, {
+      timeout: 120000, encoding: 'utf-8', cwd: process.cwd()
+    })
+    const kvs = JSON.parse(result.trim())
+
+    // Compare against expected if provided
+    let comparison = null
+    if (expected) {
+      comparison = { matches: 0, mismatches: 0, missing: 0, details: [] as any[] }
+      const parseDollar = (s: string) => {
+        const c = s.replace(/[\$,\s]/g, '').replace(/\((.+)\)/, '-$1').replace(/\.$/, '')
+        const n = parseFloat(c)
+        return isNaN(n) ? null : Math.round(n)
+      }
+      for (const [label, expVal] of Object.entries(expected)) {
+        const found = kvs.find((kv: any) => kv.key.includes(label))
+        if (found) {
+          const actual = parseDollar(found.value)
+          const exp = typeof expVal === 'number' ? expVal : parseDollar(String(expVal))
+          if (actual === exp) {
+            comparison.matches++
+            comparison.details.push({ label, expected: exp, actual, status: 'match' })
+          } else {
+            comparison.mismatches++
+            comparison.details.push({ label, expected: exp, actual, status: 'mismatch' })
+          }
+        } else {
+          comparison.missing++
+          comparison.details.push({ label, expected: expVal, actual: null, status: 'missing' })
+        }
+      }
+    }
+
+    res.json({ success: true, extracted: kvs.length, kvs, comparison })
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message })
   }
 })
 
