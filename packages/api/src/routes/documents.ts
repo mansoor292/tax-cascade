@@ -232,6 +232,71 @@ print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
   res.json({ document: doc, classification, textract: textractData ? { num_pages: textractData.num_pages, num_fields: textractData.kvs?.length } : null })
 })
 
+// Re-categorize an existing document with Gemini
+router.post('/:id/categorize', async (req, res) => {
+  const client = sb(req)
+  const { data: { user } } = await client.auth.getUser()
+  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { data: doc } = await client.from('document')
+    .select('*').eq('id', req.params.id).eq('user_id', user.id).single()
+  if (!doc) return res.status(404).json({ error: 'Not found' })
+
+  if (!GEMINI_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' })
+
+  const ext = doc.file_type || doc.filename?.split('.').pop()?.toLowerCase() || ''
+  if (!['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
+    return res.status(400).json({ error: 'Only PDF and image files can be categorized' })
+  }
+
+  try {
+    const pythonBin = process.env.PYTHON_BIN || 'python3'
+    const dlScript = `
+import boto3, base64
+s3 = boto3.client('s3', region_name='us-east-1')
+obj = s3.get_object(Bucket='${S3_BUCKET}', Key='${doc.s3_path}')
+print(base64.b64encode(obj['Body'].read()).decode())
+`
+    const base64 = execSync(`${pythonBin} -c "${dlScript}"`, { timeout: 30000, encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }).trim()
+
+    const genAI = new GoogleGenerativeAI(GEMINI_KEY)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' })
+    const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`
+
+    const result = await model.generateContent([
+      { inlineData: { data: base64, mimeType } },
+      { text: `Analyze this tax document. Respond ONLY with valid JSON (no markdown):
+{
+  "doc_type": one of "w2" | "1099" | "k1" | "prior_return_1040" | "prior_return_1120" | "prior_return_1120s" | "bank_statement" | "invoice" | "receipt" | "tax_transcript" | "other",
+  "tax_year": integer or null,
+  "entity_name": string or "",
+  "ein_or_ssn": string or "",
+  "summary": one-line description,
+  "key_values": { up to 10 key financial values }
+}` }
+    ])
+
+    const text = result.response.text().trim().replace(/^```json?\s*/i, '').replace(/\s*```$/i, '')
+    const classification = JSON.parse(text)
+
+    await client.from('document').update({
+      doc_type: classification.doc_type || doc.doc_type,
+      tax_year: classification.tax_year || doc.tax_year,
+      meta: {
+        ...doc.meta,
+        entity_name: classification.entity_name || '',
+        ein_or_ssn: classification.ein_or_ssn || '',
+        summary: classification.summary || '',
+        key_values: classification.key_values || {},
+      }
+    }).eq('id', req.params.id)
+
+    res.json({ document_id: req.params.id, classification })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // List documents
 router.get('/', async (req, res) => {
   const client = sb(req)

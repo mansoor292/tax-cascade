@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { api } from '../lib/api'
-import { Upload, FileText, Trash2, Loader2 } from 'lucide-react'
+import { Upload, FileText, Trash2, Loader2, Sparkles } from 'lucide-react'
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   w2: 'W-2', '1099': '1099', k1: 'K-1',
@@ -22,6 +22,7 @@ export default function Documents() {
   const [docs, setDocs] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState('')
+  const [categorizing, setCategorizing] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = () => api('/api/documents').then(d => setDocs(d.documents || [])).catch(() => {})
@@ -103,6 +104,18 @@ export default function Documents() {
                 <div className="flex items-center gap-2">
                   {d.textract_data && (
                     <span className="text-xs text-green-500">{d.textract_data.num_pages || '?'} pages · {d.textract_data.kvs?.length || 0} fields</span>
+                  )}
+                  {(!d.meta?.summary || d.doc_type === 'other') && (
+                    <button onClick={async () => {
+                      setCategorizing(d.id)
+                      try { await api(`/api/documents/${d.id}/categorize`, { method: 'POST' }); load() }
+                      catch (err: any) { alert(err.message) }
+                      setCategorizing(null)
+                    }} disabled={categorizing === d.id}
+                      className="flex items-center gap-1 px-2 py-1 bg-purple-900/40 text-purple-300 hover:bg-purple-800/40 rounded text-xs disabled:opacity-50">
+                      {categorizing === d.id ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                      Categorize
+                    </button>
                   )}
                   <button onClick={() => del(d.id)} className="text-zinc-700 hover:text-red-400"><Trash2 size={13} /></button>
                 </div>
