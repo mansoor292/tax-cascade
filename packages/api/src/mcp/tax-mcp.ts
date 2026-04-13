@@ -222,6 +222,75 @@ function createServer(apiKey: string): McpServer {
     return text(await call('GET', '/api/documents'))
   })
 
+  // ─── Tool: download_document ───
+  server.tool('download_document', 'Get a presigned download URL for an uploaded document', {
+    document_id: z.string().describe('Document UUID'),
+  }, async ({ document_id }) => {
+    return text(await call('GET', `/api/documents/${document_id}/download`))
+  })
+
+  // ─── Tool: promote_scenario ───
+  server.tool('promote_scenario', 'Finalize a computed scenario into an official tax return', {
+    scenario_id: z.string().describe('Scenario UUID'),
+  }, async ({ scenario_id }) => {
+    return text(await call('POST', `/api/scenarios/${scenario_id}/promote`))
+  })
+
+  // ─── Tool: analyze_scenario ───
+  server.tool('analyze_scenario', 'Get AI analysis of a tax scenario — tax impact, risks, alternatives, compliance', {
+    scenario_id: z.string().describe('Scenario UUID'),
+  }, async ({ scenario_id }) => {
+    return text(await call('POST', `/api/scenarios/${scenario_id}/analyze`))
+  })
+
+  // ─── Tool: compute_cascade ───
+  server.tool('compute_cascade', 'Compute S-Corp → K-1 → Individual 1040 cascade. Shows combined tax impact and QBI savings.', {
+    s_corp_inputs: z.record(z.any()).describe('Form 1120-S inputs'),
+    individual_base: z.record(z.any()).describe('Form 1040 base inputs (wages, filing_status, etc.)'),
+  }, async (params) => {
+    return text(await call('POST', '/api/compute/cascade', params))
+  })
+
+  // ─── Tool: get_tax_tables ───
+  server.tool('get_tax_tables', 'Get tax brackets, standard deduction, and rate tables for a specific year', {
+    year: z.number().describe('Tax year (2018-2025)'),
+  }, async ({ year }) => {
+    return text(await call('GET', `/api/tax-tables/${year}`))
+  })
+
+  // ─── Tool: update_entity ───
+  server.tool('update_entity', 'Update a tax entity (name, form_type, EIN, address)', {
+    entity_id: z.string().describe('Entity UUID'),
+    name: z.string().optional().describe('Entity name'),
+    form_type: z.string().optional().describe('1040, 1120, or 1120S'),
+    ein: z.string().optional().describe('EIN or SSN'),
+    address: z.string().optional().describe('Address'),
+  }, async ({ entity_id, ...updates }) => {
+    return text(await call('PUT', `/api/entities/${entity_id}`, updates))
+  })
+
+  // ─── Tool: connect_qbo ───
+  server.tool('connect_qbo', 'Start QuickBooks OAuth connection for an entity. Returns an auth_url for the user to click.', {
+    entity_id: z.string().describe('Entity UUID'),
+  }, async ({ entity_id }) => {
+    return text(await call('GET', `/api/qbo/connect/${entity_id}`))
+  })
+
+  // ─── Tool: qbo_query ───
+  server.tool('qbo_query', 'Run a raw QuickBooks query (e.g. SELECT * FROM Account, SELECT * FROM Invoice WHERE TotalAmt > 1000)', {
+    entity_id: z.string().describe('Entity UUID'),
+    query: z.string().describe('QBO SQL query'),
+  }, async ({ entity_id, query }) => {
+    return text(await call('GET', `/api/qbo/${entity_id}/query?q=${encodeURIComponent(query)}`))
+  })
+
+  // ─── Tool: qbo_status ───
+  server.tool('qbo_status', 'Check if QuickBooks is connected for an entity', {
+    entity_id: z.string().describe('Entity UUID'),
+  }, async ({ entity_id }) => {
+    return text(await call('GET', `/api/qbo/${entity_id}/status`))
+  })
+
   return server
 }
 
