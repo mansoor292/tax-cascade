@@ -1,0 +1,6 @@
+[auth]
+site_url = "https://tax-api.catalogshub.com"
+additional_redirect_urls = ["https://tax-api.catalogshub.com/**", "http://localhost:3737/**"]
+
+[auth.email]
+enable_confirmations = false
