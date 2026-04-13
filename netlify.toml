@@ -1,0 +1,14 @@
+[build]
+  base = "packages/web"
+  command = "npm install && npm run build"
+  publish = "dist"
+
+[build.environment]
+  VITE_API_URL = "https://tax-api.catalogshub.com"
+  VITE_SUPABASE_URL = "https://ophnjqjmxeohbyydxnlg.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
