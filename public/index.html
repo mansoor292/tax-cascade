@@ -1,357 +1,57 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tax API — Edgewater Tax Engine</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e4e4e7; }
-    .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
-    h1 { font-size: 1.8em; margin-bottom: 4px; color: #fff; }
-    h2 { font-size: 1.2em; margin: 24px 0 12px; color: #a1a1aa; border-bottom: 1px solid #27272a; padding-bottom: 8px; }
-    .subtitle { color: #71717a; margin-bottom: 24px; }
-    .card { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    input, select, textarea { width: 100%; padding: 10px 12px; background: #27272a; border: 1px solid #3f3f46; border-radius: 6px; color: #fff; font-size: 14px; margin-bottom: 10px; }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: #6366f1; }
-    button { padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; }
-    .btn-primary { background: #6366f1; color: white; }
-    .btn-primary:hover { background: #4f46e5; }
-    .btn-secondary { background: #27272a; color: #e4e4e7; border: 1px solid #3f3f46; }
-    .btn-danger { background: #dc2626; color: white; }
-    .btn-sm { padding: 6px 12px; font-size: 12px; }
-    .row { display: flex; gap: 12px; }
-    .row > * { flex: 1; }
-    .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
-    .key-display { background: #1e1e2e; padding: 10px; border-radius: 4px; word-break: break-all; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-    .badge-green { background: #065f46; color: #6ee7b7; }
-    .badge-yellow { background: #713f12; color: #fcd34d; }
-    .badge-blue { background: #1e3a5f; color: #93c5fd; }
-    .result { background: #1a1a2e; border: 1px solid #2d2d44; border-radius: 6px; padding: 16px; margin-top: 12px; white-space: pre-wrap; font-size: 13px; max-height: 400px; overflow-y: auto; }
-    .tabs { display: flex; gap: 0; margin-bottom: 16px; }
-    .tab { padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; color: #71717a; }
-    .tab.active { border-color: #6366f1; color: #fff; }
-    .hidden { display: none; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .stat { text-align: center; }
-    .stat-value { font-size: 2em; font-weight: 700; color: #6366f1; }
-    .stat-label { font-size: 12px; color: #71717a; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #27272a; }
-    th { color: #a1a1aa; font-size: 12px; text-transform: uppercase; }
-    .ai-analysis { line-height: 1.6; }
-    #auth-section, #app-section { transition: all 0.3s; }
-    .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; background: #065f46; color: #6ee7b7; z-index: 100; }
-  </style>
+<html>
+<head><title>Tax API</title>
+<style>body{font-family:system-ui;max-width:600px;margin:40px auto;color:#e4e4e7;background:#0f1117}a{color:#6366f1}pre{background:#18181b;padding:16px;border-radius:8px;overflow-x:auto;font-size:13px}</style>
 </head>
 <body>
-  <div class="container">
-    <h1>Tax API</h1>
-    <p class="subtitle">Edgewater Tax Engine — Compute, Fill, Verify</p>
+<h1>Tax API</h1>
+<p>Edgewater Tax Engine — <a href="https://tax-api.catalogshub.com/api/health">/api/health</a></p>
+<h2>Endpoints</h2>
+<pre>
+GET  /api/health              — public
+GET  /api/forms               — list 19 supported forms
+GET  /api/tax-tables/:year    — IRS brackets 2020-2025
+GET  /api/field-map/:form/:year — Textract-verified field maps
 
-    <!-- Auth Section -->
-    <div id="auth-section">
-      <div class="card">
-        <div class="tabs">
-          <div class="tab active" onclick="showAuthTab('signin')">Sign In</div>
-          <div class="tab" onclick="showAuthTab('signup')">Sign Up</div>
-        </div>
+POST /api/compute/1120        — C-Corp return
+POST /api/compute/1120s       — S-Corp return
+POST /api/compute/1040        — Individual return
+POST /api/compute/cascade     — S-Corp → K-1 → 1040
 
-        <div id="signin-form">
-          <input type="email" id="si-email" placeholder="Email">
-          <input type="password" id="si-password" placeholder="Password">
-          <button class="btn-primary" onclick="signIn()">Sign In</button>
-        </div>
+POST /api/compute/ordinary-tax
+POST /api/compute/qbi
+POST /api/compute/niit
+POST /api/compute/standard-deduction
 
-        <div id="signup-form" class="hidden">
-          <input type="text" id="su-name" placeholder="Full Name">
-          <input type="email" id="su-email" placeholder="Email">
-          <input type="password" id="su-password" placeholder="Password">
-          <input type="text" id="su-company" placeholder="Company Name (optional)">
-          <button class="btn-primary" onclick="signUp()">Create Account</button>
-        </div>
+POST /api/fill/:form/:year    — fill PDF from field IDs
+POST /api/label/:form/:year   — label fields for verification
+POST /api/verify              — Textract round-trip verify
 
-        <div id="auth-error" style="color: #ef4444; margin-top: 8px; font-size: 13px;"></div>
-      </div>
-    </div>
+POST /auth/signup             — create account
+POST /auth/signin             — get session
+GET  /auth/me                 — profile + API keys
+POST /auth/api-keys           — create key
+DELETE /auth/api-keys/:id     — revoke key
 
-    <!-- App Section (shown after login) -->
-    <div id="app-section" class="hidden">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <div>Welcome, <span id="user-name"></span></div>
-        <button class="btn-secondary btn-sm" onclick="signOut()">Sign Out</button>
-      </div>
+POST /api/scenarios           — create scenario
+GET  /api/scenarios           — list scenarios
+POST /api/scenarios/:id/compute  — run engine
+POST /api/scenarios/:id/analyze  — Gemini AI analysis
+POST /api/scenarios/compare      — compare scenarios
+</pre>
+<h2>Auth</h2>
+<pre>
+# API key
+curl -H "x-api-key: YOUR_KEY" https://tax-api.catalogshub.com/api/forms
 
-      <div class="tabs">
-        <div class="tab active" onclick="showTab('compute')">Compute</div>
-        <div class="tab" onclick="showTab('scenarios')">Scenarios</div>
-        <div class="tab" onclick="showTab('keys')">API Keys</div>
-      </div>
-
-      <!-- Compute Tab -->
-      <div id="tab-compute">
-        <div class="card">
-          <h2>Quick Compute</h2>
-          <div class="row">
-            <div>
-              <label>Form Type</label>
-              <select id="compute-form">
-                <option value="1120">1120 (C-Corp)</option>
-                <option value="1120s">1120-S (S-Corp)</option>
-                <option value="1040">1040 (Individual)</option>
-                <option value="cascade">Cascade (S-Corp → K-1 → 1040)</option>
-              </select>
-            </div>
-            <div>
-              <label>Tax Year</label>
-              <select id="compute-year">
-                <option value="2025">2025</option>
-                <option value="2024" selected>2024</option>
-                <option value="2023">2023</option>
-                <option value="2022">2022</option>
-              </select>
-            </div>
-          </div>
-          <label>Input (JSON)</label>
-          <textarea id="compute-input" rows="10" class="mono" placeholder='{"gross_receipts": 1651448, ...}'></textarea>
-          <button class="btn-primary" onclick="compute()">Compute</button>
-          <div id="compute-result" class="result hidden"></div>
-        </div>
-      </div>
-
-      <!-- Scenarios Tab -->
-      <div id="tab-scenarios" class="hidden">
-        <div class="card">
-          <div class="card-header">
-            <h2 style="margin:0;border:none;padding:0">Scenarios</h2>
-            <button class="btn-primary btn-sm" onclick="showNewScenario()">+ New Scenario</button>
-          </div>
-
-          <div id="new-scenario-form" class="hidden" style="margin-bottom: 16px; padding: 16px; background: #1a1a2e; border-radius: 6px;">
-            <input type="text" id="sc-name" placeholder="Scenario name (e.g. 'S07 Cash Restatement')">
-            <textarea id="sc-desc" rows="2" placeholder="Description"></textarea>
-            <div class="row">
-              <select id="sc-year"><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option></select>
-              <select id="sc-form"><option value="1120">1120</option><option value="1120S">1120-S</option><option value="1040">1040</option></select>
-            </div>
-            <label>Adjustments (JSON)</label>
-            <textarea id="sc-adjustments" rows="6" class="mono" placeholder='{"gross_receipts": 1498253, "nol_deduction": 428809, ...}'></textarea>
-            <button class="btn-primary" onclick="createScenario()">Create & Compute</button>
-          </div>
-
-          <div id="scenarios-list"></div>
-        </div>
-      </div>
-
-      <!-- API Keys Tab -->
-      <div id="tab-keys" class="hidden">
-        <div class="card">
-          <div class="card-header">
-            <h2 style="margin:0;border:none;padding:0">API Keys</h2>
-            <button class="btn-primary btn-sm" onclick="createApiKey()">+ New Key</button>
-          </div>
-          <div id="keys-list"></div>
-
-          <h2>Usage</h2>
-          <div class="result mono">curl -X POST https://tax-api.catalogshub.com/api/compute/1120 \
-  -H "x-api-key: YOUR_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"gross_receipts": 1000000, ...}'</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-<script>
-const API = '';  // same origin
-const SUPABASE_URL = 'https://ophnjqjmxeohbyydxnlg.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-
-let session = null;
-let apiKeys = [];
-
-// Check existing session
-sb.auth.getSession().then(({data}) => {
-  if (data.session) { session = data.session; showApp(); }
-});
-
-function showAuthTab(tab) {
-  document.getElementById('signin-form').classList.toggle('hidden', tab !== 'signin');
-  document.getElementById('signup-form').classList.toggle('hidden', tab !== 'signup');
-  document.querySelectorAll('#auth-section .tab').forEach((t,i) => t.classList.toggle('active', (tab === 'signin' ? i === 0 : i === 1)));
-}
-
-async function signIn() {
-  const email = document.getElementById('si-email').value;
-  const password = document.getElementById('si-password').value;
-  const {data, error} = await sb.auth.signInWithPassword({email, password});
-  if (error) { document.getElementById('auth-error').textContent = error.message; return; }
-  session = data.session;
-  showApp();
-}
-
-async function signUp() {
-  const r = await fetch('/auth/signup', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      email: document.getElementById('su-email').value,
-      password: document.getElementById('su-password').value,
-      full_name: document.getElementById('su-name').value,
-      company_name: document.getElementById('su-company').value,
-    })
-  });
-  const d = await r.json();
-  if (d.error) { document.getElementById('auth-error').textContent = d.error; return; }
-  const email = document.getElementById('su-email').value;
-  const password = document.getElementById('su-password').value;
-  const {data} = await sb.auth.signInWithPassword({email, password});
-  if (data.session) { session = data.session; showApp(); }
-}
-
-async function signOut() {
-  await sb.auth.signOut();
-  session = null;
-  document.getElementById('auth-section').classList.remove('hidden');
-  document.getElementById('app-section').classList.add('hidden');
-}
-
-async function showApp() {
-  document.getElementById('auth-section').classList.add('hidden');
-  document.getElementById('app-section').classList.remove('hidden');
-  document.getElementById('user-name').textContent = session.user.email;
-  loadApiKeys();
-  loadScenarios();
-}
-
-function showTab(tab) {
-  ['compute','scenarios','keys'].forEach(t => {
-    document.getElementById('tab-'+t).classList.toggle('hidden', t !== tab);
-  });
-  document.querySelectorAll('#app-section > .tabs .tab').forEach((el,i) => {
-    el.classList.toggle('active', ['compute','scenarios','keys'][i] === tab);
-  });
-}
-
-function apiFetch(path, opts = {}) {
-  return fetch(API + path, {
-    ...opts,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + session.access_token,
-      ...(opts.headers || {}),
-    }
-  });
-}
-
-// Compute
-async function compute() {
-  const form = document.getElementById('compute-form').value;
-  const input = JSON.parse(document.getElementById('compute-input').value);
-  const r = await apiFetch(`/api/compute/${form}`, { method: 'POST', body: JSON.stringify(input) });
-  const d = await r.json();
-  const el = document.getElementById('compute-result');
-  el.classList.remove('hidden');
-  el.textContent = JSON.stringify(d, null, 2);
-}
-
-// API Keys
-async function loadApiKeys() {
-  const r = await fetch('/auth/me', { headers: { 'Authorization': 'Bearer ' + session.access_token } });
-  const d = await r.json();
-  apiKeys = d.api_keys || [];
-  const el = document.getElementById('keys-list');
-  if (!apiKeys.length) { el.innerHTML = '<p style="color:#71717a">No API keys yet</p>'; return; }
-  el.innerHTML = '<table><tr><th>Name</th><th>Key</th><th>Status</th><th></th></tr>' +
-    apiKeys.map(k => `<tr>
-      <td>${k.name}</td>
-      <td class="mono" style="font-size:11px">${k.key_value}</td>
-      <td><span class="badge ${k.is_active ? 'badge-green' : 'badge-yellow'}">${k.is_active ? 'active' : 'revoked'}</span></td>
-      <td>${k.is_active ? `<button class="btn-danger btn-sm" onclick="revokeKey('${k.id}')">Revoke</button>` : ''}</td>
-    </tr>`).join('') + '</table>';
-}
-
-async function createApiKey() {
-  const name = prompt('Key name:') || 'API Key';
-  const r = await fetch('/auth/api-keys', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-    body: JSON.stringify({ name })
-  });
-  const d = await r.json();
-  alert('New API key: ' + d.api_key.key_value);
-  loadApiKeys();
-}
-
-async function revokeKey(id) {
-  if (!confirm('Revoke this key?')) return;
-  await fetch('/auth/api-keys/' + id, {
-    method: 'DELETE', headers: { 'Authorization': 'Bearer ' + session.access_token }
-  });
-  loadApiKeys();
-}
-
-// Scenarios
-function showNewScenario() {
-  document.getElementById('new-scenario-form').classList.toggle('hidden');
-}
-
-async function createScenario() {
-  const body = {
-    name: document.getElementById('sc-name').value,
-    description: document.getElementById('sc-desc').value,
-    tax_year: parseInt(document.getElementById('sc-year').value),
-    adjustments: JSON.parse(document.getElementById('sc-adjustments').value || '{}'),
-  };
-  const r = await apiFetch('/api/scenarios', { method: 'POST', body: JSON.stringify(body) });
-  const d = await r.json();
-  if (d.scenario) {
-    // Auto-compute
-    await apiFetch(`/api/scenarios/${d.scenario.id}/compute`, { method: 'POST' });
-    loadScenarios();
-    document.getElementById('new-scenario-form').classList.add('hidden');
-  }
-}
-
-async function loadScenarios() {
-  const r = await apiFetch('/api/scenarios');
-  const d = await r.json();
-  const el = document.getElementById('scenarios-list');
-  const scenarios = d.scenarios || [];
-  if (!scenarios.length) { el.innerHTML = '<p style="color:#71717a">No scenarios yet. Create one to get started.</p>'; return; }
-  el.innerHTML = scenarios.map(s => `
-    <div class="card" style="margin-bottom:8px">
-      <div class="card-header">
-        <div>
-          <strong>${s.name}</strong>
-          <span class="badge badge-blue" style="margin-left:8px">${s.tax_year}</span>
-          <span class="badge ${s.status==='computed'?'badge-green':'badge-yellow'}">${s.status}</span>
-        </div>
-        <div>
-          <button class="btn-secondary btn-sm" onclick="analyzeScenario('${s.id}')">AI Analyze</button>
-        </div>
-      </div>
-      ${s.description ? `<p style="color:#71717a;font-size:13px;margin-bottom:8px">${s.description}</p>` : ''}
-      ${s.computed_result ? `<div class="result mono" style="max-height:150px">${JSON.stringify(s.computed_result?.computed || s.computed_result, null, 2)}</div>` : ''}
-      ${s.ai_analysis ? `<div class="ai-analysis" style="margin-top:12px;padding:12px;background:#1a1a2e;border-radius:6px;font-size:13px">${s.ai_analysis.replace(/\n/g,'<br>')}</div>` : ''}
-    </div>
-  `).join('');
-}
-
-async function analyzeScenario(id) {
-  const btn = event.target;
-  btn.textContent = 'Analyzing...';
-  btn.disabled = true;
-  const r = await apiFetch(`/api/scenarios/${id}/analyze`, { method: 'POST' });
-  const d = await r.json();
-  if (d.error) alert('Error: ' + d.error);
-  loadScenarios();
-  btn.textContent = 'AI Analyze';
-  btn.disabled = false;
-}
-</script>
+# Bearer token (Supabase JWT)
+curl -H "Authorization: Bearer YOUR_TOKEN" https://tax-api.catalogshub.com/api/forms
+</pre>
+<h2>Supabase</h2>
+<pre>
+Project: ophnjqjmxeohbyydxnlg
+URL: https://ophnjqjmxeohbyydxnlg.supabase.co
+Region: us-east-1
+</pre>
 </body>
 </html>
