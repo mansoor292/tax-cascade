@@ -17,6 +17,7 @@
  */
 
 import express from 'express'
+import cors from 'cors'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { execSync } from 'child_process'
 import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib'
@@ -25,23 +26,51 @@ import {
   ordinaryTax, ltcgTax, niitTax, qbiDeduction, standardDeduction, TAX_TABLES
 } from './engine/tax_tables.js'
 import { FORM_INVENTORY } from './maps/field_maps.js'
+import authRoutes, { supabase } from './routes/auth.js'
+import scenarioRoutes from './routes/scenarios.js'
 
 const app = express()
+app.use(cors())
 app.use(express.json({ limit: '10mb' }))
+app.use(express.static('public'))
 
-// ─── API Key Auth ───
-const API_KEYS = new Set((process.env.TAX_API_KEYS || 'test-key-2026').split(','))
+// ─── Auth routes (public — no API key needed) ───
+app.use('/auth', authRoutes)
 
-app.use('/api', (req, res, next) => {
+// ─── API Key Auth (supports both static keys and Supabase-provisioned keys) ───
+const STATIC_KEYS = new Set((process.env.TAX_API_KEYS || 'test-key-2026').split(','))
+
+app.use('/api', async (req, res, next) => {
   // Health check is public
-  if (req.path === '/api/health' || req.path === '/health') return next()
-  const key = req.headers['x-api-key'] || req.query.api_key
-  if (!key || !API_KEYS.has(key as string)) {
-    res.status(401).json({ error: 'Invalid or missing API key. Set x-api-key header.' })
+  if (req.path === '/health') return next()
+  // Auth routes are separate
+  const key = req.headers['x-api-key'] || req.query.api_key as string
+  if (!key) {
+    // Try Bearer token (Supabase JWT)
+    const token = req.headers.authorization?.replace('Bearer ', '')
+    if (token) {
+      const { data: { user } } = await supabase.auth.getUser(token)
+      if (user) { (req as any).userId = user.id; return next() }
+    }
+    res.status(401).json({ error: 'Missing API key or Bearer token' })
     return
   }
-  next()
+  // Check static keys
+  if (STATIC_KEYS.has(key as string)) return next()
+  // Check Supabase-provisioned keys
+  const { data } = await supabase.from('api_key')
+    .select('user_id').eq('key_value', key).eq('is_active', true).single()
+  if (data) {
+    (req as any).userId = data.user_id
+    // Update last_used
+    supabase.from('api_key').update({ last_used_at: new Date().toISOString() }).eq('key_value', key).then()
+    return next()
+  }
+  res.status(401).json({ error: 'Invalid API key' })
 })
+
+// ─── Scenario routes ───
+app.use('/api/scenarios', scenarioRoutes)
 
 // ─── Health ───
 app.get('/api/health', (_req, res) => {
