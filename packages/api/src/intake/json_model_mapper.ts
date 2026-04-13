@@ -268,16 +268,39 @@ const FUZZY_RULES_1120: FuzzyRule[] = [
 ]
 
 const FUZZY_RULES_1040: FuzzyRule[] = [
-  { pattern: /1z\s+add\s+lines\s+1a|wages.*salaries.*tips/,       canonical_key: 'income.wages',                   confidence: 0.95 },
-  { pattern: /2b\s+taxable\s+interest/,                           canonical_key: 'income.taxable_interest',        confidence: 0.97 },
-  { pattern: /3b\s+ordinary\s+dividends/,                         canonical_key: 'income.ordinary_dividends',      confidence: 0.97 },
-  { pattern: /11\s+adjusted\s+gross|adjusted\s+gross\s+income/,  canonical_key: 'income.agi',                     confidence: 0.97 },
-  { pattern: /15\s+taxable\s+income/,                             canonical_key: 'deductions.taxable_income',      confidence: 0.97 },
-  { pattern: /16\s+tax.*see\s+instructions/,                      canonical_key: 'tax.income_tax',                 confidence: 0.95 },
-  { pattern: /24\s+.*total\s+tax/,                                canonical_key: 'tax.total_tax',                  confidence: 0.97 },
-  { pattern: /25a.*withholding.*w.2/,                             canonical_key: 'payments.w2_withholding',        confidence: 0.95 },
-  { pattern: /33\s+.*total\s+payments/,                           canonical_key: 'payments.total_payments',        confidence: 0.97 },
-  { pattern: /35a\s+amount.*refunded/,                            canonical_key: 'result.refund',                  confidence: 0.95 },
+  // Income — Textract labels may start with letter (Z, b) or number (1a, 2b)
+  { pattern: /1a\s+total\s+amount.*w-2|total\s+amount.*form.*w-2.*1a/,                        canonical_key: 'income.w2_wages',            confidence: 0.97 },
+  { pattern: /add\s+lines\s+1a\s+through\s+1h\s+1z|^z\s+add\s+lines\s+1a/,                  canonical_key: 'income.wages',               confidence: 0.95 },
+  { pattern: /taxable\s+interest.*2b|2b\s+taxable\s+interest|^b\s+taxable\s+interest/,        canonical_key: 'income.taxable_interest',    confidence: 0.97 },
+  { pattern: /qualified\s+dividends.*3a|3a\s+qualified|^3a\s+qualified/,                       canonical_key: 'income.qualified_dividends', confidence: 0.97 },
+  { pattern: /ordinary\s+dividends.*3b|3b\s+ordinary|^b\s+ordinary\s+dividends/,              canonical_key: 'income.ordinary_dividends',  confidence: 0.97 },
+  { pattern: /capital\s+gain.*(?:loss|7)|7\s+capital\s+gain|7a\s+capital\s+gain/,              canonical_key: 'income.capital_gains',        confidence: 0.96 },
+  { pattern: /additional\s+income.*schedule\s+1.*(?:line\s+10|8)|8\s+additional\s+income/,     canonical_key: 'income.schedule1_income',    confidence: 0.96 },
+  { pattern: /add\s+lines\s+1z.*this\s+is\s+your\s+total\s+incom|9\s+add\s+lines\s+1z/,     canonical_key: 'income.total_income',        confidence: 0.97 },
+  { pattern: /adjustments\s+to\s+income.*schedule\s+1|10\s+adjustments/,                      canonical_key: 'income.adjustments',         confidence: 0.95 },
+  { pattern: /adjusted\s+gross\s+income|11\s+.*adjusted\s+gross|11a\s+.*adjusted\s+gross/,   canonical_key: 'income.agi',                 confidence: 0.97 },
+  // Deductions
+  { pattern: /standard\s+deduction.*(?:schedule\s+a|12)|12\s+standard\s+deduction|12e\s+standard/, canonical_key: 'deductions.standard',   confidence: 0.97 },
+  { pattern: /qualified\s+business\s+income\s+deduction|13\s+qualified\s+business|13a\s+qualified/, canonical_key: 'deductions.qbi',        confidence: 0.97 },
+  { pattern: /add\s+lines\s+12.*and\s+13|14\s+add\s+lines\s+12/,                             canonical_key: 'deductions.total',           confidence: 0.95 },
+  { pattern: /this\s+is\s+your\s+taxable\s+income|15\s+.*taxable\s+income|subtract\s+line\s+14.*11/, canonical_key: 'deductions.taxable_income', confidence: 0.97 },
+  // Tax
+  { pattern: /^16\s+tax|tax.*see\s+instructions.*16|tax.*check\s+if/,                         canonical_key: 'tax.income_tax',             confidence: 0.95 },
+  { pattern: /amount\s+from\s+schedule\s+2.*line\s+3|17\s+amount.*schedule\s+2/,              canonical_key: 'tax.schedule2',              confidence: 0.96 },
+  { pattern: /add\s+lines\s+16\s+and\s+17|18\s+add\s+lines\s+16/,                            canonical_key: 'tax.add_16_17',              confidence: 0.95 },
+  { pattern: /other\s+taxes.*self-employment.*schedule\s+2|23\s+other\s+taxes/,                canonical_key: 'tax.other_taxes',            confidence: 0.96 },
+  { pattern: /this\s+is\s+your\s+total\s+tax|24\s+.*total\s+tax/,                            canonical_key: 'tax.total_tax',              confidence: 0.97 },
+  // Payments
+  { pattern: /form.*w-2\s+25a|^a\s+form.*w-2|25a.*withholding/,                               canonical_key: 'payments.w2_withholding',   confidence: 0.95 },
+  { pattern: /add\s+lines\s+25a.*25c\s+25d|^d\s+add\s+lines\s+25a/,                          canonical_key: 'payments.total_withholding', confidence: 0.95 },
+  { pattern: /estimated\s+tax\s+payments.*(?:26|return)|26\s+.*estimated\s+tax/,               canonical_key: 'payments.estimated',         confidence: 0.96 },
+  { pattern: /total\s+payments.*33|33\s+.*total\s+payments|these\s+are\s+your\s+total\s+payments/, canonical_key: 'payments.total_payments', confidence: 0.97 },
+  // Result
+  { pattern: /amount.*refunded.*35a|35a\s+amount.*refunded/,                                   canonical_key: 'result.refund',              confidence: 0.95 },
+  { pattern: /amount\s+you\s+owe|37\s+.*amount\s+you\s+owe/,                                  canonical_key: 'result.balance_due',         confidence: 0.95 },
+  { pattern: /estimated\s+tax\s+penalty|38\s+estimated\s+tax\s+penalty/,                       canonical_key: 'result.penalty',             confidence: 0.93 },
+  // Schedule 1 / E (K-1 flow)
+  { pattern: /rental\s+real\s+estate.*partnerships.*s\s+corporations|5\s+rental\s+real\s+estate/, canonical_key: 'schedule1.k1_income',     confidence: 0.94 },
 ]
 
 const FUZZY_RULES: Record<string, FuzzyRule[]> = {

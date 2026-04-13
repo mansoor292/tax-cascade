@@ -116,23 +116,29 @@ router.post('/process/:document_id', async (req, res) => {
       }
       engineResult = calc1120S(engineInput)
     } else if (formType === '1040') {
-      // For 1040, extract what we can and run calc
+      // For 1040, use the canonical keys from the updated mapper
+      // Use 1z total wages (includes dependent care, tips) — NOT 1a W-2 box 1
+      const wages = getNum('income.wages')  // 1z
+      // Schedule 1 line 10 (additional income = K-1 + other)
+      const schedule1 = getNum('income.schedule1_income') || getNum('schedule1.k1_income')
+      // If we have AGI directly, use it to validate
+      const extractedAgi = getNum('income.agi')
       engineInput = {
         filing_status: 'mfj', tax_year: taxYear,
-        wages: getNum('income.wages') || getNum('income.L1z_total_wages'),
-        taxable_interest: getNum('income.taxable_interest') || getNum('income.L2b_taxable_int'),
-        ordinary_dividends: getNum('income.ordinary_dividends') || getNum('income.L3b_ord_dividends'),
-        qualified_dividends: 0, ira_distributions: 0, pensions_annuities: 0,
-        social_security: 0,
-        capital_gains: getNum('income.capital_gains') || getNum('income.L7_capital_gains'),
-        schedule1_income: getNum('income.schedule1') || getNum('income.L8_schedule1'),
+        wages,
+        taxable_interest: getNum('income.taxable_interest'),
+        ordinary_dividends: getNum('income.ordinary_dividends'),
+        qualified_dividends: getNum('income.qualified_dividends'),
+        ira_distributions: 0, pensions_annuities: 0, social_security: 0,
+        capital_gains: getNum('income.capital_gains'),
+        schedule1_income: schedule1,
         student_loan_interest: 0, educator_expenses: 0,
         itemized_deductions: 0, use_itemized: false,
         qbi_from_k1: 0,
-        k1_ordinary_income: getNum('income.schedule1') || getNum('income.L8_schedule1'),
+        k1_ordinary_income: 0,  // K-1 is already in schedule1_income — don't double count
         k1_w2_wages: 0, k1_ubia: 0,
-        withholding: getNum('payments.w2_withholding') || getNum('payments.L25a_w2'),
-        estimated_payments: getNum('payments.estimated') || getNum('payments.L26_estimated'),
+        withholding: getNum('payments.w2_withholding') || getNum('payments.total_withholding'),
+        estimated_payments: getNum('payments.estimated'),
       }
       engineResult = calc1040(engineInput)
     }
@@ -167,12 +173,26 @@ router.post('/process/:document_id', async (req, res) => {
       }
     }
 
-    // 4. Find or create entity
+    // 4. Find entity — try exact match, then partial, then by form type
     let entityId = doc.entity_id
     if (!entityId && doc.meta?.entity_name) {
-      const { data: existing } = await supabase.from('tax_entity')
+      // Try exact match first
+      const { data: exact } = await supabase.from('tax_entity')
         .select('id').ilike('name', doc.meta.entity_name).single()
-      entityId = existing?.id || null
+      if (exact) { entityId = exact.id }
+      else {
+        // Try partial match on first word
+        const firstName = doc.meta.entity_name.split(' ')[0]
+        const { data: partial } = await supabase.from('tax_entity')
+          .select('id').ilike('name', `%${firstName}%`).single()
+        if (partial) { entityId = partial.id }
+      }
+    }
+    // Last resort: match by form type for this user
+    if (!entityId && formType) {
+      const { data: byForm } = await supabase.from('tax_entity')
+        .select('id').eq('form_type', formType).eq('user_id', userId).single()
+      if (byForm) { entityId = byForm.id }
     }
 
     // 5. Save tax_return
