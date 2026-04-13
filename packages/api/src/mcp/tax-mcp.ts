@@ -17,11 +17,11 @@ const API_BASE = `http://localhost:${process.env.PORT || 3737}`
  * The key is captured from the MCP request's Authorization header
  * and threaded through every tool call via the session.
  */
-async function api(apiKey: string, method: string, path: string, body?: any): Promise<any> {
+async function api(token: string, method: string, path: string, body?: any): Promise<any> {
   const opts: RequestInit = {
     method,
     headers: {
-      'x-api-key': apiKey,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
   }
