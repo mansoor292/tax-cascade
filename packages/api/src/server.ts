@@ -38,6 +38,7 @@ import qboRoutes from './routes/qbo.js'
 import discoveryRoutes from './discovery/discovery_routes.js'
 
 const app = express()
+app.set('trust proxy', true)
 app.use(cors())
 
 // ─── Deploy webhook — must be before express.json() so we get the raw body for HMAC ───
