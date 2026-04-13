@@ -147,93 +147,9 @@ export interface Form1040_Inputs {
 }
 
 // ─────────────────────────────────────────────────────────────
-// TAX TABLES  (IRS Rev. Proc. 2023-34 for TY2024)
+// Year-specific tax functions imported from tax_tables.ts
 // ─────────────────────────────────────────────────────────────
-
-interface Bracket { min: number; max: number; rate: number; base_tax: number }
-
-const TAX_BRACKETS: Record<FilingStatus, Bracket[]> = {
-  single: [
-    { min: 0,       max: 11600,  rate: 0.10, base_tax: 0 },
-    { min: 11600,   max: 47150,  rate: 0.12, base_tax: 1160 },
-    { min: 47150,   max: 100525, rate: 0.22, base_tax: 5426 },
-    { min: 100525,  max: 191950, rate: 0.24, base_tax: 17168.50 },
-    { min: 191950,  max: 243725, rate: 0.32, base_tax: 39110.50 },
-    { min: 243725,  max: 609350, rate: 0.35, base_tax: 55678.50 },
-    { min: 609350,  max: Infinity, rate: 0.37, base_tax: 183647.25 },
-  ],
-  mfj: [
-    { min: 0,       max: 23200,  rate: 0.10, base_tax: 0 },
-    { min: 23200,   max: 94300,  rate: 0.12, base_tax: 2320 },
-    { min: 94300,   max: 201050, rate: 0.22, base_tax: 10852 },
-    { min: 201050,  max: 383900, rate: 0.24, base_tax: 34337 },
-    { min: 383900,  max: 487450, rate: 0.32, base_tax: 78221 },
-    { min: 487450,  max: 731200, rate: 0.35, base_tax: 111357 },
-    { min: 731200,  max: Infinity, rate: 0.37, base_tax: 196669.50 },
-  ],
-  mfs: [
-    { min: 0,       max: 11600,  rate: 0.10, base_tax: 0 },
-    { min: 11600,   max: 47150,  rate: 0.12, base_tax: 1160 },
-    { min: 47150,   max: 100525, rate: 0.22, base_tax: 5426 },
-    { min: 100525,  max: 191950, rate: 0.24, base_tax: 17168.50 },
-    { min: 191950,  max: 243725, rate: 0.32, base_tax: 39110.50 },
-    { min: 243725,  max: 365600, rate: 0.35, base_tax: 55678.50 },
-    { min: 365600,  max: Infinity, rate: 0.37, base_tax: 98334.75 },
-  ],
-  hoh: [
-    { min: 0,       max: 16550,  rate: 0.10, base_tax: 0 },
-    { min: 16550,   max: 63100,  rate: 0.12, base_tax: 1655 },
-    { min: 63100,   max: 100500, rate: 0.22, base_tax: 7241 },
-    { min: 100500,  max: 191950, rate: 0.24, base_tax: 15469 },
-    { min: 191950,  max: 243700, rate: 0.32, base_tax: 37417 },
-    { min: 243700,  max: 609350, rate: 0.35, base_tax: 53977 },
-    { min: 609350,  max: Infinity, rate: 0.37, base_tax: 181954.50 },
-  ],
-  qw: [] // same as mfj for simplicity
-}
-
-const STANDARD_DEDUCTION: Record<FilingStatus, number> = {
-  single: 14600,
-  mfj:    29200,
-  mfs:    14600,
-  hoh:    21900,
-  qw:     29200,
-}
-
-// ─────────────────────────────────────────────────────────────
-// CALCULATION FUNCTIONS
-// ─────────────────────────────────────────────────────────────
-
-/** Apply tax brackets — pure function */
-export function applyTaxBrackets(taxable: number, status: FilingStatus): number {
-  if (taxable <= 0) return 0
-  const brackets = status === 'qw' ? TAX_BRACKETS.mfj : TAX_BRACKETS[status]
-  for (const b of [...brackets].reverse()) {
-    if (taxable > b.min) {
-      return Math.round(b.base_tax + (taxable - b.min) * b.rate)
-    }
-  }
-  return 0
-}
-
-/** QBI deduction §199A — simplified (no phase-out for demo) */
-export function calcQBI(
-  qbi_income: number,
-  w2_wages: number,
-  ubia: number,
-  taxable_income: number,
-  status: FilingStatus
-): number {
-  // Threshold: $201,050 single / $402,100 MFJ (TY2024) — simplified
-  const threshold = status === 'mfj' ? 402100 : 201050
-  const tentative = Math.round(qbi_income * 0.20)
-  if (taxable_income <= threshold) return Math.min(tentative, Math.round(taxable_income * 0.20))
-  // W-2 wage limitation kicks in above threshold
-  const wage_limit = Math.round(w2_wages * 0.50)
-  const wage_ubia_limit = Math.round(w2_wages * 0.25 + ubia * 0.025)
-  const limited = Math.min(tentative, Math.max(wage_limit, wage_ubia_limit))
-  return Math.min(limited, Math.round(taxable_income * 0.20))
-}
+import { ordinaryTax, standardDeduction, qbiDeduction } from './tax_tables.js'
 
 /** Form 1120-S calculation */
 export function calc1120S(inp: Form1120S_Inputs): Form1120S_Result {
@@ -337,24 +253,25 @@ export function calc1040(inp: Form1040_Inputs): {
 
   const agi = total_income - adjustments  // Line 11
 
-  // Lines 12-14: Deduction
-  const std = STANDARD_DEDUCTION[inp.filing_status]
+  // Lines 12-14: Deduction (year-specific standard deduction)
+  const std = standardDeduction(inp.filing_status, inp.tax_year)
   const deduction = inp.use_itemized ? Math.max(inp.itemized_deductions, std) : std
 
-  // QBI deduction (§199A) — Line 13
+  // QBI deduction (§199A) — Line 13 (year-specific thresholds)
   const tentative_taxable = Math.max(0, agi - deduction)
-  const qbi_deduction = calcQBI(
+  const qbi_deduction = qbiDeduction(
     inp.k1_ordinary_income + inp.qbi_from_k1,
     inp.k1_w2_wages,
     inp.k1_ubia,
     tentative_taxable,
-    inp.filing_status
+    inp.filing_status,
+    inp.tax_year
   )
 
   const taxable_income = Math.max(0, tentative_taxable - qbi_deduction)  // Line 15
 
-  // Line 16: Tax
-  const income_tax = applyTaxBrackets(taxable_income, inp.filing_status)
+  // Line 16: Tax (year-specific brackets)
+  const income_tax = ordinaryTax(taxable_income, inp.filing_status, inp.tax_year)
 
   // Lines 25-33: Payments
   const total_payments = inp.withholding + inp.estimated_payments
@@ -371,9 +288,9 @@ export function calc1040(inp: Form1040_Inputs): {
       total_payments, refund, owed,
     },
     citations: [
-      'IRS Rev. Proc. 2023-34: TY2024 tax brackets',
+      `IRS tax brackets for TY${inp.tax_year} (from TAX_TABLES)`,
       'IRC §63(c): Standard deduction',
-      'IRC §199A: QBI deduction (20% of qualified income)',
+      'IRC §199A: QBI deduction (year-specific thresholds)',
       'IRC §86: Social security taxability (simplified at 85%)',
     ]
   }
