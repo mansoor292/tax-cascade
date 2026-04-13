@@ -541,6 +541,7 @@ router.post('/compute', async (req, res) => {
         input_data: inputs,
         computed_data: engineResult,
         computed_at: new Date().toISOString(),
+        pdf_s3_path: null,  // invalidate cached PDF on recompute
       }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
 
       if (error) return res.status(500).json({ error: error.message })

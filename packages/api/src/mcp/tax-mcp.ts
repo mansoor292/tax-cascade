@@ -210,10 +210,10 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: get_pdf ───
-  server.tool('get_pdf', 'Generate a filled IRS PDF for a computed return. Returns a download URL.', {
+  server.tool('get_pdf', 'Generate a filled IRS PDF for a computed return. Returns a download URL. Always regenerates from latest data.', {
     return_id: z.string().describe('Tax return UUID'),
   }, async ({ return_id }) => {
-    return text(await call('GET', `/api/returns/${return_id}/pdf`))
+    return text(await call('GET', `/api/returns/${return_id}/pdf?regenerate=true`))
   })
 
   // ─── Tool: compare_returns ───
