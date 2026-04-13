@@ -189,6 +189,39 @@ function createServer(apiKey: string): McpServer {
     return text(await call('GET', `/api/returns/compare/${entity_id}`))
   })
 
+  // ─── Tool: upload_document ───
+  server.tool('upload_document', 'Get a presigned S3 upload URL for a tax document (PDF, image, CSV). After uploading, call register_document.', {
+    filename: z.string().describe('Filename with extension (e.g. "2022_1120.pdf")'),
+  }, async ({ filename }) => {
+    return text(await call('GET', `/api/documents/presign?filename=${encodeURIComponent(filename)}`))
+  })
+
+  // ─── Tool: register_document ───
+  server.tool('register_document', 'Register an uploaded document. Triggers OCR classification and Textract extraction. Call after uploading to the presigned URL.', {
+    s3_key: z.string().describe('S3 key returned from upload_document'),
+    filename: z.string().describe('Original filename'),
+    file_size: z.number().optional().describe('File size in bytes'),
+  }, async (params) => {
+    return text(await call('POST', '/api/documents/register', params))
+  })
+
+  // ─── Tool: process_document ───
+  server.tool('process_document', 'Process an uploaded tax document into a computed return. Extracts data via Textract, maps to canonical model, runs tax engine, and saves the return.', {
+    document_id: z.string().describe('Document UUID from register_document'),
+    form_type: z.string().optional().describe('Override form type (1040, 1120, 1120S) if auto-detection was wrong'),
+    tax_year: z.number().optional().describe('Override tax year if auto-detection was wrong'),
+  }, async ({ document_id, form_type, tax_year }) => {
+    const body: any = {}
+    if (form_type) body.form_type = form_type
+    if (tax_year) body.tax_year = tax_year
+    return text(await call('POST', `/api/returns/process/${document_id}`, body))
+  })
+
+  // ─── Tool: list_documents ───
+  server.tool('list_documents', 'List all uploaded documents', {}, async () => {
+    return text(await call('GET', '/api/documents'))
+  })
+
   return server
 }
 
