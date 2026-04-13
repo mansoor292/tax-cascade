@@ -29,6 +29,20 @@ import { FORM_INVENTORY } from './maps/field_maps.js'
 const app = express()
 app.use(express.json({ limit: '10mb' }))
 
+// ─── API Key Auth ───
+const API_KEYS = new Set((process.env.TAX_API_KEYS || 'test-key-2026').split(','))
+
+app.use('/api', (req, res, next) => {
+  // Health check is public
+  if (req.path === '/api/health' || req.path === '/health') return next()
+  const key = req.headers['x-api-key'] || req.query.api_key
+  if (!key || !API_KEYS.has(key as string)) {
+    res.status(401).json({ error: 'Invalid or missing API key. Set x-api-key header.' })
+    return
+  }
+  next()
+})
+
 // ─── Health ───
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', version: '0.1.0', forms: Object.keys(FORM_INVENTORY).length })
