@@ -81,9 +81,12 @@ const INSTRUCTIONS = `You help users prepare and optimize tax returns using the 
 ## QuickBooks
 - qbo_status: check connection
 - connect_qbo: start OAuth (returns URL for user to click)
-- get_financials: P&L + Balance Sheet (cached, use refresh=true for fresh data)
-- get_qbo_report: individual reports (profit-and-loss, balance-sheet, trial-balance, general-ledger, cash-flow)
-- qbo_query: raw QBO SQL (SELECT * FROM Account, etc.)
+- get_financials: P&L + Balance Sheet summary (cached)
+- get_qbo_report: any report — P&L detail, balance sheet detail, trial balance, GL, cash flow, transaction list, AR/AP aging, vendor/customer balances. All cached in DB.
+- get_accounts: chart of accounts with balances — use to find account names for filtering
+- get_transactions: search transactions by account, date range, or year. Returns individual line items.
+- qbo_query: raw QBO SQL for anything else
+- IMPORTANT: Reports and transactions are cached in the database. Claude can query them anytime without re-fetching from QBO. Use refresh=true only when the user asks for fresh data.
 
 ## Rules
 - Never fabricate financial data — ask the user for missing values
@@ -153,9 +156,9 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: get_qbo_report ───
-  server.tool('get_qbo_report', 'Pull a specific QBO report (profit-and-loss, balance-sheet, trial-balance, general-ledger, cash-flow)', {
+  server.tool('get_qbo_report', 'Pull a QBO report. All reports are cached — add refresh=true to re-fetch. Available: profit-and-loss, profit-and-loss-detail, balance-sheet, balance-sheet-detail, trial-balance, general-ledger, cash-flow, transaction-list, accounts-receivable, accounts-payable, vendor-balance, customer-balance', {
     entity_id: z.string().describe('Entity UUID'),
-    report: z.enum(['profit-and-loss', 'balance-sheet', 'trial-balance', 'general-ledger', 'cash-flow']),
+    report: z.enum(['profit-and-loss', 'profit-and-loss-detail', 'balance-sheet', 'balance-sheet-detail', 'trial-balance', 'general-ledger', 'cash-flow', 'transaction-list', 'accounts-receivable', 'accounts-payable', 'vendor-balance', 'customer-balance']),
     year: z.number().optional(),
     refresh: z.boolean().optional(),
   }, async ({ entity_id, report, year, refresh }) => {
@@ -330,6 +333,29 @@ function createServer(apiKey: string): McpServer {
     query: z.string().describe('QBO SQL query'),
   }, async ({ entity_id, query }) => {
     return text(await call('GET', `/api/qbo/${entity_id}/query?q=${encodeURIComponent(query)}`))
+  })
+
+  // ─── Tool: get_accounts ───
+  server.tool('get_accounts', 'Get the chart of accounts from QuickBooks — all accounts with balances, types, and IDs. Use this to find account names for filtering transactions or reports.', {
+    entity_id: z.string().describe('Entity UUID'),
+  }, async ({ entity_id }) => {
+    return text(await call('GET', `/api/qbo/${entity_id}/accounts`))
+  })
+
+  // ─── Tool: get_transactions ───
+  server.tool('get_transactions', 'Get transactions from QuickBooks. Filter by account name, date range, or year. Returns date, type, name, memo, account, amount. Results are cached.', {
+    entity_id: z.string().describe('Entity UUID'),
+    year: z.number().optional().describe('Tax year to filter'),
+    account: z.string().optional().describe('Account name to filter (from get_accounts)'),
+    start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
+    end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
+  }, async ({ entity_id, year, account, start_date, end_date }) => {
+    const qs = new URLSearchParams()
+    if (year) qs.set('year', String(year))
+    if (account) qs.set('account', account)
+    if (start_date) qs.set('start_date', start_date)
+    if (end_date) qs.set('end_date', end_date)
+    return text(await call('GET', `/api/qbo/${entity_id}/transactions?${qs}`))
   })
 
   // ─── Tool: qbo_status ───

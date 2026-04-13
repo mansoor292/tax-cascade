@@ -266,10 +266,17 @@ router.delete('/:entity_id/disconnect', async (req, res) => {
 
 const REPORT_MAP: Record<string, string> = {
   'profit-and-loss': 'ProfitAndLoss',
+  'profit-and-loss-detail': 'ProfitAndLossDetail',
   'balance-sheet': 'BalanceSheet',
+  'balance-sheet-detail': 'BalanceSheetDetail',
   'trial-balance': 'TrialBalance',
   'general-ledger': 'GeneralLedger',
   'cash-flow': 'CashFlow',
+  'transaction-list': 'TransactionList',
+  'accounts-receivable': 'AgedReceivableDetail',
+  'accounts-payable': 'AgedPayableDetail',
+  'vendor-balance': 'VendorBalanceDetail',
+  'customer-balance': 'CustomerBalanceDetail',
 }
 
 function flattenReport(report: any): Record<string, number> {
@@ -494,6 +501,98 @@ router.get('/:entity_id/financials', async (req, res) => {
         items: bsData.summary,
         fetched_at: bsData.fetched_at,
       },
+    })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ─── Chart of Accounts ───
+router.get('/:entity_id/accounts', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  try {
+    const data = await qboFetch(req.params.entity_id, '/query', {
+      query: 'SELECT * FROM Account ORDERBY Name MAXRESULTS 500',
+    })
+    const accounts = data?.QueryResponse?.Account || []
+    res.json({
+      count: accounts.length,
+      accounts: accounts.map((a: any) => ({
+        id: a.Id,
+        name: a.Name,
+        full_name: a.FullyQualifiedName,
+        type: a.AccountType,
+        sub_type: a.AccountSubType,
+        balance: a.CurrentBalance,
+        active: a.Active,
+      })),
+    })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ─── Transactions for an account ───
+router.get('/:entity_id/transactions', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { account, start_date, end_date, type, limit: maxResults } = req.query as Record<string, string>
+  const year = req.query.year as string
+
+  // Build the TransactionList report query
+  const query: Record<string, string> = {}
+  if (year) {
+    query.start_date = `${year}-01-01`
+    query.end_date = `${year}-12-31`
+  }
+  if (start_date) query.start_date = start_date
+  if (end_date) query.end_date = end_date
+  if (account) query.account = account
+  if (type) query.transaction_type = type
+
+  try {
+    const data = await qboFetch(req.params.entity_id, '/reports/TransactionList', query)
+
+    // Flatten the report rows into a transaction list
+    const transactions: any[] = []
+    const rows = data?.Rows?.Row || []
+    for (const row of rows) {
+      if (row.type === 'Data' && row.ColData) {
+        const cols = row.ColData
+        transactions.push({
+          date: cols[0]?.value,
+          type: cols[1]?.value,
+          num: cols[2]?.value,
+          name: cols[3]?.value,
+          memo: cols[4]?.value,
+          account: cols[5]?.value,
+          amount: parseFloat(cols[6]?.value || '0') || 0,
+        })
+      }
+    }
+
+    // Store in qbo_report cache
+    const periodStart = query.start_date || `${year || new Date().getFullYear()}-01-01`
+    const periodEnd = query.end_date || `${year || new Date().getFullYear()}-12-31`
+    await supabase.from('qbo_report').upsert({
+      entity_id: req.params.entity_id,
+      report_type: `transactions${account ? `-${account}` : ''}`,
+      period_start: periodStart,
+      period_end: periodEnd,
+      accounting_method: 'Accrual',
+      raw_data: data,
+      summary: { count: transactions.length, total: transactions.reduce((s, t) => s + t.amount, 0) },
+      fetched_at: new Date().toISOString(),
+    }, { onConflict: 'entity_id,report_type,period_start,period_end,accounting_method' })
+
+    res.json({
+      count: transactions.length,
+      period: { start: periodStart, end: periodEnd },
+      account_filter: account || 'all',
+      transactions,
     })
   } catch (e: any) {
     res.status(500).json({ error: e.message })
