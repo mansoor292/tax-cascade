@@ -15,7 +15,6 @@ import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { getEngineToCanonicalMap } from '../maps/engine_to_pdf.js'
 import * as maps2025 from '../maps/pdf_field_map_2025.js'
-import * as maps2024 from '../maps/pdf_field_map_2024.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -599,7 +598,6 @@ print(json.dumps({'url': url}))
   try {
     const { PDFDocument, PDFTextField } = await import('pdf-lib')
     const { readFileSync, existsSync } = await import('fs')
-    const { getCanonicalMap } = await import('../maps/field_maps.js')
 
     const formName = taxReturn.form_type === '1120S' ? 'f1120s' : `f${taxReturn.form_type.toLowerCase()}`
     const blankPath = `data/irs_forms/${formName}_${taxReturn.tax_year}.pdf`
@@ -610,44 +608,62 @@ print(json.dumps({'url': url}))
     const pdf = await PDFDocument.load(readFileSync(blankPath))
     const form = pdf.getForm()
 
-    // Engine key → canonical key → field_id
-    const engineMap = getEngineToCanonicalMap(taxReturn.form_type)
-
-    // Get the typed canonical→fieldId map for this form+year
-    const allMaps: Record<string, Record<string, string>> = { ...maps2024, ...maps2025 } as any
+    // Get the year-specific canonical→fieldId map (same maps the builders use)
     const mapKey = `F${taxReturn.form_type.replace('-', '')}_${taxReturn.tax_year}`
-    const typedMap: Record<string, string> = allMaps[mapKey] || {}
+    let fieldMap: Record<string, string> = (maps2025 as any)[mapKey] || {}
 
-    // Merge input_data + computed values
-    const rawData = { ...taxReturn.input_data, ...taxReturn.computed_data?.computed }
+    // Build canonical model — same approach as build_1120_package.ts
+    const model: Record<string, string | number> = {}
+    const engineMap = getEngineToCanonicalMap(taxReturn.form_type)
+    const inputs = taxReturn.input_data || {}
+    const computed = taxReturn.computed_data?.computed || {}
 
-    // Build final data: engine key → canonical key → field_id
-    const dataToFill: Record<string, any> = {}
-
-    for (const [engineKey, value] of Object.entries(rawData)) {
-      if (value === undefined || value === null || value === 0) continue
-      const canonicalKey = engineMap[engineKey]
-      if (canonicalKey) {
-        const fieldId = typedMap[canonicalKey]
-        if (fieldId) dataToFill[fieldId] = value
-      }
+    // Map engine input keys → canonical keys
+    for (const [key, value] of Object.entries(inputs)) {
+      if (value === undefined || value === null) continue
+      const canon = engineMap[key]
+      if (canon) model[canon] = value as string | number
     }
-
-    // Also try direct canonical keys from field_values (extracted returns)
+    // Map engine computed keys → canonical keys
+    for (const [key, value] of Object.entries(computed)) {
+      if (value === undefined || value === null) continue
+      const canon = engineMap[key]
+      if (canon) model[canon] = value as string | number
+    }
+    // Add field_values directly (already canonical-keyed from extracted returns)
     if (taxReturn.field_values) {
-      for (const [canonKey, value] of Object.entries(taxReturn.field_values)) {
-        if (value === undefined || value === null) continue
-        const fieldId = typedMap[canonKey]
-        if (fieldId) dataToFill[fieldId] = value
+      for (const [key, value] of Object.entries(taxReturn.field_values)) {
+        if (value !== undefined && value !== null) model[key] = value as string | number
       }
     }
 
-    // Fill the PDF
+    // Add entity metadata (name, EIN, address — same as builders do)
+    const { data: entityMeta } = await supabase.from('tax_entity')
+      .select('name, ein, address, city, state, zip, date_incorporated, meta')
+      .eq('id', taxReturn.entity_id).single()
+    if (entityMeta) {
+      model['meta.entity_name'] = entityMeta.name || ''
+      model['meta.ein'] = entityMeta.ein || ''
+      model['meta.address'] = entityMeta.address || ''
+      if (entityMeta.city || entityMeta.state || entityMeta.zip)
+        model['meta.city_state_zip'] = [entityMeta.city, entityMeta.state, entityMeta.zip].filter(Boolean).join(', ')
+      if (entityMeta.date_incorporated) model['meta.date_incorporated'] = entityMeta.date_incorporated
+      if (entityMeta.meta?.business_activity) model['meta.business_activity'] = entityMeta.meta.business_activity
+      if (entityMeta.meta?.product_service) model['meta.product_service'] = entityMeta.meta.product_service
+      if (entityMeta.meta?.business_code) model['meta.business_activity_code'] = entityMeta.meta.business_code
+    }
+
+    // Fill PDF: canonical key → field ID → set text (same as builders)
     let filled = 0
-    for (const [fieldId, value] of Object.entries(dataToFill)) {
+    for (const [canonKey, value] of Object.entries(model)) {
+      if (value === undefined || value === null || value === '' || value === 0) continue
+      const fieldId = fieldMap[canonKey]
+      if (!fieldId) continue
       for (const f of form.getFields()) {
         if (f.getName().includes(fieldId + '[') && f instanceof PDFTextField) {
-          const str = typeof value === 'number' ? value.toLocaleString() : String(value)
+          const str = typeof value === 'number'
+            ? (value === 0 ? '' : value.toLocaleString()) : String(value)
+          if (!str) break
           const ml = f.getMaxLength()
           if (ml !== undefined && str.length > ml) f.setMaxLength(str.length)
           f.setText(str)

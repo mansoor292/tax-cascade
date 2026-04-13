@@ -133,6 +133,34 @@ export const F1120_2025: Record<string, string> = {
   'tax.L29c_total_29':          'f1_46',
   'tax.L30_taxable_income':     'f1_47',
   'tax.L31_total_tax':          'f1_48',
+
+  // Page 1: Payments & Balance (Lines 32-37)
+  'payments.L33_total_payments': 'f1_50',
+  'payments.L35_amount_owed':    'f1_52',
+  'payments.L36_overpayment':    'f1_53',
+  'payments.L37_refunded':       'f1_55',
+
+  // Page 1: Signature
+  'meta.title':                  'f1_58',
+
+  // Page 3: Schedule J (Tax Computation)
+  'schedJ.J1a_income_tax':       'f3_1',
+  'schedJ.J2_total_income_tax':  'f3_9',
+  'schedJ.J4_add_2_3':           'f3_11',
+  'schedJ.J7_subtract_6_4':      'f3_19',
+  'schedJ.J11a_total_before_def':'f3_30',
+  'schedJ.J12_total_tax':        'f3_33',
+  'schedJ.J13_prior_overpayment':'f3_34',
+  'schedJ.J14_estimated_payments':'f3_35',
+  'schedJ.J17_7004_deposit':     'f3_38',
+  'schedJ.J19_total_payments':   'f3_40',
+  'schedJ.J23_total_pay_credits':'f3_48',
+
+  // Preparer
+  'preparer.ptin':               'f1_60',
+  'preparer.firm_ein':           'f1_62',
+  'preparer.firm_address':       'f1_63',
+  'preparer.phone':              'f1_64',
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -34,7 +34,6 @@ export const ENGINE_TO_PDF_1120: Record<string, string> = {
   'other_deductions':      'deductions.L26_other_deductions',
   'nol_deduction':         'tax.L29a_nol',
   'special_deductions':    'tax.L29b_special_ded',
-  'estimated_tax_paid':    'schedJ.J13_estimated_payments',
   // Computed → canonical
   'balance_1c':            'income.L1c_balance',
   'gross_profit':          'income.L3_gross_profit',
@@ -42,8 +41,12 @@ export const ENGINE_TO_PDF_1120: Record<string, string> = {
   'total_deductions':      'deductions.L27_total_deductions',
   'taxable_income_before_nol': 'tax.L28_ti_before_nol',
   'taxable_income':        'tax.L30_taxable_income',
-  'income_tax':            'tax.L31_total_tax',
+  'income_tax':            'schedJ.J1a_income_tax',
   'total_tax':             'tax.L31_total_tax',
+  'total_payments':        'payments.L33_total_payments',
+  'balance_due':           'payments.L35_amount_owed',
+  'overpayment':           'payments.L36_overpayment',
+  'estimated_tax_paid':    'schedJ.J14_estimated_payments',
 }
 
 export const ENGINE_TO_PDF_1120S: Record<string, string> = {
