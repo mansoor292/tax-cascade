@@ -1,7 +1,7 @@
 [
   {
     "page": 1,
-    "field_id": "f1_1 , 2025,",
+    "field_id": "f1_1",
     "label": "beginning"
   },
   {
@@ -46,7 +46,7 @@
   },
   {
     "page": 1,
-    "field_id": "f1_2 , 20f1_3",
+    "field_id": "f1_2",
     "label": "ending"
   },
   {
@@ -601,7 +601,7 @@
   },
   {
     "page": 6,
-    "field_id": "f6_158 f6_159 f6_160",
+    "field_id": "f6_158",
     "label": "(itemize):"
   },
   {

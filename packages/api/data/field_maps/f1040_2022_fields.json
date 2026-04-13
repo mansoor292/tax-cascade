@@ -2,221 +2,211 @@
   {
     "page": 1,
     "field_id": "f1_02",
-    "label": "ending"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_04",
     "label": "Your first name and middle initial"
   },
   {
     "page": 1,
-    "field_id": "f1_05",
+    "field_id": "f1_03",
     "label": "Last name"
   },
   {
     "page": 1,
-    "field_id": "f1_06",
-    "label": "Your social security number"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_07",
+    "field_id": "f1_05",
     "label": "If joint return, spouse's first name and middle initial"
   },
   {
     "page": 1,
-    "field_id": "f1_08",
+    "field_id": "f1_06",
     "label": "Last name"
   },
   {
     "page": 1,
-    "field_id": "f1_09",
+    "field_id": "f1_07",
     "label": "Spouse's social security number"
   },
   {
     "page": 1,
-    "field_id": "f1_10",
+    "field_id": "f1_08",
     "label": "Home address (number and street). If you have a P.O. box, see instructions."
   },
   {
     "page": 1,
-    "field_id": "f1_11",
+    "field_id": "f1_09",
     "label": "Apt. no."
   },
   {
     "page": 1,
-    "field_id": "f1_12",
+    "field_id": "f1_10",
     "label": "City, town, or post office. If you have a foreign address, also complete spaces below."
   },
   {
     "page": 1,
-    "field_id": "f1_13",
+    "field_id": "f1_11",
     "label": "State"
   },
   {
     "page": 1,
-    "field_id": "f1_14",
+    "field_id": "f1_12",
     "label": "ZIP code"
   },
   {
     "page": 1,
-    "field_id": "f1_15",
+    "field_id": "f1_13",
     "label": "Foreign country name"
   },
   {
     "page": 1,
-    "field_id": "f1_16",
+    "field_id": "f1_14",
     "label": "Foreign province/state/county"
   },
   {
     "page": 1,
-    "field_id": "f1_17",
+    "field_id": "f1_15",
     "label": "Foreign postal code"
   },
   {
     "page": 1,
-    "field_id": "f1_32",
+    "field_id": "f1_28",
     "label": "1a Total amount from Form(s) W-2, box 1 (see instructions) 1a"
   },
   {
     "page": 1,
-    "field_id": "f1_33",
+    "field_id": "f1_29",
     "label": "b Household employee wages not reported on Form(s) W-2 1b"
   },
   {
     "page": 1,
-    "field_id": "f1_34",
+    "field_id": "f1_30",
     "label": "c Tip income not reported on line 1a (see instructions) 1c"
   },
   {
     "page": 1,
-    "field_id": "f1_35",
+    "field_id": "f1_31",
     "label": "d Medicaid waiver payments not reported on Form(s) W-2 (see instructions) 1d"
   },
   {
     "page": 1,
-    "field_id": "f1_36",
+    "field_id": "f1_32",
     "label": "e Taxable dependent care benefits from Form 2441, line 26 1e"
   },
   {
     "page": 1,
-    "field_id": "f1_37",
+    "field_id": "f1_33",
     "label": "f Employer-provided adoption benefits from Form 8839, line 29 1f"
   },
   {
     "page": 1,
-    "field_id": "f1_38",
+    "field_id": "f1_34",
     "label": "g Wages from Form 8919, line 6 1g"
   },
   {
     "page": 1,
-    "field_id": "f1_39",
+    "field_id": "f1_35",
     "label": "h Other earned income (see instructions) 1h"
   },
   {
     "page": 1,
-    "field_id": "f1_40",
+    "field_id": "f1_36",
     "label": "i Nontaxable combat pay election (see instructions) 1i"
   },
   {
     "page": 1,
-    "field_id": "f1_41",
+    "field_id": "f1_37",
     "label": "Z Add lines 1a through 1h 1z"
   },
   {
     "page": 1,
-    "field_id": "f1_42",
+    "field_id": "f1_38",
     "label": "2a Tax-exempt interest 2a"
   },
   {
     "page": 1,
-    "field_id": "f1_43",
+    "field_id": "f1_39",
     "label": "b Taxable interest 2b"
   },
   {
     "page": 1,
-    "field_id": "f1_44",
+    "field_id": "f1_40",
     "label": "3a Qualified dividends 3a"
   },
   {
     "page": 1,
-    "field_id": "f1_45",
+    "field_id": "f1_41",
     "label": "b Ordinary dividends 3b"
   },
   {
     "page": 1,
-    "field_id": "f1_46",
+    "field_id": "f1_42",
     "label": "4a IRA distributions 4a"
   },
   {
     "page": 1,
-    "field_id": "f1_47",
+    "field_id": "f1_43",
     "label": "b Taxable amount 4b"
   },
   {
     "page": 1,
-    "field_id": "f1_48",
+    "field_id": "f1_44",
     "label": "5a Pensions and annuities 5a"
   },
   {
     "page": 1,
-    "field_id": "f1_49",
+    "field_id": "f1_45",
     "label": "b Taxable amount 5b"
   },
   {
     "page": 1,
-    "field_id": "f1_50",
+    "field_id": "f1_46",
     "label": "6a Social security benefits 6a"
   },
   {
     "page": 1,
-    "field_id": "f1_51",
+    "field_id": "f1_47",
     "label": "b Taxable amount 6b"
   },
   {
     "page": 1,
-    "field_id": "f1_52",
+    "field_id": "f1_48",
     "label": "7 Capital gain or (loss). Attach Schedule D if required. If not required, check here 7"
   },
   {
     "page": 1,
-    "field_id": "f1_53",
-    "label": "8 Additional income from Schedule 1, line 10 8"
+    "field_id": "f1_49",
+    "label": "8 Other income from Schedule 1, line 10 8"
   },
   {
     "page": 1,
-    "field_id": "f1_54",
+    "field_id": "f1_50",
     "label": "9 Add lines 1z, 2b, 3b, 4b, 5b, 6b, 7, and 8. This is your total income 9"
   },
   {
     "page": 1,
-    "field_id": "f1_55",
+    "field_id": "f1_51",
     "label": "10 Adjustments to income from Schedule 1, line 26 10"
   },
   {
     "page": 1,
-    "field_id": "f1_56",
+    "field_id": "f1_52",
     "label": "11 Subtract line 10 from line 9. This is your adjusted gross income 11"
   },
   {
     "page": 1,
-    "field_id": "f1_57",
+    "field_id": "f1_53",
     "label": "12 Standard deduction or itemized deductions (from Schedule A) 12"
   },
   {
     "page": 1,
-    "field_id": "f1_58",
+    "field_id": "f1_54",
     "label": "13 Qualified business income deduction from Form 8995 or Form 8995-A 13"
   },
   {
     "page": 1,
-    "field_id": "f1_59",
+    "field_id": "f1_55",
     "label": "14 Add lines 12 and 13 14"
   },
   {
     "page": 1,
-    "field_id": "f1_60",
+    "field_id": "f1_56",
     "label": "15 Subtract line 14 from line 11. If zero or less, enter -0-. This is your taxable income 15"
   },
   {
@@ -282,7 +272,7 @@
   {
     "page": 2,
     "field_id": "f2_15",
-    "label": "26 2024 estimated tax payments and amount applied from 2023 return 26"
+    "label": "26 2022 estimated tax payments and amount applied from 2021 return 26"
   },
   {
     "page": 2,
@@ -337,7 +327,7 @@
   {
     "page": 2,
     "field_id": "f2_27",
-    "label": "36 Amount of line 34 you want applied to your 2025 estimated tax 36"
+    "label": "36 Amount of line 34 you want applied to your 2023 estimated tax 36"
   },
   {
     "page": 2,

@@ -2,222 +2,182 @@
   {
     "page": 1,
     "field_id": "f1_02",
-    "label": "ending"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_04",
     "label": "Your first name and middle initial"
   },
   {
     "page": 1,
-    "field_id": "f1_05",
+    "field_id": "f1_03",
     "label": "Last name"
   },
   {
     "page": 1,
-    "field_id": "f1_06",
+    "field_id": "f1_04",
     "label": "Your social security number"
   },
   {
     "page": 1,
-    "field_id": "f1_07",
+    "field_id": "f1_05",
     "label": "If joint return, spouse's first name and middle initial"
   },
   {
     "page": 1,
-    "field_id": "f1_08",
+    "field_id": "f1_06",
     "label": "Last name"
   },
   {
     "page": 1,
-    "field_id": "f1_09",
-    "label": "Spouse's social security number"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_10",
+    "field_id": "f1_08",
     "label": "Home address (number and street). If you have a P.O. box, see instructions."
   },
   {
     "page": 1,
-    "field_id": "f1_11",
+    "field_id": "f1_09",
     "label": "Apt. no."
   },
   {
     "page": 1,
-    "field_id": "f1_12",
+    "field_id": "f1_10",
     "label": "City, town, or post office. If you have a foreign address, also complete spaces below."
   },
   {
     "page": 1,
-    "field_id": "f1_13",
+    "field_id": "f1_11",
     "label": "State"
   },
   {
     "page": 1,
-    "field_id": "f1_14",
+    "field_id": "f1_12",
     "label": "ZIP code"
   },
   {
     "page": 1,
-    "field_id": "f1_15",
+    "field_id": "f1_13",
     "label": "Foreign country name"
   },
   {
     "page": 1,
-    "field_id": "f1_16",
+    "field_id": "f1_14",
     "label": "Foreign province/state/county"
   },
   {
     "page": 1,
-    "field_id": "f1_17",
+    "field_id": "f1_15",
     "label": "Foreign postal code"
   },
   {
     "page": 1,
-    "field_id": "f1_32",
-    "label": "1a Total amount from Form(s) W-2, box 1 (see instructions) 1a"
+    "field_id": "f1_28",
+    "label": "1 Wages, salaries, tips, etc. Attach Form(s) W-2 1"
   },
   {
     "page": 1,
-    "field_id": "f1_33",
-    "label": "b Household employee wages not reported on Form(s) W-2 1b"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_34",
-    "label": "c Tip income not reported on line 1a (see instructions) 1c"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_35",
-    "label": "d Medicaid waiver payments not reported on Form(s) W-2 (see instructions) 1d"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_36",
-    "label": "e Taxable dependent care benefits from Form 2441, line 26 1e"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_37",
-    "label": "f Employer-provided adoption benefits from Form 8839, line 29 1f"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_38",
-    "label": "g Wages from Form 8919, line 6 1g"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_39",
-    "label": "h Other earned income (see instructions) 1h"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_40",
-    "label": "i Nontaxable combat pay election (see instructions) 1i"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_41",
-    "label": "Z Add lines 1a through 1h 1z"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_42",
+    "field_id": "f1_29",
     "label": "2a Tax-exempt interest 2a"
   },
   {
     "page": 1,
-    "field_id": "f1_43",
+    "field_id": "f1_30",
     "label": "b Taxable interest 2b"
   },
   {
     "page": 1,
-    "field_id": "f1_44",
+    "field_id": "f1_31",
     "label": "3a Qualified dividends 3a"
   },
   {
     "page": 1,
-    "field_id": "f1_45",
+    "field_id": "f1_32",
     "label": "b Ordinary dividends 3b"
   },
   {
     "page": 1,
-    "field_id": "f1_46",
+    "field_id": "f1_33",
     "label": "4a IRA distributions 4a"
   },
   {
     "page": 1,
-    "field_id": "f1_47",
+    "field_id": "f1_34",
     "label": "b Taxable amount 4b"
   },
   {
     "page": 1,
-    "field_id": "f1_48",
+    "field_id": "f1_35",
     "label": "5a Pensions and annuities 5a"
   },
   {
     "page": 1,
-    "field_id": "f1_49",
+    "field_id": "f1_36",
     "label": "b Taxable amount 5b"
   },
   {
     "page": 1,
-    "field_id": "f1_50",
+    "field_id": "f1_37",
     "label": "6a Social security benefits 6a"
   },
   {
     "page": 1,
-    "field_id": "f1_51",
+    "field_id": "f1_38",
     "label": "b Taxable amount 6b"
   },
   {
     "page": 1,
-    "field_id": "f1_52",
+    "field_id": "f1_39",
     "label": "7 Capital gain or (loss). Attach Schedule D if required. If not required, check here 7"
   },
   {
     "page": 1,
-    "field_id": "f1_53",
-    "label": "8 Additional income from Schedule 1, line 10 8"
+    "field_id": "f1_40",
+    "label": "8 Other income from Schedule 1, line 9 8"
   },
   {
     "page": 1,
-    "field_id": "f1_54",
-    "label": "9 Add lines 1z, 2b, 3b, 4b, 5b, 6b, 7, and 8. This is your total income 9"
+    "field_id": "f1_41",
+    "label": "9 Add lines 1, 2b, 3b, 4b, 5b, 6b, 7, and 8. This is your total income 9"
   },
   {
     "page": 1,
-    "field_id": "f1_55",
-    "label": "10 Adjustments to income from Schedule 1, line 26 10"
+    "field_id": "f1_42",
+    "label": "a From Schedule 1, line 22 10a"
   },
   {
     "page": 1,
-    "field_id": "f1_56",
-    "label": "11 Subtract line 10 from line 9. This is your adjusted gross income 11"
+    "field_id": "f1_43",
+    "label": "b Charitable contributions if you take the standard deduction. See instructions 10b"
   },
   {
     "page": 1,
-    "field_id": "f1_57",
+    "field_id": "f1_44",
+    "label": "c Add lines 10a and 10b. These are your total adjustments to income 10c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_45",
+    "label": "11 Subtract line 10c from line 9. This is your adjusted gross income 11"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_46",
     "label": "12 Standard deduction or itemized deductions (from Schedule A) 12"
   },
   {
     "page": 1,
-    "field_id": "f1_58",
-    "label": "13 Qualified business income deduction from Form 8995 or Form 8995-A 13"
+    "field_id": "f1_47",
+    "label": "13 Qualified business income deduction. Attach Form 8995 or Form 8995-A 13"
   },
   {
     "page": 1,
-    "field_id": "f1_59",
+    "field_id": "f1_48",
     "label": "14 Add lines 12 and 13 14"
   },
   {
     "page": 1,
-    "field_id": "f1_60",
-    "label": "15 Subtract line 14 from line 11. If zero or less, enter -0-. This is your taxable income 15"
+    "field_id": "f1_49",
+    "label": "15 Taxable income. Subtract line 14 from line 11. If zero or less, enter -0- 15"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_01",
+    "label": "3"
   },
   {
     "page": 2,
@@ -232,12 +192,12 @@
   {
     "page": 2,
     "field_id": "f2_05",
-    "label": "19 Child tax credit or credit for other dependents from Schedule 8812 19"
+    "label": "19 Child tax credit or credit for other dependents 19"
   },
   {
     "page": 2,
     "field_id": "f2_06",
-    "label": "20 Amount from Schedule 3, line 8 20"
+    "label": "20 Amount from Schedule 3, line 7 20"
   },
   {
     "page": 2,
@@ -252,7 +212,7 @@
   {
     "page": 2,
     "field_id": "f2_09",
-    "label": "23 Other taxes, including self-employment tax, from Schedule 2, line 21 23"
+    "label": "23 Other taxes, including self-employment tax, from Schedule 2, line 10 23"
   },
   {
     "page": 2,
@@ -282,7 +242,7 @@
   {
     "page": 2,
     "field_id": "f2_15",
-    "label": "26 2024 estimated tax payments and amount applied from 2023 return 26"
+    "label": "26 2020 estimated tax payments and amount applied from 2019 return 26"
   },
   {
     "page": 2,
@@ -292,7 +252,7 @@
   {
     "page": 2,
     "field_id": "f2_17",
-    "label": "28 Additional child tax credit from Schedule 8812 28"
+    "label": "28 Additional child tax credit. Attach Schedule 8812 28"
   },
   {
     "page": 2,
@@ -302,17 +262,17 @@
   {
     "page": 2,
     "field_id": "f2_19",
-    "label": "30 Reserved for future use 30"
+    "label": "30 Recovery rebate credit. See instructions 30"
   },
   {
     "page": 2,
     "field_id": "f2_20",
-    "label": "31 Amount from Schedule 3, line 15 31"
+    "label": "31 Amount from Schedule 3, line 13 31"
   },
   {
     "page": 2,
     "field_id": "f2_21",
-    "label": "32 Add lines 27, 28, 29, and 31. These are your total other payments and refundable credits 32"
+    "label": "32 Add lines 27 through 31. These are your total other payments and refundable credits 32"
   },
   {
     "page": 2,
@@ -326,87 +286,82 @@
   },
   {
     "page": 2,
-    "field_id": "f2_24",
-    "label": "35a Amount of line 34 you want refunded to you. If Form 8888 is attached, check here 35a"
-  },
-  {
-    "page": 2,
     "field_id": "f2_26",
     "label": "d Account number"
   },
   {
     "page": 2,
     "field_id": "f2_27",
-    "label": "36 Amount of line 34 you want applied to your 2025 estimated tax 36"
+    "label": "36 Amount of line 34 you want applied to your 2021 estimated tax 36"
   },
   {
     "page": 2,
     "field_id": "f2_28",
-    "label": "37 Subtract line 33 from line 24. This is the amount you owe. For details on how to pay, go to www.irs.gov/Payments or see instructions 37"
+    "label": "37 Subtract line 33 from line 24. This is the amount you owe now 37"
   },
   {
     "page": 2,
-    "field_id": "f2_29",
+    "field_id": "f2_32",
     "label": "38 Estimated tax penalty (see instructions) 38"
   },
   {
     "page": 2,
-    "field_id": "f2_30",
+    "field_id": "f2_33",
     "label": "Designee's name"
   },
   {
     "page": 2,
-    "field_id": "f2_31",
+    "field_id": "f2_34",
     "label": "Phone no."
   },
   {
     "page": 2,
-    "field_id": "f2_33",
+    "field_id": "f2_36",
     "label": "Your occupation"
   },
   {
     "page": 2,
-    "field_id": "f2_35",
+    "field_id": "f2_38",
     "label": "Spouse's occupation"
   },
   {
     "page": 2,
-    "field_id": "f2_37",
-    "label": "Phone no."
-  },
-  {
-    "page": 2,
-    "field_id": "f2_38",
-    "label": "Email address"
-  },
-  {
-    "page": 2,
-    "field_id": "f2_39",
-    "label": "Preparer's name"
-  },
-  {
-    "page": 2,
     "field_id": "f2_40",
-    "label": "PTIN"
+    "label": "Phone no."
   },
   {
     "page": 2,
     "field_id": "f2_41",
-    "label": "Firm's name"
+    "label": "Email address"
   },
   {
     "page": 2,
     "field_id": "f2_42",
-    "label": "Phone no."
+    "label": "Preparer's name"
   },
   {
     "page": 2,
     "field_id": "f2_43",
-    "label": "Firm's address"
+    "label": "PTIN"
   },
   {
     "page": 2,
     "field_id": "f2_44",
+    "label": "Firm's name"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_45",
+    "label": "Phone no."
+  },
+  {
+    "page": 2,
+    "field_id": "f2_46",
+    "label": "Firm's address"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_47",
     "label": "Firm's EIN"
   }
 ]

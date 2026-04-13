@@ -2,7 +2,7 @@
   {
     "page": 1,
     "field_id": "f1_1",
-    "label": "For calendar year 2023 or tax year beginning"
+    "label": "beginning"
   },
   {
     "page": 1,
@@ -17,12 +17,17 @@
   {
     "page": 1,
     "field_id": "f1_13",
-    "label": "1a Gross receipts or sales"
+    "label": "1a Gross receipts or sales 1a"
   },
   {
     "page": 1,
     "field_id": "f1_14",
-    "label": "b Less returns and allowances"
+    "label": "b Returns and allowances 1b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "c Balance. Subtract line 1b from line 1a 1c"
   },
   {
     "page": 1,
@@ -92,7 +97,7 @@
   {
     "page": 1,
     "field_id": "f1_28",
-    "label": "14 Depreciation from Form 4562 not claimed on Form 1125-A or elsewhere on return (attach Form 4562) 14"
+    "label": "14 Depreciation not claimed on Form 1125-A or elsewhere on return (attach Form 4562) 14"
   },
   {
     "page": 1,
@@ -117,37 +122,37 @@
   {
     "page": 1,
     "field_id": "f1_33",
-    "label": "19 Energy efficient commercial buildings deduction (attach Form 7205) 19"
+    "label": "19 Other deductions (attach statement) 19"
   },
   {
     "page": 1,
     "field_id": "f1_34",
-    "label": "20 Other deductions (attach statement) 20"
+    "label": "20 Total deductions. Add lines 7 through 19 20"
   },
   {
     "page": 1,
     "field_id": "f1_35",
-    "label": "21 Total deductions. Add lines 7 through 20 21"
+    "label": "21 Ordinary business income (loss). Subtract line 20 from line 6 21"
   },
   {
     "page": 1,
     "field_id": "f1_36",
-    "label": "22 Ordinary business income (loss). Subtract line 21 from line 6 22"
+    "label": "22a Excess net passive income or LIFO recapture tax (see instructions) 22a"
   },
   {
     "page": 1,
     "field_id": "f1_37",
-    "label": "23a Excess net passive income or LIFO recapture tax (see instructions) 23a"
+    "label": "b Tax from Schedule D (Form 1120-S) 22b"
   },
   {
     "page": 1,
     "field_id": "f1_38",
-    "label": "b Tax from Schedule D (Form 1120-S) 23b"
+    "label": "c Add lines 22a and 22b (see instructions for additional taxes) 22c"
   },
   {
     "page": 1,
     "field_id": "f1_39",
-    "label": "c Add lines 23a and 23b (see instructions for additional taxes) 23c"
+    "label": "23a 2021 estimated tax payments and 2020 overpayment credited to 2021 23a"
   },
   {
     "page": 1,
@@ -157,47 +162,47 @@
   {
     "page": 1,
     "field_id": "f1_40",
-    "label": "24a Current year's estimated tax payments and preceding year's overpayment credited to the current year 24a"
+    "label": "b Tax deposited with Form 7004 23b"
   },
   {
     "page": 1,
     "field_id": "f1_41",
-    "label": "b Tax deposited with Form 7004 24b"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_42",
-    "label": "c Credit for federal tax paid on fuels (attach Form 4136) 24c"
+    "label": "c Credit for federal tax paid on fuels (attach Form 4136) 23c"
   },
   {
     "page": 1,
     "field_id": "f1_43",
-    "label": "d Elective payment election amount from Form 3800 24d"
+    "label": "d Add lines 23a through 23c 23d"
   },
   {
     "page": 1,
     "field_id": "f1_44",
-    "label": "Z Add lines 24a through 24d 24z"
+    "label": "24"
   },
   {
     "page": 1,
     "field_id": "f1_45",
-    "label": "25 Estimated tax penalty (see instructions). Check if Form 2220 is attached 25"
+    "label": "25 Amount owed. If line 23d is smaller than the total of lines 22c and 24, enter amount owed 25"
   },
   {
     "page": 1,
     "field_id": "f1_46",
-    "label": "26 Amount owed. If line 24z is smaller than the total of lines 23c and 25, enter amount owed 26"
+    "label": "26 Overpayment. If line 23d is larger than the total of lines 22c and 24, enter amount overpaid 26"
   },
   {
     "page": 1,
     "field_id": "f1_47",
-    "label": "27 Overpayment. If line 24z is larger than the total of lines 23c and 25, enter amount overpaid 27"
+    "label": "Credited to 2022 estimated tax"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_48",
+    "label": "Refunded 27"
   },
   {
     "page": 1,
     "field_id": "f1_49",
-    "label": "28 Enter amount from line 27: Credited to 2024 estimated tax f1_48 Refunded 28"
+    "label": "Title"
   },
   {
     "page": 1,
@@ -207,36 +212,31 @@
   {
     "page": 1,
     "field_id": "f1_50",
-    "label": "Title"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_51",
     "label": "Print/Type preparer's name"
   },
   {
     "page": 1,
-    "field_id": "f1_52",
+    "field_id": "f1_51",
     "label": "PTIN"
   },
   {
     "page": 1,
-    "field_id": "f1_53",
+    "field_id": "f1_52",
     "label": "Firm's name"
   },
   {
     "page": 1,
-    "field_id": "f1_54",
+    "field_id": "f1_53",
     "label": "Firm's address"
   },
   {
     "page": 1,
-    "field_id": "f1_55",
+    "field_id": "f1_54",
     "label": "Firm's EIN"
   },
   {
     "page": 1,
-    "field_id": "f1_56",
+    "field_id": "f1_55",
     "label": "Phone no."
   },
   {
@@ -263,6 +263,11 @@
     "page": 2,
     "field_id": "f2_1",
     "label": "(specify)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_2",
+    "label": "a Business activity"
   },
   {
     "page": 2,
@@ -326,8 +331,13 @@
   },
   {
     "page": 3,
+    "field_id": "f3_17",
+    "label": "Type"
+  },
+  {
+    "page": 3,
     "field_id": "f3_18",
-    "label": "10 Other income (loss) (see instructions) Type: f3_17 10"
+    "label": "10"
   },
   {
     "page": 3,
@@ -346,13 +356,23 @@
   },
   {
     "page": 3,
+    "field_id": "f3_22",
+    "label": "Type"
+  },
+  {
+    "page": 3,
     "field_id": "f3_23",
-    "label": "c Section 59(e)(2) expenditures Type: f3_22 12c"
+    "label": "12c"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_24",
+    "label": "Type"
   },
   {
     "page": 3,
     "field_id": "f3_25",
-    "label": "d Other deductions (see instructions) Type: f3_24 12d"
+    "label": "12d"
   },
   {
     "page": 3,
@@ -371,18 +391,28 @@
   },
   {
     "page": 3,
+    "field_id": "f3_29",
+    "label": "Type"
+  },
+  {
+    "page": 3,
     "field_id": "f3_3",
-    "label": "1 Ordinary business income (loss) (page 1, line 22) 1"
+    "label": "1 Ordinary business income (loss) (page 1, line 21) 1"
   },
   {
     "page": 3,
     "field_id": "f3_30",
-    "label": "d Other rental real estate credits (see instructions) Type: f3_29 13d"
+    "label": "13d"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_31",
+    "label": "Type"
   },
   {
     "page": 3,
     "field_id": "f3_32",
-    "label": "e Other rental credits (see instructions) Type: f3_31 13e"
+    "label": "13e"
   },
   {
     "page": 3,
@@ -391,8 +421,13 @@
   },
   {
     "page": 3,
+    "field_id": "f3_34",
+    "label": "Type"
+  },
+  {
+    "page": 3,
     "field_id": "f3_35",
-    "label": "g Other credits (see instructions) Type: f3_34 13g"
+    "label": "13g"
   },
   {
     "page": 3,
@@ -502,7 +537,7 @@
   {
     "page": 4,
     "field_id": "f4_4",
-    "label": "18 Income (loss) reconciliation. Combine the total amounts on lines 1 through 10. From the result, subtract the sum of the amounts on lines 11 through 12d and 16f 18"
+    "label": "18 Income (loss) reconciliation. Combine the amounts on lines 1 through 10 in the far right column. From the result, subtract the sum of the amounts on lines 11 through 12d and 16f 18"
   },
   {
     "page": 5,
@@ -522,7 +557,7 @@
   {
     "page": 5,
     "field_id": "f5_16",
-    "label": "6 Deductions included on Schedule K, lines 1 through 12, and 16f, not charged against book income this year (itemize):"
+    "label": "6 Deductions included on Schedule K, lines 1 through 12 and 16f, not charged against book income this year (itemize):"
   },
   {
     "page": 5,
@@ -537,11 +572,11 @@
   {
     "page": 5,
     "field_id": "f5_4",
-    "label": "2 Income included on Schedule K, lines 1, 2, 3c, 4, 5a, 6, 7, 8a, 9, and 10, not recorded on books this year (itemize): f5_2"
+    "label": "2 Income included on Schedule K, lines 1, 2, 3c, 4, 5a, 6, 7, 8a, 9, and 10, not recorded on books this year (itemize) f5_2"
   },
   {
     "page": 5,
     "field_id": "f5_9",
-    "label": "3 Expenses recorded on books this year not included on Schedule K, lines 1 through 12, and 16f (itemize):"
+    "label": "3 Expenses recorded on books this year not included on Schedule K, lines 1 through 12 and 16f (itemize):"
   }
 ]

@@ -1,7 +1,7 @@
 [
   {
     "page": 1,
-    "field_id": "f1_1 , 2023,",
+    "field_id": "f1_1",
     "label": "beginning"
   },
   {
@@ -56,7 +56,7 @@
   },
   {
     "page": 1,
-    "field_id": "f1_2 , 20 f1_3",
+    "field_id": "f1_2",
     "label": "ending"
   },
   {
@@ -541,7 +541,7 @@
   },
   {
     "page": 4,
-    "field_id": "f4_5 f4 6",
+    "field_id": "f4_5",
     "label": "If \"Yes,\" enter name and EIN of the parent corporation"
   },
   {
@@ -616,7 +616,7 @@
   },
   {
     "page": 6,
-    "field_id": "f6_158 f6_159 f6_160",
+    "field_id": "f6_158",
     "label": "(itemize):"
   },
   {

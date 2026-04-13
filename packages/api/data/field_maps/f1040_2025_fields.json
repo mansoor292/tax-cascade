@@ -1,7 +1,7 @@
 [
   {
     "page": 1,
-    "field_id": "f1_02 , 201_03",
+    "field_id": "f1_02",
     "label": "For the year Jan. 1-Dec. 31, 2025, or other tax year beginning f1_01 , 2025, ending"
   },
   {
@@ -243,11 +243,6 @@
     "page": 2,
     "field_id": "f2_06",
     "label": "15 Subtract line 14 from line 11b. If zero or less, enter -0-. This is your taxable income 15"
-  },
-  {
-    "page": 2,
-    "field_id": "f2_07",
-    "label": ""
   },
   {
     "page": 2,

@@ -1,8 +1,43 @@
 [
   {
     "page": 1,
-    "field_id": "f1_1",
-    "label": "For calendar year 2023 or tax year beginning"
+    "field_id": "f1_01",
+    "label": "beginning"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_02",
+    "label": "ending"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_04",
+    "label": "Name"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_05",
+    "label": "Number, street, and room or suite no. If a P.O. box, see instructions."
+  },
+  {
+    "page": 1,
+    "field_id": "f1_06",
+    "label": "City or town, state or province, country, and ZIP or foreign postal code"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_07",
+    "label": "A S election effective date"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_08",
+    "label": "B Business activity code number (see instructions)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_09",
+    "label": "D Employer identification number"
   },
   {
     "page": 1,
@@ -17,12 +52,17 @@
   {
     "page": 1,
     "field_id": "f1_13",
-    "label": "1a Gross receipts or sales"
+    "label": "1a Gross receipts or sales 1a"
   },
   {
     "page": 1,
     "field_id": "f1_14",
-    "label": "b Less returns and allowances"
+    "label": "b Returns and allowances 1b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "c Balance. Subtract line 1b from line 1a 1c"
   },
   {
     "page": 1,
@@ -43,11 +83,6 @@
     "page": 1,
     "field_id": "f1_19",
     "label": "5 Other income (loss) (see instructions-attach statement) 5"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_2",
-    "label": "ending"
   },
   {
     "page": 1,
@@ -92,7 +127,7 @@
   {
     "page": 1,
     "field_id": "f1_28",
-    "label": "14 Depreciation from Form 4562 not claimed on Form 1125-A or elsewhere on return (attach Form 4562) 14"
+    "label": "14 Depreciation not claimed on Form 1125-A or elsewhere on return (attach Form 4562) 14"
   },
   {
     "page": 1,
@@ -117,156 +152,116 @@
   {
     "page": 1,
     "field_id": "f1_33",
-    "label": "19 Energy efficient commercial buildings deduction (attach Form 7205) 19"
+    "label": "19 Other deductions (attach statement) 19"
   },
   {
     "page": 1,
     "field_id": "f1_34",
-    "label": "20 Other deductions (attach statement) 20"
+    "label": "20 Total deductions. Add lines 7 through 19 20"
   },
   {
     "page": 1,
     "field_id": "f1_35",
-    "label": "21 Total deductions. Add lines 7 through 20 21"
+    "label": "21 Ordinary business income (loss). Subtract line 20 from line 6 21"
   },
   {
     "page": 1,
     "field_id": "f1_36",
-    "label": "22 Ordinary business income (loss). Subtract line 21 from line 6 22"
+    "label": "22a Excess net passive income or LIFO recapture tax (see instructions) 22a"
   },
   {
     "page": 1,
     "field_id": "f1_37",
-    "label": "23a Excess net passive income or LIFO recapture tax (see instructions) 23a"
+    "label": "b Tax from Schedule D (Form 1120-S) 22b"
   },
   {
     "page": 1,
     "field_id": "f1_38",
-    "label": "b Tax from Schedule D (Form 1120-S) 23b"
+    "label": "c Add lines 22a and 22b (see instructions for additional taxes) 22c"
   },
   {
     "page": 1,
     "field_id": "f1_39",
-    "label": "c Add lines 23a and 23b (see instructions for additional taxes) 23c"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_4",
-    "label": "Name"
+    "label": "23a 2020 estimated tax payments and 2019 overpayment credited to 2020 23a"
   },
   {
     "page": 1,
     "field_id": "f1_40",
-    "label": "24a Current year's estimated tax payments and preceding year's overpayment credited to the current year 24a"
+    "label": "b Tax deposited with Form 7004 23b"
   },
   {
     "page": 1,
     "field_id": "f1_41",
-    "label": "b Tax deposited with Form 7004 24b"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_42",
-    "label": "c Credit for federal tax paid on fuels (attach Form 4136) 24c"
+    "label": "c Credit for federal tax paid on fuels (attach Form 4136) 23c"
   },
   {
     "page": 1,
     "field_id": "f1_43",
-    "label": "d Elective payment election amount from Form 3800 24d"
+    "label": "e Add lines 23a through 23d 23e"
   },
   {
     "page": 1,
     "field_id": "f1_44",
-    "label": "Z Add lines 24a through 24d 24z"
+    "label": "24 Estimated tax penalty (see instructions). Check if Form 2220 is attached 24"
   },
   {
     "page": 1,
     "field_id": "f1_45",
-    "label": "25 Estimated tax penalty (see instructions). Check if Form 2220 is attached 25"
+    "label": "25 Amount owed. If line 23e is smaller than the total of lines 22c and 24, enter amount owed 25"
   },
   {
     "page": 1,
     "field_id": "f1_46",
-    "label": "26 Amount owed. If line 24z is smaller than the total of lines 23c and 25, enter amount owed 26"
+    "label": "26 Overpayment. If line 23e is larger than the total of lines 22c and 24, enter amount overpaid 26"
   },
   {
     "page": 1,
-    "field_id": "f1_47",
-    "label": "27 Overpayment. If line 24z is larger than the total of lines 23c and 25, enter amount overpaid 27"
+    "field_id": "f1_48",
+    "label": "27 Enter amount from line 26: Credited to 2021 estimated tax f1_47 Refunded 27"
   },
   {
     "page": 1,
     "field_id": "f1_49",
-    "label": "28 Enter amount from line 27: Credited to 2024 estimated tax f1_48 Refunded 28"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_5",
-    "label": "Number, street, and room or suite no. If a P.O. box, see instructions."
-  },
-  {
-    "page": 1,
-    "field_id": "f1_50",
     "label": "Title"
   },
   {
     "page": 1,
-    "field_id": "f1_51",
+    "field_id": "f1_50",
     "label": "Print/Type preparer's name"
   },
   {
     "page": 1,
-    "field_id": "f1_52",
+    "field_id": "f1_51",
     "label": "PTIN"
   },
   {
     "page": 1,
     "field_id": "f1_53",
-    "label": "Firm's name"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_54",
     "label": "Firm's address"
   },
   {
     "page": 1,
-    "field_id": "f1_55",
+    "field_id": "f1_54",
     "label": "Firm's EIN"
   },
   {
     "page": 1,
-    "field_id": "f1_56",
+    "field_id": "f1_55",
     "label": "Phone no."
   },
   {
-    "page": 1,
-    "field_id": "f1_6",
-    "label": "City or town, state or province, country, and ZIP or foreign postal code"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_7",
-    "label": "A S election effective date"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_8",
-    "label": "B Business activity code number (see instructions)"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_9",
-    "label": "D Employer identification number"
-  },
-  {
     "page": 2,
-    "field_id": "f2_1",
+    "field_id": "f2_01",
     "label": "(specify)"
   },
   {
     "page": 2,
-    "field_id": "f2_3",
+    "field_id": "f2_02",
+    "label": "a Business activity"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_03",
     "label": "b Product or service"
   },
   {
@@ -288,6 +283,41 @@
     "page": 2,
     "field_id": "f2_47",
     "label": "(ii) Total shares of stock outstanding if all instruments were executed"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_03",
+    "label": "1 Ordinary business income (loss) (page 1, line 21) 1"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_04",
+    "label": "2 Net rental real estate income (loss) (attach Form 8825) 2"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_05",
+    "label": "3a Other gross rental income (loss) 3a"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_06",
+    "label": "b Expenses from other rental activities (attach statement) 3b"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_07",
+    "label": "c Other net rental income (loss). Subtract line 3b from line 3a 3c"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_08",
+    "label": "4 Interest income 4"
+  },
+  {
+    "page": 3,
+    "field_id": "f3_09",
+    "label": "5 Dividends: a Ordinary dividends 5a"
   },
   {
     "page": 3,
@@ -327,7 +357,7 @@
   {
     "page": 3,
     "field_id": "f3_18",
-    "label": "10 Other income (loss) (see instructions) Type: f3_17 10"
+    "label": "10 Other income (loss) (see instructions) Type f3_17 10"
   },
   {
     "page": 3,
@@ -346,16 +376,6 @@
   },
   {
     "page": 3,
-    "field_id": "f3_23",
-    "label": "c Section 59(e)(2) expenditures Type: f3_22 12c"
-  },
-  {
-    "page": 3,
-    "field_id": "f3_25",
-    "label": "d Other deductions (see instructions) Type: f3_24 12d"
-  },
-  {
-    "page": 3,
     "field_id": "f3_26",
     "label": "13a Low-income housing credit (section 42(j)(5)) 13a"
   },
@@ -371,143 +391,183 @@
   },
   {
     "page": 3,
-    "field_id": "f3_3",
-    "label": "1 Ordinary business income (loss) (page 1, line 22) 1"
-  },
-  {
-    "page": 3,
-    "field_id": "f3_30",
-    "label": "d Other rental real estate credits (see instructions) Type: f3_29 13d"
-  },
-  {
-    "page": 3,
-    "field_id": "f3_32",
-    "label": "e Other rental credits (see instructions) Type: f3_31 13e"
-  },
-  {
-    "page": 3,
     "field_id": "f3_33",
     "label": "f Biofuel producer credit (attach Form 6478) 13f"
   },
   {
     "page": 3,
-    "field_id": "f3_35",
-    "label": "g Other credits (see instructions) Type: f3_34 13g"
-  },
-  {
-    "page": 3,
     "field_id": "f3_36",
-    "label": "15a Post-1986 depreciation adjustment 15a"
+    "label": "14a Name of country or U.S. possession"
   },
   {
     "page": 3,
     "field_id": "f3_37",
-    "label": "b Adjusted gain or loss 15b"
+    "label": "b Gross income from all sources 14b"
   },
   {
     "page": 3,
     "field_id": "f3_38",
-    "label": "c Depletion (other than oil and gas) 15c"
-  },
-  {
-    "page": 3,
-    "field_id": "f3_39",
-    "label": "d Oil, gas, and geothermal properties-gross income 15d"
-  },
-  {
-    "page": 3,
-    "field_id": "f3_4",
-    "label": "2 Net rental real estate income (loss) (attach Form 8825) 2"
+    "label": "c Gross income sourced at shareholder level 14c"
   },
   {
     "page": 3,
     "field_id": "f3_40",
-    "label": "e Oil, gas, and geothermal properties-deductions 15e"
+    "label": "e Foreign branch category 14e"
   },
   {
     "page": 3,
     "field_id": "f3_41",
-    "label": "f Other AMT items (attach statement) 15f"
+    "label": "f Passive category 14f"
   },
   {
     "page": 3,
     "field_id": "f3_42",
-    "label": "16a Tax-exempt interest income 16a"
+    "label": "g General category 14g"
   },
   {
     "page": 3,
     "field_id": "f3_43",
-    "label": "b Other tax-exempt income 16b"
+    "label": "h Other (attach statement) 14h"
   },
   {
     "page": 3,
     "field_id": "f3_44",
-    "label": "c Nondeductible expenses 16c"
+    "label": "i Interest expense 14i"
   },
   {
     "page": 3,
     "field_id": "f3_45",
-    "label": "d Distributions (attach statement if required) (see instructions) 16d"
-  },
-  {
-    "page": 3,
-    "field_id": "f3_46",
-    "label": "e Repayment of loans from shareholders 16e"
+    "label": "j Other 14j"
   },
   {
     "page": 3,
     "field_id": "f3_47",
-    "label": "f Foreign taxes paid or accrued 16f"
+    "label": "I Foreign branch category 14I"
   },
   {
     "page": 3,
-    "field_id": "f3_5",
-    "label": "3a Other gross rental income (loss) 3a"
+    "field_id": "f3_48",
+    "label": "m Passive category 14m"
   },
   {
     "page": 3,
-    "field_id": "f3_6",
-    "label": "b Expenses from other rental activities (attach statement) 3b"
+    "field_id": "f3_49",
+    "label": "n General category 14n"
   },
   {
     "page": 3,
-    "field_id": "f3_7",
-    "label": "c Other net rental income (loss). Subtract line 3b from line 3a 3c"
+    "field_id": "f3_50",
+    "label": "o Other (attach statement) 14o"
   },
   {
     "page": 3,
-    "field_id": "f3_8",
-    "label": "4 Interest income 4"
+    "field_id": "f3_51",
+    "label": "p Total foreign taxes (check one): Paid Accrued 14p"
   },
   {
     "page": 3,
-    "field_id": "f3_9",
-    "label": "a Ordinary dividends 5a"
+    "field_id": "f3_52",
+    "label": "q Reduction in taxes available for credit (attach statement) 14q"
   },
   {
     "page": 4,
     "field_id": "f4_1",
+    "label": "15a Post-1986 depreciation adjustment 15a"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_10",
+    "label": "d Distributions (attach statement if required) (see instructions) 16d"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_11",
+    "label": "e Repayment of loans from shareholders 16e"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_12",
     "label": "17a Investment income 17a"
   },
   {
     "page": 4,
-    "field_id": "f4_2",
+    "field_id": "f4_13",
     "label": "b Investment expenses 17b"
   },
   {
     "page": 4,
-    "field_id": "f4_3",
+    "field_id": "f4_14",
     "label": "c Dividend distributions paid from accumulated earnings and profits 17c"
   },
   {
     "page": 4,
+    "field_id": "f4_15",
+    "label": "18 Income (loss) reconciliation. Combine the amounts on lines 1 through 10 in the far right column. From the result, subtract the sum of the amounts on lines 11 through 12d and 14p 18"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_2",
+    "label": "b Adjusted gain or loss 15b"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_3",
+    "label": "c Depletion (other than oil and gas) 15c"
+  },
+  {
+    "page": 4,
     "field_id": "f4_4",
-    "label": "18 Income (loss) reconciliation. Combine the total amounts on lines 1 through 10. From the result, subtract the sum of the amounts on lines 11 through 12d and 16f 18"
+    "label": "d Oil, gas, and geothermal properties-gross income 15d"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_5",
+    "label": "e Oil, gas, and geothermal properties-deductions 15e"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_6",
+    "label": "f Other AMT items (attach statement) 15f"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_7",
+    "label": "16a Tax-exempt interest income 16a"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_8",
+    "label": "b Other tax-exempt income 16b"
+  },
+  {
+    "page": 4,
+    "field_id": "f4_9",
+    "label": "c Nondeductible expenses 16c"
   },
   {
     "page": 5,
-    "field_id": "f5_1",
+    "field_id": "f5_01",
     "label": "1 Net income (loss) per books"
+  },
+  {
+    "page": 5,
+    "field_id": "f5_04",
+    "label": "2 Income included on Schedule K, lines 1, 2, 3c, 4, 5a, 6, 7, 8a, 9, and 10, not recorded on books this year (itemize) f5_02"
+  },
+  {
+    "page": 5,
+    "field_id": "f5_05",
+    "label": "a Depreciation $"
+  },
+  {
+    "page": 5,
+    "field_id": "f5_07",
+    "label": "b Travel and entertainment $"
+  },
+  {
+    "page": 5,
+    "field_id": "f5_09",
+    "label": "3 Expenses recorded on books this year not included on Schedule K, lines 1 through 12 and 14p (itemize):"
   },
   {
     "page": 5,
@@ -516,13 +576,23 @@
   },
   {
     "page": 5,
+    "field_id": "f5_11",
+    "label": "a Tax-exempt interest $"
+  },
+  {
+    "page": 5,
     "field_id": "f5_13",
     "label": "5 Income recorded on books this year not included on Schedule K, lines 1 through 10 (itemize):"
   },
   {
     "page": 5,
+    "field_id": "f5_14",
+    "label": "a Depreciation $"
+  },
+  {
+    "page": 5,
     "field_id": "f5_16",
-    "label": "6 Deductions included on Schedule K, lines 1 through 12, and 16f, not charged against book income this year (itemize):"
+    "label": "6 Deductions included on Schedule K, lines 1 through 12 and 14p, not charged against book income this year (itemize):"
   },
   {
     "page": 5,
@@ -533,15 +603,5 @@
     "page": 5,
     "field_id": "f5_18",
     "label": "8 Income (loss) (Schedule K, line 18). Subtract line 7 from line 4"
-  },
-  {
-    "page": 5,
-    "field_id": "f5_4",
-    "label": "2 Income included on Schedule K, lines 1, 2, 3c, 4, 5a, 6, 7, 8a, 9, and 10, not recorded on books this year (itemize): f5_2"
-  },
-  {
-    "page": 5,
-    "field_id": "f5_9",
-    "label": "3 Expenses recorded on books this year not included on Schedule K, lines 1 through 12, and 16f (itemize):"
   }
 ]

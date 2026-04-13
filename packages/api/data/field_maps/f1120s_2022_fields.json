@@ -1,7 +1,7 @@
 [
   {
     "page": 1,
-    "field_id": "f1_1 , 2022,",
+    "field_id": "f1_1",
     "label": "beginning"
   },
   {
@@ -51,7 +51,7 @@
   },
   {
     "page": 1,
-    "field_id": "f1_2 , 20 f1_3",
+    "field_id": "f1_2",
     "label": "ending"
   },
   {
