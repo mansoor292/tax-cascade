@@ -91,46 +91,87 @@ export function mountOAuth(app: Express) {
       return res.status(400).json({ error: 'unsupported_response_type' })
     }
 
-    // Render login page
+    // Render login/signup page
     const error = req.query.error as string || ''
+    const mode = req.query.mode as string || 'signin'
+    const hiddenFields = `
+    <input type="hidden" name="client_id" value="${client_id || ''}">
+    <input type="hidden" name="redirect_uri" value="${redirect_uri || ''}">
+    <input type="hidden" name="state" value="${state || ''}">
+    <input type="hidden" name="code_challenge" value="${code_challenge || ''}">
+    <input type="hidden" name="code_challenge_method" value="${code_challenge_method || 'S256'}">
+    <input type="hidden" name="scope" value="${scope || 'tax-api'}">`
+
     res.send(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tax API — Sign In</title>
+<title>Catipult Tax API</title>
 <style>
   body { font-family: system-ui; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f7fa; }
   .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); max-width: 400px; width: 100%; }
   h2 { margin: 0 0 0.5rem; color: #1a1a2e; }
   p { color: #666; font-size: 0.9rem; margin: 0 0 1.5rem; }
   label { display: block; font-weight: 500; margin-bottom: 0.5rem; color: #333; }
-  input[type="email"], input[type="password"] { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; box-sizing: border-box; margin-bottom: 1rem; }
-  button { width: 100%; padding: 0.75rem; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; }
+  input[type="email"], input[type="password"], input[type="text"] { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; box-sizing: border-box; margin-bottom: 1rem; }
+  button { width: 100%; padding: 0.75rem; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; margin-bottom: 0.5rem; }
   button:hover { background: #1d4ed8; }
+  .switch { text-align: center; font-size: 0.9rem; color: #666; }
+  .switch a { color: #2563eb; text-decoration: none; font-weight: 500; }
   .error { color: #dc2626; font-size: 0.9rem; margin-bottom: 1rem; }
-</style></head>
+  .tabs { display: flex; margin-bottom: 1.5rem; border-bottom: 2px solid #e5e7eb; }
+  .tab { flex: 1; text-align: center; padding: 0.75rem; cursor: pointer; font-weight: 500; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+  .tab.active { color: #2563eb; border-bottom-color: #2563eb; }
+</style>
+<script>
+function showTab(tab) {
+  document.getElementById('signin-form').style.display = tab === 'signin' ? 'block' : 'none';
+  document.getElementById('signup-form').style.display = tab === 'signup' ? 'block' : 'none';
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+}
+</script>
+</head>
 <body><div class="card">
-  <h2>Sign in to Tax API</h2>
-  <p>Sign in to authorize Claude to access your tax data.</p>
+  <h2>Catipult Tax API</h2>
+  <p>Connect Claude to your tax data.</p>
   ${error ? `<p class="error">${error}</p>` : ''}
-  <form method="POST" action="/oauth/authorize">
-    <input type="hidden" name="client_id" value="${client_id || ''}">
-    <input type="hidden" name="redirect_uri" value="${redirect_uri || ''}">
-    <input type="hidden" name="state" value="${state || ''}">
-    <input type="hidden" name="code_challenge" value="${code_challenge || ''}">
-    <input type="hidden" name="code_challenge_method" value="${code_challenge_method || 'S256'}">
-    <input type="hidden" name="scope" value="${scope || 'tax-api'}">
-    <label for="email">Email</label>
-    <input type="email" id="email" name="email" required>
-    <label for="password">Password</label>
-    <input type="password" id="password" name="password" required>
-    <button type="submit">Sign In & Authorize</button>
-  </form>
+  <div class="tabs">
+    <div class="tab ${mode !== 'signup' ? 'active' : ''}" id="tab-signin" onclick="showTab('signin')">Sign In</div>
+    <div class="tab ${mode === 'signup' ? 'active' : ''}" id="tab-signup" onclick="showTab('signup')">Create Account</div>
+  </div>
+  <div id="signin-form" style="display:${mode !== 'signup' ? 'block' : 'none'}">
+    <form method="POST" action="/oauth/authorize">
+      ${hiddenFields}
+      <input type="hidden" name="action" value="signin">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required>
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" required>
+      <button type="submit">Sign In & Authorize</button>
+    </form>
+  </div>
+  <div id="signup-form" style="display:${mode === 'signup' ? 'block' : 'none'}">
+    <form method="POST" action="/oauth/authorize">
+      ${hiddenFields}
+      <input type="hidden" name="action" value="signup">
+      <label for="full_name">Full Name</label>
+      <input type="text" id="full_name" name="full_name" required>
+      <label for="company_name">Company Name (optional)</label>
+      <input type="text" id="company_name" name="company_name">
+      <label for="signup_email">Email</label>
+      <input type="email" id="signup_email" name="email" required>
+      <label for="signup_password">Password</label>
+      <input type="password" id="signup_password" name="password" minlength="6" required>
+      <button type="submit">Create Account & Authorize</button>
+    </form>
+  </div>
 </div></body></html>`)
   })
 
-  // ─── Authorization POST — authenticate via Supabase, issue code ───
+  // ─── Authorization POST — sign in or sign up via Supabase, issue code ───
   app.post('/oauth/authorize', async (req, res) => {
     const {
-      email, password, client_id, redirect_uri, state,
+      action, email, password, full_name, company_name,
+      client_id, redirect_uri, state,
       code_challenge, code_challenge_method, scope,
     } = req.body
 
@@ -138,17 +179,42 @@ export function mountOAuth(app: Express) {
       return res.status(400).send('Email, password, and redirect_uri are required')
     }
 
-    // Authenticate with Supabase
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error || !data.session) {
-      // Re-render form with error
+    const errorRedirect = (msg: string, mode?: string) => {
       const qs = new URLSearchParams({
         response_type: 'code', client_id: client_id || '', redirect_uri,
         state: state || '', code_challenge: code_challenge || '',
         code_challenge_method: code_challenge_method || 'S256',
-        scope: scope || 'tax-api', error: 'Invalid email or password',
+        scope: scope || 'tax-api', error: msg, mode: mode || 'signin',
       })
       return res.redirect(`/oauth/authorize?${qs}`)
+    }
+
+    let data: any, error: any
+
+    if (action === 'signup') {
+      // Sign up
+      if (!full_name) return errorRedirect('Full name is required', 'signup')
+      const result = await supabase.auth.signUp({
+        email, password,
+        options: { data: { full_name, company_name: company_name || '' } },
+      })
+      data = result.data
+      error = result.error
+      if (error) return errorRedirect(error.message, 'signup')
+      if (!data.session) {
+        // Some Supabase configs require email confirmation
+        // Try signing in immediately (works if email confirmation is disabled)
+        const signInResult = await supabase.auth.signInWithPassword({ email, password })
+        data = signInResult.data
+        error = signInResult.error
+        if (error) return errorRedirect('Account created. Please check your email to confirm, then sign in.', 'signin')
+      }
+    } else {
+      // Sign in
+      const result = await supabase.auth.signInWithPassword({ email, password })
+      data = result.data
+      error = result.error
+      if (error || !data.session) return errorRedirect('Invalid email or password')
     }
 
     // Get or create a persistent API key for this user (doesn't expire like JWTs)
