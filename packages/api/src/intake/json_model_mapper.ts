@@ -151,9 +151,9 @@ const FUZZY_RULES_1120S: FuzzyRule[] = [
   { pattern: /^16\s+advertising/,                                  canonical_key: 'deductions.advertising',        confidence: 0.97 },
   { pattern: /17\s+pension.*profit.sharing/,                       canonical_key: 'deductions.pension_plans',      confidence: 0.97 },
   { pattern: /18\s+employee\s+benefit/,                            canonical_key: 'deductions.employee_benefits',  confidence: 0.97 },
-  { pattern: /19\s+other\s+deductions.*attach/,                    canonical_key: 'deductions.other_deductions',   confidence: 0.96 },
-  { pattern: /20\s+total\s+deductions.*add\s+lines\s+7/,           canonical_key: 'deductions.total_deductions',   confidence: 0.97 },
-  { pattern: /21\s+ordinary\s+business.*subtract.*20/,             canonical_key: 'deductions.ordinary_income_loss', confidence: 0.97 },
+  { pattern: /(?:19|20)\s+other\s+deductions/,                     canonical_key: 'deductions.other_deductions',   confidence: 0.96 },
+  { pattern: /(?:20|21)\s+total\s+deductions.*add\s+lines/,        canonical_key: 'deductions.total_deductions',   confidence: 0.97 },
+  { pattern: /(?:21|22)\s+ordinary\s+business.*(?:subtract|loss)/, canonical_key: 'deductions.ordinary_income_loss', confidence: 0.97 },
   // Schedule K
   { pattern: /ordinary\s+business.*income.*page\s+1.*line\s+21/,  canonical_key: 'schedule_k.ordinary_income',    confidence: 0.95 },
   { pattern: /12a\s+charitable.*contrib|charitable\s+contributions/, canonical_key: 'schedule_k.charitable_contrib', confidence: 0.96 },
