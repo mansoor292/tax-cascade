@@ -14,12 +14,13 @@ import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
-function sb(req: Request) {
-  const token = req.headers.authorization?.replace('Bearer ', '') || ''
-  return createClient(SUPABASE_URL, SUPABASE_ANON, {
-    global: { headers: { Authorization: `Bearer ${token}` } }
-  })
+async function getUser(req: any): Promise<string | null> {
+  if ((req as any).userId) return (req as any).userId
+  const t = req.headers.authorization?.replace('Bearer ', '')
+  if (t) { const { data: { user } } = await supabase.auth.getUser(t); return user?.id || null }
+  return null
 }
 
 const FORM_TYPE_MAP: Record<string, string> = {
@@ -30,12 +31,12 @@ const router = Router()
 
 // Process a document into a tax return
 router.post('/process/:document_id', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  const { data: doc } = await client.from('document')
-    .select('*').eq('id', req.params.document_id).eq('user_id', user.id).single()
+  const { data: doc } = await supabase.from('document')
+    .select('*').eq('id', req.params.document_id).eq('user_id', userId).single()
   if (!doc) return res.status(404).json({ error: 'Document not found' })
 
   if (!doc.textract_data?.kvs?.length) {
@@ -169,13 +170,13 @@ router.post('/process/:document_id', async (req, res) => {
     // 4. Find or create entity
     let entityId = doc.entity_id
     if (!entityId && doc.meta?.entity_name) {
-      const { data: existing } = await client.from('tax_entity')
+      const { data: existing } = await supabase.from('tax_entity')
         .select('id').ilike('name', doc.meta.entity_name).single()
       entityId = existing?.id || null
     }
 
     // 5. Save tax_return
-    const { data: taxReturn, error } = await client.from('tax_return').upsert({
+    const { data: taxReturn, error } = await supabase.from('tax_return').upsert({
       entity_id: entityId,
       tax_year: taxYear,
       form_type: formType,
@@ -196,7 +197,7 @@ router.post('/process/:document_id', async (req, res) => {
 
     // Link document to entity
     if (entityId && !doc.entity_id) {
-      await client.from('document').update({ entity_id: entityId }).eq('id', doc.id)
+      await supabase.from('document').update({ entity_id: entityId }).eq('id', doc.id)
     }
 
     res.json({
@@ -220,17 +221,17 @@ router.post('/process/:document_id', async (req, res) => {
 
 // List returns
 router.get('/', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
   // Get returns for entities owned by this user
-  const { data: entities } = await client.from('tax_entity').select('id').eq('user_id', user.id)
+  const { data: entities } = await supabase.from('tax_entity').select('id').eq('user_id', userId)
   const entityIds = entities?.map(e => e.id) || []
 
   if (!entityIds.length) return res.json({ returns: [] })
 
-  const { data, error } = await client.from('tax_return')
+  const { data, error } = await supabase.from('tax_return')
     .select('*, tax_entity(name, form_type, ein)')
     .in('entity_id', entityIds)
     .order('tax_year', { ascending: false })
@@ -241,11 +242,11 @@ router.get('/', async (req, res) => {
 
 // Get single return with full breakdown
 router.get('/:id', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  const { data } = await client.from('tax_return')
+  const { data } = await supabase.from('tax_return')
     .select('*, tax_entity(name, form_type, ein)')
     .eq('id', req.params.id).single()
 
@@ -255,11 +256,11 @@ router.get('/:id', async (req, res) => {
 
 // Multi-year comparison for an entity
 router.get('/compare/:entity_id', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  const { data: returns } = await client.from('tax_return')
+  const { data: returns } = await supabase.from('tax_return')
     .select('*, tax_entity(name)')
     .eq('entity_id', req.params.entity_id)
     .eq('is_amended', false)

@@ -18,26 +18,33 @@ const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5
 const S3_BUCKET = process.env.S3_BUCKET || 'tax-api-storage-2026'
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
 
-function sb(req: Request) {
-  const token = req.headers.authorization?.replace('Bearer ', '') || ''
-  return createClient(SUPABASE_URL, SUPABASE_ANON, {
-    global: { headers: { Authorization: `Bearer ${token}` } }
-  })
+// Anon client for queries — RLS is open, API handles auth
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
+
+// Get user ID from either Bearer token or API key middleware
+async function getUser(req: Request): Promise<string | null> {
+  if ((req as any).userId) return (req as any).userId
+  const token = req.headers.authorization?.replace('Bearer ', '')
+  if (token) {
+    const { data: { user } } = await supabase.auth.getUser(token)
+    return user?.id || null
+  }
+  return null
 }
 
 const router = Router()
 
 // Get presigned upload URL
 router.get('/presign', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
   const filename = req.query.filename as string
   if (!filename) return res.status(400).json({ error: 'filename required' })
 
   const ext = filename.split('.').pop()?.toLowerCase() || 'pdf'
-  const s3Key = `documents/${user.id}/${uuidv4()}.${ext}`
+  const s3Key = `documents/${userId}/${uuidv4()}.${ext}`
 
   const contentTypes: Record<string, string> = {
     pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
@@ -71,12 +78,12 @@ print(json.dumps({'url': url, 'key': '${s3Key}'}))
 
 // Get presigned download URL
 router.get('/:id/download', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  const { data: doc } = await client.from('document')
-    .select('s3_path').eq('id', req.params.id).eq('user_id', user.id).single()
+  const { data: doc } = await supabase.from('document')
+    .select('s3_path').eq('id', req.params.id).eq('user_id', userId!).single()
   if (!doc) return res.status(404).json({ error: 'Not found' })
 
   try {
@@ -97,9 +104,9 @@ print(json.dumps({'url': url}))
 
 // Register uploaded file + Gemini categorization
 router.post('/register', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
   const { s3_key, filename, file_size } = req.body
   if (!s3_key || !filename) return res.status(400).json({ error: 's3_key and filename required' })
@@ -204,8 +211,8 @@ print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
   }
 
   // Save to DB
-  const { data: doc, error } = await client.from('document').insert({
-    user_id: user.id,
+  const { data: doc, error } = await supabase.from('document').insert({
+    user_id: userId,
     filename,
     file_type: ext,
     s3_path: s3_key,
@@ -286,12 +293,12 @@ print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
         // Find entity
         let entityId = null
         if (classification.entity_name) {
-          const { data: existing } = await client.from('tax_entity')
+          const { data: existing } = await supabase.from('tax_entity')
             .select('id').ilike('name', `%${classification.entity_name.split(' ')[0]}%`).single()
           entityId = existing?.id || null
         }
 
-        const { data: taxReturn } = await client.from('tax_return').upsert({
+        const { data: taxReturn } = await supabase.from('tax_return').upsert({
           entity_id: entityId, tax_year: txYear, form_type: formType,
           status: 'computed', is_amended: false,
           input_data: {}, computed_data: engineResult,
@@ -321,12 +328,12 @@ print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
 
 // Re-categorize an existing document with Gemini
 router.post('/:id/categorize', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  const { data: doc } = await client.from('document')
-    .select('*').eq('id', req.params.id).eq('user_id', user.id).single()
+  const { data: doc } = await supabase.from('document')
+    .select('*').eq('id', req.params.id).eq('user_id', userId!).single()
   if (!doc) return res.status(404).json({ error: 'Not found' })
 
   if (!GEMINI_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' })
@@ -365,7 +372,7 @@ print(base64.b64encode(obj['Body'].read()).decode())
     const text = result.response.text().trim().replace(/^```json?\s*/i, '').replace(/\s*```$/i, '')
     const classification = JSON.parse(text)
 
-    await client.from('document').update({
+    await supabase.from('document').update({
       doc_type: classification.doc_type || doc.doc_type,
       tax_year: classification.tax_year || doc.tax_year,
       meta: {
@@ -385,13 +392,13 @@ print(base64.b64encode(obj['Body'].read()).decode())
 
 // List documents
 router.get('/', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  const { data, error } = await client.from('document')
+  const { data, error } = await supabase.from('document')
     .select('*, tax_entity(name)')
-    .eq('user_id', user.id)
+    .eq('user_id', userId!)
     .order('created_at', { ascending: false })
 
   if (error) return res.status(500).json({ error: error.message })
@@ -400,34 +407,34 @@ router.get('/', async (req, res) => {
 
 // Get single document
 router.get('/:id', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  const { data, error } = await client.from('document')
-    .select('*').eq('id', req.params.id).eq('user_id', user.id).single()
+  const { data, error } = await supabase.from('document')
+    .select('*').eq('id', req.params.id).eq('user_id', userId!).single()
   if (error || !data) return res.status(404).json({ error: 'Not found' })
   res.json({ document: data })
 })
 
 // Delete document
 router.delete('/:id', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  await client.from('document').delete().eq('id', req.params.id).eq('user_id', user.id)
+  await supabase.from('document').delete().eq('id', req.params.id).eq('user_id', userId!)
   res.json({ success: true })
 })
 
 // Run Textract
 router.post('/:id/extract', async (req, res) => {
-  const client = sb(req)
-  const { data: { user } } = await client.auth.getUser()
-  if (!user) return res.status(401).json({ error: 'Unauthorized' })
+  const userId = await getUser(req)
+  
+  if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  const { data: doc } = await client.from('document')
-    .select('*').eq('id', req.params.id).eq('user_id', user.id).single()
+  const { data: doc } = await supabase.from('document')
+    .select('*').eq('id', req.params.id).eq('user_id', userId!).single()
   if (!doc) return res.status(404).json({ error: 'Not found' })
 
   try {
@@ -481,7 +488,7 @@ print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
     const result = runPython(script, { timeout: 120000 })
     const textractData = JSON.parse(result)
 
-    await client.from('document').update({
+    await supabase.from('document').update({
       textract_data: textractData,
       extracted_at: new Date().toISOString(),
     }).eq('id', req.params.id)
