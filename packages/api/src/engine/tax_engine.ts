@@ -152,7 +152,8 @@ export interface Form1040_Inputs {
 import { ordinaryTax, standardDeduction, qbiDeduction } from './tax_tables.js'
 
 /** Form 1120-S calculation */
-export function calc1120S(inp: Form1120S_Inputs): Form1120S_Result {
+export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
+  const inp = defaults(raw, ['shareholders'])
   const balance_1c = inp.gross_receipts - inp.returns_allowances
   const gross_profit = balance_1c - inp.cost_of_goods_sold
   const total_income = gross_profit + inp.net_gain_4797 + inp.other_income  // L6
@@ -189,8 +190,18 @@ export function calc1120S(inp: Form1120S_Inputs): Form1120S_Result {
   }
 }
 
+/** Default missing numeric fields to 0 */
+function defaults<T extends Record<string, any>>(inp: T, exclude: string[] = []): T {
+  const result = { ...inp }
+  for (const [k, v] of Object.entries(result)) {
+    if (v === undefined && !exclude.includes(k)) (result as any)[k] = 0
+  }
+  return result
+}
+
 /** Form 1120 calculation */
-export function calc1120(inp: Form1120_Inputs): Form1120_Result {
+export function calc1120(raw: Form1120_Inputs): Form1120_Result {
+  const inp = defaults(raw, ['tax_year'])
   const balance_1c = inp.gross_receipts - inp.returns_allowances
   const gross_profit = balance_1c - inp.cost_of_goods_sold
   const total_income = (
@@ -236,10 +247,11 @@ export function calc1120(inp: Form1120_Inputs): Form1120_Result {
 }
 
 /** Form 1040 calculation */
-export function calc1040(inp: Form1040_Inputs): {
+export function calc1040(raw: Form1040_Inputs): {
   computed: Record<string,number>
   citations: string[]
 } {
+  const inp = defaults(raw, ['filing_status', 'tax_year', 'use_itemized'])
   // Line 9: Total income
   const total_income = (
     inp.wages + inp.taxable_interest + inp.ordinary_dividends +
@@ -292,6 +304,74 @@ export function calc1040(inp: Form1040_Inputs): {
       'IRC §63(c): Standard deduction',
       'IRC §199A: QBI deduction (year-specific thresholds)',
       'IRC §86: Social security taxability (simplified at 85%)',
+    ]
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// EXTENSION FORMS (4868, 7004, 8868)
+// ─────────────────────────────────────────────────────────────
+
+export type ExtensionType = '4868' | '7004' | '8868'
+
+export interface ExtensionInputs {
+  extension_type:          ExtensionType
+  tax_year:                number
+  // Identification
+  taxpayer_name:           string
+  taxpayer_id:             string    // SSN (4868) or EIN (7004/8868)
+  address:                 string
+  city:                    string
+  state:                   string
+  zip:                     string
+  // Tax estimates
+  estimated_tax_liability: number
+  total_payments:          number
+  amount_paying:           number
+  // 4868-specific
+  spouse_ssn?:             string
+  out_of_country?:         boolean
+  form_1040nr_no_wages?:   boolean
+  // 7004-specific
+  form_code?:              string    // 2-digit code (e.g. '12' for 1120, '25' for 1120-S)
+  calendar_year?:          number
+  is_foreign_corp?:        boolean
+  is_consolidated_parent?: boolean
+  // 8868-specific
+  return_code?:            string    // 2-digit code (e.g. '01' for 990, '04' for 990-PF)
+  org_books_care_of?:      string
+  telephone?:              string
+  fax?:                    string
+  extension_date?:         string
+}
+
+export interface ExtensionResult {
+  inputs:   ExtensionInputs
+  computed: {
+    balance_due:  number
+    overpayment:  number
+  }
+  citations: string[]
+}
+
+/** Extension form calculation — applies to 4868, 7004, 8868 */
+export function calcExtension(inp: ExtensionInputs): ExtensionResult {
+  const balance_due  = Math.max(0, inp.estimated_tax_liability - inp.total_payments)
+  const overpayment  = Math.max(0, inp.total_payments - inp.estimated_tax_liability)
+
+  const formNames: Record<ExtensionType, string> = {
+    '4868': 'Form 4868 — Individual Extension',
+    '7004': 'Form 7004 — Business Extension',
+    '8868': 'Form 8868 — Exempt Organization Extension',
+  }
+
+  return {
+    inputs: inp,
+    computed: { balance_due, overpayment },
+    citations: [
+      `${formNames[inp.extension_type]}: Balance due = Estimated tax - Total payments`,
+      `${formNames[inp.extension_type]}: Line balance = max(0, ${inp.estimated_tax_liability} - ${inp.total_payments}) = ${balance_due}`,
+      'Extension does not extend the time to pay — interest accrues on unpaid amounts',
     ]
   }
 }
