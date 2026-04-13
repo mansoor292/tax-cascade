@@ -471,3 +471,13 @@ export function getMappedKeys(form: '1120' | '1040' | '1120S'): string[] {
   const map = form === '1120' ? PDF_FIELD_MAP_1120 : form === '1040' ? PDF_FIELD_MAP_1040 : PDF_FIELD_MAP_1120S
   return Object.keys(map)
 }
+
+
+// Year-keyed aliases for the PDF route
+export const F1120_2024 = PDF_FIELD_MAP_1120
+export const F1120_2023 = PDF_FIELD_MAP_1120  // 2023 uses same form layout as 2024
+export const F1120_2022 = PDF_FIELD_MAP_1120
+export const F1040_2024 = PDF_FIELD_MAP_1040
+export const F1040_2023 = PDF_FIELD_MAP_1040
+export const F1120S_2024 = PDF_FIELD_MAP_1120S
+export const F1120S_2023 = PDF_FIELD_MAP_1120S

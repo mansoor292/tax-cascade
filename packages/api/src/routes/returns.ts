@@ -14,6 +14,7 @@ import { calc1120, calc1120S, calc1040, calcExtension, type ExtensionInputs, typ
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { getEngineToCanonicalMap } from '../maps/engine_to_pdf.js'
+import * as maps2024 from '../maps/pdf_field_map_2024.js'
 import * as maps2025 from '../maps/pdf_field_map_2025.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
@@ -610,7 +611,7 @@ print(json.dumps({'url': url}))
 
     // Get the year-specific canonical→fieldId map (same maps the builders use)
     const mapKey = `F${taxReturn.form_type.replace('-', '')}_${taxReturn.tax_year}`
-    let fieldMap: Record<string, string> = (maps2025 as any)[mapKey] || {}
+    let fieldMap: Record<string, string> = (maps2025 as any)[mapKey] || (maps2024 as any)[mapKey] || {}
 
     // Build canonical model — same approach as build_1120_package.ts
     const model: Record<string, string | number> = {}
