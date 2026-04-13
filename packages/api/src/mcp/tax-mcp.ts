@@ -36,22 +36,50 @@ function text(data: any): { content: Array<{ type: 'text'; text: string }> } {
 
 const INSTRUCTIONS = `You help users prepare and optimize tax returns using the Tax Preparation API.
 
-## Workflow
+## Getting Started
 1. Call list_entities to see existing entities and returns
-2. Call get_schema to discover supported forms, years, and required inputs
-3. If QuickBooks is connected, call get_financials to pull P&L and Balance Sheet data
-4. Call get_qbo_mapping to map QBO categories to tax form fields
-5. Call validate_return before computing to catch errors early
-6. Call compute_return to calculate the tax return
-7. Use run_scenario for what-if analysis, compare_scenarios to pick the best option
-8. Call get_pdf to generate the filled IRS form
+2. Call get_schema to discover supported forms (1040/1120/1120S), years (2018-2025), and required inputs
+3. Call get_schema with form_type and year for the exact input fields needed
+
+## Data Entry — Two Paths
+
+### Path A: Upload a prior return (PDF)
+1. upload_document → get presigned S3 URL
+2. register_document → triggers OCR + auto-classification
+3. process_document → extracts data, computes, saves as return
+
+### Path B: Enter data manually or from QuickBooks
+1. Check qbo_status — is QuickBooks connected?
+2. If yes: get_financials to pull P&L + Balance Sheet, then get_qbo_mapping for field mappings
+3. If no: ask the user for the numbers, or use connect_qbo to start OAuth
+4. validate_return to check inputs
+5. compute_return to calculate and save
+
+## Analysis & Scenarios
+- run_scenario: create what-if scenarios with adjusted inputs
+- analyze_scenario: get AI analysis of a scenario's tax impact
+- compare_scenarios: side-by-side comparison with recommendation
+- promote_scenario: finalize a scenario into an official return
+- compute_cascade: S-Corp → K-1 → 1040 pass-through in one call
+
+## Output
+- get_pdf: generate filled IRS PDF with download URL
+- compare_returns: year-over-year comparison for an entity
+
+## QuickBooks
+- qbo_status: check connection
+- connect_qbo: start OAuth (returns URL for user to click)
+- get_financials: P&L + Balance Sheet (cached, use refresh=true for fresh data)
+- get_qbo_report: individual reports (profit-and-loss, balance-sheet, trial-balance, general-ledger, cash-flow)
+- qbo_query: raw QBO SQL (SELECT * FROM Account, etc.)
 
 ## Rules
 - Never fabricate financial data — ask the user for missing values
 - Always confirm the tax year before computing
-- Validate inputs before computing
+- Call validate_return before compute_return
 - For S-Corps, shareholder percentages must sum to 100%
-- When QBO is connected, pull financials first before asking for manual input`
+- When QBO is connected, pull financials first before asking for manual input
+- Call get_schema to discover required fields — don't guess`
 
 function extractApiKey(req: Request): string | null {
   const auth = req.headers.authorization
@@ -62,10 +90,10 @@ function extractApiKey(req: Request): string | null {
 }
 
 function createServer(apiKey: string): McpServer {
-  const server = new McpServer({
-    name: 'Tax Preparation API',
-    version: '0.1.0',
-  })
+  const server = new McpServer(
+    { name: 'Tax Preparation API', version: '0.1.0' },
+    { instructions: INSTRUCTIONS },
+  )
 
   const call = (method: string, path: string, body?: any) => api(apiKey, method, path, body)
 
