@@ -28,6 +28,7 @@ import {
 import { FORM_INVENTORY } from './maps/field_maps.js'
 import authRoutes, { supabase } from './routes/auth.js'
 import scenarioRoutes from './routes/scenarios.js'
+import documentRoutes from './routes/documents.js'
 
 const app = express()
 app.use(cors())
@@ -71,6 +72,7 @@ app.use('/api', async (req, res, next) => {
 
 // ─── Scenario routes ───
 app.use('/api/scenarios', scenarioRoutes)
+app.use('/api/documents', documentRoutes)
 
 // ─── Health ───
 app.get('/api/health', (_req, res) => {

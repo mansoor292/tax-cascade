@@ -1,9 +1,10 @@
 import { useAuth } from '../lib/auth'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Calculator, FileText, FlaskConical, Key, LogOut } from 'lucide-react'
+import { Calculator, FileText, FlaskConical, Key, LogOut, Upload } from 'lucide-react'
 
 const links = [
   { to: '/compute', label: 'Compute', icon: Calculator },
+  { to: '/documents', label: 'Documents', icon: Upload },
   { to: '/returns', label: 'Returns', icon: FileText },
   { to: '/scenarios', label: 'Scenarios', icon: FlaskConical },
   { to: '/keys', label: 'API Keys', icon: Key },

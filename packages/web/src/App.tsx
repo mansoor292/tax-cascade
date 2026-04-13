@@ -6,6 +6,7 @@ import Compute from './pages/Compute'
 import Returns from './pages/Returns'
 import Scenarios from './pages/Scenarios'
 import Keys from './pages/Keys'
+import Documents from './pages/Documents'
 
 function Guard({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()
@@ -24,6 +25,7 @@ export default function App() {
             <Route index element={<Navigate to="/compute" />} />
             <Route path="compute" element={<Compute />} />
             <Route path="returns" element={<Returns />} />
+            <Route path="documents" element={<Documents />} />
             <Route path="scenarios" element={<Scenarios />} />
             <Route path="keys" element={<Keys />} />
           </Route>
