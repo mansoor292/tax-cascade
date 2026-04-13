@@ -42,3 +42,4 @@ When QBO is connected, pull financials first and auto-map before asking user for
 - Always confirm tax year before computing
 - Validate before compute
 - For S-Corps, shareholder percentages must sum to 100%
+# Auto-deploy via GitHub webhook
