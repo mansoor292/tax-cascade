@@ -786,20 +786,32 @@ router.post('/extension', async (req, res) => {
 
     const result = calcExtension(engineInputs)
 
-    // Optionally generate PDF
+    // Optionally generate PDF and upload to S3
     let pdfUrl = null
+    let pdfFilled = 0
     if (generate_pdf) {
       const { buildExtensionPdf } = await import('../builders/build_extension.js')
-      const { pdf, filled, missed } = await buildExtensionPdf(engineInputs, tax_year)
+      const { pdf, filled } = await buildExtensionPdf(engineInputs, tax_year)
+      pdfFilled = filled
       const pdfBytes = await pdf.save()
 
-      // Save locally to output/
-      const { writeFileSync, mkdirSync } = await import('fs')
-      mkdirSync('output', { recursive: true })
-      const filename = `extension_${extension_type}_${tax_year}_${Date.now()}.pdf`
-      const outPath = `output/${filename}`
-      writeFileSync(outPath, Buffer.from(pdfBytes))
-      pdfUrl = outPath
+      const { writeFileSync } = await import('fs')
+      const tmpPath = `/tmp/ext_${extension_type}_${tax_year}_${Date.now()}.pdf`
+      writeFileSync(tmpPath, Buffer.from(pdfBytes))
+
+      const s3Key = `extensions/${userId}/${extension_type}_${tax_year}_${Date.now()}.pdf`
+      const { runPython } = await import('../lib/run_python.js')
+      const uploadScript = `
+import boto3, json
+s3 = boto3.client('s3', region_name='us-east-1')
+s3.upload_file('${tmpPath}', '${S3_BUCKET}', '${s3Key}', ExtraArgs={'ContentType': 'application/pdf'})
+url = s3.generate_presigned_url('get_object', Params={
+    'Bucket': '${S3_BUCKET}', 'Key': '${s3Key}'
+}, ExpiresIn=3600)
+print(json.dumps({'url': url}))
+`
+      const uploadResult = runPython(uploadScript, { timeout: 30000 })
+      pdfUrl = JSON.parse(uploadResult.trim()).url
     }
 
     // Optionally save to database
@@ -827,7 +839,8 @@ router.post('/extension', async (req, res) => {
       saved: save && !!entity_id,
       computed: result.computed,
       citations: result.citations,
-      pdf_path: pdfUrl,
+      pdf_url: pdfUrl,
+      pdf_filled: pdfFilled,
     })
   } catch (e: any) {
     res.status(500).json({ error: e.message })
