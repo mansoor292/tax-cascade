@@ -306,13 +306,15 @@ router.get('/callback', async (req, res) => {
     return res.status(500).send(`<h2>Failed to Save Connection</h2><p>${error.message}</p>`)
   }
 
+  const appUrl = process.env.APP_URL || 'https://tax-api.catalogshub.com'
   res.send(`
-    <html><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:system-ui;background:#f8faf8;">
+    <html><head>
+      <meta http-equiv="refresh" content="3;url=${appUrl}">
+    </head><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:system-ui;background:#f8faf8;">
       <h2 style="color:#2e8b57;">Connected to QuickBooks</h2>
       <p><strong>${companyName}</strong> (Realm ${realmId})</p>
       ${companyEin ? `<p>EIN: ${companyEin}</p>` : ''}
-      <p>Entity ID: ${entityId}</p>
-      <p>You can close this window.</p>
+      <p style="color:#999;font-size:0.9rem;">Redirecting to app...</p>
     </body></html>
   `)
 })
