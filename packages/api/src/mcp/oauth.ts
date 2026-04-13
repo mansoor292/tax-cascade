@@ -151,10 +151,26 @@ export function mountOAuth(app: Express) {
       return res.redirect(`/oauth/authorize?${qs}`)
     }
 
-    // Generate auth code — store the Supabase access token
+    // Get or create a persistent API key for this user (doesn't expire like JWTs)
+    let apiKey: string
+    const { data: existingKey } = await supabase.from('api_key')
+      .select('key_value').eq('user_id', data.user.id).eq('is_active', true).limit(1).single()
+    if (existingKey) {
+      apiKey = existingKey.key_value
+    } else {
+      apiKey = `txk_${crypto.randomBytes(12).toString('hex')}`
+      await supabase.from('api_key').insert({
+        user_id: data.user.id,
+        key_value: apiKey,
+        name: 'Claude MCP (auto-created)',
+        is_active: true,
+      })
+    }
+
+    // Generate auth code — store the persistent API key (not the short-lived JWT)
     const code = crypto.randomBytes(32).toString('hex')
     authCodes.set(code, {
-      accessToken: data.session.access_token,
+      accessToken: apiKey,
       userId: data.user.id,
       codeChallenge: code_challenge || '',
       codeChallengeMethod: code_challenge_method || 'S256',
@@ -201,13 +217,11 @@ export function mountOAuth(app: Express) {
       // Clean up
       authCodes.delete(code)
 
-      // Return the Supabase access token — the MCP handler passes it as
-      // a Bearer token to internal API calls, where the auth middleware
-      // resolves it to the user via supabase.auth.getUser()
+      // Return the persistent API key — never expires, survives server restarts
       res.json({
         access_token: authCode.accessToken,
         token_type: 'Bearer',
-        expires_in: 3600, // Supabase JWT is ~1 hour
+        expires_in: 31536000, // 1 year (API keys don't expire)
         scope: 'tax-api',
       })
     } else if (grant_type === 'refresh_token') {
