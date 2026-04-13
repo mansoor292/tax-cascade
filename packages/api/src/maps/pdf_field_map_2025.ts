@@ -156,8 +156,22 @@ export const F1120_2025: Record<string, string> = {
   'schedJ.J19_total_payments':   'f3_40',
   'schedJ.J23_total_pay_credits':'f3_48',
 
+  // Page 1: Lines 32-37 (corrected from labeled PDF)
+  'payments.L32_1062':           'f1_49',
+  // 'payments.L33_total_payments' already mapped above as f1_50
+  'payments.L34_est_penalty':    'f1_51',
+  // 'payments.L35_amount_owed' already mapped above as f1_52
+  // 'payments.L36_overpayment' already mapped above as f1_53
+  // 'payments.L37a_credited' is f1_54
+  // 'payments.L37b_refunded' is f1_55
+
+  // Sign Here
+  'meta.title':                  'f1_58',
+
   // Preparer
+  'preparer.name':               'f1_59',
   'preparer.ptin':               'f1_60',
+  'preparer.firm_name':          'f1_61',
   'preparer.firm_ein':           'f1_62',
   'preparer.firm_address':       'f1_63',
   'preparer.phone':              'f1_64',

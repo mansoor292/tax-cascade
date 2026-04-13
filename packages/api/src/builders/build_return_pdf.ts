@@ -576,8 +576,9 @@ function fill1120Extras(
 
   // Title (field ID varies by year)
   if (entity.meta?.title) {
-    setField(form, 'f1_56', entity.meta.title)  // 2024 field ID
-    setField(form, 'f1_58', entity.meta.title)  // 2025 field ID
+    // Title field ID differs by year: f1_56 (2024), f1_58 (2025)
+    if (taxYear >= 2025) setField(form, 'f1_58', entity.meta.title)
+    else setField(form, 'f1_56', entity.meta.title)
   }
 
   // Preparer (1120 uses f1_53..f1_58 area in 2024)
@@ -609,8 +610,9 @@ function fill1120SExtras(
 
   // Title
   if (entity.meta?.title) {
-    setField(form, 'f1_50', entity.meta.title)  // 2024 field ID for 1120S
-    setField(form, 'f1_54', entity.meta.title)  // 2025 field ID for 1120S
+    // 1120S title field ID differs by year
+    if (taxYear >= 2025) setField(form, 'f1_54', entity.meta.title)
+    else setField(form, 'f1_50', entity.meta.title)
   }
 
   // Schedule L for 1120S uses f4_* field IDs (NOT f6_* like 1120)
