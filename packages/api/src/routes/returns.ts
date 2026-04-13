@@ -13,6 +13,7 @@ import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper
 import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
+import { getEngineToCanonicalMap } from '../maps/engine_to_pdf.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -573,8 +574,8 @@ router.get('/:id/pdf', async (req, res) => {
     .select('user_id').eq('id', taxReturn.entity_id).single()
   if (!entity || entity.user_id !== userId) return res.status(403).json({ error: 'Forbidden' })
 
-  // If we already have a cached PDF, return presigned URL
-  if (taxReturn.pdf_s3_path) {
+  // If we already have a cached PDF, return presigned URL (skip with ?regenerate=true)
+  if (taxReturn.pdf_s3_path && req.query.regenerate !== 'true') {
     try {
       const { runPython } = await import('../lib/run_python.js')
       const script = `
@@ -604,14 +605,59 @@ print(json.dumps({'url': url}))
 
     const pdf = await PDFDocument.load(readFileSync(blankPath))
     const form = pdf.getForm()
-    const canonMap = getCanonicalMap(formName, taxReturn.tax_year)
 
-    // Fill from computed data + input data
-    const data = { ...taxReturn.input_data, ...taxReturn.computed_data?.computed }
+    // Two maps: Textract-verified label→fieldId, and engine key→canonical key
+    const canonMap = getCanonicalMap(formName, taxReturn.tax_year)
+    const engineMap = getEngineToCanonicalMap(taxReturn.form_type)
+
+    // Import the typed pdf_field_map for this form+year
+    let typedMap: Record<string, string> = {}
+    try {
+      const maps = await import('../maps/pdf_field_map_2025.js')
+      const mapKey = `F${taxReturn.form_type.replace('-', '')}_${taxReturn.tax_year}`
+      typedMap = (maps as any)[mapKey] || {}
+    } catch {}
+    // Also try 2024
+    if (!Object.keys(typedMap).length) {
+      try {
+        const maps = await import('../maps/pdf_field_map_2024.js')
+        const mapKey = `F${taxReturn.form_type.replace('-', '')}_${taxReturn.tax_year}`
+        typedMap = (maps as any)[mapKey] || {}
+      } catch {}
+    }
+
+    // Merge input_data + computed values
+    const rawData = { ...taxReturn.input_data, ...taxReturn.computed_data?.computed }
+
+    // Build final data: engine key → canonical key → field_id
+    const dataToFill: Record<string, any> = {}
+
+    // First, map engine keys to canonical keys and use typed map for field IDs
+    for (const [engineKey, value] of Object.entries(rawData)) {
+      if (value === undefined || value === null || value === 0) continue
+      const canonicalKey = engineMap[engineKey]
+      if (canonicalKey) {
+        // Look up field_id from typed map (canonical key → field_id)
+        const fieldId = typedMap[canonicalKey]
+        if (fieldId) dataToFill[fieldId] = value
+        // Also try the Textract map (label → field_id)
+        const fieldIdFromLabel = canonMap[canonicalKey]
+        if (fieldIdFromLabel) dataToFill[fieldIdFromLabel] = value
+      }
+    }
+
+    // Also try direct canonical keys from field_values (extracted returns)
+    if (taxReturn.field_values) {
+      for (const [canonKey, value] of Object.entries(taxReturn.field_values)) {
+        if (value === undefined || value === null) continue
+        const fieldId = typedMap[canonKey] || canonMap[canonKey]
+        if (fieldId) dataToFill[fieldId] = value
+      }
+    }
+
+    // Fill the PDF
     let filled = 0
-    for (const [label, fieldId] of Object.entries(canonMap)) {
-      const value = data[label]
-      if (value === undefined || value === null) continue
+    for (const [fieldId, value] of Object.entries(dataToFill)) {
       for (const f of form.getFields()) {
         if (f.getName().includes(fieldId + '[') && f instanceof PDFTextField) {
           const str = typeof value === 'number' ? value.toLocaleString() : String(value)
