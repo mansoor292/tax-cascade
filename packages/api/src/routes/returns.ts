@@ -14,6 +14,7 @@ import { calc1120, calc1120S, calc1040, calcExtension, type ExtensionInputs, typ
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { buildCanonicalModel, buildReturnPdf } from '../builders/build_return_pdf.js'
+import { buildScheduleL } from '../maps/qbo_to_schedule_l.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -613,6 +614,34 @@ print(json.dumps({'url': url}))
       textractKvs = docs[0].textract_data.kvs
     }
 
+    // Pull Schedule L from QBO if connected (BOY = prior year EOY, EOY = current year)
+    let schedLOverrides: Record<string, number> = {}
+    try {
+      const { data: qboConn } = await supabase.from('qbo_connection')
+        .select('id').eq('entity_id', taxReturn.entity_id).eq('is_active', true).single()
+      if (qboConn) {
+        const API_BASE = `http://localhost:${process.env.PORT || 3737}`
+        const apiKey = req.headers['x-api-key'] as string || req.headers.authorization?.replace('Bearer ', '') || ''
+        const [eoyResp, boyResp] = await Promise.all([
+          fetch(`${API_BASE}/api/qbo/${taxReturn.entity_id}/financials?year=${taxReturn.tax_year}`, {
+            headers: { 'x-api-key': apiKey },
+          }),
+          fetch(`${API_BASE}/api/qbo/${taxReturn.entity_id}/financials?year=${taxReturn.tax_year - 1}`, {
+            headers: { 'x-api-key': apiKey },
+          }),
+        ])
+        const eoyData = await eoyResp.json() as any
+        const boyData = await boyResp.json() as any
+        const eoyBs = eoyData?.balance_sheet?.items || {}
+        const boyBs = boyData?.balance_sheet?.items || {}
+        if (Object.keys(eoyBs).length > 0) {
+          schedLOverrides = buildScheduleL(eoyBs, boyBs)
+        }
+      }
+    } catch (e: any) {
+      console.error('QBO Schedule L failed:', e.message)
+    }
+
     // Build the full package using the tested builder
     const { pdf, filled, pages, forms } = await buildReturnPdf({
       formType: taxReturn.form_type,
@@ -620,7 +649,7 @@ print(json.dumps({'url': url}))
       entity: entityData,
       inputData: taxReturn.input_data,
       computedData: taxReturn.computed_data?.computed,
-      fieldValues: taxReturn.field_values,
+      fieldValues: { ...taxReturn.field_values, ...schedLOverrides },
       textractKvs,
     })
 
