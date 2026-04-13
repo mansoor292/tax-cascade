@@ -18,6 +18,8 @@
 
 import express from 'express'
 import cors from 'cors'
+import crypto from 'crypto'
+import { execSync } from 'child_process'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { runPython } from './lib/run_python.js'
 import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib'
@@ -39,6 +41,37 @@ const app = express()
 app.use(cors())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.static('public'))
+
+// ─── Deploy webhook (public — verified by GitHub signature) ───
+const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || ''
+
+app.post('/deploy', express.raw({ type: 'application/json' }), (req, res) => {
+  if (!WEBHOOK_SECRET) return res.status(500).json({ error: 'Webhook secret not configured' })
+
+  const sig = req.headers['x-hub-signature-256'] as string
+  if (!sig) return res.status(401).json({ error: 'Missing signature' })
+
+  const expected = 'sha256=' + crypto.createHmac('sha256', WEBHOOK_SECRET).update(req.body).digest('hex')
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+    return res.status(401).json({ error: 'Invalid signature' })
+  }
+
+  const payload = JSON.parse(req.body.toString())
+  if (payload.ref !== 'refs/heads/main') {
+    return res.json({ skipped: true, reason: `Push to ${payload.ref}, not main` })
+  }
+
+  // Pull and restart in background
+  res.json({ deploying: true, commit: payload.head_commit?.id?.slice(0, 7) })
+
+  const cmd = 'cd /opt/tax-api && git pull && cd packages/api && npm install --include=dev && pm2 restart tax-api'
+  try {
+    execSync(cmd, { timeout: 120000 })
+    console.log('Deploy succeeded:', payload.head_commit?.message)
+  } catch (e: any) {
+    console.error('Deploy failed:', e.message)
+  }
+})
 
 // ─── Auth routes (public — no API key needed) ───
 app.use('/auth', authRoutes)
