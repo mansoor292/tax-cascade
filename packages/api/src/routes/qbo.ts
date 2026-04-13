@@ -115,6 +115,31 @@ async function qboFetch(entityId: string, path: string, query?: Record<string, s
   return resp.json()
 }
 
+async function qboPost(entityId: string, path: string, body: any, query?: Record<string, string>): Promise<any> {
+  const auth = await getAccessToken(entityId)
+  if (!auth) throw new Error('No active QBO connection for this entity')
+
+  const qs = query ? '?' + new URLSearchParams(query).toString() : ''
+  const url = `${QBO_BASE}/v3/company/${auth.realmId}${path}${qs}`
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${auth.token}`,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!resp.ok) {
+    const text = await resp.text()
+    throw new Error(`QBO API ${resp.status}: ${text}`)
+  }
+
+  return resp.json()
+}
+
 const router = Router()
 
 // ─── OAuth: Start connection ───
@@ -648,6 +673,110 @@ router.get('/:entity_id/transactions', async (req, res) => {
       account_filter: account || 'all',
       transactions,
     })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ─── Generic CRUD for any QBO resource ───
+const QBO_RESOURCES = [
+  'Account', 'Bill', 'BillPayment', 'Budget', 'Class', 'CreditMemo',
+  'Customer', 'Department', 'Deposit', 'Employee', 'Estimate',
+  'Invoice', 'Item', 'JournalEntry', 'Payment', 'PaymentMethod',
+  'Purchase', 'PurchaseOrder', 'RefundReceipt', 'SalesReceipt',
+  'TaxCode', 'TaxRate', 'Term', 'TimeActivity', 'Transfer', 'Vendor', 'VendorCredit',
+]
+
+// Read: GET /api/qbo/:entity_id/resource/:resource/:id
+router.get('/:entity_id/resource/:resource/:id', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const resource = req.params.resource.toLowerCase()
+  const matched = QBO_RESOURCES.find(r => r.toLowerCase() === resource)
+  if (!matched) return res.status(400).json({ error: `Unknown resource: ${resource}`, available: QBO_RESOURCES })
+
+  try {
+    const data = await qboFetch(req.params.entity_id, `/${resource}/${req.params.id}`)
+    res.json(data)
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Search: GET /api/qbo/:entity_id/resource/:resource?where=...&orderby=...&limit=...
+router.get('/:entity_id/resource/:resource', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const resource = req.params.resource.toLowerCase()
+  const matched = QBO_RESOURCES.find(r => r.toLowerCase() === resource)
+  if (!matched) return res.status(400).json({ error: `Unknown resource: ${resource}`, available: QBO_RESOURCES })
+
+  const where = req.query.where as string || ''
+  const orderby = req.query.orderby as string || ''
+  const limit = req.query.limit as string || '100'
+
+  let sql = `SELECT * FROM ${matched}`
+  if (where) sql += ` WHERE ${where}`
+  if (orderby) sql += ` ORDERBY ${orderby}`
+  sql += ` MAXRESULTS ${limit}`
+
+  try {
+    const data = await qboFetch(req.params.entity_id, '/query', { query: sql })
+    const items = data?.QueryResponse?.[matched] || []
+    res.json({ count: items.length, resource: matched, items })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Create: POST /api/qbo/:entity_id/resource/:resource
+router.post('/:entity_id/resource/:resource', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const resource = req.params.resource.toLowerCase()
+  const matched = QBO_RESOURCES.find(r => r.toLowerCase() === resource)
+  if (!matched) return res.status(400).json({ error: `Unknown resource: ${resource}`, available: QBO_RESOURCES })
+
+  try {
+    const data = await qboPost(req.params.entity_id, `/${resource}`, req.body)
+    res.json(data)
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Update: PUT /api/qbo/:entity_id/resource/:resource
+router.put('/:entity_id/resource/:resource', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const resource = req.params.resource.toLowerCase()
+  const matched = QBO_RESOURCES.find(r => r.toLowerCase() === resource)
+  if (!matched) return res.status(400).json({ error: `Unknown resource: ${resource}`, available: QBO_RESOURCES })
+
+  try {
+    const data = await qboPost(req.params.entity_id, `/${resource}`, req.body, { operation: 'update' })
+    res.json(data)
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Delete: DELETE /api/qbo/:entity_id/resource/:resource
+router.delete('/:entity_id/resource/:resource', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const resource = req.params.resource.toLowerCase()
+  const matched = QBO_RESOURCES.find(r => r.toLowerCase() === resource)
+  if (!matched) return res.status(400).json({ error: `Unknown resource: ${resource}`, available: QBO_RESOURCES })
+
+  try {
+    const data = await qboPost(req.params.entity_id, `/${resource}?operation=delete`, req.body)
+    res.json(data)
   } catch (e: any) {
     res.status(500).json({ error: e.message })
   }

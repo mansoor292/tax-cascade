@@ -85,8 +85,10 @@ const INSTRUCTIONS = `You help users prepare and optimize tax returns using the 
 - get_qbo_report: any report — P&L detail, balance sheet detail, trial balance, GL, cash flow, transaction list, AR/AP aging, vendor/customer balances. All cached in DB.
 - get_accounts: chart of accounts with balances — use to find account names for filtering
 - get_transactions: search transactions by account, date range, or year. Returns individual line items.
+- qbo_resource: CRUD any QBO resource (Invoice, Customer, Bill, Vendor, Employee, JournalEntry, etc). Search with WHERE/ORDERBY, or create/update/delete.
 - qbo_query: raw QBO SQL for anything else
 - IMPORTANT: Reports and transactions are cached in the database. Claude can query them anytime without re-fetching from QBO. Use refresh=true only when the user asks for fresh data.
+- For QBO resource operations, use standard QBO API field names (e.g. DisplayName, TotalAmt, TxnDate).
 
 ## Rules
 - Never fabricate financial data — ask the user for missing values
@@ -356,6 +358,36 @@ function createServer(apiKey: string): McpServer {
     if (start_date) qs.set('start_date', start_date)
     if (end_date) qs.set('end_date', end_date)
     return text(await call('GET', `/api/qbo/${entity_id}/transactions?${qs}`))
+  })
+
+  // ─── Tool: qbo_resource ───
+  server.tool('qbo_resource', 'CRUD any QuickBooks resource (Invoice, Customer, Bill, Vendor, Employee, JournalEntry, Purchase, Estimate, Account, Item, Payment, etc). Supports read, search, create, update, delete.', {
+    entity_id: z.string().describe('Entity UUID'),
+    operation: z.enum(['read', 'search', 'create', 'update', 'delete']).describe('CRUD operation'),
+    resource: z.string().describe('QBO resource type: Invoice, Customer, Bill, Vendor, Employee, JournalEntry, Purchase, Estimate, Account, Item, Payment, SalesReceipt, CreditMemo, Deposit, Transfer, etc.'),
+    id: z.string().optional().describe('Resource ID (for read)'),
+    where: z.string().optional().describe('WHERE clause for search (e.g. "TotalAmt > \'1000\'" or "DisplayName LIKE \'%Smith%\'")'),
+    orderby: z.string().optional().describe('ORDER BY for search (e.g. "TxnDate DESC")'),
+    limit: z.number().optional().describe('Max results for search (default 100)'),
+    data: z.record(z.any()).optional().describe('Resource data for create/update/delete (QBO API format)'),
+  }, async ({ entity_id, operation, resource, id, where, orderby, limit, data }) => {
+    if (operation === 'read') {
+      if (!id) return text({ error: 'id is required for read' })
+      return text(await call('GET', `/api/qbo/${entity_id}/resource/${resource}/${id}`))
+    } else if (operation === 'search') {
+      const qs = new URLSearchParams()
+      if (where) qs.set('where', where)
+      if (orderby) qs.set('orderby', orderby)
+      if (limit) qs.set('limit', String(limit))
+      return text(await call('GET', `/api/qbo/${entity_id}/resource/${resource}?${qs}`))
+    } else if (operation === 'create') {
+      return text(await call('POST', `/api/qbo/${entity_id}/resource/${resource}`, data || {}))
+    } else if (operation === 'update') {
+      return text(await call('PUT', `/api/qbo/${entity_id}/resource/${resource}`, data || {}))
+    } else if (operation === 'delete') {
+      return text(await call('DELETE', `/api/qbo/${entity_id}/resource/${resource}`, data || {}))
+    }
+    return text({ error: 'Invalid operation' })
   })
 
   // ─── Tool: qbo_status ───
