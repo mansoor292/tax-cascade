@@ -238,6 +238,18 @@ async function fillScheduleG(
   setField(form, 'f1_1_0_', entity.name)
   setField(form, 'f1_3_0_', entity.ein)
 
+  // Fill owners from entity.meta.owners
+  const owners = entity.meta?.owners as Array<{ name: string; ssn: string; country: string; pct: string }> | undefined
+  if (owners) {
+    for (let i = 0; i < Math.min(owners.length, 4); i++) {
+      const o = owners[i]
+      setField(form, `f1_${4 + i * 4}_0_`, o.name)
+      setField(form, `f1_${5 + i * 4}_0_`, o.ssn)
+      setField(form, `f1_${6 + i * 4}_0_`, o.country)
+      setField(form, `f1_${7 + i * 4}_0_`, o.pct)
+    }
+  }
+
   return pdf
 }
 
@@ -328,15 +340,78 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
   if (!main) throw new Error(`No blank PDF for ${formName} ${taxYear}`)
   forms.push(`Form ${formType}`)
 
-  // 2. Check Schedule K checkboxes (1120 only)
-  if (formType === '1120') {
+  // 2. Schedule K checkboxes + ownership + title (from entity.meta)
+  if (formType === '1120' || formType === '1120S') {
     const mainForm = main.pdf.getForm()
-    for (const f of mainForm.getFields()) {
-      if (!(f instanceof PDFCheckBox)) continue
-      const name = f.getName()
-      // Accrual method
-      if (name.includes('c4_1[1]')) f.check()
+    const schedK = entity.meta?.sched_k as Record<string, string> | undefined
+
+    if (schedK) {
+      // Checkbox mapping: Schedule K question → [page prefix, checkbox index, yes=0/no=1]
+      const checkboxMap: Record<string, [string, number]> = {
+        // Page 4 (c4_): K1 method, K3-K7
+        'K1_method':          ['c4_1', 1],  // [1] = accrual
+        'K3_subsidiary':      ['c4_2', -1],
+        'K4a_foreign_own':    ['c4_3', -1],
+        'K4b_individual_own': ['c4_4', -1],
+        'K5a_own_foreign':    ['c4_5', -1],
+        'K5b_own_partnership':['c4_6', -1],
+        'K6_dividends':       ['c4_7', -1],
+        'K7_foreign_25pct':   ['c4_8', -1],
+        // Page 5 (c5_): K13-K31
+        'K13_receipts_250k':  ['c5_1', -1],
+        'K14_utp':            ['c5_2', -1],
+        'K15a_1099':          ['c5_3', -1],
+        'K16_ownership_change':['c5_4', -1],
+        'K17_dispose_65pct':  ['c5_5', -1],
+        'K18_351_transfer':   ['c5_6', -1],
+        'K19_payments':       ['c5_7', -1],
+        'K20_cooperative':    ['c5_8', -1],
+        'K21_267a':           ['c5_9', -1],
+        'K22_500m':           ['c5_10', -1],
+        'K23_163j':           ['c5_11', -1],
+        'K24_8990':           ['c5_12', -1],
+        'K25_qof':            ['c5_13', -1],
+        'K26_foreign_acq':    ['c5_14', -1],
+        'K27_digital_asset':  ['c5_15', -1],
+        'K28_controlled_group':['c5_16', -1],
+        'K29a_59k':           ['c5_17', -1],
+        'K29c_safe_harbor':   ['c5_18', -1],
+        'K30a_repurchase':    ['c5_19', -1],
+        'K30b_foreign_corp':  ['c5_20', -1],
+        'K31_consolidated':   ['c5_21', -1],
+      }
+
+      for (const f of mainForm.getFields()) {
+        if (!(f instanceof PDFCheckBox)) continue
+        const name = f.getName()
+
+        for (const [key, [prefix, defaultIdx]] of Object.entries(checkboxMap)) {
+          const answer = schedK[key]
+          if (!answer) continue
+          // [0] = Yes, [1] = No (for most checkboxes)
+          if (key === 'K1_method') {
+            // Special: [0]=cash, [1]=accrual, [2]=other
+            if (answer === 'accrual' && name.includes(`${prefix}[1]`)) f.check()
+            if (answer === 'cash' && name.includes(`${prefix}[0]`)) f.check()
+          } else {
+            const yesIdx = 0, noIdx = 1
+            if (answer === 'yes' && name.includes(`${prefix}[${yesIdx}]`)) f.check()
+            if (answer === 'no' && name.includes(`${prefix}[${noIdx}]`)) f.check()
+          }
+        }
+      }
     }
+
+    // Title (e.g. "PRESIDENT")
+    if (entity.meta?.title) {
+      setField(mainForm, 'f1_56', entity.meta.title)  // 2024 field ID
+      setField(mainForm, 'f1_58', entity.meta.title)  // 2025 field ID
+    }
+  }
+
+  // Fill Schedule G with owners (if available)
+  if (formType === '1120' && entity.meta?.owners) {
+    // Will be filled in the fillScheduleG function below
   }
 
   // 3. Build package with supporting forms
