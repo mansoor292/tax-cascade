@@ -62,6 +62,12 @@ const INSTRUCTIONS = `You help users prepare and optimize tax returns using the 
 - promote_scenario: finalize a scenario into an official return
 - compute_cascade: S-Corp → K-1 → 1040 pass-through in one call
 
+## Extensions
+- validate_extension: check extension inputs before filing
+- file_extension: file Form 4868 (individual), 7004 (business), or 8868 (exempt org)
+- Call get_schema with form_type 4868/7004/8868 to see required fields
+- Extensions can generate a filled PDF and save to the entity
+
 ## Output
 - get_pdf: generate filled IRS PDF with download URL
 - compare_returns: year-over-year comparison for an entity
@@ -317,6 +323,27 @@ function createServer(apiKey: string): McpServer {
     entity_id: z.string().describe('Entity UUID'),
   }, async ({ entity_id }) => {
     return text(await call('GET', `/api/qbo/${entity_id}/status`))
+  })
+
+  // ─── Tool: file_extension ───
+  server.tool('file_extension', 'File a tax extension (Form 4868 for individuals, 7004 for businesses, 8868 for exempt orgs). Can generate a filled PDF.', {
+    extension_type: z.enum(['4868', '7004', '8868']).describe('4868=individual, 7004=business (1120/1120S/1065), 8868=exempt org'),
+    tax_year: z.number().optional().describe('Tax year (default 2025)'),
+    inputs: z.record(z.any()).describe('Extension form fields — call get_schema with the form type to see required fields'),
+    entity_id: z.string().optional().describe('Entity UUID to save the extension against'),
+    generate_pdf: z.boolean().optional().describe('Generate a filled PDF (default false)'),
+  }, async ({ extension_type, tax_year, inputs, entity_id, generate_pdf }) => {
+    return text(await call('POST', '/api/returns/extension', {
+      extension_type, tax_year: tax_year || 2025, inputs, entity_id, generate_pdf,
+    }))
+  })
+
+  // ─── Tool: validate_extension ───
+  server.tool('validate_extension', 'Validate extension form inputs before filing', {
+    extension_type: z.enum(['4868', '7004', '8868']).describe('4868=individual, 7004=business, 8868=exempt org'),
+    inputs: z.record(z.any()).describe('Extension form fields'),
+  }, async ({ extension_type, inputs }) => {
+    return text(await call('POST', '/api/returns/extension/validate', { extension_type, inputs }))
   })
 
   return server
