@@ -32,6 +32,7 @@ import documentRoutes from './routes/documents.js'
 import returnRoutes from './routes/returns.js'
 import entityRoutes from './routes/entities.js'
 import schemaRoutes from './routes/schema.js'
+import qboRoutes from './routes/qbo.js'
 import discoveryRoutes from './discovery/discovery_routes.js'
 
 const app = express()
@@ -80,6 +81,7 @@ app.use('/api/documents', documentRoutes)
 app.use('/api/returns', returnRoutes)
 app.use('/api/entities', entityRoutes)
 app.use('/api/schema', schemaRoutes)
+app.use('/api/qbo', qboRoutes)
 app.use('/api/discover', discoveryRoutes)
 
 // ─── Health ───

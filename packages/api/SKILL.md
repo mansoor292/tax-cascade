@@ -27,8 +27,15 @@ For detailed input specs: `GET /api/schema/:form_type/:year`
 ## Validation
 Before computing, call `POST /api/returns/validate` with `{ form_type, tax_year, inputs }`. It returns errors and warnings without running the engine. Relay errors to the user in plain language.
 
-## QuickBooks Bridge
-When the user has QBO connected, call `GET /api/schema/:form_type/qbo-mapping` to get P&L category → tax field mappings. Pull QBO P&L data and auto-map before asking for manual input.
+## QuickBooks Integration
+1. **Check status**: `GET /api/qbo/:entity_id/status` — is QBO connected?
+2. **Connect**: `GET /api/qbo/connect/:entity_id` — returns `auth_url` for user to click
+3. **Pull financials**: `GET /api/qbo/:entity_id/financials?year=2025` — unified P&L + Balance Sheet summary
+4. **Individual reports**: `GET /api/qbo/:entity_id/reports/profit-and-loss?start_date=2025-01-01&end_date=2025-12-31`
+5. **Map to tax inputs**: `GET /api/schema/:form_type/qbo-mapping` — get P&L → tax field mappings
+6. **Raw query**: `GET /api/qbo/:entity_id/query?q=SELECT * FROM Account`
+
+When QBO is connected, pull financials first and auto-map before asking user for manual input.
 
 ## Rules
 - Never fabricate financial data — ask for missing values

@@ -177,6 +177,15 @@ router.get('/', (_req, res) => {
         '1120s': 'POST /api/compute/1120s',
         cascade: 'POST /api/compute/cascade',
       },
+      quickbooks: {
+        connect: 'GET /api/qbo/connect/:entity_id — returns auth_url for OAuth',
+        callback: 'GET /api/qbo/callback — OAuth redirect (automatic)',
+        status: 'GET /api/qbo/:entity_id/status',
+        disconnect: 'DELETE /api/qbo/:entity_id/disconnect',
+        financials: 'GET /api/qbo/:entity_id/financials?year=YYYY — unified P&L + Balance Sheet',
+        reports: 'GET /api/qbo/:entity_id/reports/:report — profit-and-loss, balance-sheet, trial-balance, general-ledger, cash-flow',
+        query: 'GET /api/qbo/:entity_id/query?q=SELECT... — raw QBO query',
+      },
     },
     auth: {
       method: 'API key via x-api-key header',
