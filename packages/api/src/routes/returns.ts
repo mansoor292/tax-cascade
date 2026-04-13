@@ -644,16 +644,34 @@ print(json.dumps({'url': url}))
       console.error('QBO Schedule L failed:', e.message)
     }
 
-    // Build the full package using the tested builder
-    const { pdf, filled, pages, forms } = await buildReturnPdf({
-      formType: taxReturn.form_type,
-      taxYear: taxReturn.tax_year,
-      entity: entityData,
-      inputData: taxReturn.input_data,
-      computedData: taxReturn.computed_data?.computed,
-      fieldValues: { ...taxReturn.field_values, ...schedLOverrides },
-      textractKvs,
-    })
+    // Build PDF — dispatch to extension builder or return builder
+    const isExtension = ['4868', '7004', '8868'].includes(taxReturn.form_type)
+    let pdf: any, filled: number, pages: number, forms: string[]
+
+    if (isExtension) {
+      const { buildExtensionPdf } = await import('../builders/build_extension.js')
+      const extInputs = {
+        extension_type: taxReturn.form_type as any,
+        tax_year: taxReturn.tax_year,
+        ...taxReturn.input_data,
+      }
+      const extResult = await buildExtensionPdf(extInputs, taxReturn.tax_year)
+      pdf = extResult.pdf
+      filled = extResult.filled
+      pages = pdf.getPageCount()
+      forms = [`Form ${taxReturn.form_type}`]
+    } else {
+      const result = await buildReturnPdf({
+        formType: taxReturn.form_type,
+        taxYear: taxReturn.tax_year,
+        entity: entityData,
+        inputData: taxReturn.input_data,
+        computedData: taxReturn.computed_data?.computed,
+        fieldValues: { ...taxReturn.field_values, ...schedLOverrides },
+        textractKvs,
+      })
+      pdf = result.pdf; filled = result.filled; pages = result.pages; forms = result.forms
+    }
 
     // Upload to S3
     const pdfBytes = await pdf.save()
