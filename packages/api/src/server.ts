@@ -47,8 +47,9 @@ app.use('/auth', authRoutes)
 const STATIC_KEYS = new Set((process.env.TAX_API_KEYS || 'test-key-2026').split(','))
 
 app.use('/api', async (req, res, next) => {
-  // Health check is public
+  // Public routes — no API key needed
   if (req.path === '/health') return next()
+  if (req.path === '/qbo/callback') return next()
   // Auth routes are separate
   const key = req.headers['x-api-key'] || req.query.api_key as string
   if (!key) {
