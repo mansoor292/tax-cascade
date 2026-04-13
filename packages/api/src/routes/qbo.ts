@@ -13,6 +13,7 @@
 import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 
+const API_BASE_URL = process.env.API_BASE_URL || 'https://tax-api.catalogshub.com'
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
@@ -129,8 +130,7 @@ router.get('/connect/:entity_id', async (req, res) => {
   if (!entity) return res.status(404).json({ error: 'Entity not found' })
 
   // Build the redirect URI — callback comes back to this API
-  const apiBase = `${req.protocol}://${req.get('host')}`
-  const redirectUri = `${apiBase}/api/qbo/callback`
+  const redirectUri = `${API_BASE_URL}/api/qbo/callback`
 
   // State encodes entity_id + user_id so callback can link them
   const state = Buffer.from(JSON.stringify({
@@ -169,8 +169,7 @@ router.get('/callback', async (req, res) => {
   }
 
   // Exchange code for tokens
-  const apiBase = `${req.protocol}://${req.get('host')}`
-  const redirectUri = `${apiBase}/api/qbo/callback`
+  const redirectUri = `${API_BASE_URL}/api/qbo/callback`
 
   const tokenResp = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
     method: 'POST',
