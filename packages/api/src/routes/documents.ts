@@ -9,9 +9,9 @@
  */
 import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
-import { execSync } from 'child_process'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
+import { runPython } from '../lib/run_python.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -45,7 +45,6 @@ router.get('/presign', async (req, res) => {
   }
 
   try {
-    const pythonBin = process.env.PYTHON_BIN || 'python3'
     const script = `
 import boto3, json
 s3 = boto3.client('s3', region_name='us-east-1')
@@ -56,7 +55,7 @@ url = s3.generate_presigned_url('put_object', Params={
 }, ExpiresIn=300)
 print(json.dumps({'url': url, 'key': '${s3Key}'}))
 `
-    const result = execSync(`${pythonBin} -c "${script}"`, { timeout: 10000, encoding: 'utf-8' })
+    const result = runPython(script, { timeout: 10000 })
     const { url, key } = JSON.parse(result.trim())
 
     res.json({
@@ -81,7 +80,6 @@ router.get('/:id/download', async (req, res) => {
   if (!doc) return res.status(404).json({ error: 'Not found' })
 
   try {
-    const pythonBin = process.env.PYTHON_BIN || 'python3'
     const script = `
 import boto3, json
 s3 = boto3.client('s3', region_name='us-east-1')
@@ -90,7 +88,7 @@ url = s3.generate_presigned_url('get_object', Params={
 }, ExpiresIn=3600)
 print(json.dumps({'url': url}))
 `
-    const result = execSync(`${pythonBin} -c "${script}"`, { timeout: 10000, encoding: 'utf-8' })
+    const result = runPython(script, { timeout: 10000 })
     res.json(JSON.parse(result.trim()))
   } catch (e: any) {
     res.status(500).json({ error: e.message })
@@ -114,7 +112,6 @@ router.post('/register', async (req, res) => {
   if (GEMINI_KEY && ['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
     try {
       // Download from S3 for Gemini
-      const pythonBin = process.env.PYTHON_BIN || 'python3'
       const dlScript = `
 import boto3, base64, json
 s3 = boto3.client('s3', region_name='us-east-1')
@@ -122,7 +119,7 @@ obj = s3.get_object(Bucket='${S3_BUCKET}', Key='${s3_key}')
 data = obj['Body'].read()
 print(base64.b64encode(data).decode())
 `
-      const base64 = execSync(`${pythonBin} -c "${dlScript}"`, { timeout: 30000, encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }).trim()
+      const base64 = runPython(dlScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })
 
       const genAI = new GoogleGenerativeAI(GEMINI_KEY)
       const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
@@ -152,7 +149,6 @@ print(base64.b64encode(data).decode())
   let textractData: any = null
   if (['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
     try {
-      const pythonBin = process.env.PYTHON_BIN || 'python3'
       const txScript = `
 import boto3, json, time
 textract = boto3.client('textract', region_name='us-east-1')
@@ -200,9 +196,7 @@ for kid, kb in km.items():
 np = sum(1 for b in blocks if b['BlockType'] == 'PAGE')
 print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
 `
-      const txResult = execSync(`${pythonBin} -c '${txScript.replace(/'/g, "\\'")}'`, {
-        timeout: 180000, encoding: 'utf-8'
-      })
+      const txResult = runPython(txScript, { timeout: 180000 })
       textractData = JSON.parse(txResult.trim())
     } catch (e: any) {
       console.error('Textract failed:', e.message)
@@ -343,14 +337,13 @@ router.post('/:id/categorize', async (req, res) => {
   }
 
   try {
-    const pythonBin = process.env.PYTHON_BIN || 'python3'
     const dlScript = `
 import boto3, base64
 s3 = boto3.client('s3', region_name='us-east-1')
 obj = s3.get_object(Bucket='${S3_BUCKET}', Key='${doc.s3_path}')
 print(base64.b64encode(obj['Body'].read()).decode())
 `
-    const base64 = execSync(`${pythonBin} -c "${dlScript}"`, { timeout: 30000, encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }).trim()
+    const base64 = runPython(dlScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })
 
     const genAI = new GoogleGenerativeAI(GEMINI_KEY)
     const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
@@ -438,7 +431,6 @@ router.post('/:id/extract', async (req, res) => {
   if (!doc) return res.status(404).json({ error: 'Not found' })
 
   try {
-    const pythonBin = process.env.PYTHON_BIN || 'python3'
     const script = `
 import boto3, json, time
 textract = boto3.client('textract', region_name='us-east-1')
@@ -486,10 +478,8 @@ for kid, kb in km.items():
 np = sum(1 for b in blocks if b['BlockType'] == 'PAGE')
 print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
 `
-    const result = execSync(`${pythonBin} -c '${script.replace(/'/g, "\\'")}'`, {
-      timeout: 120000, encoding: 'utf-8'
-    })
-    const textractData = JSON.parse(result.trim())
+    const result = runPython(script, { timeout: 120000 })
+    const textractData = JSON.parse(result)
 
     await client.from('document').update({
       textract_data: textractData,

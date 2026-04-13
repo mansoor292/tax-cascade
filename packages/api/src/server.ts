@@ -19,7 +19,7 @@
 import express from 'express'
 import cors from 'cors'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import { execSync } from 'child_process'
+import { runPython } from './lib/run_python.js'
 import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib'
 import { calc1120, calc1120S, calc1040, calcCascade } from './engine/tax_engine.js'
 import {
@@ -289,7 +289,6 @@ app.post('/api/verify', async (req, res) => {
     const { pdfPath, expected } = req.body  // pdfPath = local path, expected = {label: value}
 
     const s3Key = `verify/${Date.now()}_${pdfPath.split('/').pop()}`
-    const pythonBin = process.env.PYTHON_BIN || 'python3'
     const script = `
 import boto3, json, time, re
 s3 = boto3.client("s3", region_name="us-east-1")
@@ -330,9 +329,7 @@ for kid, kb in key_map.items():
     if kt or vt: kvs.append({"key": kt, "value": vt})
 print(json.dumps(kvs))
 `
-    const result = execSync(`${pythonBin} -c '${script.replace(/'/g, "\\'")}'`, {
-      timeout: 120000, encoding: 'utf-8', cwd: process.cwd()
-    })
+    const result = runPython(script, { timeout: 120000 })
     const kvs = JSON.parse(result.trim())
 
     // Compare against expected if provided
