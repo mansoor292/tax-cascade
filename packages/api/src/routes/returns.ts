@@ -11,6 +11,8 @@ import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
 import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
+import { TAX_TABLES } from '../engine/tax_tables.js'
+import { INPUT_SCHEMAS } from './schema.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -434,6 +436,222 @@ router.get('/compare/:entity_id', async (req, res) => {
     matrix,
     changes,
   })
+})
+
+// ─── Validate inputs before compute ───
+router.post('/validate', async (req, res) => {
+  const { form_type, tax_year, inputs } = req.body
+  const errors: Array<{field: string; message: string}> = []
+  const warnings: Array<{field: string; message: string}> = []
+
+  if (!form_type) errors.push({ field: 'form_type', message: 'form_type is required (1040, 1120, or 1120S)' })
+  if (!tax_year) errors.push({ field: 'tax_year', message: 'tax_year is required' })
+  if (!inputs || typeof inputs !== 'object') errors.push({ field: 'inputs', message: 'inputs object is required' })
+
+  if (errors.length) return res.json({ valid: false, errors, warnings })
+
+  if (!TAX_TABLES[tax_year]) {
+    errors.push({ field: 'tax_year', message: `No tax tables for year ${tax_year}. Supported: ${Object.keys(TAX_TABLES).join(', ')}` })
+  }
+
+  // Check required fields from schema
+  const schema = INPUT_SCHEMAS[form_type]
+  if (!schema) {
+    errors.push({ field: 'form_type', message: `Unknown form type: ${form_type}. Supported: ${Object.keys(INPUT_SCHEMAS).join(', ')}` })
+  } else {
+    for (const field of schema.fields) {
+      if (field.required && (inputs[field.name] === undefined || inputs[field.name] === null)) {
+        errors.push({ field: field.name, message: `${field.name} is required for Form ${form_type}` })
+      }
+      if (inputs[field.name] !== undefined && field.type === 'number' && typeof inputs[field.name] !== 'number') {
+        errors.push({ field: field.name, message: `${field.name} must be a number` })
+      }
+    }
+    // Warn about unknown fields
+    const knownFields = new Set(schema.fields.map((f: any) => f.name))
+    for (const key of Object.keys(inputs)) {
+      if (!knownFields.has(key)) {
+        warnings.push({ field: key, message: `Unknown field "${key}" — will be ignored` })
+      }
+    }
+  }
+
+  // 1040-specific: check filing_status
+  if (form_type === '1040' && inputs.filing_status) {
+    const valid = ['single', 'mfj', 'mfs', 'hoh', 'qw']
+    if (!valid.includes(inputs.filing_status)) {
+      errors.push({ field: 'filing_status', message: `filing_status must be one of: ${valid.join(', ')}` })
+    }
+  }
+
+  // 1120S-specific: check shareholders
+  if (form_type === '1120S' && inputs.shareholders) {
+    if (!Array.isArray(inputs.shareholders) || inputs.shareholders.length === 0) {
+      errors.push({ field: 'shareholders', message: 'shareholders must be a non-empty array of {name, pct}' })
+    } else {
+      const totalPct = inputs.shareholders.reduce((s: number, sh: any) => s + (sh.pct || 0), 0)
+      if (Math.abs(totalPct - 100) > 0.01) {
+        warnings.push({ field: 'shareholders', message: `Shareholder percentages sum to ${totalPct}%, expected 100%` })
+      }
+    }
+  }
+
+  res.json({ valid: errors.length === 0, errors, warnings })
+})
+
+// ─── Compute return from structured inputs ───
+router.post('/compute', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { entity_id, tax_year, form_type, inputs, save } = req.body
+  if (!form_type || !tax_year || !inputs) {
+    return res.status(400).json({ error: 'form_type, tax_year, and inputs are required' })
+  }
+
+  if (!TAX_TABLES[tax_year]) {
+    return res.status(400).json({ error: `No tax tables for year ${tax_year}` })
+  }
+
+  try {
+    let engineResult: any = null
+
+    if (form_type === '1120') {
+      engineResult = calc1120({ ...inputs, tax_year })
+    } else if (form_type === '1120S') {
+      engineResult = calc1120S(inputs)
+    } else if (form_type === '1040') {
+      engineResult = calc1040({ ...inputs, tax_year })
+    } else {
+      return res.status(400).json({ error: `Unsupported form_type: ${form_type}` })
+    }
+
+    let taxReturn = null
+    if (save !== false && entity_id) {
+      const { data, error } = await supabase.from('tax_return').upsert({
+        entity_id,
+        tax_year,
+        form_type,
+        status: 'computed',
+        is_amended: false,
+        input_data: inputs,
+        computed_data: engineResult,
+        computed_at: new Date().toISOString(),
+      }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
+
+      if (error) return res.status(500).json({ error: error.message })
+      taxReturn = data
+    }
+
+    res.json({
+      return_id: taxReturn?.id || null,
+      form_type,
+      tax_year,
+      saved: save !== false && !!entity_id,
+      computed: engineResult?.computed || engineResult,
+      citations: engineResult?.citations,
+    })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ─── Generate filled PDF and return download URL ───
+const S3_BUCKET = process.env.S3_BUCKET || 'tax-api-storage-2026'
+
+router.get('/:id/pdf', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  // Load the return
+  const { data: taxReturn } = await supabase.from('tax_return')
+    .select('*').eq('id', req.params.id).single()
+  if (!taxReturn) return res.status(404).json({ error: 'Return not found' })
+
+  // Verify ownership via entity
+  const { data: entity } = await supabase.from('tax_entity')
+    .select('user_id').eq('id', taxReturn.entity_id).single()
+  if (!entity || entity.user_id !== userId) return res.status(403).json({ error: 'Forbidden' })
+
+  // If we already have a cached PDF, return presigned URL
+  if (taxReturn.pdf_s3_path) {
+    try {
+      const { runPython } = await import('../lib/run_python.js')
+      const script = `
+import boto3, json
+s3 = boto3.client('s3', region_name='us-east-1')
+url = s3.generate_presigned_url('get_object', Params={
+    'Bucket': '${S3_BUCKET}', 'Key': '${taxReturn.pdf_s3_path}'
+}, ExpiresIn=3600)
+print(json.dumps({'url': url}))
+`
+      const result = runPython(script, { timeout: 10000 })
+      return res.json(JSON.parse(result.trim()))
+    } catch {}
+  }
+
+  // Generate the PDF
+  try {
+    const { PDFDocument, PDFTextField } = await import('pdf-lib')
+    const { readFileSync, existsSync } = await import('fs')
+    const { getCanonicalMap } = await import('../maps/field_maps.js')
+
+    const formName = taxReturn.form_type === '1120S' ? 'f1120s' : `f${taxReturn.form_type.toLowerCase()}`
+    const blankPath = `data/irs_forms/${formName}_${taxReturn.tax_year}.pdf`
+    if (!existsSync(blankPath)) {
+      return res.status(404).json({ error: `No blank PDF for ${formName} ${taxReturn.tax_year}` })
+    }
+
+    const pdf = await PDFDocument.load(readFileSync(blankPath))
+    const form = pdf.getForm()
+    const canonMap = getCanonicalMap(formName, taxReturn.tax_year)
+
+    // Fill from computed data + input data
+    const data = { ...taxReturn.input_data, ...taxReturn.computed_data?.computed }
+    let filled = 0
+    for (const [label, fieldId] of Object.entries(canonMap)) {
+      const value = data[label]
+      if (value === undefined || value === null) continue
+      for (const f of form.getFields()) {
+        if (f.getName().includes(fieldId + '[') && f instanceof PDFTextField) {
+          const str = typeof value === 'number' ? value.toLocaleString() : String(value)
+          const ml = f.getMaxLength()
+          if (ml !== undefined && str.length > ml) f.setMaxLength(str.length)
+          f.setText(str)
+          filled++
+          break
+        }
+      }
+    }
+
+    // Upload to S3
+    const pdfBytes = await pdf.save()
+    const s3Key = `returns/${userId}/${taxReturn.id}.pdf`
+
+    const { runPython } = await import('../lib/run_python.js')
+    const { writeFileSync, mkdirSync } = await import('fs')
+    const tmpPath = `/tmp/${taxReturn.id}.pdf`
+    writeFileSync(tmpPath, Buffer.from(pdfBytes))
+
+    const uploadScript = `
+import boto3, json
+s3 = boto3.client('s3', region_name='us-east-1')
+s3.upload_file('${tmpPath}', '${S3_BUCKET}', '${s3Key}', ExtraArgs={'ContentType': 'application/pdf'})
+url = s3.generate_presigned_url('get_object', Params={
+    'Bucket': '${S3_BUCKET}', 'Key': '${s3Key}'
+}, ExpiresIn=3600)
+print(json.dumps({'url': url}))
+`
+    const result = runPython(uploadScript, { timeout: 30000 })
+    const { url } = JSON.parse(result.trim())
+
+    // Cache the S3 path on the return
+    await supabase.from('tax_return').update({ pdf_s3_path: s3Key }).eq('id', req.params.id)
+
+    res.json({ url, filled, form: formName, year: taxReturn.tax_year })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
 })
 
 export default router

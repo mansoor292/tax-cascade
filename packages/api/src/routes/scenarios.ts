@@ -207,4 +207,41 @@ Keep it under 600 words.`
   }
 })
 
+// Promote scenario to a tax return
+router.post('/:id/promote', async (req, res) => {
+  const userId = (req as any).userId
+  const { data: scenario } = await sb(req)
+    .from('scenario').select('*, tax_entity(form_type)')
+    .eq('id', req.params.id).eq('user_id', userId).single()
+
+  if (!scenario) return res.status(404).json({ error: 'Scenario not found' })
+  if (!scenario.computed_result) return res.status(400).json({ error: 'Scenario must be computed before promoting' })
+
+  const formType = scenario.tax_entity?.form_type || scenario.adjustments?.form_type
+  if (!formType) return res.status(400).json({ error: 'Cannot determine form_type for this scenario' })
+
+  const supabase = sb(req)
+
+  // Create tax_return from scenario
+  const { data: taxReturn, error } = await supabase.from('tax_return').upsert({
+    entity_id: scenario.entity_id,
+    tax_year: scenario.tax_year,
+    form_type: formType,
+    status: 'computed',
+    is_amended: false,
+    input_data: scenario.adjustments,
+    computed_data: scenario.computed_result,
+    computed_at: new Date().toISOString(),
+  }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
+
+  if (error) return res.status(500).json({ error: error.message })
+
+  // Mark scenario as promoted
+  await supabase.from('scenario').update({
+    status: 'promoted', updated_at: new Date().toISOString(),
+  }).eq('id', req.params.id)
+
+  res.json({ scenario_id: req.params.id, return_id: taxReturn?.id, status: 'promoted' })
+})
+
 export default router
