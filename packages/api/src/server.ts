@@ -30,6 +30,7 @@ import authRoutes, { supabase } from './routes/auth.js'
 import scenarioRoutes from './routes/scenarios.js'
 import documentRoutes from './routes/documents.js'
 import returnRoutes from './routes/returns.js'
+import discoveryRoutes from './discovery/discovery_routes.js'
 
 const app = express()
 app.use(cors())
@@ -75,6 +76,7 @@ app.use('/api', async (req, res, next) => {
 app.use('/api/scenarios', scenarioRoutes)
 app.use('/api/documents', documentRoutes)
 app.use('/api/returns', returnRoutes)
+app.use('/api/discover', discoveryRoutes)
 
 // ─── Health ───
 app.get('/api/health', (_req, res) => {

@@ -319,10 +319,35 @@ print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
     }
   }
 
+  // Auto-trigger discovery if form/year has no field map
+  let discoveryStarted = false
+  if (isReturn && classification.tax_year) {
+    try {
+      const { hasFieldMap } = await import('../maps/field_maps.js')
+      const formNameMap: Record<string, string> = {
+        prior_return_1040: 'f1040', prior_return_1120: 'f1120', prior_return_1120s: 'f1120s',
+      }
+      const irsFormName = formNameMap[classification.doc_type]
+      if (irsFormName && !hasFieldMap(irsFormName, classification.tax_year)) {
+        const { discoverForm } = await import('../discovery/form_discovery.js')
+        discoveryStarted = true
+        // Run in background — don't await
+        discoverForm(irsFormName, classification.tax_year).then(result => {
+          console.log(`Auto-discovery ${irsFormName}/${classification.tax_year}: ${result.status}`)
+        }).catch(err => {
+          console.error(`Auto-discovery ${irsFormName}/${classification.tax_year} error:`, err.message)
+        })
+      }
+    } catch (e: any) {
+      console.error('Discovery check failed:', e.message)
+    }
+  }
+
   res.json({
     document: doc, classification,
     textract: textractData ? { num_pages: textractData.num_pages, num_fields: textractData.kvs?.length } : null,
     processed_return: processedReturn,
+    discovery_started: discoveryStarted,
   })
 })
 

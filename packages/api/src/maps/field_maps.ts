@@ -13,12 +13,17 @@
  * NO fuzzy logic on output. Lookup is deterministic.
  */
 
-import { readFileSync, readdirSync } from 'fs'
+import { readFileSync, readdirSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { createClient } from '@supabase/supabase-js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = join(__dirname, '../../data/field_maps')
+
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
+const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
 interface FieldEntry {
   page: number
@@ -29,16 +34,68 @@ interface FieldEntry {
 // Cache loaded maps
 const cache: Record<string, FieldEntry[]> = {}
 
+/**
+ * Invalidate a cached field map so it reloads on next access.
+ */
+export function invalidateCache(formYear: string) {
+  delete cache[formYear]
+}
+
+async function loadMapFromSupabase(formName: string, year: number): Promise<FieldEntry[]> {
+  const { data } = await supabase.from('field_map')
+    .select('page, field_id, label')
+    .eq('form_name', formName)
+    .eq('tax_year', year)
+    .order('page')
+    .order('field_id')
+  return (data as FieldEntry[]) || []
+}
+
 function loadMap(formYear: string): FieldEntry[] {
   if (!cache[formYear]) {
-    try {
-      const raw = readFileSync(join(DATA_DIR, `${formYear}_fields.json`), 'utf-8')
-      cache[formYear] = JSON.parse(raw)
-    } catch {
+    const jsonPath = join(DATA_DIR, `${formYear}_fields.json`)
+    if (existsSync(jsonPath)) {
+      try {
+        const raw = readFileSync(jsonPath, 'utf-8')
+        cache[formYear] = JSON.parse(raw)
+      } catch {
+        cache[formYear] = []
+      }
+    } else {
+      // Will try Supabase fallback via async path
       cache[formYear] = []
     }
   }
   return cache[formYear]
+}
+
+/**
+ * Load field map with Supabase fallback if JSON file is missing.
+ */
+async function loadMapAsync(formYear: string): Promise<FieldEntry[]> {
+  if (cache[formYear]?.length) return cache[formYear]
+
+  const jsonPath = join(DATA_DIR, `${formYear}_fields.json`)
+  if (existsSync(jsonPath)) {
+    try {
+      const raw = readFileSync(jsonPath, 'utf-8')
+      cache[formYear] = JSON.parse(raw)
+      return cache[formYear]
+    } catch {}
+  }
+
+  // Supabase fallback — parse "formName_year" from formYear
+  const match = formYear.match(/^(.+)_(\d+)$/)
+  if (match) {
+    const entries = await loadMapFromSupabase(match[1], parseInt(match[2]))
+    if (entries.length) {
+      cache[formYear] = entries
+      return entries
+    }
+  }
+
+  cache[formYear] = []
+  return []
 }
 
 /**
@@ -47,6 +104,22 @@ function loadMap(formYear: string): FieldEntry[] {
  */
 export function getFieldMap(form: string, year: number): FieldEntry[] {
   return loadMap(`${form}_${year}`)
+}
+
+/**
+ * Async version with Supabase fallback for discovered forms.
+ */
+export async function getFieldMapAsync(form: string, year: number): Promise<FieldEntry[]> {
+  return loadMapAsync(`${form}_${year}`)
+}
+
+/**
+ * Check if a field map exists (JSON file or in cache).
+ */
+export function hasFieldMap(form: string, year: number): boolean {
+  const key = `${form}_${year}`
+  if (cache[key]?.length) return true
+  return existsSync(join(DATA_DIR, `${key}_fields.json`))
 }
 
 /**
@@ -75,8 +148,8 @@ export function listAvailableMaps(): string[] {
 // One per form type per year.
 // ═══════════════════════════════════════════════════════════════
 
-export type FormType = '1040' | '1120' | '1120S'
-export type TaxYear = 2024 | 2025
+export type FormType = string
+export type TaxYear = number
 
 /**
  * Get the canonical → field_id map for a form+year.
@@ -103,7 +176,7 @@ export function getCanonicalMap(form: string, year: number): Record<string, stri
 // SUPPORTED FORMS INVENTORY
 // ═══════════════════════════════════════════════════════════════
 
-export const FORM_INVENTORY = {
+export const FORM_INVENTORY: Record<string, { name: string; years: number[]; maps: number[] }> = {
   // Main returns
   f1040:    { name: 'Form 1040',    years: [2020,2021,2022,2023,2024,2025], maps: [2024,2025] },
   f1120:    { name: 'Form 1120',    years: [2020,2021,2022,2023,2024,2025], maps: [2024,2025] },
@@ -130,4 +203,24 @@ export const FORM_INVENTORY = {
   f4562:    { name: 'Form 4562',    years: [2024,2025], maps: [] },
   f1120sg:  { name: 'Schedule G',   years: [2024,2025], maps: [] },
   f1120sk1: { name: 'Schedule K-1', years: [2024,2025], maps: [2025] },
-} as const
+}
+
+/**
+ * Register a newly discovered form+year in the inventory.
+ * Called by the discovery pipeline after a successful map is saved.
+ */
+export function registerDiscoveredForm(formName: string, year: number, displayName?: string) {
+  if (!FORM_INVENTORY[formName]) {
+    FORM_INVENTORY[formName] = { name: displayName || formName, years: [year], maps: [year] }
+  } else {
+    if (!FORM_INVENTORY[formName].years.includes(year)) {
+      FORM_INVENTORY[formName].years.push(year)
+      FORM_INVENTORY[formName].years.sort()
+    }
+    if (!FORM_INVENTORY[formName].maps.includes(year)) {
+      FORM_INVENTORY[formName].maps.push(year)
+      FORM_INVENTORY[formName].maps.sort()
+    }
+  }
+  invalidateCache(`${formName}_${year}`)
+}
