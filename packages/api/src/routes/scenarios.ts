@@ -1,11 +1,21 @@
 /**
  * Scenario routes — Create, compute, and AI-analyze tax scenarios
  */
-import { Router } from 'express'
+import { Router, type Request } from 'express'
+import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { supabase } from './auth.js'
 import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
 import { ordinaryTax, qbiDeduction, niitTax, standardDeduction } from '../engine/tax_tables.js'
+
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
+const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
+
+function sb(req: Request) {
+  const token = req.headers.authorization?.replace('Bearer ', '') || ''
+  return createClient(SUPABASE_URL, SUPABASE_ANON, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  })
+}
 
 const router = Router()
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
@@ -13,7 +23,7 @@ const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
 // List scenarios
 router.get('/', async (req, res) => {
   const userId = (req as any).userId
-  const { data, error } = await supabase
+  const { data, error } = await sb(req)
     .from('scenario').select('*, tax_entity(name, form_type)')
     .eq('user_id', userId).order('created_at', { ascending: false })
   if (error) return res.status(500).json({ error: error.message })
@@ -25,7 +35,7 @@ router.post('/', async (req, res) => {
   const userId = (req as any).userId
   const { name, description, entity_id, tax_year, base_return_id, adjustments } = req.body
 
-  const { data, error } = await supabase.from('scenario').insert({
+  const { data, error } = await sb(req).from('scenario').insert({
     user_id: userId, name, description, entity_id, tax_year,
     base_return_id, adjustments: adjustments || {},
   }).select().single()
@@ -37,7 +47,7 @@ router.post('/', async (req, res) => {
 // Compute a scenario
 router.post('/:id/compute', async (req, res) => {
   const userId = (req as any).userId
-  const { data: scenario, error } = await supabase
+  const { data: scenario, error } = await sb(req)
     .from('scenario').select('*, tax_entity(form_type)')
     .eq('id', req.params.id).eq('user_id', userId).single()
 
@@ -83,7 +93,7 @@ router.post('/:id/compute', async (req, res) => {
     }
 
     // Save result
-    await supabase.from('scenario').update({
+    await sb(req).from('scenario').update({
       computed_result: result, status: 'computed', updated_at: new Date().toISOString()
     }).eq('id', req.params.id)
 
@@ -98,7 +108,7 @@ router.post('/:id/analyze', async (req, res) => {
   if (!GEMINI_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' })
 
   const userId = (req as any).userId
-  const { data: scenario } = await supabase
+  const { data: scenario } = await sb(req)
     .from('scenario').select('*, tax_entity(name, form_type, ein)')
     .eq('id', req.params.id).eq('user_id', userId).single()
 
@@ -107,7 +117,7 @@ router.post('/:id/analyze', async (req, res) => {
   // Get base return for comparison if available
   let baseReturn = null
   if (scenario.base_return_id) {
-    const { data } = await supabase.from('tax_return')
+    const { data } = await sb(req).from('tax_return')
       .select('*').eq('id', scenario.base_return_id).single()
     baseReturn = data
   }
@@ -143,7 +153,7 @@ Keep it under 500 words. Use specific dollar amounts.`
     const analysis = result.response.text()
 
     // Save analysis
-    await supabase.from('scenario').update({
+    await sb(req).from('scenario').update({
       ai_analysis: analysis, updated_at: new Date().toISOString()
     }).eq('id', req.params.id)
 
@@ -160,7 +170,7 @@ router.post('/compare', async (req, res) => {
   const userId = (req as any).userId
   const { scenario_ids } = req.body
 
-  const { data: scenarios } = await supabase
+  const { data: scenarios } = await sb(req)
     .from('scenario').select('*, tax_entity(name)')
     .in('id', scenario_ids).eq('user_id', userId)
 
