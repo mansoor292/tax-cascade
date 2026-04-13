@@ -93,28 +93,27 @@ app.use('/api', async (req, res, next) => {
   if (req.path === '/health') return next()
   if (req.path === '/qbo/callback') return next()
   // Auth routes are separate
-  const key = req.headers['x-api-key'] || req.query.api_key as string
+  // Extract key from x-api-key header, query param, or Bearer token
+  const key = req.headers['x-api-key'] as string
+    || req.query.api_key as string
+    || req.headers.authorization?.replace('Bearer ', '')
   if (!key) {
-    // Try Bearer token (Supabase JWT)
-    const token = req.headers.authorization?.replace('Bearer ', '')
-    if (token) {
-      const { data: { user } } = await supabase.auth.getUser(token)
-      if (user) { (req as any).userId = user.id; return next() }
-    }
     res.status(401).json({ error: 'Missing API key or Bearer token' })
     return
   }
-  // Check static keys — set a placeholder userId for compatibility
-  if (STATIC_KEYS.has(key as string)) {
+  // Check static keys
+  if (STATIC_KEYS.has(key)) {
     (req as any).userId = '00000000-0000-0000-0000-000000000000'
     return next()
   }
-  // Check Supabase-provisioned keys
+  // Check Supabase JWT
+  const { data: { user } } = await supabase.auth.getUser(key)
+  if (user) { (req as any).userId = user.id; return next() }
+  // Check Supabase-provisioned API keys
   const { data } = await supabase.from('api_key')
     .select('user_id').eq('key_value', key).eq('is_active', true).single()
   if (data) {
     (req as any).userId = data.user_id
-    // Update last_used
     supabase.from('api_key').update({ last_used_at: new Date().toISOString() }).eq('key_value', key).then()
     return next()
   }
