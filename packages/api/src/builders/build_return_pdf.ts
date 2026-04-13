@@ -146,10 +146,14 @@ function buildModel(input: BuildPdfInput): Record<string, string | number> {
     if (e.state) model['meta.state'] = e.state
     if (e.zip) model['meta.zip'] = e.zip
   } else {
-    // 1120 / 1120S use entity_name + combined city_state_zip
+    // 1120 / 1120S use entity_name + address fields
     model['meta.entity_name'] = e.name || ''
     model['meta.ein'] = e.ein || ''
     model['meta.address'] = e.address || ''
+    // Individual city/state/zip fields (2025+) AND combined (2024)
+    if (e.city) model['meta.city'] = e.city
+    if (e.state) model['meta.state'] = e.state
+    if (e.zip) model['meta.zip'] = e.zip
     if (e.city || e.state || e.zip)
       model['meta.city_state_zip'] = [e.city, e.state, e.zip].filter(Boolean).join(', ')
     if (e.date_incorporated) model['meta.date_incorporated'] = e.date_incorporated
@@ -576,21 +580,27 @@ function fill1120Extras(
 
   // Title (field ID varies by year)
   if (entity.meta?.title) {
-    // Title field ID differs by year: f1_56 (2024), f1_58 (2025)
-    if (taxYear >= 2025) setField(form, 'f1_58', entity.meta.title)
+    if (year >= 2025) setField(form, 'f1_58', entity.meta.title)
     else setField(form, 'f1_56', entity.meta.title)
   }
 
-  // Preparer (1120 uses f1_53..f1_58 area in 2024)
+  // Preparer — field IDs differ by year
   const prep = entity.meta?.preparer as Record<string, string> | undefined
   if (prep) {
-    // 2024 field IDs for 1120 preparer block
-    setField(form, 'f1_53', prep.name)
-    setField(form, 'f1_55', prep.ptin)
-    setField(form, 'f1_56', prep.firm_name)
-    setField(form, 'f1_57', prep.firm_ein)
-    setField(form, 'f1_58', prep.firm_address)
-    // 2025 uses different IDs (handled by field map canonical keys)
+    if (year >= 2025) {
+      setField(form, 'f1_59', prep.name)
+      setField(form, 'f1_60', prep.ptin)
+      setField(form, 'f1_61', prep.firm_name)
+      setField(form, 'f1_62', prep.firm_ein)
+      setField(form, 'f1_63', prep.firm_address)
+      setField(form, 'f1_64', prep.phone)
+    } else {
+      setField(form, 'f1_53', prep.name)
+      setField(form, 'f1_55', prep.ptin)
+      setField(form, 'f1_56', prep.firm_name)
+      setField(form, 'f1_57', prep.firm_ein)
+      setField(form, 'f1_58', prep.firm_address)
+    }
   }
 }
 
@@ -611,7 +621,7 @@ function fill1120SExtras(
   // Title
   if (entity.meta?.title) {
     // 1120S title field ID differs by year
-    if (taxYear >= 2025) setField(form, 'f1_54', entity.meta.title)
+    if (year >= 2025) setField(form, 'f1_54', entity.meta.title)
     else setField(form, 'f1_50', entity.meta.title)
   }
 

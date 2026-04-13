@@ -87,12 +87,17 @@ export const F1040_2025: Record<string, string> = {
 // FORM 1120 (2025)
 // ═══════════════════════════════════════════════════════════════
 export const F1120_2025: Record<string, string> = {
-  // Header
+  // Header — f1_1/f1_2 = tax year begin/end, f1_3 = ?, f1_4 = name
   'meta.entity_name':           'f1_4',
   'meta.address':               'f1_5',
-  'meta.city_state_zip':        'f1_6',   // need to verify from map
+  'meta.city_state_zip':        'f1_6',   // Room or suite no. field
+  'meta.city':                  'f1_7',
+  'meta.state':                 'f1_8',
+  'meta.country':               'f1_9',
+  'meta.zip':                   'f1_10',
   'meta.ein':                   'f1_11',
   'meta.date_incorporated':     'f1_12',
+  'meta.total_assets':          'f1_13',
 
   // Income
   'income.L1a_gross_receipts':  'f1_14',
@@ -165,10 +170,7 @@ export const F1120_2025: Record<string, string> = {
   // 'payments.L37a_credited' is f1_54
   // 'payments.L37b_refunded' is f1_55
 
-  // Sign Here
-  'meta.title':                  'f1_58',
-
-  // Preparer
+  // Preparer (meta.title is already mapped above as f1_58)
   'preparer.name':               'f1_59',
   'preparer.ptin':               'f1_60',
   'preparer.firm_name':          'f1_61',
