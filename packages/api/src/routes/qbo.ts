@@ -124,10 +124,12 @@ router.get('/connect/:entity_id', async (req, res) => {
 
   if (!QBO_CLIENT_ID) return res.status(500).json({ error: 'QUICKBOOKS_CLIENT_ID not configured' })
 
-  // Verify entity belongs to user
-  const { data: entity } = await supabase.from('tax_entity')
-    .select('id').eq('id', req.params.entity_id).eq('user_id', userId).single()
-  if (!entity) return res.status(404).json({ error: 'Entity not found' })
+  // "new" = auto-create entity from QBO company info during callback
+  if (req.params.entity_id !== 'new') {
+    const { data: entity } = await supabase.from('tax_entity')
+      .select('id').eq('id', req.params.entity_id).eq('user_id', userId).single()
+    if (!entity) return res.status(404).json({ error: 'Entity not found' })
+  }
 
   // Build the redirect URI — callback comes back to this API
   const redirectUri = `${API_BASE_URL}/api/qbo/callback`
@@ -192,8 +194,8 @@ router.get('/callback', async (req, res) => {
 
   const tokens = await tokenResp.json() as any
 
-  // Get company info
-  let companyName = ''
+  // Get company info from QBO
+  let companyInfo: any = {}
   try {
     const base = QBO_ENVIRONMENT === 'sandbox'
       ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -206,14 +208,60 @@ router.get('/callback', async (req, res) => {
     })
     if (infoResp.ok) {
       const info = await infoResp.json() as any
-      companyName = info.CompanyInfo?.CompanyName || ''
+      companyInfo = info.CompanyInfo || {}
     }
   } catch {}
+
+  const companyName = companyInfo.CompanyName || ''
+  const companyEin = companyInfo.EIN || ''
+  const companyAddr = companyInfo.CompanyAddr || {}
+
+  // If no entity_id was provided, auto-create the entity from QBO company info
+  let entityId = stateData.entity_id
+  if (!entityId || entityId === 'new') {
+    // Check if entity already exists for this user with matching name or EIN
+    let existing = null
+    if (companyEin) {
+      const { data } = await supabase.from('tax_entity')
+        .select('id').eq('user_id', stateData.user_id).eq('ein', companyEin).single()
+      existing = data
+    }
+    if (!existing && companyName) {
+      const { data } = await supabase.from('tax_entity')
+        .select('id').eq('user_id', stateData.user_id).ilike('name', companyName).single()
+      existing = data
+    }
+
+    if (existing) {
+      entityId = existing.id
+    } else {
+      // Create new entity from QBO data
+      const { data: newEntity, error: createErr } = await supabase.from('tax_entity').insert({
+        user_id: stateData.user_id,
+        name: companyName,
+        ein: companyEin,
+        address: [companyAddr.Line1, companyAddr.Line2].filter(Boolean).join(' ') || null,
+        city: companyAddr.City || null,
+        state: companyAddr.CountrySubDivisionCode || null,
+        zip: companyAddr.PostalCode || null,
+        meta: {
+          qbo_realm_id: realmId,
+          fiscal_year_end: companyInfo.FiscalYearStartMonth ? `${companyInfo.FiscalYearStartMonth}/end` : null,
+        },
+      }).select().single()
+
+      if (createErr) {
+        console.error('Failed to create entity:', createErr)
+        return res.status(500).send(`<h2>Failed to Create Entity</h2><p>${createErr.message}</p>`)
+      }
+      entityId = newEntity.id
+    }
+  }
 
   // Upsert connection
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000)
   const { error } = await supabase.from('qbo_connection').upsert({
-    entity_id: stateData.entity_id,
+    entity_id: entityId,
     user_id: stateData.user_id,
     realm_id: realmId,
     company_name: companyName,
@@ -233,6 +281,8 @@ router.get('/callback', async (req, res) => {
     <html><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:system-ui;background:#f8faf8;">
       <h2 style="color:#2e8b57;">Connected to QuickBooks</h2>
       <p><strong>${companyName}</strong> (Realm ${realmId})</p>
+      ${companyEin ? `<p>EIN: ${companyEin}</p>` : ''}
+      <p>Entity ID: ${entityId}</p>
       <p>You can close this window.</p>
     </body></html>
   `)

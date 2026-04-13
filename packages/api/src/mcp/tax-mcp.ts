@@ -321,8 +321,8 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: connect_qbo ───
-  server.tool('connect_qbo', 'Start QuickBooks OAuth connection for an entity. Returns an auth_url for the user to click.', {
-    entity_id: z.string().describe('Entity UUID'),
+  server.tool('connect_qbo', 'Start QuickBooks OAuth connection. Pass entity_id to link to existing entity, or pass "new" to auto-create an entity from the QBO company info. Returns an auth_url for the user to click.', {
+    entity_id: z.string().describe('Entity UUID, or "new" to auto-create from QBO company info'),
   }, async ({ entity_id }) => {
     return text(await call('GET', `/api/qbo/connect/${entity_id}`))
   })
