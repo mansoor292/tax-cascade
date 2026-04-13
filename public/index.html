@@ -206,8 +206,6 @@ async function signUp() {
   });
   const d = await r.json();
   if (d.error) { document.getElementById('auth-error').textContent = d.error; return; }
-  if (d.api_key) alert('Your API key: ' + d.api_key + '\n\nSave this — you won\'t see it again.');
-  // Sign in after signup
   const email = document.getElementById('su-email').value;
   const password = document.getElementById('su-password').value;
   const {data} = await sb.auth.signInWithPassword({email, password});

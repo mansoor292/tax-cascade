@@ -21,15 +21,7 @@ router.post('/signup', async (req, res) => {
   })
   if (error) return res.status(400).json({ error: error.message })
 
-  // Generate initial API key
-  const apiKey = `txk_${uuidv4().replace(/-/g, '').slice(0, 24)}`
-  if (data.user) {
-    await supabase.from('api_key').insert({
-      user_id: data.user.id, key_value: apiKey, name: 'Default'
-    })
-  }
-
-  res.json({ user: data.user, api_key: apiKey, session: data.session })
+  res.json({ user: data.user, session: data.session })
 })
 
 // Sign in
