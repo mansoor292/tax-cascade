@@ -11,13 +11,17 @@ import { z } from 'zod'
 import type { Express, Request, Response } from 'express'
 
 const API_BASE = `http://localhost:${process.env.PORT || 3737}`
-const API_KEY = (process.env.TAX_API_KEYS || 'test-key-2026').split(',')[0]
 
-async function api(method: string, path: string, body?: any): Promise<any> {
+/**
+ * Call the REST API with the user's API key.
+ * The key is captured from the MCP request's Authorization header
+ * and threaded through every tool call via the session.
+ */
+async function api(apiKey: string, method: string, path: string, body?: any): Promise<any> {
   const opts: RequestInit = {
     method,
     headers: {
-      'x-api-key': API_KEY,
+      'x-api-key': apiKey,
       'Content-Type': 'application/json',
     },
   }
@@ -50,17 +54,27 @@ const INSTRUCTIONS = `You help users prepare and optimize tax returns using the 
 - When QBO is connected, pull financials first before asking for manual input`
 
 // ─── Session management ───
-const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: McpServer }>()
+const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: McpServer; apiKey: string }>()
 
-function createServer(): McpServer {
+function extractApiKey(req: Request): string | null {
+  const auth = req.headers.authorization
+  if (auth?.startsWith('Bearer ')) return auth.slice(7)
+  const key = req.headers['x-api-key'] as string
+  if (key) return key
+  return null
+}
+
+function createServer(apiKey: string): McpServer {
   const server = new McpServer({
     name: 'Tax Preparation API',
     version: '0.1.0',
   })
 
+  const call = (method: string, path: string, body?: any) => api(apiKey, method, path, body)
+
   // ─── Tool: list_entities ───
   server.tool('list_entities', 'List all tax entities and their returns', {}, async () => {
-    return text(await api('GET', '/api/entities'))
+    return text(await call('GET', '/api/entities'))
   })
 
   // ─── Tool: get_schema ───
@@ -68,16 +82,16 @@ function createServer(): McpServer {
     form_type: z.string().optional().describe('Form type (1040, 1120, 1120S) — omit for full manifest'),
     year: z.number().optional().describe('Tax year — required if form_type provided'),
   }, async ({ form_type, year }) => {
-    if (form_type && year) return text(await api('GET', `/api/schema/${form_type}/${year}`))
-    if (form_type) return text(await api('GET', `/api/schema/${form_type}/2025`))
-    return text(await api('GET', '/api/schema'))
+    if (form_type && year) return text(await call('GET', `/api/schema/${form_type}/${year}`))
+    if (form_type) return text(await call('GET', `/api/schema/${form_type}/2025`))
+    return text(await call('GET', '/api/schema'))
   })
 
   // ─── Tool: get_entity ───
   server.tool('get_entity', 'Get entity details with all returns and scenarios', {
     entity_id: z.string().describe('Entity UUID'),
   }, async ({ entity_id }) => {
-    return text(await api('GET', `/api/entities/${entity_id}`))
+    return text(await call('GET', `/api/entities/${entity_id}`))
   })
 
   // ─── Tool: create_entity ───
@@ -86,7 +100,7 @@ function createServer(): McpServer {
     form_type: z.string().optional().describe('1040, 1120, or 1120S'),
     ein: z.string().optional().describe('EIN or SSN'),
   }, async (params) => {
-    return text(await api('POST', '/api/entities', params))
+    return text(await call('POST', '/api/entities', params))
   })
 
   // ─── Tool: get_financials ───
@@ -98,7 +112,7 @@ function createServer(): McpServer {
     const qs = new URLSearchParams()
     if (year) qs.set('year', String(year))
     if (refresh) qs.set('refresh', 'true')
-    return text(await api('GET', `/api/qbo/${entity_id}/financials?${qs}`))
+    return text(await call('GET', `/api/qbo/${entity_id}/financials?${qs}`))
   })
 
   // ─── Tool: get_qbo_report ───
@@ -111,14 +125,14 @@ function createServer(): McpServer {
     const qs = new URLSearchParams()
     if (year) qs.set('year', String(year))
     if (refresh) qs.set('refresh', 'true')
-    return text(await api('GET', `/api/qbo/${entity_id}/reports/${report}?${qs}`))
+    return text(await call('GET', `/api/qbo/${entity_id}/reports/${report}?${qs}`))
   })
 
   // ─── Tool: get_qbo_mapping ───
   server.tool('get_qbo_mapping', 'Get QBO P&L category to tax form field mappings', {
     form_type: z.string().describe('1040, 1120, or 1120S'),
   }, async ({ form_type }) => {
-    return text(await api('GET', `/api/schema/${form_type}/qbo-mapping`))
+    return text(await call('GET', `/api/schema/${form_type}/qbo-mapping`))
   })
 
   // ─── Tool: validate_return ───
@@ -127,7 +141,7 @@ function createServer(): McpServer {
     tax_year: z.number().describe('Tax year'),
     inputs: z.record(z.any()).describe('Tax return input fields'),
   }, async (params) => {
-    return text(await api('POST', '/api/returns/validate', params))
+    return text(await call('POST', '/api/returns/validate', params))
   })
 
   // ─── Tool: compute_return ───
@@ -138,7 +152,7 @@ function createServer(): McpServer {
     inputs: z.record(z.any()).describe('Tax return input fields'),
     save: z.boolean().optional().describe('Save as tax_return record (default true)'),
   }, async (params) => {
-    return text(await api('POST', '/api/returns/compute', params))
+    return text(await call('POST', '/api/returns/compute', params))
   })
 
   // ─── Tool: run_scenario ───
@@ -149,11 +163,11 @@ function createServer(): McpServer {
     adjustments: z.record(z.any()).describe('Adjusted input values'),
     base_return_id: z.string().optional().describe('Base return to adjust from'),
   }, async ({ entity_id, name, tax_year, adjustments, base_return_id }) => {
-    const scenario = await api('POST', '/api/scenarios', {
+    const scenario = await call('POST', '/api/scenarios', {
       entity_id, name, tax_year, adjustments, base_return_id,
     })
     if (scenario.error) return text(scenario)
-    const computed = await api('POST', `/api/scenarios/${scenario.scenario.id}/compute`)
+    const computed = await call('POST', `/api/scenarios/${scenario.scenario.id}/compute`)
     return text({ scenario: scenario.scenario, result: computed })
   })
 
@@ -161,21 +175,21 @@ function createServer(): McpServer {
   server.tool('compare_scenarios', 'Compare multiple scenarios with AI analysis', {
     scenario_ids: z.array(z.string()).describe('Array of scenario UUIDs to compare'),
   }, async ({ scenario_ids }) => {
-    return text(await api('POST', '/api/scenarios/compare', { scenario_ids }))
+    return text(await call('POST', '/api/scenarios/compare', { scenario_ids }))
   })
 
   // ─── Tool: get_pdf ───
   server.tool('get_pdf', 'Generate a filled IRS PDF for a computed return. Returns a download URL.', {
     return_id: z.string().describe('Tax return UUID'),
   }, async ({ return_id }) => {
-    return text(await api('GET', `/api/returns/${return_id}/pdf`))
+    return text(await call('GET', `/api/returns/${return_id}/pdf`))
   })
 
   // ─── Tool: compare_returns ───
   server.tool('compare_returns', 'Compare tax returns across years for an entity', {
     entity_id: z.string().describe('Entity UUID'),
   }, async ({ entity_id }) => {
-    return text(await api('GET', `/api/returns/compare/${entity_id}`))
+    return text(await call('GET', `/api/returns/compare/${entity_id}`))
   })
 
   return server
@@ -189,19 +203,29 @@ export function mountMCP(app: Express) {
     let session = sessionId ? sessions.get(sessionId) : undefined
 
     if (!session) {
-      // New session — create transport and server
+      // New session — require API key
+      const apiKey = extractApiKey(req)
+      if (!apiKey) {
+        res.status(401).json({
+          jsonrpc: '2.0',
+          error: { code: -32001, message: 'API key required. Set Authorization: Bearer <your-api-key> or x-api-key header.' },
+          id: null,
+        })
+        return
+      }
+
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
-          sessions.set(id, { transport, server })
+          sessions.set(id, { transport, server, apiKey })
         },
         onsessionclosed: (id) => {
           sessions.delete(id)
         },
       })
-      const server = createServer()
+      const server = createServer(apiKey)
       await server.connect(transport)
-      session = { transport, server }
+      session = { transport, server, apiKey }
     }
 
     await session.transport.handleRequest(req, res, req.body)
