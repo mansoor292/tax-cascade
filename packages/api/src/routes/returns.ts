@@ -230,6 +230,7 @@ router.post('/process/:document_id', async (req, res) => {
         unmapped_count: mapped.unmapped.length,
       },
       computed_at: new Date().toISOString(),
+      pdf_s3_path: null,  // invalidate cached PDF
     }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
 
     if (error) return res.status(500).json({ error: error.message })
@@ -808,6 +809,7 @@ print(json.dumps({'url': url}))
         input_data: inputs,
         computed_data: result,
         computed_at: new Date().toISOString(),
+        pdf_s3_path: null,  // invalidate cached PDF on recompute
       }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
 
       if (error) return res.status(500).json({ error: error.message })

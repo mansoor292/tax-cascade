@@ -232,6 +232,7 @@ router.post('/:id/promote', async (req, res) => {
     input_data: scenario.adjustments,
     computed_data: scenario.computed_result,
     computed_at: new Date().toISOString(),
+    pdf_s3_path: null,  // invalidate cached PDF
   }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
 
   if (error) return res.status(500).json({ error: error.message })
