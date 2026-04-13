@@ -517,14 +517,66 @@ router.post('/compute', async (req, res) => {
   }
 
   try {
+    // Pull supporting documents (W-2s, 1099s, K-1s) for this entity+year
+    // and merge their extracted data into the inputs
+    let supportingDocs: any[] = []
+    const mergedInputs = { ...inputs }
+    if (entity_id) {
+      const { data: docs } = await supabase.from('document')
+        .select('doc_type, meta, textract_data')
+        .eq('entity_id', entity_id)
+        .eq('tax_year', tax_year)
+        .in('doc_type', ['w2', '1099', 'k1'])
+      if (docs?.length) {
+        supportingDocs = docs
+        // Aggregate W-2 data
+        const w2s = docs.filter(d => d.doc_type === 'w2')
+        if (w2s.length && form_type === '1040') {
+          let totalWages = 0, totalWithholding = 0
+          for (const w2 of w2s) {
+            const kv = w2.meta?.key_values || {}
+            totalWages += parseFloat(kv.wages || kv['box_1'] || '0') || 0
+            totalWithholding += parseFloat(kv.federal_tax || kv['box_2'] || '0') || 0
+          }
+          if (totalWages && !mergedInputs.wages) mergedInputs.wages = Math.round(totalWages)
+          if (totalWithholding && !mergedInputs.withholding) mergedInputs.withholding = Math.round(totalWithholding)
+        }
+        // Aggregate 1099 data
+        const f1099s = docs.filter(d => d.doc_type === '1099')
+        if (f1099s.length && form_type === '1040') {
+          let totalInterest = 0, totalDividends = 0
+          for (const f of f1099s) {
+            const kv = f.meta?.key_values || {}
+            totalInterest += parseFloat(kv.interest || kv['box_1'] || '0') || 0
+            totalDividends += parseFloat(kv.dividends || kv.ordinary_dividends || '0') || 0
+          }
+          if (totalInterest && !mergedInputs.taxable_interest) mergedInputs.taxable_interest = Math.round(totalInterest)
+          if (totalDividends && !mergedInputs.ordinary_dividends) mergedInputs.ordinary_dividends = Math.round(totalDividends)
+        }
+        // K-1 data
+        const k1s = docs.filter(d => d.doc_type === 'k1')
+        if (k1s.length && form_type === '1040') {
+          let totalK1 = 0, totalK1W2 = 0
+          for (const k of k1s) {
+            const kv = k.meta?.key_values || {}
+            totalK1 += parseFloat(kv.ordinary_income || kv['box_1'] || '0') || 0
+            totalK1W2 += parseFloat(kv.w2_wages || '0') || 0
+          }
+          if (totalK1 && !mergedInputs.k1_ordinary_income) mergedInputs.k1_ordinary_income = Math.round(totalK1)
+          if (totalK1 && !mergedInputs.schedule1_income) mergedInputs.schedule1_income = Math.round(totalK1)
+          if (totalK1W2 && !mergedInputs.k1_w2_wages) mergedInputs.k1_w2_wages = Math.round(totalK1W2)
+        }
+      }
+    }
+
     let engineResult: any = null
 
     if (form_type === '1120') {
-      engineResult = calc1120({ ...inputs, tax_year })
+      engineResult = calc1120({ ...mergedInputs, tax_year })
     } else if (form_type === '1120S') {
-      engineResult = calc1120S(inputs)
+      engineResult = calc1120S(mergedInputs)
     } else if (form_type === '1040') {
-      engineResult = calc1040({ ...inputs, tax_year })
+      engineResult = calc1040({ ...mergedInputs, tax_year })
     } else if (['4868', '7004', '8868'].includes(form_type)) {
       engineResult = calcExtension({ ...inputs, extension_type: form_type as ExtensionType, tax_year })
     } else {
@@ -580,6 +632,12 @@ router.post('/compute', async (req, res) => {
       saved: save !== false && !!entity_id,
       computed,
       citations: engineResult?.citations,
+      supporting_documents: supportingDocs.length > 0 ? {
+        count: supportingDocs.length,
+        types: supportingDocs.map(d => d.doc_type),
+        merged_fields: Object.keys(mergedInputs).filter(k => !(k in inputs)),
+        note: 'Data from uploaded W-2s, 1099s, and K-1s was auto-merged into inputs',
+      } : undefined,
       pdf_coverage: {
         filled: filledCount,
         total: totalMapFields,

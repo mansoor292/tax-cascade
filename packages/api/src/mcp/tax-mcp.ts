@@ -43,17 +43,20 @@ const INSTRUCTIONS = `You help users prepare and optimize tax returns using the 
 
 ## Data Entry — Two Paths
 
-### Path A: Upload a prior return (PDF)
-1. upload_document → get presigned S3 URL
-2. register_document → triggers OCR + auto-classification
-3. process_document → extracts data, computes, saves as return
+### Path A: Upload documents (prior returns, W-2s, 1099s, K-1s)
+1. upload_document → get presigned S3 URL for each document
+2. register_document → triggers OCR + auto-classification (detects w2/1099/k1/prior_return)
+3. For prior returns: process_document → extracts, computes, saves as return
+4. For W-2s, 1099s, K-1s: data is auto-extracted and stored
+5. When compute_return is called, it auto-merges data from all supporting docs for that entity+year
+6. IMPORTANT: Ask the user to upload ALL their W-2s, 1099s, and K-1s before computing
 
 ### Path B: Enter data manually or from QuickBooks
 1. Check qbo_status — is QuickBooks connected?
 2. If yes: get_financials to pull P&L + Balance Sheet, then get_qbo_mapping for field mappings
 3. If no: ask the user for the numbers, or use connect_qbo to start OAuth
 4. validate_return to check inputs
-5. compute_return to calculate and save
+5. compute_return to calculate and save (auto-merges any uploaded supporting docs)
 
 ## Analysis & Scenarios
 - run_scenario: create what-if scenarios. Returns: computed result, field-by-field diff vs base, input changes, PDF coverage %
@@ -235,7 +238,7 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: register_document ───
-  server.tool('register_document', 'Register an uploaded document. Triggers OCR classification and Textract extraction. Call after uploading to the presigned URL.', {
+  server.tool('register_document', 'Register an uploaded document (prior return, W-2, 1099, K-1, bank statement). Triggers OCR + auto-classification + Textract extraction. W-2/1099/K-1 data auto-merges into compute_return for the same entity+year.', {
     s3_key: z.string().describe('S3 key returned from upload_document'),
     filename: z.string().describe('Original filename'),
     file_size: z.number().optional().describe('File size in bytes'),
