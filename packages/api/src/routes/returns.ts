@@ -13,9 +13,7 @@ import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper
 import { calc1120, calc1120S, calc1040, calcExtension, type ExtensionInputs, type ExtensionType } from '../engine/tax_engine.js'
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
-import { getEngineToCanonicalMap } from '../maps/engine_to_pdf.js'
-import * as maps2024 from '../maps/pdf_field_map_2024.js'
-import * as maps2025 from '../maps/pdf_field_map_2025.js'
+import { buildCanonicalModel, buildReturnPdf } from '../builders/build_return_pdf.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -595,91 +593,32 @@ print(json.dumps({'url': url}))
     } catch {}
   }
 
-  // Generate the PDF
+  // Generate the PDF using the builder (same code that produces verified returns)
   try {
-    const { PDFDocument, PDFTextField } = await import('pdf-lib')
-    const { readFileSync, existsSync } = await import('fs')
-
-    const formName = taxReturn.form_type === '1120S' ? 'f1120s' : `f${taxReturn.form_type.toLowerCase()}`
-    const blankPath = `data/irs_forms/${formName}_${taxReturn.tax_year}.pdf`
-    if (!existsSync(blankPath)) {
-      return res.status(404).json({ error: `No blank PDF for ${formName} ${taxReturn.tax_year}` })
-    }
-
-    const pdf = await PDFDocument.load(readFileSync(blankPath))
-    const form = pdf.getForm()
-
-    // Get the year-specific canonical→fieldId map (same maps the builders use)
-    const mapKey = `F${taxReturn.form_type.replace('-', '')}_${taxReturn.tax_year}`
-    let fieldMap: Record<string, string> = (maps2025 as any)[mapKey] || (maps2024 as any)[mapKey] || {}
-
-    // Build canonical model — same approach as build_1120_package.ts
-    const model: Record<string, string | number> = {}
-    const engineMap = getEngineToCanonicalMap(taxReturn.form_type)
-    const inputs = taxReturn.input_data || {}
-    const computed = taxReturn.computed_data?.computed || {}
-
-    // Map engine input keys → canonical keys
-    for (const [key, value] of Object.entries(inputs)) {
-      if (value === undefined || value === null) continue
-      const canon = engineMap[key]
-      if (canon) model[canon] = value as string | number
-    }
-    // Map engine computed keys → canonical keys
-    for (const [key, value] of Object.entries(computed)) {
-      if (value === undefined || value === null) continue
-      const canon = engineMap[key]
-      if (canon) model[canon] = value as string | number
-    }
-    // Add field_values directly (already canonical-keyed from extracted returns)
-    if (taxReturn.field_values) {
-      for (const [key, value] of Object.entries(taxReturn.field_values)) {
-        if (value !== undefined && value !== null) model[key] = value as string | number
-      }
-    }
-
-    // Add entity metadata (name, EIN, address — same as builders do)
-    const { data: entityMeta } = await supabase.from('tax_entity')
+    // Get entity data for the header
+    const { data: entityData } = await supabase.from('tax_entity')
       .select('name, ein, address, city, state, zip, date_incorporated, meta')
       .eq('id', taxReturn.entity_id).single()
-    if (entityMeta) {
-      model['meta.entity_name'] = entityMeta.name || ''
-      model['meta.ein'] = entityMeta.ein || ''
-      model['meta.address'] = entityMeta.address || ''
-      if (entityMeta.city || entityMeta.state || entityMeta.zip)
-        model['meta.city_state_zip'] = [entityMeta.city, entityMeta.state, entityMeta.zip].filter(Boolean).join(', ')
-      if (entityMeta.date_incorporated) model['meta.date_incorporated'] = entityMeta.date_incorporated
-      if (entityMeta.meta?.business_activity) model['meta.business_activity'] = entityMeta.meta.business_activity
-      if (entityMeta.meta?.product_service) model['meta.product_service'] = entityMeta.meta.product_service
-      if (entityMeta.meta?.business_code) model['meta.business_activity_code'] = entityMeta.meta.business_code
-    }
+    if (!entityData) return res.status(404).json({ error: 'Entity not found' })
 
-    // Fill PDF: canonical key → field ID → set text (same as builders)
-    let filled = 0
-    for (const [canonKey, value] of Object.entries(model)) {
-      if (value === undefined || value === null || value === '' || value === 0) continue
-      const fieldId = fieldMap[canonKey]
-      if (!fieldId) continue
-      for (const f of form.getFields()) {
-        if (f.getName().includes(fieldId + '[') && f instanceof PDFTextField) {
-          const str = typeof value === 'number'
-            ? (value === 0 ? '' : value.toLocaleString()) : String(value)
-          if (!str) break
-          const ml = f.getMaxLength()
-          if (ml !== undefined && str.length > ml) f.setMaxLength(str.length)
-          f.setText(str)
-          filled++
-          break
-        }
-      }
-    }
+    // Build canonical model from engine data + entity
+    const model = buildCanonicalModel(
+      taxReturn.form_type,
+      taxReturn.input_data || {},
+      taxReturn.computed_data?.computed || {},
+      entityData,
+      taxReturn.field_values,
+    )
+
+    // Fill the PDF
+    const { pdf, filled } = await buildReturnPdf(taxReturn.form_type, taxReturn.tax_year, model)
 
     // Upload to S3
     const pdfBytes = await pdf.save()
     const s3Key = `returns/${userId}/${taxReturn.id}.pdf`
 
     const { runPython } = await import('../lib/run_python.js')
-    const { writeFileSync, mkdirSync } = await import('fs')
+    const { writeFileSync } = await import('fs')
     const tmpPath = `/tmp/${taxReturn.id}.pdf`
     writeFileSync(tmpPath, Buffer.from(pdfBytes))
 
@@ -698,6 +637,7 @@ print(json.dumps({'url': url}))
     // Cache the S3 path on the return
     await supabase.from('tax_return').update({ pdf_s3_path: s3Key }).eq('id', req.params.id)
 
+    const formName = taxReturn.form_type === '1120S' ? 'f1120s' : `f${taxReturn.form_type.toLowerCase()}`
     res.json({ url, filled, form: formName, year: taxReturn.tax_year })
   } catch (e: any) {
     res.status(500).json({ error: e.message })
