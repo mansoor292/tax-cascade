@@ -14,6 +14,8 @@ import { calc1120, calc1120S, calc1040, calcExtension, type ExtensionInputs, typ
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { getEngineToCanonicalMap } from '../maps/engine_to_pdf.js'
+import * as maps2025 from '../maps/pdf_field_map_2025.js'
+import * as maps2024 from '../maps/pdf_field_map_2024.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -608,25 +610,13 @@ print(json.dumps({'url': url}))
     const pdf = await PDFDocument.load(readFileSync(blankPath))
     const form = pdf.getForm()
 
-    // Two maps: Textract-verified label→fieldId, and engine key→canonical key
-    const canonMap = getCanonicalMap(formName, taxReturn.tax_year)
+    // Engine key → canonical key → field_id
     const engineMap = getEngineToCanonicalMap(taxReturn.form_type)
 
-    // Import the typed pdf_field_map for this form+year
-    let typedMap: Record<string, string> = {}
-    try {
-      const maps = await import('../maps/pdf_field_map_2025.js')
-      const mapKey = `F${taxReturn.form_type.replace('-', '')}_${taxReturn.tax_year}`
-      typedMap = (maps as any)[mapKey] || {}
-    } catch {}
-    // Also try 2024
-    if (!Object.keys(typedMap).length) {
-      try {
-        const maps = await import('../maps/pdf_field_map_2024.js')
-        const mapKey = `F${taxReturn.form_type.replace('-', '')}_${taxReturn.tax_year}`
-        typedMap = (maps as any)[mapKey] || {}
-      } catch {}
-    }
+    // Get the typed canonical→fieldId map for this form+year
+    const allMaps: Record<string, Record<string, string>> = { ...maps2024, ...maps2025 } as any
+    const mapKey = `F${taxReturn.form_type.replace('-', '')}_${taxReturn.tax_year}`
+    const typedMap: Record<string, string> = allMaps[mapKey] || {}
 
     // Merge input_data + computed values
     const rawData = { ...taxReturn.input_data, ...taxReturn.computed_data?.computed }
@@ -634,17 +624,12 @@ print(json.dumps({'url': url}))
     // Build final data: engine key → canonical key → field_id
     const dataToFill: Record<string, any> = {}
 
-    // First, map engine keys to canonical keys and use typed map for field IDs
     for (const [engineKey, value] of Object.entries(rawData)) {
       if (value === undefined || value === null || value === 0) continue
       const canonicalKey = engineMap[engineKey]
       if (canonicalKey) {
-        // Look up field_id from typed map (canonical key → field_id)
         const fieldId = typedMap[canonicalKey]
         if (fieldId) dataToFill[fieldId] = value
-        // Also try the Textract map (label → field_id)
-        const fieldIdFromLabel = canonMap[canonicalKey]
-        if (fieldIdFromLabel) dataToFill[fieldIdFromLabel] = value
       }
     }
 
@@ -652,7 +637,7 @@ print(json.dumps({'url': url}))
     if (taxReturn.field_values) {
       for (const [canonKey, value] of Object.entries(taxReturn.field_values)) {
         if (value === undefined || value === null) continue
-        const fieldId = typedMap[canonKey] || canonMap[canonKey]
+        const fieldId = typedMap[canonKey]
         if (fieldId) dataToFill[fieldId] = value
       }
     }
