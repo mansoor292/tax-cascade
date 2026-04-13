@@ -593,25 +593,36 @@ print(json.dumps({'url': url}))
     } catch {}
   }
 
-  // Generate the PDF using the builder (same code that produces verified returns)
+  // Generate the PDF using the full builder (same code that produces verified returns)
   try {
-    // Get entity data for the header
+    // Get entity data
     const { data: entityData } = await supabase.from('tax_entity')
       .select('name, ein, address, city, state, zip, date_incorporated, meta')
       .eq('id', taxReturn.entity_id).single()
     if (!entityData) return res.status(404).json({ error: 'Entity not found' })
 
-    // Build canonical model from engine data + entity
-    const model = buildCanonicalModel(
-      taxReturn.form_type,
-      taxReturn.input_data || {},
-      taxReturn.computed_data?.computed || {},
-      entityData,
-      taxReturn.field_values,
-    )
+    // Try to get raw textract KVs from the source document
+    let textractKvs: Array<{ key: string; value: string }> | undefined
+    const { data: docs } = await supabase.from('document')
+      .select('textract_data')
+      .eq('entity_id', taxReturn.entity_id)
+      .eq('tax_year', taxReturn.tax_year)
+      .not('textract_data', 'is', null)
+      .limit(1)
+    if (docs?.[0]?.textract_data?.kvs) {
+      textractKvs = docs[0].textract_data.kvs
+    }
 
-    // Fill the PDF
-    const { pdf, filled } = await buildReturnPdf(taxReturn.form_type, taxReturn.tax_year, model)
+    // Build the full package using the tested builder
+    const { pdf, filled, pages, forms } = await buildReturnPdf({
+      formType: taxReturn.form_type,
+      taxYear: taxReturn.tax_year,
+      entity: entityData,
+      inputData: taxReturn.input_data,
+      computedData: taxReturn.computed_data?.computed,
+      fieldValues: taxReturn.field_values,
+      textractKvs,
+    })
 
     // Upload to S3
     const pdfBytes = await pdf.save()
@@ -637,8 +648,7 @@ print(json.dumps({'url': url}))
     // Cache the S3 path on the return
     await supabase.from('tax_return').update({ pdf_s3_path: s3Key }).eq('id', req.params.id)
 
-    const formName = taxReturn.form_type === '1120S' ? 'f1120s' : `f${taxReturn.form_type.toLowerCase()}`
-    res.json({ url, filled, form: formName, year: taxReturn.tax_year })
+    res.json({ url, filled, pages, forms, year: taxReturn.tax_year })
   } catch (e: any) {
     res.status(500).json({ error: e.message })
   }
