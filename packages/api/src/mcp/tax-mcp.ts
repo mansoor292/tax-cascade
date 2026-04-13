@@ -56,11 +56,14 @@ const INSTRUCTIONS = `You help users prepare and optimize tax returns using the 
 5. compute_return to calculate and save
 
 ## Analysis & Scenarios
-- run_scenario: create what-if scenarios with adjusted inputs
-- analyze_scenario: get AI analysis of a scenario's tax impact
-- compare_scenarios: side-by-side comparison with recommendation
-- promote_scenario: finalize a scenario into an official return
+- run_scenario: create what-if scenarios. Returns: computed result, field-by-field diff vs base, input changes, PDF coverage %
+- compare_scenarios: side-by-side comparison with AI recommendation
+- get_scenario_pdf: generate a preview PDF for any scenario without promoting
+- promote_scenario: finalize a scenario into an official return (only after user approval)
+- analyze_scenario: get Gemini AI analysis of tax impact
 - compute_cascade: S-Corp → K-1 → 1040 pass-through in one call
+- IMPORTANT: Always pass base_return_id when creating scenarios — this enables the diff
+- compute_return also returns pdf_coverage showing how complete the PDF would be
 
 ## Extensions
 - validate_extension: check extension inputs before filing
@@ -187,19 +190,20 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: run_scenario ───
-  server.tool('run_scenario', 'Create and compute a what-if tax scenario', {
+  server.tool('run_scenario', 'Create and compute a what-if tax scenario. Returns computed result, diff vs base return, input changes, and PDF coverage. Pass base_return_id to get a field-by-field comparison.', {
     entity_id: z.string().describe('Entity UUID'),
     name: z.string().describe('Scenario name'),
     tax_year: z.number().describe('Tax year'),
     adjustments: z.record(z.any()).describe('Adjusted input values'),
-    base_return_id: z.string().optional().describe('Base return to adjust from'),
+    base_return_id: z.string().optional().describe('Base return to compare against — enables diff'),
   }, async ({ entity_id, name, tax_year, adjustments, base_return_id }) => {
     const scenario = await call('POST', '/api/scenarios', {
       entity_id, name, tax_year, adjustments, base_return_id,
     })
     if (scenario.error) return text(scenario)
+    // Compute returns rich detail: result + diff + input_changes + pdf_coverage
     const computed = await call('POST', `/api/scenarios/${scenario.scenario.id}/compute`)
-    return text({ scenario: scenario.scenario, result: computed })
+    return text(computed)
   })
 
   // ─── Tool: compare_scenarios ───
@@ -263,8 +267,15 @@ function createServer(apiKey: string): McpServer {
     return text(await call('GET', `/api/documents/${document_id}/download`))
   })
 
+  // ─── Tool: get_scenario_pdf ───
+  server.tool('get_scenario_pdf', 'Generate a preview PDF for a scenario without promoting it to an official return. Use this to let the user review before committing.', {
+    scenario_id: z.string().describe('Scenario UUID'),
+  }, async ({ scenario_id }) => {
+    return text(await call('GET', `/api/scenarios/${scenario_id}/pdf`))
+  })
+
   // ─── Tool: promote_scenario ───
-  server.tool('promote_scenario', 'Finalize a computed scenario into an official tax return', {
+  server.tool('promote_scenario', 'Finalize a computed scenario into an official tax return. Only do this after the user has reviewed and approved the scenario.', {
     scenario_id: z.string().describe('Scenario UUID'),
   }, async ({ scenario_id }) => {
     return text(await call('POST', `/api/scenarios/${scenario_id}/promote`))

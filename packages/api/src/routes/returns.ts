@@ -549,13 +549,47 @@ router.post('/compute', async (req, res) => {
       taxReturn = data
     }
 
+    // Check PDF coverage — what fields would be filled vs missing
+    const { getEngineToCanonicalMap } = await import('../maps/engine_to_pdf.js')
+    const { getFieldMap } = await import('../maps/field_maps.js')
+    const engineMap = getEngineToCanonicalMap(form_type)
+    const formName = form_type === '1120S' ? 'f1120s' : `f${form_type.toLowerCase()}`
+    const fieldMapEntries = getFieldMap(formName, tax_year)
+    const filledCanonKeys = new Set<string>()
+    const computed = engineResult?.computed || {}
+    for (const [k, v] of Object.entries({ ...inputs, ...computed })) {
+      const canon = engineMap[k]
+      if (canon && v !== undefined && v !== null) filledCanonKeys.add(canon)
+    }
+    const totalMapFields = fieldMapEntries.length
+    const filledCount = filledCanonKeys.size
+    const coveragePct = totalMapFields > 0 ? Math.round((filledCount / totalMapFields) * 100) : 0
+
+    // List which major sections have data vs are empty
+    const sections: Record<string, { filled: number; total: number }> = {}
+    for (const entry of fieldMapEntries) {
+      const section = entry.label.split('.')[0] || 'other'
+      if (!sections[section]) sections[section] = { filled: 0, total: 0 }
+      sections[section].total++
+    }
+
     res.json({
       return_id: taxReturn?.id || null,
       form_type,
       tax_year,
       saved: save !== false && !!entity_id,
-      computed: engineResult?.computed || engineResult,
+      computed,
       citations: engineResult?.citations,
+      pdf_coverage: {
+        filled: filledCount,
+        total: totalMapFields,
+        pct: coveragePct,
+        note: coveragePct < 30
+          ? 'Most PDF fields will be blank — provide more inputs or connect QuickBooks'
+          : coveragePct < 60
+          ? 'Some PDF sections will be incomplete'
+          : undefined,
+      },
     })
   } catch (e: any) {
     res.status(500).json({ error: e.message })

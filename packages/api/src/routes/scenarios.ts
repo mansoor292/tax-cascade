@@ -92,12 +92,90 @@ router.post('/:id/compute', async (req, res) => {
       }
     }
 
+    // Get base return for comparison if available
+    let baseComputed: Record<string, number> | null = null
+    if (scenario.base_return_id) {
+      const { data: baseReturn } = await sb(req).from('tax_return')
+        .select('computed_data').eq('id', scenario.base_return_id).single()
+      if (baseReturn?.computed_data?.computed) baseComputed = baseReturn.computed_data.computed
+    }
+
+    // Build field-by-field diff vs base
+    const diff: Array<{ field: string; base: number; scenario: number; delta: number; pct_change: number }> = []
+    if (baseComputed && result?.computed) {
+      const allKeys = new Set([...Object.keys(baseComputed), ...Object.keys(result.computed)])
+      for (const key of allKeys) {
+        const b = typeof baseComputed[key] === 'number' ? baseComputed[key] : 0
+        const s = typeof result.computed[key] === 'number' ? result.computed[key] : 0
+        if (b !== s) {
+          diff.push({
+            field: key, base: b, scenario: s, delta: s - b,
+            pct_change: b !== 0 ? Math.round(((s - b) / Math.abs(b)) * 10000) / 100 : 0,
+          })
+        }
+      }
+      diff.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    }
+
+    // Identify which inputs changed vs base
+    let inputChanges: Record<string, { from: any; to: any }> = {}
+    if (scenario.base_return_id) {
+      const { data: baseReturn } = await sb(req).from('tax_return')
+        .select('input_data').eq('id', scenario.base_return_id).single()
+      if (baseReturn?.input_data) {
+        const baseInputs = baseReturn.input_data
+        for (const [k, v] of Object.entries(adj)) {
+          if (baseInputs[k] !== v) inputChanges[k] = { from: baseInputs[k] ?? 0, to: v }
+        }
+      }
+    }
+
+    // Check what PDF fields would be missing
+    const { getFieldMap } = await import('../maps/field_maps.js')
+    const { getEngineToCanonicalMap } = await import('../maps/engine_to_pdf.js')
+    const engineMap = getEngineToCanonicalMap(formType)
+    const fieldMapEntries = getFieldMap(
+      formType === '1120S' ? 'f1120s' : `f${formType.toLowerCase()}`,
+      scenario.tax_year
+    )
+    const filledCanonKeys = new Set<string>()
+    for (const [engineKey, value] of Object.entries({ ...adj, ...(result?.computed || {}) })) {
+      const canon = engineMap[engineKey]
+      if (canon && value !== undefined && value !== null) filledCanonKeys.add(canon)
+    }
+    const totalMapFields = fieldMapEntries.length
+    const filledCount = filledCanonKeys.size
+    const coveragePct = totalMapFields > 0 ? Math.round((filledCount / totalMapFields) * 100) : 0
+
     // Save result
     await sb(req).from('scenario').update({
       computed_result: result, status: 'computed', updated_at: new Date().toISOString()
     }).eq('id', req.params.id)
 
-    res.json({ scenario_id: req.params.id, result })
+    res.json({
+      scenario_id: req.params.id,
+      scenario_name: scenario.name,
+      entity: scenario.tax_entity?.name || scenario.entity_id,
+      form_type: formType,
+      tax_year: scenario.tax_year,
+      result,
+      // What changed in this scenario
+      input_changes: inputChanges,
+      // How the computed output differs from the base return
+      diff: diff.length > 0 ? diff : undefined,
+      diff_summary: diff.length > 0 ? {
+        tax_delta: diff.find(d => d.field === 'total_tax')?.delta || diff.find(d => d.field === 'income_tax')?.delta,
+        balance_due_delta: diff.find(d => d.field === 'balance_due')?.delta,
+        fields_changed: diff.length,
+      } : undefined,
+      // PDF readiness
+      pdf_coverage: {
+        filled: filledCount,
+        total: totalMapFields,
+        pct: coveragePct,
+        note: coveragePct < 50 ? 'Many PDF fields will be blank — consider adding more inputs' : undefined,
+      },
+    })
   } catch (e: any) {
     res.status(500).json({ error: e.message })
   }
@@ -243,6 +321,57 @@ router.post('/:id/promote', async (req, res) => {
   }).eq('id', req.params.id)
 
   res.json({ scenario_id: req.params.id, return_id: taxReturn?.id, status: 'promoted' })
+})
+
+// Generate PDF preview for a scenario (without promoting)
+router.get('/:id/pdf', async (req, res) => {
+  const userId = (req as any).userId
+  const { data: scenario } = await sb(req)
+    .from('scenario').select('*, tax_entity(name, ein, address, city, state, zip, date_incorporated, meta, form_type)')
+    .eq('id', req.params.id).eq('user_id', userId).single()
+
+  if (!scenario) return res.status(404).json({ error: 'Scenario not found' })
+  if (!scenario.computed_result) return res.status(400).json({ error: 'Scenario must be computed first' })
+
+  const formType = scenario.tax_entity?.form_type || scenario.adjustments?.form_type
+  if (!formType) return res.status(400).json({ error: 'Cannot determine form_type' })
+
+  try {
+    const { buildReturnPdf } = await import('../builders/build_return_pdf.js')
+    const S3_BUCKET = process.env.S3_BUCKET || 'tax-api-storage-2026'
+
+    const { pdf, filled, pages, forms } = await buildReturnPdf({
+      formType,
+      taxYear: scenario.tax_year,
+      entity: scenario.tax_entity,
+      inputData: scenario.adjustments,
+      computedData: scenario.computed_result?.computed,
+    })
+
+    const pdfBytes = await pdf.save()
+    const s3Key = `scenarios/${userId}/${scenario.id}.pdf`
+
+    const { runPython } = await import('../lib/run_python.js')
+    const { writeFileSync } = await import('fs')
+    const tmpPath = `/tmp/scenario_${scenario.id}.pdf`
+    writeFileSync(tmpPath, Buffer.from(pdfBytes))
+
+    const uploadScript = `
+import boto3, json
+s3 = boto3.client('s3', region_name='us-east-1')
+s3.upload_file('${tmpPath}', '${S3_BUCKET}', '${s3Key}', ExtraArgs={'ContentType': 'application/pdf'})
+url = s3.generate_presigned_url('get_object', Params={
+    'Bucket': '${S3_BUCKET}', 'Key': '${s3Key}'
+}, ExpiresIn=3600)
+print(json.dumps({'url': url}))
+`
+    const result = runPython(uploadScript, { timeout: 30000 })
+    const { url } = JSON.parse(result.trim())
+
+    res.json({ url, filled, pages, forms, scenario_id: scenario.id, scenario_name: scenario.name })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
 })
 
 export default router
