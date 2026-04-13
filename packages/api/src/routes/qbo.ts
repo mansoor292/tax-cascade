@@ -239,14 +239,18 @@ router.get('/callback', async (req, res) => {
       const { data: newEntity, error: createErr } = await supabase.from('tax_entity').insert({
         user_id: stateData.user_id,
         name: companyName,
-        ein: companyEin,
+        ein: companyEin || null,
+        entity_type: companyInfo.CompanyType === 'SoleProprietor' ? 'individual'
+          : companyInfo.LegalName?.includes('LLC') ? 'llc' : 'c_corp',
+        form_type: companyInfo.CompanyType === 'SoleProprietor' ? '1040' : '1120',
         address: [companyAddr.Line1, companyAddr.Line2].filter(Boolean).join(' ') || null,
         city: companyAddr.City || null,
         state: companyAddr.CountrySubDivisionCode || null,
         zip: companyAddr.PostalCode || null,
+        fiscal_year_end: '12/31',
         meta: {
           qbo_realm_id: realmId,
-          fiscal_year_end: companyInfo.FiscalYearStartMonth ? `${companyInfo.FiscalYearStartMonth}/end` : null,
+          qbo_company_type: companyInfo.CompanyType,
         },
       }).select().single()
 
