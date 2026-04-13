@@ -123,7 +123,7 @@ router.post('/:id/analyze', async (req, res) => {
   }
 
   const genAI = new GoogleGenerativeAI(GEMINI_KEY)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' })
 
   const prompt = `You are a tax advisor analyzing a tax scenario for ${scenario.tax_entity?.name || 'a taxpayer'} (${scenario.tax_entity?.form_type || 'unknown form'}).
 
@@ -179,7 +179,7 @@ router.post('/compare', async (req, res) => {
   }
 
   const genAI = new GoogleGenerativeAI(GEMINI_KEY)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' })
 
   const prompt = `Compare these ${scenarios.length} tax scenarios and recommend the best approach:
 

@@ -125,7 +125,7 @@ print(base64.b64encode(data).decode())
       const base64 = execSync(`${pythonBin} -c "${dlScript}"`, { timeout: 30000, encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }).trim()
 
       const genAI = new GoogleGenerativeAI(GEMINI_KEY)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
       const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`
 
       const result = await model.generateContent([
@@ -353,7 +353,7 @@ print(base64.b64encode(obj['Body'].read()).decode())
     const base64 = execSync(`${pythonBin} -c "${dlScript}"`, { timeout: 30000, encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }).trim()
 
     const genAI = new GoogleGenerativeAI(GEMINI_KEY)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
     const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`
 
     const result = await model.generateContent([
