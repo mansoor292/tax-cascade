@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { api } from '../lib/api'
-import { Upload, FileText, Trash2, Scan, Loader2 } from 'lucide-react'
+import { Upload, FileText, Trash2, Loader2 } from 'lucide-react'
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   w2: 'W-2', '1099': '1099', k1: 'K-1',
@@ -21,7 +21,7 @@ const DOC_TYPE_COLORS: Record<string, string> = {
 export default function Documents() {
   const [docs, setDocs] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
-  const [extracting, setExtracting] = useState<string | null>(null)
+  const [uploadStatus, setUploadStatus] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = () => api('/api/documents').then(d => setDocs(d.documents || [])).catch(() => {})
@@ -32,35 +32,27 @@ export default function Documents() {
     if (!file) return
     setUploading(true)
     try {
-      // 1. Get presigned URL
+      setUploadStatus('Getting upload URL...')
       const presign = await api(`/api/documents/presign?filename=${encodeURIComponent(file.name)}`)
 
-      // 2. Upload directly to S3
+      setUploadStatus('Uploading to S3...')
       await fetch(presign.upload_url, {
         method: 'PUT',
         headers: { 'Content-Type': presign.content_type },
         body: file,
       })
 
-      // 3. Register with API (triggers Gemini categorization)
+      setUploadStatus('Classifying with AI + extracting with Textract...')
       await api('/api/documents/register', {
         method: 'POST',
         body: JSON.stringify({ s3_key: presign.s3_key, filename: file.name, file_size: file.size }),
       })
 
+      setUploadStatus('')
       load()
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { alert(err.message); setUploadStatus('') }
     setUploading(false)
     if (fileRef.current) fileRef.current.value = ''
-  }
-
-  const extract = async (id: string) => {
-    setExtracting(id)
-    try {
-      await api(`/api/documents/${id}/extract`, { method: 'POST' })
-      load()
-    } catch (err: any) { alert(err.message) }
-    setExtracting(null)
   }
 
   const del = async (id: string) => {
@@ -73,11 +65,14 @@ export default function Documents() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-white">Documents</h2>
-        <label className={`flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm cursor-pointer ${uploading ? 'opacity-50' : ''}`}>
-          {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-          {uploading ? 'Uploading...' : 'Upload'}
-          <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.csv,.xlsx" onChange={upload_} className="hidden" disabled={uploading} />
-        </label>
+        <div className="flex items-center gap-3">
+          {uploadStatus && <span className="text-xs text-zinc-500">{uploadStatus}</span>}
+          <label className={`flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+            {uploading ? 'Processing...' : 'Upload'}
+            <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.csv,.xlsx" onChange={upload_} className="hidden" disabled={uploading} />
+          </label>
+        </div>
       </div>
 
       {!docs.length ? (
@@ -106,14 +101,8 @@ export default function Documents() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {d.textract_data ? (
-                    <span className="text-xs text-green-500">{d.textract_data.num_pages || '?'} pages extracted</span>
-                  ) : (
-                    <button onClick={() => extract(d.id)} disabled={extracting === d.id}
-                      className="flex items-center gap-1 px-2 py-1 bg-zinc-800 text-zinc-400 hover:text-white rounded text-xs disabled:opacity-50">
-                      {extracting === d.id ? <Loader2 size={11} className="animate-spin" /> : <Scan size={11} />}
-                      Extract
-                    </button>
+                  {d.textract_data && (
+                    <span className="text-xs text-green-500">{d.textract_data.num_pages || '?'} pages · {d.textract_data.kvs?.length || 0} fields</span>
                   )}
                   <button onClick={() => del(d.id)} className="text-zinc-700 hover:text-red-400"><Trash2 size={13} /></button>
                 </div>

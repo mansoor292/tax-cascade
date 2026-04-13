@@ -148,6 +148,67 @@ print(base64.b64encode(data).decode())
     }
   }
 
+  // Run Textract (for PDFs/images)
+  let textractData: any = null
+  if (['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
+    try {
+      const pythonBin = process.env.PYTHON_BIN || 'python3'
+      const txScript = `
+import boto3, json, time
+textract = boto3.client('textract', region_name='us-east-1')
+job = textract.start_document_analysis(
+    DocumentLocation={'S3Object': {'Bucket': '${S3_BUCKET}', 'Name': '${s3_key}'}},
+    FeatureTypes=['FORMS', 'TABLES'])
+jid = job['JobId']
+while True:
+    resp = textract.get_document_analysis(JobId=jid)
+    if resp['JobStatus'] == 'SUCCEEDED':
+        blocks = resp.get('Blocks', [])
+        nt = resp.get('NextToken')
+        while nt:
+            resp = textract.get_document_analysis(JobId=jid, NextToken=nt)
+            blocks.extend(resp.get('Blocks', []))
+            nt = resp.get('NextToken')
+        break
+    elif resp['JobStatus'] == 'FAILED':
+        print(json.dumps({'error': 'failed'}))
+        exit(0)
+    time.sleep(3)
+bm = {b['Id']: b for b in blocks}
+km, vm = {}, {}
+for b in blocks:
+    if b['BlockType'] == 'KEY_VALUE_SET':
+        if 'KEY' in b.get('EntityTypes', []): km[b['Id']] = b
+        else: vm[b['Id']] = b
+def gt(bl):
+    t = ''
+    for rel in bl.get('Relationships', []):
+        if rel['Type'] == 'CHILD':
+            for cid in rel['Ids']:
+                c = bm.get(cid, {})
+                if c.get('BlockType') == 'WORD': t += c.get('Text', '') + ' '
+    return t.strip()
+kvs = []
+for kid, kb in km.items():
+    kt = gt(kb); vb = None
+    for rel in kb.get('Relationships', []):
+        if rel['Type'] == 'VALUE':
+            for vid in rel['Ids']:
+                if vid in vm: vb = vm[vid]; break
+    vt = gt(vb) if vb else ''
+    if kt or vt: kvs.append({'key': kt, 'value': vt})
+np = sum(1 for b in blocks if b['BlockType'] == 'PAGE')
+print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
+`
+      const txResult = execSync(`${pythonBin} -c '${txScript.replace(/'/g, "\\'")}'`, {
+        timeout: 180000, encoding: 'utf-8'
+      })
+      textractData = JSON.parse(txResult.trim())
+    } catch (e: any) {
+      console.error('Textract failed:', e.message)
+    }
+  }
+
   // Save to DB
   const { data: doc, error } = await client.from('document').insert({
     user_id: user.id,
@@ -156,6 +217,8 @@ print(base64.b64encode(data).decode())
     s3_path: s3_key,
     doc_type: classification.doc_type || 'other',
     tax_year: classification.tax_year || null,
+    textract_data: textractData,
+    extracted_at: textractData ? new Date().toISOString() : null,
     meta: {
       size: file_size,
       entity_name: classification.entity_name || '',
@@ -166,7 +229,7 @@ print(base64.b64encode(data).decode())
   }).select().single()
 
   if (error) return res.status(500).json({ error: error.message })
-  res.json({ document: doc, classification })
+  res.json({ document: doc, classification, textract: textractData ? { num_pages: textractData.num_pages, num_fields: textractData.kvs?.length } : null })
 })
 
 // List documents
