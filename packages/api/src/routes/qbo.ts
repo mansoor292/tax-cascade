@@ -263,7 +263,8 @@ router.delete('/:entity_id/disconnect', async (req, res) => {
   res.json({ disconnected: true })
 })
 
-// ─── Reports ───
+// ─── Report helpers ───
+
 const REPORT_MAP: Record<string, string> = {
   'profit-and-loss': 'ProfitAndLoss',
   'balance-sheet': 'BalanceSheet',
@@ -272,112 +273,227 @@ const REPORT_MAP: Record<string, string> = {
   'cash-flow': 'CashFlow',
 }
 
+function flattenReport(report: any): Record<string, number> {
+  const result: Record<string, number> = {}
+  const walk = (rows: any[], prefix = '') => {
+    if (!rows) return
+    for (const row of rows) {
+      if (row.type === 'Section' && row.group) {
+        const sectionName = row.group
+        walk(row.Rows?.Row || [], prefix ? `${prefix} > ${sectionName}` : sectionName)
+        if (row.Summary?.ColData) {
+          const name = prefix ? `${prefix} > ${sectionName}` : sectionName
+          const val = parseFloat(row.Summary.ColData[1]?.value || '0')
+          if (!isNaN(val)) result[`${name} (Total)`] = val
+        }
+      } else if (row.type === 'Data' && row.ColData) {
+        const name = row.ColData[0]?.value
+        const val = parseFloat(row.ColData[1]?.value || '0')
+        if (name && !isNaN(val)) {
+          result[prefix ? `${prefix} > ${name}` : name] = val
+        }
+      }
+      if (row.Rows?.Row) walk(row.Rows.Row, prefix)
+    }
+  }
+  walk(report?.Rows?.Row || [])
+  return result
+}
+
+/** Fetch a report from QBO, store in DB, return both raw and summary. */
+async function fetchAndStoreReport(
+  entityId: string,
+  reportType: string,
+  qboReportName: string,
+  periodStart: string,
+  periodEnd: string,
+  accountingMethod: string,
+  extraQuery?: Record<string, string>,
+): Promise<{ raw: any; summary: Record<string, number>; fetched_at: string }> {
+  const query: Record<string, string> = { accounting_method: accountingMethod, ...extraQuery }
+  // Balance sheet uses 'date' not 'start_date/end_date'
+  if (qboReportName === 'BalanceSheet') {
+    query.date = periodEnd
+  } else {
+    query.start_date = periodStart
+    query.end_date = periodEnd
+  }
+
+  const raw = await qboFetch(entityId, `/reports/${qboReportName}`, query)
+  const summary = flattenReport(raw)
+  const now = new Date().toISOString()
+
+  await supabase.from('qbo_report').upsert({
+    entity_id: entityId,
+    report_type: reportType,
+    period_start: periodStart,
+    period_end: periodEnd,
+    accounting_method: accountingMethod,
+    raw_data: raw,
+    summary,
+    fetched_at: now,
+  }, { onConflict: 'entity_id,report_type,period_start,period_end,accounting_method' })
+
+  await supabase.from('qbo_connection').update({ last_synced_at: now })
+    .eq('entity_id', entityId)
+
+  return { raw, summary, fetched_at: now }
+}
+
+// ─── Reports (cached in DB, refresh on demand) ───
+
 router.get('/:entity_id/reports/:report', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const reportName = REPORT_MAP[req.params.report]
-  if (!reportName) {
+  const reportType = req.params.report
+  const qboReportName = REPORT_MAP[reportType]
+  if (!qboReportName) {
     return res.status(400).json({
-      error: `Unknown report: ${req.params.report}`,
+      error: `Unknown report: ${reportType}`,
       available: Object.keys(REPORT_MAP),
     })
   }
 
-  // Pass through query params as QBO report options
-  const query: Record<string, string> = {}
-  if (req.query.start_date) query.start_date = req.query.start_date as string
-  if (req.query.end_date) query.end_date = req.query.end_date as string
-  if (req.query.date_macro) query.date_macro = req.query.date_macro as string
-  if (req.query.accounting_method) query.accounting_method = req.query.accounting_method as string
-  if (req.query.summarize_column_by) query.summarize_column_by = req.query.summarize_column_by as string
+  const refresh = req.query.refresh === 'true'
+  const year = (req.query.year as string) || new Date().getFullYear().toString()
+  const startDate = (req.query.start_date as string) || `${year}-01-01`
+  const endDate = (req.query.end_date as string) || `${year}-12-31`
+  const accountingMethod = (req.query.accounting_method as string) || 'Accrual'
 
-  try {
-    const data = await qboFetch(req.params.entity_id, `/reports/${reportName}`, query)
-
-    // Update last_synced_at
-    await supabase.from('qbo_connection').update({ last_synced_at: new Date().toISOString() })
+  // Check DB cache first
+  if (!refresh) {
+    const { data: cached } = await supabase.from('qbo_report')
+      .select('*')
       .eq('entity_id', req.params.entity_id)
+      .eq('report_type', reportType)
+      .eq('period_start', startDate)
+      .eq('period_end', endDate)
+      .eq('accounting_method', accountingMethod)
+      .single()
 
-    res.json(data)
+    if (cached) {
+      return res.json({
+        ...cached,
+        source: 'cache',
+      })
+    }
+  }
+
+  // Fetch from QBO
+  try {
+    const extraQuery: Record<string, string> = {}
+    if (req.query.summarize_column_by) extraQuery.summarize_column_by = req.query.summarize_column_by as string
+
+    const result = await fetchAndStoreReport(
+      req.params.entity_id, reportType, qboReportName,
+      startDate, endDate, accountingMethod, extraQuery,
+    )
+
+    res.json({
+      entity_id: req.params.entity_id,
+      report_type: reportType,
+      period_start: startDate,
+      period_end: endDate,
+      accounting_method: accountingMethod,
+      raw_data: result.raw,
+      summary: result.summary,
+      fetched_at: result.fetched_at,
+      source: 'qbo',
+    })
   } catch (e: any) {
     res.status(500).json({ error: e.message })
   }
 })
 
-// ─── Unified financial view for Claude ───
-// Pulls P&L + Balance Sheet and flattens into a structured summary
+// ─── List cached reports for an entity ───
+router.get('/:entity_id/reports', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { data, error } = await supabase.from('qbo_report')
+    .select('id, report_type, period_start, period_end, accounting_method, fetched_at')
+    .eq('entity_id', req.params.entity_id)
+    .order('fetched_at', { ascending: false })
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ reports: data || [] })
+})
+
+// ─── Unified financial view (cached, refresh on demand) ───
 router.get('/:entity_id/financials', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const year = req.query.year as string || new Date().getFullYear().toString()
+  const refresh = req.query.refresh === 'true'
+  const year = (req.query.year as string) || new Date().getFullYear().toString()
   const startDate = `${year}-01-01`
   const endDate = `${year}-12-31`
 
-  try {
-    const [pnl, bs] = await Promise.all([
-      qboFetch(req.params.entity_id, '/reports/ProfitAndLoss', {
-        start_date: startDate, end_date: endDate, accounting_method: 'Accrual',
-      }),
-      qboFetch(req.params.entity_id, '/reports/BalanceSheet', {
-        date: endDate, accounting_method: 'Accrual',
-      }),
+  // Try cache first for both reports
+  let pnlData: { summary: Record<string, number>; raw: any; fetched_at: string } | null = null
+  let bsData: { summary: Record<string, number>; raw: any; fetched_at: string } | null = null
+  let source = 'cache'
+
+  if (!refresh) {
+    const [{ data: pnlCached }, { data: bsCached }] = await Promise.all([
+      supabase.from('qbo_report')
+        .select('*')
+        .eq('entity_id', req.params.entity_id)
+        .eq('report_type', 'profit-and-loss')
+        .eq('period_start', startDate)
+        .eq('period_end', endDate)
+        .single(),
+      supabase.from('qbo_report')
+        .select('*')
+        .eq('entity_id', req.params.entity_id)
+        .eq('report_type', 'balance-sheet')
+        .eq('period_start', startDate)
+        .eq('period_end', endDate)
+        .single(),
     ])
 
-    // Flatten QBO report rows into key-value summaries
-    const flattenReport = (report: any): Record<string, number> => {
-      const result: Record<string, number> = {}
-      const walk = (rows: any[], prefix = '') => {
-        if (!rows) return
-        for (const row of rows) {
-          if (row.type === 'Section' && row.group) {
-            const sectionName = row.group
-            walk(row.Rows?.Row || [], prefix ? `${prefix} > ${sectionName}` : sectionName)
-            if (row.Summary?.ColData) {
-              const name = prefix ? `${prefix} > ${sectionName}` : sectionName
-              const val = parseFloat(row.Summary.ColData[1]?.value || '0')
-              if (!isNaN(val)) result[`${name} (Total)`] = val
-            }
-          } else if (row.type === 'Data' && row.ColData) {
-            const name = row.ColData[0]?.value
-            const val = parseFloat(row.ColData[1]?.value || '0')
-            if (name && !isNaN(val)) {
-              result[prefix ? `${prefix} > ${name}` : name] = val
-            }
-          }
-          // Recurse into nested rows
-          if (row.Rows?.Row) walk(row.Rows.Row, prefix)
-        }
-      }
-      walk(report?.Rows?.Row || [])
-      return result
+    if (pnlCached) pnlData = { summary: pnlCached.summary, raw: pnlCached.raw_data, fetched_at: pnlCached.fetched_at }
+    if (bsCached) bsData = { summary: bsCached.summary, raw: bsCached.raw_data, fetched_at: bsCached.fetched_at }
+  }
+
+  // Fetch missing reports from QBO
+  try {
+    if (!pnlData) {
+      pnlData = await fetchAndStoreReport(
+        req.params.entity_id, 'profit-and-loss', 'ProfitAndLoss',
+        startDate, endDate, 'Accrual',
+      )
+      source = 'qbo'
+    }
+    if (!bsData) {
+      bsData = await fetchAndStoreReport(
+        req.params.entity_id, 'balance-sheet', 'BalanceSheet',
+        startDate, endDate, 'Accrual',
+      )
+      source = 'qbo'
     }
 
-    const pnlFlat = flattenReport(pnl)
-    const bsFlat = flattenReport(bs)
-
-    // Extract key totals from headers
-    const pnlHeader = pnl?.Header || {}
-    const bsHeader = bs?.Header || {}
-
-    await supabase.from('qbo_connection').update({ last_synced_at: new Date().toISOString() })
-      .eq('entity_id', req.params.entity_id)
+    const pnlHeader = pnlData.raw?.Header || {}
+    const bsHeader = bsData.raw?.Header || {}
 
     res.json({
       entity_id: req.params.entity_id,
       year: parseInt(year),
       period: { start: startDate, end: endDate },
+      source,
       profit_and_loss: {
-        title: pnlHeader.ReportName,
+        title: pnlHeader.ReportName || 'Profit and Loss',
         currency: pnlHeader.Currency || 'USD',
-        items: pnlFlat,
+        items: pnlData.summary,
+        fetched_at: pnlData.fetched_at,
       },
       balance_sheet: {
-        title: bsHeader.ReportName,
+        title: bsHeader.ReportName || 'Balance Sheet',
         currency: bsHeader.Currency || 'USD',
         as_of: endDate,
-        items: bsFlat,
+        items: bsData.summary,
+        fetched_at: bsData.fetched_at,
       },
     })
   } catch (e: any) {
