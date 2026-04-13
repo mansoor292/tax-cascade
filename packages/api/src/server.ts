@@ -39,10 +39,8 @@ import discoveryRoutes from './discovery/discovery_routes.js'
 
 const app = express()
 app.use(cors())
-app.use(express.json({ limit: '10mb' }))
-app.use(express.static('public'))
 
-// ─── Deploy webhook (public — verified by GitHub signature) ───
+// ─── Deploy webhook — must be before express.json() so we get the raw body for HMAC ───
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || ''
 
 app.post('/deploy', express.raw({ type: 'application/json' }), (req, res) => {
@@ -72,6 +70,9 @@ app.post('/deploy', express.raw({ type: 'application/json' }), (req, res) => {
     console.error('Deploy failed:', e.message)
   }
 })
+
+app.use(express.json({ limit: '10mb' }))
+app.use(express.static('public'))
 
 // ─── Auth routes (public — no API key needed) ───
 app.use('/auth', authRoutes)
