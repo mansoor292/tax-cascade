@@ -235,6 +235,98 @@ router.post('/process/:document_id', async (req, res) => {
       await supabase.from('document').update({ entity_id: entityId }).eq('id', doc.id)
     }
 
+    // 6. Extract secondary forms from the same textract data
+    const secondaryForms: Array<{form: string; fields: Record<string, any>}> = []
+    const kvs = doc.textract_data.kvs as Array<{key: string; value: string}>
+
+    const parseDollar = (s: string): number | null => {
+      if (!s) return null
+      const c = s.replace(/[\$,\s]/g, '').replace(/\((.+)\)/, '-$1').replace(/\.$/, '')
+      const n = parseFloat(c)
+      return isNaN(n) ? null : Math.round(n)
+    }
+
+    // Define secondary form patterns
+    const secPatterns: Record<string, Array<[RegExp, string]>> = {
+      'schedule_2': [
+        [/11\s+additional\s+medicare\s+tax/i, 'L11_additional_medicare'],
+        [/12\s+net\s+investment\s+income\s+tax/i, 'L12_niit'],
+        [/21\s+.*total\s+other\s+taxes/i, 'L21_total_other_taxes'],
+      ],
+      'schedule_b': [
+        [/2\s+add\s+the\s+amounts\s+on\s+line\s+1\s+2/i, 'L2_total_interest'],
+        [/6\s+add\s+the\s+amounts\s+on\s+line\s+5/i, 'L6_total_dividends'],
+      ],
+      'schedule_d': [
+        [/7\s+net\s+short-term\s+capital\s+gain/i, 'L7_net_short_term'],
+        [/15\s+net\s+long-term\s+capital\s+gain/i, 'L15_net_long_term'],
+        [/16\s+combine\s+lines\s+7\s+and\s+15/i, 'L16_combined'],
+      ],
+      'schedule_e': [
+        [/30\s+add\s+columns.*line\s+29a/i, 'L30_partnership_income'],
+        [/32\s+total\s+partnership.*s\s+corporation/i, 'L32_total_partnership'],
+        [/41\s+total\s+income/i, 'L41_total_income'],
+      ],
+      'form_8959': [
+        [/1\s+medicare\s+wages.*from\s+.*w-2.*box\s+5/i, 'L1_medicare_wages'],
+        [/7\s+additional\s+medicare\s+tax\s+on\s+medicare/i, 'L7_additional_medicare'],
+        [/18\s+add\s+lines\s+7.*13.*17/i, 'L18_total'],
+      ],
+      'form_8960': [
+        [/8\s+total\s+investment\s+income/i, 'L8_total_investment'],
+        [/12\s+net\s+investment\s+income/i, 'L12_net_investment'],
+        [/13\s+modified\s+adjusted\s+gross/i, 'L13_magi'],
+        [/17\s+net\s+investment\s+income\s+tax/i, 'L17_niit'],
+      ],
+      'form_8995a': [
+        [/27\s+total\s+qualified\s+business\s+income\s+component/i, 'L27_total_qbi'],
+        [/33\s+taxable\s+income\s+before\s+qualified/i, 'L33_ti_before_qbi'],
+        [/39\s+total\s+qualified\s+business\s+income\s+deduction/i, 'L39_total_qbi_deduction'],
+      ],
+      'form_7203': [
+        [/1\s+stock\s+basis\s+at\s+the\s+beginning/i, 'L1_basis_boy'],
+        [/3a\s+ordinary\s+business\s+income.*enter\s+losses/i, 'L3a_ordinary_income'],
+        [/5\s+stock\s+basis\s+before\s+distributions/i, 'L5_basis_before_dist'],
+        [/6\s+distributions.*excluding\s+dividend/i, 'L6_distributions'],
+        [/15\s+stock\s+basis\s+at\s+the\s+end/i, 'L15_basis_eoy'],
+      ],
+      'form_1125a': [
+        [/3\s+cost\s+of\s+labor/i, 'L3_labor'],
+        [/5\s+other\s+costs/i, 'L5_other_costs'],
+        [/8\s+cost\s+of\s+goods\s+sold.*subtract/i, 'L8_cogs'],
+      ],
+      'schedule_k1': [
+        [/1\s+ordinary\s+business\s+income\s*\(/i, 'L1_ordinary_income'],
+        [/4\s+interest\s+income\b/i, 'L4_interest'],
+        [/5a\s+ordinary\s+dividends/i, 'L5a_dividends'],
+      ],
+    }
+
+    for (const [formName, patterns] of Object.entries(secPatterns)) {
+      const fields: Record<string, any> = {}
+      for (const kv of kvs) {
+        for (const [regex, fieldKey] of patterns) {
+          if (regex.test(kv.key)) {
+            const val = parseDollar(kv.value)
+            if (val !== null) fields[fieldKey] = val
+          }
+        }
+      }
+      if (Object.keys(fields).length > 0) {
+        secondaryForms.push({ form: formName, fields })
+        // Save to tax_return_form
+        if (taxReturn) {
+          await supabase.from('tax_return_form').upsert({
+            return_id: taxReturn.id,
+            form_name: formName,
+            form_year: taxYear,
+            field_values: fields,
+            status: 'extracted',
+          }, { onConflict: 'return_id,form_name,form_year' as any }).then(() => {})
+        }
+      }
+    }
+
     res.json({
       return: taxReturn,
       breakdown: {
@@ -247,6 +339,7 @@ router.post('/process/:document_id', async (req, res) => {
         computed: engineResult?.computed,
         discrepancies,
         mapper_stats: mapped.stats,
+        secondary_forms: secondaryForms,
       }
     })
   } catch (e: any) {
@@ -282,7 +375,7 @@ router.get('/:id', async (req, res) => {
   if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
   const { data } = await supabase.from('tax_return')
-    .select('*, tax_entity(name, form_type, ein)')
+    .select('*, tax_entity(name, form_type, ein), tax_return_form(*)')
     .eq('id', req.params.id).single()
 
   if (!data) return res.status(404).json({ error: 'Not found' })
