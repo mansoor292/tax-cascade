@@ -36,6 +36,7 @@ import entityRoutes from './routes/entities.js'
 import schemaRoutes from './routes/schema.js'
 import qboRoutes from './routes/qbo.js'
 import discoveryRoutes from './discovery/discovery_routes.js'
+import { mountMCP } from './mcp/tax-mcp.js'
 
 const app = express()
 app.set('trust proxy', true)
@@ -74,6 +75,9 @@ app.post('/deploy', express.raw({ type: 'application/json' }), (req, res) => {
 
 app.use(express.json({ limit: '10mb' }))
 app.use(express.static('public'))
+
+// ─── MCP over HTTP (public — tools call API internally with key) ───
+mountMCP(app)
 
 // ─── Auth routes (public — no API key needed) ───
 app.use('/auth', authRoutes)
