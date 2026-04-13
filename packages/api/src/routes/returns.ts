@@ -10,7 +10,7 @@
 import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
-import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
+import { calc1120, calc1120S, calc1040, calcExtension, type ExtensionInputs, type ExtensionType } from '../engine/tax_engine.js'
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { getEngineToCanonicalMap } from '../maps/engine_to_pdf.js'
@@ -523,6 +523,8 @@ router.post('/compute', async (req, res) => {
       engineResult = calc1120S(inputs)
     } else if (form_type === '1040') {
       engineResult = calc1040({ ...inputs, tax_year })
+    } else if (['4868', '7004', '8868'].includes(form_type)) {
+      engineResult = calcExtension({ ...inputs, extension_type: form_type as ExtensionType, tax_year })
     } else {
       return res.status(400).json({ error: `Unsupported form_type: ${form_type}` })
     }
@@ -695,6 +697,138 @@ print(json.dumps({'url': url}))
     await supabase.from('tax_return').update({ pdf_s3_path: s3Key }).eq('id', req.params.id)
 
     res.json({ url, filled, form: formName, year: taxReturn.tax_year })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ─── Extension forms (4868, 7004, 8868) ───
+
+// Validate extension inputs
+router.post('/extension/validate', async (req, res) => {
+  const { extension_type, inputs } = req.body
+  const errors: Array<{field: string; message: string}> = []
+  const warnings: Array<{field: string; message: string}> = []
+
+  const validTypes: ExtensionType[] = ['4868', '7004', '8868']
+  if (!extension_type || !validTypes.includes(extension_type)) {
+    errors.push({ field: 'extension_type', message: `extension_type must be one of: ${validTypes.join(', ')}` })
+  }
+  if (!inputs || typeof inputs !== 'object') {
+    errors.push({ field: 'inputs', message: 'inputs object is required' })
+  }
+
+  if (errors.length) return res.json({ valid: false, errors, warnings })
+
+  const schema = INPUT_SCHEMAS[extension_type]
+  if (schema) {
+    for (const field of schema.fields) {
+      if (field.required && (inputs[field.name] === undefined || inputs[field.name] === null || inputs[field.name] === '')) {
+        errors.push({ field: field.name, message: `${field.name} is required for Form ${extension_type}` })
+      }
+    }
+    const knownFields = new Set(schema.fields.map((f: any) => f.name))
+    for (const key of Object.keys(inputs)) {
+      if (!knownFields.has(key)) {
+        warnings.push({ field: key, message: `Unknown field "${key}" — will be ignored` })
+      }
+    }
+  }
+
+  res.json({ valid: errors.length === 0, errors, warnings })
+})
+
+// Compute + optionally fill extension form
+router.post('/extension', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { extension_type, tax_year = 2025, inputs, entity_id, generate_pdf = false, save = true } = req.body
+
+  const validTypes: ExtensionType[] = ['4868', '7004', '8868']
+  if (!extension_type || !validTypes.includes(extension_type)) {
+    return res.status(400).json({ error: `extension_type must be one of: ${validTypes.join(', ')}` })
+  }
+  if (!inputs || typeof inputs !== 'object') {
+    return res.status(400).json({ error: 'inputs object is required' })
+  }
+
+  try {
+    // Build engine inputs
+    const engineInputs: ExtensionInputs = {
+      extension_type,
+      tax_year,
+      taxpayer_name:           inputs.taxpayer_name || '',
+      taxpayer_id:             inputs.taxpayer_id || '',
+      address:                 inputs.address || '',
+      city:                    inputs.city || '',
+      state:                   inputs.state || '',
+      zip:                     inputs.zip || '',
+      estimated_tax_liability: inputs.estimated_tax_liability || 0,
+      total_payments:          inputs.total_payments || 0,
+      amount_paying:           inputs.amount_paying || 0,
+      // 4868 specific
+      spouse_ssn:              inputs.spouse_ssn,
+      out_of_country:          inputs.out_of_country,
+      form_1040nr_no_wages:    inputs.form_1040nr_no_wages,
+      // 7004 specific
+      form_code:               inputs.form_code,
+      calendar_year:           inputs.calendar_year,
+      is_foreign_corp:         inputs.is_foreign_corp,
+      is_consolidated_parent:  inputs.is_consolidated_parent,
+      // 8868 specific
+      return_code:             inputs.return_code,
+      org_books_care_of:       inputs.org_books_care_of,
+      telephone:               inputs.telephone,
+      fax:                     inputs.fax,
+      extension_date:          inputs.extension_date,
+    }
+
+    const result = calcExtension(engineInputs)
+
+    // Optionally generate PDF
+    let pdfUrl = null
+    if (generate_pdf) {
+      const { buildExtensionPdf } = await import('../builders/build_extension.js')
+      const { pdf, filled, missed } = await buildExtensionPdf(engineInputs, tax_year)
+      const pdfBytes = await pdf.save()
+
+      // Save locally to output/
+      const { writeFileSync, mkdirSync } = await import('fs')
+      mkdirSync('output', { recursive: true })
+      const filename = `extension_${extension_type}_${tax_year}_${Date.now()}.pdf`
+      const outPath = `output/${filename}`
+      writeFileSync(outPath, Buffer.from(pdfBytes))
+      pdfUrl = outPath
+    }
+
+    // Optionally save to database
+    let taxReturn = null
+    if (save && entity_id) {
+      const { data, error } = await supabase.from('tax_return').upsert({
+        entity_id,
+        tax_year,
+        form_type: extension_type,
+        status: 'computed',
+        is_amended: false,
+        input_data: inputs,
+        computed_data: result,
+        computed_at: new Date().toISOString(),
+      }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
+
+      if (error) return res.status(500).json({ error: error.message })
+      taxReturn = data
+    }
+
+    res.json({
+      return_id: taxReturn?.id || null,
+      extension_type,
+      tax_year,
+      saved: save && !!entity_id,
+      computed: result.computed,
+      citations: result.citations,
+      pdf_path: pdfUrl,
+    })
   } catch (e: any) {
     res.status(500).json({ error: e.message })
   }

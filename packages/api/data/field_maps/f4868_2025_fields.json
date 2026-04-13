@@ -1,0 +1,19 @@
+[
+  {"page": 1, "field_id": "f1_1", "label": "Tax year beginning date"},
+  {"page": 1, "field_id": "f1_2", "label": "Tax year ending date"},
+  {"page": 1, "field_id": "f1_3", "label": "Tax year ending year suffix"},
+  {"page": 1, "field_id": "f1_4", "label": "1 Your name(s)"},
+  {"page": 1, "field_id": "f1_5", "label": "Address"},
+  {"page": 1, "field_id": "f1_6", "label": "City, town, or post office"},
+  {"page": 1, "field_id": "f1_7", "label": "State"},
+  {"page": 1, "field_id": "f1_8", "label": "ZIP code"},
+  {"page": 1, "field_id": "f1_9", "label": "2 Your social security number"},
+  {"page": 1, "field_id": "f1_10", "label": "3 Spouse's social security number"},
+  {"page": 1, "field_id": "f1_11", "label": "4 Estimate of total tax liability for 2025"},
+  {"page": 1, "field_id": "f1_12", "label": "5 Total 2025 payments"},
+  {"page": 1, "field_id": "f1_13", "label": "6 Balance due"},
+  {"page": 1, "field_id": "f1_14", "label": "7 Amount you're paying"},
+  {"page": 1, "field_id": "c1_1", "label": "8 Out of the country checkbox"},
+  {"page": 1, "field_id": "c1_2", "label": "9 Form 1040-NR checkbox"},
+  {"page": 3, "field_id": "f3_1", "label": "Confirmation number"}
+]

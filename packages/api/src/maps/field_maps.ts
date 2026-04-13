@@ -203,6 +203,11 @@ export const FORM_INVENTORY: Record<string, { name: string; years: number[]; map
   f4562:    { name: 'Form 4562',    years: [2024,2025], maps: [] },
   f1120sg:  { name: 'Schedule G',   years: [2024,2025], maps: [] },
   f1120sk1: { name: 'Schedule K-1', years: [2024,2025], maps: [2025] },
+
+  // Extension forms
+  f4868:    { name: 'Form 4868',    years: [2025], maps: [2025] },
+  f7004:    { name: 'Form 7004',    years: [2025], maps: [2025] },
+  f8868:    { name: 'Form 8868',    years: [2025], maps: [2025] },
 }
 
 /**
