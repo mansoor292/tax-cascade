@@ -53,9 +53,6 @@ const INSTRUCTIONS = `You help users prepare and optimize tax returns using the 
 - For S-Corps, shareholder percentages must sum to 100%
 - When QBO is connected, pull financials first before asking for manual input`
 
-// ─── Session management ───
-const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: McpServer; apiKey: string }>()
-
 function extractApiKey(req: Request): string | null {
   const auth = req.headers.authorization
   if (auth?.startsWith('Bearer ')) return auth.slice(7)
@@ -195,63 +192,36 @@ function createServer(apiKey: string): McpServer {
   return server
 }
 
-// ─── Mount on Express ───
+// ─── Mount on Express (stateless — no sessions to lose on restart) ───
 export function mountMCP(app: Express) {
-  // Handle POST /mcp — JSON-RPC messages
   app.post('/mcp', async (req: Request, res: Response) => {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined
-    let session = sessionId ? sessions.get(sessionId) : undefined
-
-    if (!session) {
-      // New session — require API key
-      const apiKey = extractApiKey(req)
-      if (!apiKey) {
-        res.status(401).json({
-          jsonrpc: '2.0',
-          error: { code: -32001, message: 'API key required. Set Authorization: Bearer <your-api-key> or x-api-key header.' },
-          id: null,
-        })
-        return
-      }
-
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (id) => {
-          sessions.set(id, { transport, server, apiKey })
-        },
-        onsessionclosed: (id) => {
-          sessions.delete(id)
-        },
+    const apiKey = extractApiKey(req)
+    if (!apiKey) {
+      res.status(401).json({
+        jsonrpc: '2.0',
+        error: { code: -32001, message: 'Authorization required.' },
+        id: null,
       })
-      const server = createServer(apiKey)
-      await server.connect(transport)
-      session = { transport, server, apiKey }
-    }
-
-    await session.transport.handleRequest(req, res, req.body)
-  })
-
-  // Handle GET /mcp — SSE stream
-  app.get('/mcp', async (req: Request, res: Response) => {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined
-    const session = sessionId ? sessions.get(sessionId) : undefined
-    if (!session) {
-      res.status(400).json({ error: 'No active session. Send a POST first.' })
       return
     }
-    await session.transport.handleRequest(req, res)
+
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined, // stateless — no session tracking
+    })
+    const server = createServer(apiKey)
+    await server.connect(transport)
+    await transport.handleRequest(req, res, req.body)
   })
 
-  // Handle DELETE /mcp — close session
-  app.delete('/mcp', async (req: Request, res: Response) => {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined
-    const session = sessionId ? sessions.get(sessionId) : undefined
-    if (!session) {
-      res.status(404).json({ error: 'Session not found' })
-      return
-    }
-    await session.transport.handleRequest(req, res)
+  // GET /mcp — not needed in stateless mode, but return a helpful error
+  app.get('/mcp', (_req: Request, res: Response) => {
+    res.status(405).json({ error: 'Stateless MCP — use POST only' })
   })
 
-  console.log('  MCP endpoint: POST/GET/DELETE /mcp')
+  // DELETE /mcp — no-op in stateless mode
+  app.delete('/mcp', (_req: Request, res: Response) => {
+    res.status(200).json({ ok: true })
+  })
+
+  console.log('  MCP endpoint: POST /mcp (stateless)')
 }
