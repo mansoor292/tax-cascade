@@ -1,0 +1,177 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_01",
+    "label": "Name(s) shown on Form 1040, 1040-SR, or 1040-NR"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_02",
+    "label": "Your social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_03",
+    "label": "1 Foreign tax credit. Attach Form 1116 if required 1"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_04",
+    "label": "2 Credit for child and dependent care expenses from Form 2441, line 11. Attach Form 2441 2"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_05",
+    "label": "3 Education credits from Form 8863, line 19 3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_06",
+    "label": "4 Retirement savings contributions credit. Attach Form 8880 4"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_07",
+    "label": "5a Residential clean energy credit from Form 5695, line 15 5a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_08",
+    "label": "b Energy efficient home improvement credit from Form 5695, line 32 5b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_09",
+    "label": "a General business credit. Attach Form 3800 6a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_10",
+    "label": "b Credit for prior year minimum tax. Attach Form 8801 6b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_11",
+    "label": "c Adoption credit. Attach Form 8839 6c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_12",
+    "label": "d Credit for the elderly or disabled. Attach Schedule R 6d"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_13",
+    "label": "e Reserved for future use 6e"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_14",
+    "label": "f Clean vehicle credit. Attach Form 8936 6f"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "g Mortgage interest credit. Attach Form 8396 6g"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "h District of Columbia first-time homebuyer credit. Attach Form 8859 6h"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "i Qualified electric vehicle credit. Attach Form 8834 6i"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "j Alternative fuel vehicle refueling property credit. Attach Form 8911 6j"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_19",
+    "label": "k Credit to holders of tax credit bonds. Attach Form 8912 6k"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "I Amount on Form 8978, line 14. See instructions 6I"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_21",
+    "label": "m Credit for previously owned clean vehicles. Attach Form 8936 6m"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_23",
+    "label": "Z Other nonrefundable credits. List type and amount: f2_22 6z"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "7 Total other nonrefundable credits. Add lines 6a through 6z 7"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_25",
+    "label": "8 Add lines 1 through 4, 5a, 5b, and 7. Enter here and on Form 1040, 1040-SR, or 1040-NR, line 20 8"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_26",
+    "label": "9 Net premium tax credit. Attach Form 8962 9"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_27",
+    "label": "10 Amount paid with request for extension to file (see instructions) 10"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_28",
+    "label": "11 Excess social security and tier 1 RRTA tax withheld 11"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_29",
+    "label": "12 Credit for federal tax on fuels. Attach Form 4136 12"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_30",
+    "label": "a Form 2439 13a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_31",
+    "label": "b Section 1341 credit for repayment of amounts included in income from earlier years 13b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_32",
+    "label": "c Net elective payment election amount from Form 3800, Part III, line 6, column (j) 13c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_33",
+    "label": "d Deferred amount of net 965 tax liability (see instructions) 13d"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_35",
+    "label": "Z Other refundable credits (see instructions): f1_34 13z"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_36",
+    "label": "14 Total other payments or refundable credits. Add lines 13a through 13z 14"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_37",
+    "label": "15 Add lines 9 through 12 and 14. Enter here and on Form 1040, 1040-SR, or 1040-NR, line 31 15"
+  }
+]

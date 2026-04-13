@@ -1,0 +1,182 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_01",
+    "label": "This return is for calendar year (enter year)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_02",
+    "label": "or fiscal year (enter month and year ended)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_03",
+    "label": "Your first name and middle initial"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_04",
+    "label": "Last name"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_05",
+    "label": "Your social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_06",
+    "label": "If joint return, spouse's first name and middle initial"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_07",
+    "label": "Last name"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_08",
+    "label": "Spouse's social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_09",
+    "label": "Home address (number and street). If you have a P.O. box, see instructions."
+  },
+  {
+    "page": 1,
+    "field_id": "f1_10",
+    "label": "Apt. no."
+  },
+  {
+    "page": 1,
+    "field_id": "f1_11",
+    "label": "City, town, or post office. If you have a foreign address, also complete spaces below."
+  },
+  {
+    "page": 1,
+    "field_id": "f1_12",
+    "label": "State"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_13",
+    "label": "ZIP code"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_14",
+    "label": "Foreign country name"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "Foreign province/state/county"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "Foreign postal code"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_36",
+    "label": "6 Tax. Enter method(s) used to figure tax. See instructions:"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_68",
+    "label": "16 Total amount paid with request for extension of time to file, tax paid with original return, and additional tax paid after return was filed 16"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_69",
+    "label": "17 Total payments. Add lines 12 through 15, column C, and line 16 17"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_70",
+    "label": "18 Overpayment, if any, as shown on original return or as previously adjusted by the IRS 18"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_71",
+    "label": "19 Subtract line 18 from line 17. (If less than zero, see instructions.) 19"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_72",
+    "label": "20 Amount you owe. If line 11, column C, is more than line 19, enter the difference. For details on how to pay, go to www.irs.gov/Payments or see instructions 20"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_73",
+    "label": "21 If line 11, column C, is less than line 19, enter the difference. This is the amount overpaid on this return 21"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_74",
+    "label": "22 Amount of line 21 you want refunded to you 22"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_76",
+    "label": "f1_75 estimated tax 23"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_35",
+    "label": "Part II Explanation of Changes. In the space provided below, tell us why you are filing Form 1040-X. You must complete Part II."
+  },
+  {
+    "page": 2,
+    "field_id": "f2_36",
+    "label": "Your occupation"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_38",
+    "label": "Spouse's occupation"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_40",
+    "label": "Phone no."
+  },
+  {
+    "page": 2,
+    "field_id": "f2_41",
+    "label": "Email address"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_42",
+    "label": "Preparer's name"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_43",
+    "label": "PTIN"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_44",
+    "label": "Firm's name"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_45",
+    "label": "Phone no."
+  },
+  {
+    "page": 2,
+    "field_id": "f2_46",
+    "label": "Firm's address"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_47",
+    "label": "Firm's EIN"
+  }
+]

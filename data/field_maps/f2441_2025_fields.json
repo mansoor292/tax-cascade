@@ -1,0 +1,152 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_1",
+    "label": "Name(s) shown on return"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_2",
+    "label": "Your social security number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_27",
+    "label": "3 Add the amounts in column (d) of line 2. Don't enter more than $3,000 if you had one qualifying person or $6,000 if you had two or more persons. If you completed Part III, enter the amount from line 31 3"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_28",
+    "label": "4 Enter your earned income. See instructions 4"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_29",
+    "label": "5 If married filing jointly, enter your spouse's earned income (if you or your spouse was a student or was disabled, see the instructions); all others, enter the amount from line 4 5"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_30",
+    "label": "6 Enter the smallest of line 3, 4, or 5. If zero or less, enter -0- 6"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_31",
+    "label": "7 Enter the amount from Form 1040, 1040-SR, or 1040-NR, line 11a 7"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_33",
+    "label": "9a Multiply line 6 by the decimal amount on line 8 9a"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_34",
+    "label": "b If you paid 2024 expenses in 2025, complete Worksheet A in the instructions. Enter the amount from line 13 of the worksheet here. Otherwise, enter -0- on line 9b and go to line 9c 9b"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_35",
+    "label": "c Add lines 9a and 9b and enter the result 9c"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_36",
+    "label": "10 Tax liability limit. Enter the amount from the Credit Limit Worksheet in the instructions 10"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_37",
+    "label": "11 Credit for child and dependent care expenses. Enter the smaller of line 9c or line 10 here and on Schedule 3 (Form 1040), line 2 11"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_1",
+    "label": "12 Enter the total amount of dependent care benefits you received in 2025. Amounts you received as an employee should be shown in box 10 of your Form(s) W-2. Don't include amounts reported as wages in box 1 of Form(s) W-2. If you were self-employed or a partner, include amounts you received under a dependent care assistance program from your sole proprietorship or partnership 12"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_10",
+    "label": "21 Enter $5,000 ($2,500 if married filing separately and you were required to enter your spouse's earned income on line 19). However, don't enter more than the maximum amount allowed under your dependent care plan. See instructions 21"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_12",
+    "label": "23 Subtract line 22 from line 15 23"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_13",
+    "label": "24 Deductible benefits. Enter the smallest of line 20, 21, or 22. Also, include this amount on the appropriate line(s) of your return. See instructions 24"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_14",
+    "label": "25 Excluded benefits. If you checked \"No\" on line 22, enter the smaller of line 20 or line 21. Otherwise, subtract line 24 from the smaller of line 20 or line 21. If zero or less, enter -0- 25"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_15",
+    "label": "26 Taxable benefits. Subtract line 25 from line 23. If zero or less, enter -0-. Also, enter this amount on Form 1040, 1040-SR, or 1040-NR, line 1e 26"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_16",
+    "label": "27 Enter $3,000 ($6,000 if two or more qualifying persons) 27"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_17",
+    "label": "28 Add lines 24 and 25 28"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_18",
+    "label": "29 Subtract line 28 from line 27. If zero or less, stop. You can't take the credit. Exception. If you paid 2024 expenses in 2025, see the instructions for line 9b 29"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_19",
+    "label": "30 Complete line 2 on page 1 of this form. Don't include in column (d) any benefits shown on line 28 above. Then, add the amounts in column (d) and enter the total here 30"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_2",
+    "label": "13 Enter the amount, if any, you carried over from 2024 and used in 2025 during the grace period. See instructions 13"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_20",
+    "label": "31 Enter the smaller of line 29 or 30. Also, enter this amount on line 3 on page 1 of this form and complete lines 4 through 11 31"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_4",
+    "label": "15 Combine lines 12 through 14. See instructions 15"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_5",
+    "label": "16 Enter the total amount of qualified expenses incurred in 2025 for the care of the qualifying person(s) 16"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_6",
+    "label": "17 Enter the smaller of line 15 or 16 17"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_7",
+    "label": "18 Enter your earned income. See instructions 18"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_8",
+    "label": "19 Enter the amount shown below that applies to you. If married filing jointly, enter your spouse's earned income (if you or your spouse was a student or was disabled, see the 19 instructions for line 5). If married filing separately, see instructions. All others, enter the amount from line 18."
+  },
+  {
+    "page": 2,
+    "field_id": "f2_9",
+    "label": "20 Enter the smallest of line 17, 18, or 19. If zero or less, enter -0- 20"
+  }
+]

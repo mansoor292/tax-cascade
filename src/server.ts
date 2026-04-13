@@ -162,7 +162,7 @@ app.post('/api/fill/:form/:year', async (req, res) => {
       for (const f of form.getFields()) {
         if (f.getName().includes(fieldId + '[') && f instanceof PDFTextField) {
           const str = typeof value === 'number'
-            ? (value === 0 ? '' : (value as number).toLocaleString())
+            ? (value as number).toLocaleString()
             : String(value)
           if (str) {
             const ml = f.getMaxLength()

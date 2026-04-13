@@ -27,9 +27,9 @@ export function setField(form: ReturnType<PDFDocument['getForm']>, shortId: stri
   if (!field) return false
 
   const str = typeof value === 'number'
-    ? (value === 0 ? '' : value.toLocaleString())
+    ? value.toLocaleString()
     : String(value)
-  if (!str) return false
+  if (str === '') return false
 
   const maxLen = field.getMaxLength()
   if (maxLen !== undefined && str.length > maxLen) {

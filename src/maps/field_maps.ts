@@ -13,7 +13,7 @@
  * NO fuzzy logic on output. Lookup is deterministic.
  */
 
-import { readFileSync } from 'fs'
+import { readFileSync, readdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -64,8 +64,7 @@ export function findFieldByLabel(form: string, year: number, labelMatch: string)
  * List all available form+year combinations.
  */
 export function listAvailableMaps(): string[] {
-  const fs = require('fs')
-  return fs.readdirSync(DATA_DIR)
+  return readdirSync(DATA_DIR)
     .filter((f: string) => f.endsWith('_fields.json'))
     .map((f: string) => f.replace('_fields.json', ''))
 }
@@ -87,25 +86,17 @@ export type TaxYear = 2024 | 2025
  * (pdf_field_map_2024.ts, pdf_field_map_2025.ts) and
  * re-exported here for convenience.
  */
-export function getCanonicalMap(form: FormType, year: TaxYear): Record<string, string> {
-  if (year === 2024) {
-    // Dynamic import would be cleaner but for simplicity:
-    const maps2024 = require('./pdf_field_map_2024.js')
-    switch (form) {
-      case '1040': return maps2024.PDF_FIELD_MAP_1040
-      case '1120': return maps2024.PDF_FIELD_MAP_1120
-      case '1120S': return maps2024.PDF_FIELD_MAP_1120S
-    }
+/**
+ * Get canonical → field_id map from the JSON field maps.
+ * This loads the Textract-verified JSON and returns a label → field_id lookup.
+ */
+export function getCanonicalMap(form: string, year: number): Record<string, string> {
+  const map = getFieldMap(form, year)
+  const result: Record<string, string> = {}
+  for (const entry of map) {
+    result[entry.label] = entry.field_id
   }
-  if (year === 2025) {
-    const maps2025 = require('./pdf_field_map_2025.js')
-    switch (form) {
-      case '1040': return maps2025.F1040_2025
-      case '1120': return maps2025.F1120_2025
-      case '1120S': return maps2025.F1120S_2025
-    }
-  }
-  return {}
+  return result
 }
 
 // ═══════════════════════════════════════════════════════════════
