@@ -153,7 +153,16 @@ import { ordinaryTax, standardDeduction, qbiDeduction } from './tax_tables.js'
 
 /** Form 1120-S calculation */
 export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
-  const inp = defaults(raw, ['shareholders'])
+  const inp: Form1120S_Inputs = Object.assign({
+    gross_receipts: 0, returns_allowances: 0, cost_of_goods_sold: 0,
+    net_gain_4797: 0, other_income: 0,
+    officer_compensation: 0, salaries_wages: 0, repairs_maintenance: 0,
+    bad_debts: 0, rents: 0, taxes_licenses: 0, interest: 0,
+    depreciation: 0, depletion: 0, advertising: 0, pension_plans: 0,
+    employee_benefits: 0, other_deductions: 0,
+    charitable_contrib: 0, section_179: 0,
+    shareholders: [{ name: 'Shareholder', pct: 100 }],
+  }, raw)
   const balance_1c = inp.gross_receipts - inp.returns_allowances
   const gross_profit = balance_1c - inp.cost_of_goods_sold
   const total_income = gross_profit + inp.net_gain_4797 + inp.other_income  // L6
@@ -201,7 +210,17 @@ function defaults<T extends Record<string, any>>(inp: T, exclude: string[] = [])
 
 /** Form 1120 calculation */
 export function calc1120(raw: Form1120_Inputs): Form1120_Result {
-  const inp = defaults(raw, ['tax_year'])
+  const inp: Form1120_Inputs = Object.assign({
+    gross_receipts: 0, returns_allowances: 0, cost_of_goods_sold: 0,
+    dividends: 0, interest_income: 0, gross_rents: 0, gross_royalties: 0,
+    capital_gains: 0, net_gain_4797: 0, other_income: 0,
+    officer_compensation: 0, salaries_wages: 0, repairs_maintenance: 0,
+    bad_debts: 0, rents: 0, taxes_licenses: 0, interest_expense: 0,
+    charitable_contrib: 0, depreciation: 0, depletion: 0, advertising: 0,
+    pension_plans: 0, employee_benefits: 0, other_deductions: 0,
+    nol_deduction: 0, special_deductions: 0, estimated_tax_paid: 0,
+    tax_year: 2025,
+  }, raw)
   const balance_1c = inp.gross_receipts - inp.returns_allowances
   const gross_profit = balance_1c - inp.cost_of_goods_sold
   const total_income = (
@@ -251,7 +270,16 @@ export function calc1040(raw: Form1040_Inputs): {
   computed: Record<string,number>
   citations: string[]
 } {
-  const inp = defaults(raw, ['filing_status', 'tax_year', 'use_itemized'])
+  const inp: Form1040_Inputs = Object.assign({
+    filing_status: 'single' as FilingStatus, tax_year: 2025,
+    wages: 0, taxable_interest: 0, ordinary_dividends: 0, qualified_dividends: 0,
+    ira_distributions: 0, pensions_annuities: 0, social_security: 0,
+    capital_gains: 0, schedule1_income: 0,
+    student_loan_interest: 0, educator_expenses: 0,
+    itemized_deductions: 0, use_itemized: false,
+    qbi_from_k1: 0, k1_ordinary_income: 0, k1_w2_wages: 0, k1_ubia: 0,
+    withholding: 0, estimated_payments: 0,
+  }, raw)
   // Line 9: Total income
   const total_income = (
     inp.wages + inp.taxable_interest + inp.ordinary_dividends +
