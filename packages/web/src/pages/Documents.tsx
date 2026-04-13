@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
 import { api } from '../lib/api'
-import { supabase } from '../lib/supabase'
 import { Upload, FileText, Trash2, Scan, Loader2 } from 'lucide-react'
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -33,16 +32,22 @@ export default function Documents() {
     if (!file) return
     setUploading(true)
     try {
-      const { data } = await supabase.auth.getSession()
-      const form = new FormData()
-      form.append('file', file)
-      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/documents/upload`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${data.session?.access_token}` },
-        body: form,
+      // 1. Get presigned URL
+      const presign = await api(`/api/documents/presign?filename=${encodeURIComponent(file.name)}`)
+
+      // 2. Upload directly to S3
+      await fetch(presign.upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': presign.content_type },
+        body: file,
       })
-      const d = await res.json()
-      if (d.error) alert(d.error)
+
+      // 3. Register with API (triggers Gemini categorization)
+      await api('/api/documents/register', {
+        method: 'POST',
+        body: JSON.stringify({ s3_key: presign.s3_key, filename: file.name, file_size: file.size }),
+      })
+
       load()
     } catch (err: any) { alert(err.message) }
     setUploading(false)
