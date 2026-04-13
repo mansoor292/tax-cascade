@@ -97,8 +97,11 @@ app.use('/api', async (req, res, next) => {
     res.status(401).json({ error: 'Missing API key or Bearer token' })
     return
   }
-  // Check static keys
-  if (STATIC_KEYS.has(key as string)) return next()
+  // Check static keys — set a placeholder userId for compatibility
+  if (STATIC_KEYS.has(key as string)) {
+    (req as any).userId = '00000000-0000-0000-0000-000000000000'
+    return next()
+  }
   // Check Supabase-provisioned keys
   const { data } = await supabase.from('api_key')
     .select('user_id').eq('key_value', key).eq('is_active', true).single()
