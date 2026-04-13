@@ -78,7 +78,7 @@ export const ENGINE_TO_PDF_1120S: Record<string, string> = {
 }
 
 export const ENGINE_TO_PDF_1040: Record<string, string> = {
-  // Inputs → canonical
+  // Inputs → canonical (2025 keys)
   'wages':                 'income.L1z_total_wages',
   'taxable_interest':      'income.L2b_taxable_int',
   'ordinary_dividends':    'income.L3b_ord_dividends',
@@ -87,7 +87,7 @@ export const ENGINE_TO_PDF_1040: Record<string, string> = {
   'schedule1_income':      'income.L8_schedule1',
   'withholding':           'payments.L25d_total',
   'estimated_payments':    'payments.L26_estimated',
-  // Computed → canonical
+  // Computed → canonical (2025 keys)
   'total_income':          'income.L9_total_income',
   'agi':                   'income.L11b_agi',
   'standard_deduction':    'deductions.L14_total',
@@ -98,6 +98,18 @@ export const ENGINE_TO_PDF_1040: Record<string, string> = {
   'total_payments':        'payments.L33_total',
   'balance_due':           'result.L37_balance_due',
   'refund':                'refund.L35a_refunded',
+}
+
+/**
+ * 1040 canonical key aliases: 2025 key → 2024 equivalent.
+ * The model builder adds BOTH so either year's field map will match.
+ */
+export const CANON_1040_ALIASES: Record<string, string> = {
+  'income.L7a_capital_gains':  'income.L7_capital_gains',
+  'income.L11b_agi':           'income.L11_agi',
+  'deductions.L13a_qbi':       'deductions.L13_qbi',
+  'deductions.L14_total':      'deductions.L14_total',  // same in both years
+  'deductions.L12e_standard':  'deductions.L12_standard',
 }
 
 export function getEngineToCanonicalMap(formType: string): Record<string, string> {
