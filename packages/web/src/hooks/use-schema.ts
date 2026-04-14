@@ -25,8 +25,17 @@ export function useSchema(formType?: string, year?: number) {
     if (!formType || !year) { setSchema(null); return }
     setLoading(true)
     try {
-      const data = await api<FormSchema>(`/api/schema/${formType}/${year}`)
-      setSchema(data)
+      const raw = await api<any>(`/api/schema/${formType}/${year}`)
+      // Transform API response to match component expectations
+      const fields: FieldDef[] = (raw.fields || []).map((f: any) => ({
+        key: f.name,
+        label: f.description || f.name.replace(/_/g, ' '),
+        type: f.type || 'number',
+        section: f.category || 'General',
+        description: f.description,
+      }))
+      const sections = [...new Set(fields.map(f => f.section || 'General'))]
+      setSchema({ form_type: raw.form_type, year: raw.tax_year || year, fields, sections })
     } catch {
       setSchema(null)
     }

@@ -7,6 +7,8 @@ import {
   TableProperties,
   Clock,
   Plus,
+  FlaskConical,
+  FileText,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -30,6 +32,11 @@ const FORM_TYPE_LABEL: Record<string, string> = {
   '1120S': 'S-Corp',
   '1120-S': 'S-Corp',
 }
+
+const mainNav = [
+  { to: '/app/returns', label: 'Returns', icon: FileText },
+  { to: '/app/scenarios', label: 'Scenarios', icon: FlaskConical },
+]
 
 const tools = [
   { to: '/app/compute', label: 'Quick Compute', icon: Calculator },
@@ -77,6 +84,23 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {mainNav.map(link => (
+                <SidebarMenuItem key={link.to}>
+                  <SidebarMenuButton render={<NavLink to={link.to} />}>
+                    <link.icon className="shrink-0" />
+                    <span>{link.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
         <SidebarGroup>
           <SidebarGroupLabel className="flex items-center justify-between">
             <span>Entities</span>

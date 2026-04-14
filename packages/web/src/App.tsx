@@ -5,6 +5,8 @@ import Login from '@/pages/Login'
 import Layout from '@/pages/Layout'
 import Entities from '@/pages/Entities'
 import EntityDetail from '@/pages/EntityDetail'
+import Returns from '@/pages/Returns'
+import Scenarios from '@/pages/Scenarios'
 import Compute from '@/pages/Compute'
 import Cascade from '@/pages/Cascade'
 import Extensions from '@/pages/Extensions'
@@ -21,7 +23,7 @@ function Guard({ children }: { children: React.ReactNode }) {
 function Home() {
   const { session, loading } = useAuth()
   if (loading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading...</div>
-  if (session) return <Navigate to="/app/entities" />
+  if (session) return <Navigate to="/app/returns" />
   return <Landing />
 }
 
@@ -33,7 +35,9 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/app" element={<Guard><Layout /></Guard>}>
-            <Route index element={<Navigate to="/app/entities" />} />
+            <Route index element={<Navigate to="/app/returns" />} />
+            <Route path="returns" element={<Returns />} />
+            <Route path="scenarios" element={<Scenarios />} />
             <Route path="entities" element={<Entities />} />
             <Route path="entities/:id" element={<EntityDetail />} />
             <Route path="compute" element={<Compute />} />
