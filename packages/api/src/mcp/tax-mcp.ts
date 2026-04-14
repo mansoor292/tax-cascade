@@ -99,6 +99,12 @@ const INSTRUCTIONS = `You help users prepare and optimize tax returns using the 
 - stripe_customers: customer list
 - Use stripe_revenue to get total Stripe income for a tax year
 
+## Adding New Forms
+- If the user needs a form we don't support, call request_form with the IRS form name and year
+- The pipeline downloads the blank PDF from IRS, labels fields, runs Textract, and creates a field map
+- Check progress with check_form_status
+- Once active, the form shows up in get_schema automatically
+
 ## Rules
 - Never fabricate financial data — ask the user for missing values
 - Always confirm the tax year before computing
@@ -398,6 +404,24 @@ function createServer(apiKey: string): McpServer {
       return text(await call('DELETE', `/api/qbo/${entity_id}/resource/${resource}`, data || {}))
     }
     return text({ error: 'Invalid operation' })
+  })
+
+  // ─── Tool: request_form ───
+  server.tool('request_form', 'Request support for a new IRS form or tax year. Downloads the blank PDF from IRS, runs field detection via Textract, and creates the field map. Check status with get_schema afterward.', {
+    form_name: z.string().describe('IRS form name (e.g. f8829, f1065, f940, f941, f1099misc). Use the f-prefix naming.'),
+    year: z.number().describe('Tax year'),
+  }, async ({ form_name, year }) => {
+    // Trigger discovery
+    const result = await call('POST', `/api/discover/${form_name}/${year}`)
+    return text(result)
+  })
+
+  // ─── Tool: check_form_status ───
+  server.tool('check_form_status', 'Check if a form/year is supported and its discovery status.', {
+    form_name: z.string().describe('Form name (e.g. f8829, f1065)'),
+    year: z.number().describe('Tax year'),
+  }, async ({ form_name, year }) => {
+    return text(await call('GET', `/api/discover/${form_name}/${year}/status`))
   })
 
   // ─── Tool: connect_stripe ───
