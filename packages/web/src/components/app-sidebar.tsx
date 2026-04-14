@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, useParams } from 'react-router-dom'
 import {
   Building2,
@@ -8,7 +9,9 @@ import {
   Clock,
   Plus,
   FlaskConical,
-  FileText,
+  LayoutDashboard,
+  ChevronDown,
+  Wrench,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -33,20 +36,11 @@ const FORM_TYPE_LABEL: Record<string, string> = {
   '1120-S': 'S-Corp',
 }
 
-const mainNav = [
-  { to: '/app/returns', label: 'Returns', icon: FileText },
-  { to: '/app/scenarios', label: 'Scenarios', icon: FlaskConical },
-]
-
 const tools = [
   { to: '/app/compute', label: 'Quick Compute', icon: Calculator },
   { to: '/app/cascade', label: 'Cascade', icon: GitBranch },
   { to: '/app/extensions', label: 'Extensions', icon: Clock },
   { to: '/app/tax-tables', label: 'Tax Tables', icon: TableProperties },
-]
-
-const bottomLinks = [
-  { to: '/app/settings', label: 'API Keys & Settings', icon: Key },
 ]
 
 function EntityItem({ entity }: { entity: Entity }) {
@@ -71,11 +65,12 @@ function EntityItem({ entity }: { entity: Entity }) {
 
 export function AppSidebar() {
   const { entities, loading } = useEntities()
+  const [toolsOpen, setToolsOpen] = useState(false)
 
   return (
     <Sidebar>
       <SidebarHeader className="px-4 py-3">
-        <NavLink to="/app/entities" className="flex items-center gap-2">
+        <NavLink to="/app" className="flex items-center gap-2">
           <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center">
             <Calculator className="w-3.5 h-3.5 text-primary-foreground" />
           </div>
@@ -84,23 +79,29 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        {/* Main nav */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNav.map(link => (
-                <SidebarMenuItem key={link.to}>
-                  <SidebarMenuButton render={<NavLink to={link.to} />}>
-                    <link.icon className="shrink-0" />
-                    <span>{link.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              <SidebarMenuItem>
+                <SidebarMenuButton render={<NavLink to="/app" end />}>
+                  <LayoutDashboard className="shrink-0" />
+                  <span>Dashboard</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton render={<NavLink to="/app/scenarios" />}>
+                  <FlaskConical className="shrink-0" />
+                  <span>Scenarios</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
         <SidebarSeparator />
 
+        {/* Entities */}
         <SidebarGroup>
           <SidebarGroupLabel className="flex items-center justify-between">
             <span>Entities</span>
@@ -142,33 +143,43 @@ export function AppSidebar() {
 
         <SidebarSeparator />
 
+        {/* Tools — collapsible */}
         <SidebarGroup>
-          <SidebarGroupLabel>Tools</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {tools.map(link => (
-                <SidebarMenuItem key={link.to}>
-                  <SidebarMenuButton render={<NavLink to={link.to} />}>
-                    <link.icon className="shrink-0" />
-                    <span>{link.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
+          <SidebarGroupLabel
+            className="flex items-center justify-between cursor-pointer"
+            onClick={() => setToolsOpen(!toolsOpen)}
+          >
+            <span className="flex items-center gap-1.5">
+              <Wrench className="w-3 h-3" />
+              Tools
+            </span>
+            <ChevronDown className={`w-3 h-3 transition-transform ${toolsOpen ? '' : '-rotate-90'}`} />
+          </SidebarGroupLabel>
+          {toolsOpen && (
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {tools.map(link => (
+                  <SidebarMenuItem key={link.to}>
+                    <SidebarMenuButton render={<NavLink to={link.to} />}>
+                      <link.icon className="shrink-0" />
+                      <span>{link.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          )}
         </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter>
         <SidebarMenu>
-          {bottomLinks.map(link => (
-            <SidebarMenuItem key={link.to}>
-              <SidebarMenuButton render={<NavLink to={link.to} />}>
-                <link.icon className="shrink-0" />
-                <span>{link.label}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+          <SidebarMenuItem>
+            <SidebarMenuButton render={<NavLink to="/app/settings" />}>
+              <Key className="shrink-0" />
+              <span>Settings</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
