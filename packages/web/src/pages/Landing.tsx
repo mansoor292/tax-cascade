@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { ArrowRight, Bot, FileText, Calculator, Link2, Shield, Zap, Building2, Receipt, TrendingUp, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 export default function Landing() {
   const navigate = useNavigate()
+  const [copied, setCopied] = useState(false)
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -25,35 +27,84 @@ export default function Landing() {
 
       {/* Hero */}
       <section className="max-w-6xl mx-auto px-6 pt-24 pb-20">
-        <div className="max-w-3xl">
-          <div className="inline-flex items-center gap-2 bg-blue-600/10 border border-blue-500/20 rounded-full px-4 py-1.5 mb-6">
-            <Bot className="w-4 h-4 text-blue-400" />
-            <span className="text-sm text-blue-300">Now available as a Claude MCP Server</span>
+        <div className="flex flex-col lg:flex-row gap-16 items-start">
+          <div className="max-w-xl flex-1">
+            <div className="inline-flex items-center gap-2 bg-blue-600/10 border border-blue-500/20 rounded-full px-4 py-1.5 mb-6">
+              <Bot className="w-4 h-4 text-blue-400" />
+              <span className="text-sm text-blue-300">Now available as a Claude MCP Server</span>
+            </div>
+            <h1 className="text-5xl font-bold leading-tight mb-6">
+              Tax preparation
+              <br />
+              <span className="text-blue-400">powered by AI</span>
+            </h1>
+            <p className="text-xl text-zinc-400 leading-relaxed mb-8">
+              Connect your QuickBooks, upload prior returns, and let Claude handle the rest.
+              Compute 1040s, 1120s, and 1120-S returns. Run what-if scenarios. Generate IRS-ready PDFs.
+            </p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => navigate('/login')}
+                className="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-lg font-medium transition flex items-center gap-2"
+              >
+                Get Started <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-          <h1 className="text-5xl font-bold leading-tight mb-6">
-            Tax preparation
-            <br />
-            <span className="text-blue-400">powered by AI</span>
-          </h1>
-          <p className="text-xl text-zinc-400 leading-relaxed mb-8 max-w-2xl">
-            Connect your QuickBooks, upload prior returns, and let Claude handle the rest.
-            Compute 1040s, 1120s, and 1120-S returns. Run what-if scenarios. Generate IRS-ready PDFs.
-          </p>
-          <div className="flex gap-4">
-            <button
-              onClick={() => navigate('/login')}
-              className="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-lg font-medium transition flex items-center gap-2"
-            >
-              Get Started <ArrowRight className="w-4 h-4" />
-            </button>
+
+          {/* MCP Connect Card */}
+          <div className="w-full lg:w-96 bg-zinc-900 border border-zinc-800 rounded-xl p-6 lg:mt-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Bot className="w-5 h-5 text-blue-400" />
+              <h3 className="font-semibold">Connect to Claude</h3>
+            </div>
+            <ol className="space-y-4 mb-6">
+              <li className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-600/20 border border-blue-500/30 rounded-full flex items-center justify-center text-xs text-blue-300 font-mono">1</span>
+                <div>
+                  <p className="text-sm text-zinc-300">Copy the server URL</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <code className="bg-zinc-800 px-3 py-1.5 rounded text-blue-300 text-xs font-mono flex-1 truncate">
+                      tax-api.catalogshub.com/mcp
+                    </code>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText('https://tax-api.catalogshub.com/mcp'); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+                      className="bg-zinc-800 hover:bg-zinc-700 px-2.5 py-1.5 rounded text-xs transition flex-shrink-0"
+                    >
+                      {copied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-600/20 border border-blue-500/30 rounded-full flex items-center justify-center text-xs text-blue-300 font-mono">2</span>
+                <div>
+                  <p className="text-sm text-zinc-300">Open Claude and add connector</p>
+                  <p className="text-xs text-zinc-500 mt-1">Settings → Customize → Connectors → Add</p>
+                </div>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-600/20 border border-blue-500/30 rounded-full flex items-center justify-center text-xs text-blue-300 font-mono">3</span>
+                <div>
+                  <p className="text-sm text-zinc-300">Paste the URL and connect</p>
+                  <p className="text-xs text-zinc-500 mt-1">Sign in or create an account when prompted</p>
+                </div>
+              </li>
+              <li className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-600/20 border border-blue-500/30 rounded-full flex items-center justify-center text-xs text-blue-300 font-mono">4</span>
+                <div>
+                  <p className="text-sm text-zinc-300">Ask Claude anything about your taxes</p>
+                  <p className="text-xs text-zinc-500 mt-1">"Show me my entities" — you're live</p>
+                </div>
+              </li>
+            </ol>
             <a
               href="https://claude.ai/settings"
               target="_blank" rel="noopener"
-              onClick={(e) => { navigator.clipboard.writeText('https://tax-api.catalogshub.com/mcp') }}
-              className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-6 py-3 rounded-lg font-medium transition flex items-center gap-2"
-              title="URL copied — paste it in Claude Settings → Connectors"
+              onClick={() => navigator.clipboard.writeText('https://tax-api.catalogshub.com/mcp')}
+              className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-4 py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
             >
-              <Bot className="w-4 h-4" /> Connect via Claude
+              Open Claude Settings <ArrowRight className="w-3.5 h-3.5" />
             </a>
           </div>
         </div>
