@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { ChevronDown, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 
 export default function Returns() {
   const [returns, setReturns] = useState<any[]>([])
