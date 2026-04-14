@@ -90,6 +90,15 @@ const INSTRUCTIONS = `You help users prepare and optimize tax returns using the 
 - IMPORTANT: Reports and transactions are cached in the database. Claude can query them anytime without re-fetching from QBO. Use refresh=true only when the user asks for fresh data.
 - For QBO resource operations, use standard QBO API field names (e.g. DisplayName, TotalAmt, TxnDate).
 
+## Stripe
+- connect_stripe: link a Stripe account by providing the secret key (sk_live_... or rk_live_...)
+- stripe_revenue: annual summary — gross, fees, net by transaction type (for tax reporting)
+- stripe_invoices: list/filter invoices
+- stripe_payments: list charges
+- stripe_payouts: bank payouts
+- stripe_customers: customer list
+- Use stripe_revenue to get total Stripe income for a tax year
+
 ## Rules
 - Never fabricate financial data — ask the user for missing values
 - Always confirm the tax year before computing
@@ -389,6 +398,70 @@ function createServer(apiKey: string): McpServer {
       return text(await call('DELETE', `/api/qbo/${entity_id}/resource/${resource}`, data || {}))
     }
     return text({ error: 'Invalid operation' })
+  })
+
+  // ─── Tool: connect_stripe ───
+  server.tool('connect_stripe', 'Connect a Stripe account to an entity by providing the secret API key. Verifies the key and stores it.', {
+    entity_id: z.string().describe('Entity UUID'),
+    stripe_key: z.string().describe('Stripe secret key (sk_live_..., sk_test_..., rk_live_..., or rk_test_...)'),
+  }, async ({ entity_id, stripe_key }) => {
+    return text(await call('POST', `/api/stripe/${entity_id}/connect`, { stripe_key }))
+  })
+
+  // ─── Tool: stripe_invoices ───
+  server.tool('stripe_invoices', 'Get invoices from Stripe. Filter by status, customer, date range.', {
+    entity_id: z.string().describe('Entity UUID'),
+    status: z.string().optional().describe('Filter: draft, open, paid, void, uncollectible'),
+    customer: z.string().optional().describe('Stripe customer ID'),
+    limit: z.number().optional().describe('Max results (default 25)'),
+    created_gte: z.string().optional().describe('Created after (Unix timestamp or YYYY-MM-DD)'),
+    created_lte: z.string().optional().describe('Created before'),
+  }, async ({ entity_id, ...params }) => {
+    const qs = new URLSearchParams()
+    for (const [k, v] of Object.entries(params)) { if (v !== undefined) qs.set(k, String(v)) }
+    return text(await call('GET', `/api/stripe/${entity_id}/invoices?${qs}`))
+  })
+
+  // ─── Tool: stripe_payments ───
+  server.tool('stripe_payments', 'Get payment charges from Stripe.', {
+    entity_id: z.string().describe('Entity UUID'),
+    limit: z.number().optional(),
+    created_gte: z.string().optional(),
+    created_lte: z.string().optional(),
+  }, async ({ entity_id, ...params }) => {
+    const qs = new URLSearchParams()
+    for (const [k, v] of Object.entries(params)) { if (v !== undefined) qs.set(k, String(v)) }
+    return text(await call('GET', `/api/stripe/${entity_id}/payments?${qs}`))
+  })
+
+  // ─── Tool: stripe_revenue ───
+  server.tool('stripe_revenue', 'Get annual revenue summary from Stripe — gross, fees, net, broken down by transaction type. For tax reporting.', {
+    entity_id: z.string().describe('Entity UUID'),
+    year: z.number().optional().describe('Tax year (default current year)'),
+  }, async ({ entity_id, year }) => {
+    const qs = year ? `?year=${year}` : ''
+    return text(await call('GET', `/api/stripe/${entity_id}/revenue${qs}`))
+  })
+
+  // ─── Tool: stripe_payouts ───
+  server.tool('stripe_payouts', 'Get payouts from Stripe to bank account.', {
+    entity_id: z.string().describe('Entity UUID'),
+    limit: z.number().optional(),
+  }, async ({ entity_id, limit }) => {
+    const qs = limit ? `?limit=${limit}` : ''
+    return text(await call('GET', `/api/stripe/${entity_id}/payouts${qs}`))
+  })
+
+  // ─── Tool: stripe_customers ───
+  server.tool('stripe_customers', 'Get customers from Stripe.', {
+    entity_id: z.string().describe('Entity UUID'),
+    email: z.string().optional().describe('Filter by email'),
+    limit: z.number().optional(),
+  }, async ({ entity_id, email, limit }) => {
+    const qs = new URLSearchParams()
+    if (email) qs.set('email', email)
+    if (limit) qs.set('limit', String(limit))
+    return text(await call('GET', `/api/stripe/${entity_id}/customers?${qs}`))
   })
 
   // ─── Tool: qbo_status ───
