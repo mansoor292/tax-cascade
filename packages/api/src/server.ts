@@ -27,7 +27,7 @@ import { calc1120, calc1120S, calc1040, calcCascade } from './engine/tax_engine.
 import {
   ordinaryTax, ltcgTax, niitTax, qbiDeduction, standardDeduction, TAX_TABLES
 } from './engine/tax_tables.js'
-import { FORM_INVENTORY } from './maps/field_maps.js'
+import { FORM_INVENTORY, seedCacheFromSupabase } from './maps/field_maps.js'
 import authRoutes, { supabase } from './routes/auth.js'
 import scenarioRoutes from './routes/scenarios.js'
 import documentRoutes from './routes/documents.js'
@@ -423,8 +423,10 @@ print(json.dumps(kvs))
 
 // ─── Start server ───
 const PORT = parseInt(process.env.PORT || '3737')
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Tax API running on http://localhost:${PORT}`)
+  // Seed field maps from Supabase for forms discovered at runtime (not in git)
+  await seedCacheFromSupabase()
   console.log(`  POST /api/compute/1120    — C-Corp return`)
   console.log(`  POST /api/compute/1120s   — S-Corp return`)
   console.log(`  POST /api/compute/1040    — Individual return`)

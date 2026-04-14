@@ -41,6 +41,41 @@ export function invalidateCache(formYear: string) {
   delete cache[formYear]
 }
 
+/**
+ * Load all field maps from Supabase into cache on startup.
+ * This ensures discovered forms (not in git) are available via the sync path.
+ */
+export async function seedCacheFromSupabase() {
+  try {
+    const { data } = await supabase.from('field_map')
+      .select('form_name, tax_year, page, field_id, label')
+      .eq('verified', true)
+      .order('form_name').order('tax_year').order('page').order('field_id')
+    if (!data?.length) return
+
+    // Group by form_name + tax_year
+    const groups: Record<string, FieldEntry[]> = {}
+    for (const row of data) {
+      const key = `${row.form_name}_${row.tax_year}`
+      if (!groups[key]) groups[key] = []
+      groups[key].push({ page: row.page, field_id: row.field_id, label: row.label })
+    }
+
+    // Only cache entries that don't already have a JSON file
+    let seeded = 0
+    for (const [key, entries] of Object.entries(groups)) {
+      const jsonPath = join(DATA_DIR, `${key}_fields.json`)
+      if (!existsSync(jsonPath) && !cache[key]?.length) {
+        cache[key] = entries
+        seeded++
+      }
+    }
+    if (seeded > 0) console.log(`  Field maps: seeded ${seeded} from Supabase (not in JSON)`)
+  } catch (e: any) {
+    console.error('Failed to seed field maps from Supabase:', e.message)
+  }
+}
+
 async function loadMapFromSupabase(formName: string, year: number): Promise<FieldEntry[]> {
   const { data } = await supabase.from('field_map')
     .select('page, field_id, label')
