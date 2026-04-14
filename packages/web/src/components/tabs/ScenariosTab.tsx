@@ -14,7 +14,7 @@ import { type Entity } from '@/hooks/use-entities'
 import { useScenarios, type Scenario } from '@/hooks/use-scenarios'
 import { useReturns } from '@/hooks/use-returns'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
@@ -47,8 +47,8 @@ interface Props {
   onUpdate: () => void
 }
 
-export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
-  const { scenarios, loading, reload, create, compute, analyze, promote, getPdf } = useScenarios(entityId)
+export default function ScenariosTab({ entityId, entity: _entity, onUpdate }: Props) {
+  const { scenarios, loading, create, compute, analyze, promote, getPdf } = useScenarios(entityId)
   const { returns } = useReturns(entityId)
   const [showNew, setShowNew] = useState(false)
   const [name, setName] = useState('')
@@ -298,7 +298,7 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
               </div>
               <div className="space-y-2">
                 <Label>Base Return</Label>
-                <Select value={baseReturnId} onValueChange={setBaseReturnId}>
+                <Select value={baseReturnId} onValueChange={(v) => v && setBaseReturnId(v)}>
                   <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>

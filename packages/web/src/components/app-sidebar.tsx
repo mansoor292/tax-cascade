@@ -2,12 +2,10 @@ import { NavLink, useParams } from 'react-router-dom'
 import {
   Building2,
   Calculator,
-  FileText,
   Key,
   GitBranch,
   TableProperties,
   Clock,
-  ChevronDown,
   Plus,
 } from 'lucide-react'
 import {
@@ -24,7 +22,6 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar'
 import { useEntities, type Entity } from '@/hooks/use-entities'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const FORM_TYPE_LABEL: Record<string, string> = {
@@ -51,17 +48,15 @@ function EntityItem({ entity }: { entity: Entity }) {
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={isActive} className="h-auto py-2">
-        <NavLink to={`/app/entities/${entity.id}`}>
-          <Building2 className="shrink-0" />
-          <div className="flex flex-col gap-0.5 leading-none min-w-0">
-            <span className="truncate font-medium">{entity.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {FORM_TYPE_LABEL[entity.form_type] || entity.form_type}
-              {entity.ein ? ` · ${entity.ein}` : ''}
-            </span>
-          </div>
-        </NavLink>
+      <SidebarMenuButton render={<NavLink to={`/app/entities/${entity.id}`} />} isActive={isActive} className="h-auto py-2">
+        <Building2 className="shrink-0" />
+        <div className="flex flex-col gap-0.5 leading-none min-w-0">
+          <span className="truncate font-medium">{entity.name}</span>
+          <span className="text-xs text-muted-foreground">
+            {FORM_TYPE_LABEL[entity.form_type] || entity.form_type}
+            {entity.ein ? ` · ${entity.ein}` : ''}
+          </span>
+        </div>
       </SidebarMenuButton>
     </SidebarMenuItem>
   )
@@ -129,11 +124,9 @@ export function AppSidebar() {
             <SidebarMenu>
               {tools.map(link => (
                 <SidebarMenuItem key={link.to}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={link.to}>
-                      <link.icon className="shrink-0" />
-                      <span>{link.label}</span>
-                    </NavLink>
+                  <SidebarMenuButton render={<NavLink to={link.to} />}>
+                    <link.icon className="shrink-0" />
+                    <span>{link.label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -146,11 +139,9 @@ export function AppSidebar() {
         <SidebarMenu>
           {bottomLinks.map(link => (
             <SidebarMenuItem key={link.to}>
-              <SidebarMenuButton asChild>
-                <NavLink to={link.to}>
-                  <link.icon className="shrink-0" />
-                  <span>{link.label}</span>
-                </NavLink>
+              <SidebarMenuButton render={<NavLink to={link.to} />}>
+                <link.icon className="shrink-0" />
+                <span>{link.label}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}

@@ -78,7 +78,7 @@ export default function Compute() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Form Type</Label>
-              <Select value={formType} onValueChange={v => { setFormType(v); setInputs({}); setResult(null) }}>
+              <Select value={formType} onValueChange={v => { if (v) { setFormType(v); setInputs({}); setResult(null) } }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1040">1040 (Individual)</SelectItem>

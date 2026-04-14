@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Plus, Download, FileText, BarChart3, Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, Download, FileText, Loader2 } from 'lucide-react'
 import { type Entity } from '@/hooks/use-entities'
 import { useReturns, type TaxReturn } from '@/hooks/use-returns'
 import { useSchema } from '@/hooks/use-schema'
@@ -45,7 +45,7 @@ interface Props {
 }
 
 export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
-  const { returns, loading, reload, compute, validate, getPdf } = useReturns(entityId)
+  const { returns, loading, compute, validate, getPdf } = useReturns(entityId)
   const [showCompute, setShowCompute] = useState(false)
   const [formType, setFormType] = useState(entity.form_type || '1040')
   const [taxYear, setTaxYear] = useState(2024)
@@ -225,7 +225,7 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Form Type</Label>
-                <Select value={formType} onValueChange={setFormType}>
+                <Select value={formType} onValueChange={(v) => v && setFormType(v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="1040">1040 (Individual)</SelectItem>

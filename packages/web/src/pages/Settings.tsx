@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Key, Plus, Trash2, Copy, Loader2, Eye, EyeOff } from 'lucide-react'
+import { Key, Plus, Trash2, Copy } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
@@ -43,7 +43,6 @@ export default function Settings() {
   const [keyName, setKeyName] = useState('')
   const [creating, setCreating] = useState(false)
   const [newKey, setNewKey] = useState<string | null>(null)
-  const [showKey, setShowKey] = useState<string | null>(null)
 
   const loadKeys = async () => {
     setLoading(true)

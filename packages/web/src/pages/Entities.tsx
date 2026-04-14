@@ -169,7 +169,7 @@ export default function Entities() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="form_type">Entity Type</Label>
-              <Select value={formType} onValueChange={setFormType}>
+              <Select value={formType} onValueChange={(v) => v && setFormType(v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

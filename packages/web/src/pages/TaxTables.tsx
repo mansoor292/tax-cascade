@@ -29,9 +29,9 @@ export default function TaxTables() {
   const [year, setYear] = useState(2024)
   const { tables, loading } = useTaxTables(year)
 
-  const brackets = tables?.brackets || tables?.tax_brackets
-  const standardDeduction = tables?.standard_deduction
-  const rates = tables?.rates || tables?.corporate_rate
+  const brackets = (tables?.brackets || tables?.tax_brackets) as Record<string, unknown> | unknown[] | undefined
+  const standardDeduction = tables?.standard_deduction as Record<string, unknown> | number | undefined
+  const rates = (tables?.rates || tables?.corporate_rate) as number | Record<string, unknown> | undefined
 
   return (
     <div>

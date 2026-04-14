@@ -2,14 +2,10 @@ import { useState, useEffect } from 'react'
 import {
   Link2,
   RefreshCw,
-  Loader2,
-  ArrowUpRight,
   DollarSign,
   TrendingUp,
-  TrendingDown,
   Building,
   CheckCircle,
-  XCircle,
 } from 'lucide-react'
 import { type Entity } from '@/hooks/use-entities'
 import { useQbo, type Transaction, type Account } from '@/hooks/use-qbo'
@@ -47,7 +43,7 @@ interface Props {
 }
 
 export default function QuickBooksTab({ entityId, entity }: Props) {
-  const { status, loading, reloadStatus, connect, getFinancials, getReport, getTransactions, getAccounts, getMapping } = useQbo(entityId)
+  const { status, loading, connect, getFinancials, getTransactions, getAccounts, getMapping } = useQbo(entityId)
   const [year, setYear] = useState(2024)
   const [financials, setFinancials] = useState<Record<string, unknown> | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -65,7 +61,7 @@ export default function QuickBooksTab({ entityId, entity }: Props) {
         getTransactions({ year }),
         getAccounts(),
       ])
-      if (fin) setFinancials(fin)
+      if (fin) setFinancials(fin as Record<string, unknown>)
       setTransactions(tx)
       setAccounts(accts)
     } catch {

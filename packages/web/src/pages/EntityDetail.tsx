@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Building2, Pencil, ArrowLeft } from 'lucide-react'
-import { useEntity, type Entity } from '@/hooks/use-entities'
+import { useEntity } from '@/hooks/use-entities'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog,
@@ -167,7 +167,7 @@ export default function EntityDetail() {
             </div>
             <div className="space-y-2">
               <Label>Entity Type</Label>
-              <Select value={editFormType} onValueChange={setEditFormType}>
+              <Select value={editFormType} onValueChange={(v) => v && setEditFormType(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1040">Individual (1040)</SelectItem>

@@ -29,11 +29,9 @@ export default function Layout() {
               <Separator orientation="vertical" className="h-4" />
             </div>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
+              <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="gap-2 text-muted-foreground" />}>
                   <User className="h-4 w-4" />
                   <span className="text-sm hidden sm:inline">{user?.email}</span>
-                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => { signOut(); nav('/') }}>

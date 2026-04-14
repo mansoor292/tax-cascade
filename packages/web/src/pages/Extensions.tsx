@@ -141,7 +141,7 @@ export default function Extensions() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Extension Type</Label>
-              <Select value={extType} onValueChange={v => { setExtType(v); setInputs({}); setResult(null); setErrors([]) }}>
+              <Select value={extType} onValueChange={v => { if (v) { setExtType(v); setInputs({}); setResult(null); setErrors([]) } }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {EXTENSION_TYPES.map(et => (
