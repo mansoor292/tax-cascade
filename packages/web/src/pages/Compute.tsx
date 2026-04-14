@@ -75,7 +75,7 @@ export default function Compute() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Input panel */}
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Form Type</Label>
               <Select value={formType} onValueChange={v => { setFormType(v); setInputs({}); setResult(null) }}>
@@ -108,7 +108,7 @@ export default function Compute() {
                 <CardHeader className="py-3">
                   <CardTitle className="text-sm uppercase tracking-wide text-muted-foreground">{section}</CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-3 pt-0">
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0">
                   {fields.map(field => (
                     <div key={field.key} className="space-y-1">
                       <Label className="text-xs">{field.label || field.key.replace(/_/g, ' ')}</Label>

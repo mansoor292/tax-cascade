@@ -100,16 +100,16 @@ export default function EntityDetail() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => nav('/app/entities')}>
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <Button variant="ghost" size="icon" onClick={() => nav('/app/entities')} className="shrink-0">
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex items-center gap-3 flex-1">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
             <Building2 className="h-5 w-5 text-primary" />
           </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{entity.name}</h1>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight truncate">{entity.name}</h1>
             <div className="flex items-center gap-2 mt-0.5">
               <Badge variant="outline" className="text-xs">
                 {FORM_TYPE_LABEL[entity.form_type] || entity.form_type}
@@ -120,9 +120,9 @@ export default function EntityDetail() {
             </div>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={openEdit} className="gap-2">
+        <Button variant="outline" size="sm" onClick={openEdit} className="gap-2 shrink-0">
           <Pencil className="h-3.5 w-3.5" />
-          Edit
+          <span className="hidden sm:inline">Edit</span>
         </Button>
       </div>
 

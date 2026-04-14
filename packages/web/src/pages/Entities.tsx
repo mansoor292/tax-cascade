@@ -73,14 +73,14 @@ export default function Entities() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Entities</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Manage your tax entities — individuals, C-Corps, and S-Corps.
           </p>
         </div>
-        <Button onClick={openNew} className="gap-2">
+        <Button onClick={openNew} className="gap-2 w-full sm:w-auto">
           <Plus className="h-4 w-4" />
           New Entity
         </Button>

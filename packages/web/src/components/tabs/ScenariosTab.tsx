@@ -237,7 +237,7 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
 
                   {/* Computed result summary */}
                   {isExpanded && computed && !diff && (
-                    <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 text-sm">
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 text-sm">
                       {Object.entries(computed)
                         .filter(([, v]) => typeof v === 'number')
                         .slice(0, 12)
@@ -271,7 +271,7 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
 
       {/* New Scenario dialog */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[95vw] max-w-lg">
           <DialogHeader>
             <DialogTitle>New Scenario</DialogTitle>
           </DialogHeader>
@@ -284,7 +284,7 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
               <Label>Description (optional)</Label>
               <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="What are you testing?" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Tax Year</Label>
                 <Select value={String(taxYear)} onValueChange={v => setTaxYear(Number(v))}>

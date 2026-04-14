@@ -144,8 +144,8 @@ export default function QuickBooksTab({ entityId, entity }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
           <h3 className="text-lg font-medium">QuickBooks</h3>
           <Badge variant="outline" className="gap-1 text-green-400 border-green-500/20">
             <CheckCircle className="h-3 w-3" />

@@ -160,10 +160,10 @@ export default function DocumentsTab({ entityId }: Props) {
         <div className="space-y-2">
           {documents.map((doc: Document) => (
             <Card key={doc.id}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
                   <div className="flex items-center gap-3 min-w-0">
-                    <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+                    <FileText className="h-5 w-5 text-muted-foreground shrink-0 hidden sm:block" />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm truncate">{doc.filename}</span>
@@ -229,7 +229,7 @@ export default function DocumentsTab({ entityId }: Props) {
                 </div>
 
                 {expanded === doc.id && doc.meta?.key_values && (
-                  <div className="mt-3 pt-3 border-t grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <div className="mt-3 pt-3 border-t grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
                     {Object.entries(doc.meta.key_values).map(([k, v]) => (
                       <div key={k} className="flex justify-between">
                         <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>

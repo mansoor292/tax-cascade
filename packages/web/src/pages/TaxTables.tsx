@@ -35,7 +35,7 @@ export default function TaxTables() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Tax Tables</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -76,7 +76,7 @@ export default function TaxTables() {
               </CardHeader>
               <CardContent>
                 {typeof standardDeduction === 'object' ? (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     {Object.entries(standardDeduction as Record<string, unknown>).map(([status, amount]) => (
                       <div key={status} className="text-center p-3 rounded-lg bg-muted/30">
                         <p className="text-xs text-muted-foreground uppercase tracking-wide capitalize">

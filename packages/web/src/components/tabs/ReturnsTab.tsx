@@ -200,7 +200,7 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
                 {Object.entries(computed)
                   .filter(([, v]) => typeof v === 'number')
                   .map(([k, v]) => (
@@ -217,12 +217,12 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
 
       {/* Compute dialog */}
       <Dialog open={showCompute} onOpenChange={setShowCompute}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Compute Tax Return</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Form Type</Label>
                 <Select value={formType} onValueChange={setFormType}>
@@ -255,7 +255,7 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
               Object.entries(sections).map(([section, fields]) => (
                 <div key={section}>
                   <h4 className="text-sm font-medium text-muted-foreground mb-2 uppercase tracking-wide">{section}</h4>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {fields.map(field => (
                       <div key={field.key} className="space-y-1">
                         <Label className="text-xs">{field.label || field.key.replace(/_/g, ' ')}</Label>

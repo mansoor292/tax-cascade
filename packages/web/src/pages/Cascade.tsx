@@ -89,12 +89,12 @@ export default function Cascade() {
       </div>
 
       {/* Flow diagram */}
-      <div className="flex items-center justify-center gap-3 mb-6 text-sm">
-        <div className="px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
-          S-Corp (1120-S)
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mb-6 text-xs sm:text-sm">
+        <div className="px-2 sm:px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+          S-Corp
         </div>
-        <ArrowRight className="h-4 w-4 text-muted-foreground" />
-        <div className="px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+        <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="px-2 sm:px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
           K-1
         </div>
         <ArrowRight className="h-4 w-4 text-muted-foreground" />
@@ -159,7 +159,7 @@ export default function Cascade() {
       {/* Results */}
       {resultData && (
         <div className="mt-6 space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
             {resultData.s_corp && (
               <Card>
                 <CardHeader className="pb-2">

@@ -23,7 +23,7 @@ export default function Layout() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <header className="flex h-12 items-center justify-between border-b px-4">
+          <header className="flex h-12 items-center justify-between border-b px-2 sm:px-4">
             <div className="flex items-center gap-2">
               <SidebarTrigger />
               <Separator orientation="vertical" className="h-4" />
@@ -32,7 +32,7 @@ export default function Layout() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
                   <User className="h-4 w-4" />
-                  <span className="text-sm">{user?.email}</span>
+                  <span className="text-sm hidden sm:inline">{user?.email}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -43,7 +43,7 @@ export default function Layout() {
               </DropdownMenuContent>
             </DropdownMenu>
           </header>
-          <main className="flex-1 overflow-auto p-6">
+          <main className="flex-1 overflow-auto p-3 sm:p-6">
             <div className="mx-auto max-w-6xl">
               <Outlet />
             </div>

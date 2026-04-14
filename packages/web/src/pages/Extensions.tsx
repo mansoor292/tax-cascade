@@ -138,7 +138,7 @@ export default function Extensions() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Extension Type</Label>
               <Select value={extType} onValueChange={v => { setExtType(v); setInputs({}); setResult(null); setErrors([]) }}>
