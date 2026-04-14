@@ -47,9 +47,11 @@ export default function Landing() {
               Get Started <ArrowRight className="w-4 h-4" />
             </button>
             <a
-              href="https://claude.ai"
+              href="https://claude.ai/settings"
               target="_blank" rel="noopener"
+              onClick={(e) => { navigator.clipboard.writeText('https://tax-api.catalogshub.com/mcp') }}
               className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-6 py-3 rounded-lg font-medium transition flex items-center gap-2"
+              title="URL copied — paste it in Claude Settings → Connectors"
             >
               <Bot className="w-4 h-4" /> Connect via Claude
             </a>
