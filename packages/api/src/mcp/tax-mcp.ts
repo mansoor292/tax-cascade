@@ -243,9 +243,10 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: register_document ───
-  server.tool('register_document', 'Register an uploaded document (prior return, W-2, 1099, K-1, bank statement). Triggers OCR + auto-classification + Textract extraction. W-2/1099/K-1 data auto-merges into compute_return for the same entity+year.', {
+  server.tool('register_document', 'Register an uploaded document (prior return, W-2, 1099, K-1, bank statement). Triggers OCR + auto-classification + Textract extraction. W-2/1099/K-1 data auto-merges into compute_return for the same entity+year. ALWAYS pass entity_id to link the document to the correct entity.', {
     s3_key: z.string().describe('S3 key returned from upload_document'),
     filename: z.string().describe('Original filename'),
+    entity_id: z.string().optional().describe('Entity UUID to link this document to — strongly recommended'),
     file_size: z.number().optional().describe('File size in bytes'),
   }, async (params) => {
     return text(await call('POST', '/api/documents/register', params))

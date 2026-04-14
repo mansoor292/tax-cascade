@@ -108,7 +108,7 @@ router.post('/register', async (req, res) => {
   
   if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  const { s3_key, filename, file_size } = req.body
+  const { s3_key, filename, file_size, entity_id } = req.body
   if (!s3_key || !filename) return res.status(400).json({ error: 's3_key and filename required' })
 
   const ext = filename.split('.').pop()?.toLowerCase() || ''
@@ -213,6 +213,7 @@ print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
   // Save to DB
   const { data: doc, error } = await supabase.from('document').insert({
     user_id: userId,
+    entity_id: entity_id || null,
     filename,
     file_type: ext,
     s3_path: s3_key,
