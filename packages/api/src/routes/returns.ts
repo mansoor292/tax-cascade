@@ -220,6 +220,7 @@ router.post('/process/:document_id', async (req, res) => {
       tax_year: taxYear,
       form_type: formType,
       status: 'computed',
+      source: 'filed',
       input_data: engineInput,
       computed_data: engineResult,
       field_values: extracted,
@@ -585,16 +586,18 @@ router.post('/compute', async (req, res) => {
 
     let taxReturn = null
     if (save !== false && entity_id) {
+      const isExtension = ['4868', '7004', '8868'].includes(form_type)
       const { data, error } = await supabase.from('tax_return').upsert({
         entity_id,
         tax_year,
         form_type,
         status: 'computed',
+        source: isExtension ? 'extension' : 'proforma',
         is_amended: false,
-        input_data: inputs,
+        input_data: mergedInputs,
         computed_data: engineResult,
         computed_at: new Date().toISOString(),
-        pdf_s3_path: null,  // invalidate cached PDF on recompute
+        pdf_s3_path: null,
       }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
 
       if (error) return res.status(500).json({ error: error.message })
@@ -625,10 +628,12 @@ router.post('/compute', async (req, res) => {
       sections[section].total++
     }
 
+    const isExtension = ['4868', '7004', '8868'].includes(form_type)
     res.json({
       return_id: taxReturn?.id || null,
       form_type,
       tax_year,
+      source: isExtension ? 'extension' : 'proforma',
       saved: save !== false && !!entity_id,
       computed,
       citations: engineResult?.citations,
@@ -915,6 +920,7 @@ print(json.dumps({'url': url}))
         tax_year,
         form_type: extension_type,
         status: 'computed',
+        source: 'extension',
         is_amended: false,
         input_data: inputs,
         computed_data: result,
