@@ -93,6 +93,22 @@ async function getAccessToken(entityId: string): Promise<{
   return { token: refreshed.access_token, realmId: conn.realm_id }
 }
 
+// Cache of entity → accounting method so we don't hit QBO Preferences on every call
+const accountingMethodCache: Record<string, string> = {}
+
+async function getAccountingMethod(entityId: string): Promise<string> {
+  if (accountingMethodCache[entityId]) return accountingMethodCache[entityId]
+  try {
+    const data = await qboFetch(entityId, '/query', { query: 'SELECT * FROM Preferences' })
+    const prefs = data?.QueryResponse?.Preferences?.[0]
+    const basis = prefs?.ReportPrefs?.ReportBasis || 'Accrual'
+    accountingMethodCache[entityId] = basis
+    return basis
+  } catch {
+    return 'Accrual'
+  }
+}
+
 async function qboFetch(entityId: string, path: string, query?: Record<string, string>): Promise<any> {
   const auth = await getAccessToken(entityId)
   if (!auth) throw new Error('No active QBO connection for this entity')
@@ -446,7 +462,7 @@ router.get('/:entity_id/reports/:report', async (req, res) => {
   const year = (req.query.year as string) || new Date().getFullYear().toString()
   const startDate = (req.query.start_date as string) || `${year}-01-01`
   const endDate = (req.query.end_date as string) || `${year}-12-31`
-  const accountingMethod = (req.query.accounting_method as string) || 'Accrual'
+  const accountingMethod = (req.query.accounting_method as string) || await getAccountingMethod(req.params.entity_id)
 
   // Check DB cache first
   if (!refresh) {
@@ -544,19 +560,22 @@ router.get('/:entity_id/financials', async (req, res) => {
     if (bsCached) bsData = { summary: bsCached.summary, raw: bsCached.raw_data, fetched_at: bsCached.fetched_at }
   }
 
+  // Use entity's preferred accounting method
+  const acctMethod = await getAccountingMethod(req.params.entity_id)
+
   // Fetch missing reports from QBO
   try {
     if (!pnlData) {
       pnlData = await fetchAndStoreReport(
         req.params.entity_id, 'profit-and-loss', 'ProfitAndLoss',
-        startDate, endDate, 'Accrual',
+        startDate, endDate, acctMethod,
       )
       source = 'qbo'
     }
     if (!bsData) {
       bsData = await fetchAndStoreReport(
         req.params.entity_id, 'balance-sheet', 'BalanceSheet',
-        startDate, endDate, 'Accrual',
+        startDate, endDate, acctMethod,
       )
       source = 'qbo'
     }
@@ -568,6 +587,7 @@ router.get('/:entity_id/financials', async (req, res) => {
       entity_id: req.params.entity_id,
       year: parseInt(year),
       period: { start: startDate, end: endDate },
+      accounting_method: acctMethod,
       source,
       profit_and_loss: {
         title: pnlHeader.ReportName || 'Profit and Loss',
@@ -663,7 +683,7 @@ router.get('/:entity_id/transactions', async (req, res) => {
       report_type: `transactions${account ? `-${account}` : ''}`,
       period_start: periodStart,
       period_end: periodEnd,
-      accounting_method: 'Accrual',
+      accounting_method: await getAccountingMethod(req.params.entity_id),
       raw_data: data,
       summary: { count: transactions.length, total: transactions.reduce((s, t) => s + t.amount, 0) },
       fetched_at: new Date().toISOString(),
