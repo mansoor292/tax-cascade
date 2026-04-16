@@ -767,8 +767,9 @@ router.post('/compute', async (req, res) => {
           if (ent.meta?.total_assets) metaFields['meta.total_assets'] = ent.meta.total_assets
           if (ent.meta?.business_activity) metaFields['meta.business_activity'] = ent.meta.business_activity
           if (ent.meta?.product_service) metaFields['meta.product_service'] = ent.meta.product_service
+          // Title is an officer title (e.g. PRESIDENT) — only applies to business returns
+          if (ent.meta?.title) metaFields['meta.title'] = ent.meta.title
         }
-        if (ent.meta?.title) metaFields['meta.title'] = ent.meta.title
         // Preparer info
         const prep = ent.meta?.preparer
         if (prep) {
