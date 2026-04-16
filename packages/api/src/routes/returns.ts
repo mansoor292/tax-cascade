@@ -664,6 +664,24 @@ router.post('/compute', async (req, res) => {
               // Reconciliation: L1 = ordinary income per books
               const computed = engineResult.computed || {}
               engineResult.field_values['schedM1.L1_net_income_books'] = computed.ordinary_income_loss ?? 0
+
+              // Schedule K pro-rata share items from P&L categorization
+              // Common non-ordinary income that should flow to separate K lines
+              const pnl = eoyResp.profit_and_loss?.items || {}
+              const findByPattern = (patterns: RegExp[]): number => {
+                let total = 0
+                for (const [k, v] of Object.entries(pnl)) {
+                  if (typeof v !== 'number' || v === 0) continue
+                  if (patterns.some(p => p.test(k))) total += Math.abs(v)
+                }
+                return Math.round(total)
+              }
+              const schedKInterest = findByPattern([/interest\s+income/i, /^interest\s+earned/i])
+              const schedKDividends = findByPattern([/dividend\s+income/i, /^dividends/i])
+              const schedKRoyalties = findByPattern([/royalt(y|ies)/i])
+              if (schedKInterest) engineResult.field_values['schedK.L4_interest'] = schedKInterest
+              if (schedKDividends) engineResult.field_values['schedK.L5a_dividends'] = schedKDividends
+              if (schedKRoyalties) engineResult.field_values['schedK.L6_royalties'] = schedKRoyalties
             }
           }
         } catch (_) { /* skip */ }
@@ -870,6 +888,30 @@ router.post('/compute', async (req, res) => {
       sections[section].total++
     }
 
+    // Fetch the prior year's return (if any) for comparison
+    const isExtensionForm = ['4868', '7004', '8868'].includes(form_type)
+    let priorYearInputs: Record<string, any> = {}
+    let priorYearComputed: Record<string, any> = {}
+    if (entity_id && !isExtensionForm) {
+      const { data: priorRet } = await supabase.from('tax_return')
+        .select('input_data, computed_data')
+        .eq('entity_id', entity_id).eq('tax_year', tax_year - 1).eq('form_type', form_type).eq('is_amended', false)
+        .single()
+      if (priorRet) {
+        priorYearInputs = priorRet.input_data || {}
+        priorYearComputed = priorRet.computed_data?.computed || {}
+      }
+    }
+
+    // Fields that materially affect tax and shouldn't silently zero-default.
+    // Used to mark severity on the missing-fields review.
+    const criticalByForm: Record<string, Set<string>> = {
+      '1040':  new Set(['wages', 'withholding', 'estimated_payments', 'ira_distributions', 'pensions_annuities', 'social_security', 'net_se_income', 'k1_ordinary_income', 'num_dependents', 'is_sstb']),
+      '1120':  new Set(['gross_receipts', 'cost_of_goods_sold', 'officer_compensation', 'salaries_wages', 'depreciation', 'nol_deduction', 'estimated_tax_paid', 'foreign_tax_credit', 'general_business_credit']),
+      '1120S': new Set(['gross_receipts', 'cost_of_goods_sold', 'officer_compensation', 'salaries_wages', 'depreciation', 'shareholders']),
+    }
+    const critical = criticalByForm[form_type] || new Set<string>()
+
     // Build human-readable missing-fields review list.
     // For each input schema field that's currently 0/undefined, include its
     // description so Claude can walk the user through what's blank.
@@ -880,6 +922,9 @@ router.post('/compute', async (req, res) => {
       irs_line?: string
       category: string
       current_value: number
+      prior_year_value?: number | null
+      severity: 'critical' | 'normal'
+      note?: string
     }> = []
     const schema = INPUT_SCHEMAS[form_type]
     if (schema) {
@@ -887,15 +932,34 @@ router.post('/compute', async (req, res) => {
         if (f.type !== 'number') continue
         const v = mergedInputs[f.name]
         if (v === undefined || v === null || v === 0) {
+          const prior = priorYearInputs[f.name] ?? priorYearComputed[f.name] ?? null
+          const severity = critical.has(f.name) || (typeof prior === 'number' && prior >= 1000)
+            ? 'critical' : 'normal'
+          let note: string | undefined
+          if (typeof prior === 'number' && prior !== 0) {
+            note = `Prior year had $${prior.toLocaleString()} — confirm this year is truly $0`
+          } else if (critical.has(f.name)) {
+            note = 'Material line — do not silently default to 0'
+          }
           missingFields.push({
             field: f.name,
             description: f.description,
             irs_line: f.irs_line,
             category: f.category,
             current_value: 0,
+            prior_year_value: typeof prior === 'number' ? prior : null,
+            severity,
+            note,
           })
         }
       }
+      // Sort: critical first, then fields with prior-year values, then alphabetical
+      missingFields.sort((a, b) => {
+        if (a.severity !== b.severity) return a.severity === 'critical' ? -1 : 1
+        const ap = a.prior_year_value ?? 0, bp = b.prior_year_value ?? 0
+        if (ap !== bp) return bp - ap
+        return a.field.localeCompare(b.field)
+      })
     }
 
     const isExtension = ['4868', '7004', '8868'].includes(form_type)
@@ -934,6 +998,68 @@ router.post('/compute', async (req, res) => {
   } catch (e: any) {
     res.status(500).json({ error: e.message })
   }
+})
+
+// ─── Copy fields from prior-year return into current-year inputs ───
+router.post('/use-prior-year', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { entity_id, tax_year, form_type, fields, save } = req.body
+  if (!entity_id || !tax_year || !form_type) {
+    return res.status(400).json({ error: 'entity_id, tax_year, form_type required' })
+  }
+
+  // Fetch prior-year return
+  const { data: priorRet } = await supabase.from('tax_return')
+    .select('input_data, computed_data, tax_year')
+    .eq('entity_id', entity_id).eq('tax_year', tax_year - 1).eq('form_type', form_type).eq('is_amended', false)
+    .single()
+  if (!priorRet) {
+    return res.status(404).json({ error: `No ${tax_year - 1} ${form_type} return found for this entity` })
+  }
+
+  // Fetch current-year return (or start fresh)
+  const { data: currentRet } = await supabase.from('tax_return')
+    .select('input_data')
+    .eq('entity_id', entity_id).eq('tax_year', tax_year).eq('form_type', form_type).eq('is_amended', false)
+    .single()
+
+  const priorInputs: Record<string, any> = priorRet.input_data || {}
+  const priorComputed: Record<string, any> = priorRet.computed_data?.computed || {}
+  const currentInputs: Record<string, any> = currentRet?.input_data || {}
+
+  // If no specific fields requested, copy every numeric input that's currently blank
+  const schema = INPUT_SCHEMAS[form_type]
+  const allNumeric = schema ? schema.fields.filter((f: any) => f.type === 'number').map((f: any) => f.name) : []
+  const targetFields: string[] = fields && fields.length ? fields : allNumeric
+
+  const copied: Record<string, { from_prior: number }> = {}
+  const updatedInputs = { ...currentInputs }
+  for (const f of targetFields) {
+    const priorVal = priorInputs[f] ?? priorComputed[f]
+    if (typeof priorVal === 'number' && priorVal !== 0) {
+      // Only overwrite if current is blank/zero — don't clobber user-provided values
+      const cur = updatedInputs[f]
+      if (cur === undefined || cur === null || cur === 0) {
+        updatedInputs[f] = priorVal
+        copied[f] = { from_prior: priorVal }
+      }
+    }
+  }
+
+  res.json({
+    prior_tax_year: priorRet.tax_year,
+    target_tax_year: tax_year,
+    copied_count: Object.keys(copied).length,
+    copied,
+    merged_inputs: save ? undefined : updatedInputs,
+    note: save
+      ? 'Call compute again with these values to update the return'
+      : Object.keys(copied).length > 0
+      ? `Copied ${Object.keys(copied).length} fields from ${priorRet.tax_year}. Pass merged_inputs to compute_return to update the ${tax_year} return.`
+      : 'No fields copied — either all requested fields were already set, or prior year had $0 for them too',
+  })
 })
 
 // ─── Generate filled PDF and return download URL ───

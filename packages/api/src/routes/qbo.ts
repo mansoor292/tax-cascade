@@ -462,7 +462,8 @@ router.get('/:entity_id/reports/:report', async (req, res) => {
   const endDate = (req.query.end_date as string) || `${year}-12-31`
   const accountingMethod = (req.query.accounting_method as string) || await getAccountingMethod(req.params.entity_id)
 
-  // Check DB cache first
+  // Check DB cache first — invalidate after 1 day so data stays fresh during filing
+  const CACHE_TTL_MS = 24 * 60 * 60 * 1000  // 1 day
   if (!refresh) {
     const { data: cached } = await supabase.from('qbo_report')
       .select('*')
@@ -474,10 +475,11 @@ router.get('/:entity_id/reports/:report', async (req, res) => {
       .single()
 
     if (cached) {
-      return res.json({
-        ...cached,
-        source: 'cache',
-      })
+      const ageMs = Date.now() - new Date(cached.fetched_at).getTime()
+      if (ageMs < CACHE_TTL_MS) {
+        return res.json({ ...cached, source: 'cache', cache_age_hours: Math.round(ageMs / 3600000) })
+      }
+      // Stale — fall through to fetch
     }
   }
 
@@ -554,8 +556,11 @@ router.get('/:entity_id/financials', async (req, res) => {
         .single(),
     ])
 
-    if (pnlCached) pnlData = { summary: pnlCached.summary, raw: pnlCached.raw_data, fetched_at: pnlCached.fetched_at }
-    if (bsCached) bsData = { summary: bsCached.summary, raw: bsCached.raw_data, fetched_at: bsCached.fetched_at }
+    // Respect 1-day TTL — older cache entries are treated as missing so we re-fetch
+    const CACHE_TTL_MS = 24 * 60 * 60 * 1000
+    const fresh = (row: any) => row && (Date.now() - new Date(row.fetched_at).getTime()) < CACHE_TTL_MS
+    if (fresh(pnlCached)) pnlData = { summary: pnlCached.summary, raw: pnlCached.raw_data, fetched_at: pnlCached.fetched_at }
+    if (fresh(bsCached))  bsData  = { summary: bsCached.summary,  raw: bsCached.raw_data,  fetched_at: bsCached.fetched_at }
   }
 
   // Use entity's preferred accounting method

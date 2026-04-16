@@ -274,6 +274,16 @@ function createServer(apiKey: string): McpServer {
     })
   })
 
+  // ─── Tool: use_prior_year ───
+  server.tool('use_prior_year', 'Copy values from the prior-year return into the current-year input for specific fields. Use this when the client says "use last year" for missing items. Only fills blanks — won\'t overwrite values the user has already provided. Returns merged_inputs that you then pass to compute_return.', {
+    entity_id: z.string().describe('Entity UUID'),
+    tax_year: z.number().describe('CURRENT tax year (prior year = this - 1)'),
+    form_type: z.string().describe('1040, 1120, 1120S'),
+    fields: z.array(z.string()).optional().describe('Specific input fields to copy (e.g. ["nol_deduction", "officer_compensation"]). If omitted, copies every numeric input that has a value last year and is blank this year.'),
+  }, async ({ entity_id, tax_year, form_type, fields }) => {
+    return text(await call('POST', '/api/returns/use-prior-year', { entity_id, tax_year, form_type, fields }))
+  })
+
   // ─── Tool: compare_returns ───
   server.tool('compare_returns', 'Compare tax returns across years for an entity', {
     entity_id: z.string().describe('Entity UUID'),
