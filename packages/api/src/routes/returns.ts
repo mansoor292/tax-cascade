@@ -870,6 +870,34 @@ router.post('/compute', async (req, res) => {
       sections[section].total++
     }
 
+    // Build human-readable missing-fields review list.
+    // For each input schema field that's currently 0/undefined, include its
+    // description so Claude can walk the user through what's blank.
+    // Skip structural/computed fields — focus on fields the user actually provides.
+    const missingFields: Array<{
+      field: string
+      description: string
+      irs_line?: string
+      category: string
+      current_value: number
+    }> = []
+    const schema = INPUT_SCHEMAS[form_type]
+    if (schema) {
+      for (const f of schema.fields) {
+        if (f.type !== 'number') continue
+        const v = mergedInputs[f.name]
+        if (v === undefined || v === null || v === 0) {
+          missingFields.push({
+            field: f.name,
+            description: f.description,
+            irs_line: f.irs_line,
+            category: f.category,
+            current_value: 0,
+          })
+        }
+      }
+    }
+
     const isExtension = ['4868', '7004', '8868'].includes(form_type)
     res.json({
       return_id: taxReturn?.id || null,
@@ -895,6 +923,13 @@ router.post('/compute', async (req, res) => {
           ? 'Some PDF sections will be incomplete'
           : undefined,
       },
+      missing_fields: missingFields.length > 0 ? {
+        count: missingFields.length,
+        fields: missingFields,
+        note: missingFields.length > 3
+          ? 'Before generating the PDF, walk the user through these missing/zero fields. For each, ask: (a) leave blank/zero, (b) use prior year, or (c) provide a value now. Do not silently default to 0 for material tax lines.'
+          : 'Low-impact — confirm with user before finalizing, but OK to proceed if they confirm no activity.',
+      } : undefined,
     })
   } catch (e: any) {
     res.status(500).json({ error: e.message })

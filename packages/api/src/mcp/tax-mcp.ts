@@ -62,6 +62,37 @@ validate_return → compute_return → get_pdf.
 get_pdf and get_scenario_pdf serve cached PDFs by default. Pass refresh=true after recomputing a return or updating data to regenerate.
 Ask for data conversationally — group by topic (income, deductions, payments). Use get_schema to discover required fields.
 
+## Missing-field review — critical
+
+Before finalizing a return, compute_return's response includes a \`missing_fields\`
+list (lines the taxpayer has no value for). When it's non-trivial, DO NOT silently
+generate the PDF. Walk the user through each missing line and ask how to resolve:
+
+  For each missing field, offer three options:
+    a. "Leave blank (zero)" — confirm they truly had no activity on this line
+    b. "Use prior year" — pull the value from last year's return if available
+    c. Provide a value now — they answer the question directly
+
+Examples where this matters:
+  - 1040 line 4 IRA distributions: silently defaulting to 0 is wrong if they
+    had IRA income they forgot to mention
+  - 1120 line 29a NOL carryforward: critical; a stale $0 default loses real tax benefit
+  - Schedule L balance sheet rows: 0 is appropriate for an account type the
+    business doesn't use, but confirm for material lines like inventory, loans
+
+Present missing fields in plain English (use the \`description\` from get_schema),
+not canonical keys. Group by section so the user can answer in batches:
+  "A few 1040 items I want to confirm before filing — any of these apply?"
+    - IRA distributions (line 4a)?
+    - Pensions/annuities (line 5a)?
+    - Social Security benefits (line 6a)?
+    - Additional child tax credit (line 28)?
+
+If the user says "use prior year," pull last year's computed return via
+compare_returns or list their returns and use those values. If they say
+"leave blank," explicitly confirm by echoing the line back so they know what
+they're signing off on.
+
 ## Extensions (4868/7004/8868)
 Extensions are time-sensitive. Collect the minimum: name, SSN/EIN, address, estimated tax liability, payments already made.
 validate_extension → file_extension(generate_pdf: true) → give them the PDF.
@@ -215,6 +246,32 @@ function createServer(apiKey: string): McpServer {
   }, async ({ return_id, refresh }) => {
     const qs = refresh ? '?regenerate=true' : ''
     return text(await call('GET', `/api/returns/${return_id}/pdf${qs}`))
+  })
+
+  // ─── Tool: review_return ───
+  server.tool('review_return', 'QC review of a saved return: lists fields still at 0/blank so you can walk the user through them before finalizing the PDF. For each missing field, ask the user (a) leave blank, (b) use prior year, or (c) provide a value.', {
+    return_id: z.string().describe('Tax return UUID'),
+  }, async ({ return_id }) => {
+    // Fetch the return and run the same missing-fields analysis as compute_return
+    const r = await call('GET', `/api/returns/${return_id}`) as any
+    const ret = r.return
+    if (!ret) return text({ error: 'return not found' })
+    // Rerun compute against existing inputs to get a fresh missing_fields list
+    const recomputed = await call('POST', '/api/returns/compute', {
+      entity_id: ret.entity_id,
+      tax_year: ret.tax_year,
+      form_type: ret.form_type,
+      inputs: ret.input_data || {},
+      save: false,
+    })
+    return text({
+      return_id,
+      form_type: ret.form_type,
+      tax_year: ret.tax_year,
+      missing_fields: (recomputed as any)?.missing_fields,
+      pdf_coverage: (recomputed as any)?.pdf_coverage,
+      note: 'Walk the user through each missing field before calling get_pdf. Group by category for efficient questions.',
+    })
   })
 
   // ─── Tool: compare_returns ───
