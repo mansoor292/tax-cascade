@@ -692,12 +692,19 @@ router.post('/compute', async (req, res) => {
     let taxReturn = null
     if (save !== false && entity_id) {
       const isExtension = ['4868', '7004', '8868'].includes(form_type)
-      // Merge schedule field_values from engine result into the field_values column
+      // Merge schedule field_values from engine result into the field_values column.
+      // Strip meta.* and preparer.* from existing — they should always come from
+      // the entity record, never persist stale values from prior computes.
       const scheduleFieldValues = engineResult?.field_values || {}
-      const existingFieldValues = (await supabase.from('tax_return')
+      const rawExisting = (await supabase.from('tax_return')
         .select('field_values')
         .eq('entity_id', entity_id).eq('tax_year', tax_year).eq('form_type', form_type).eq('is_amended', false)
         .single())?.data?.field_values || {}
+      const existingFieldValues: Record<string, any> = {}
+      for (const [k, v] of Object.entries(rawExisting)) {
+        if (k.startsWith('meta.') || k.startsWith('preparer.')) continue
+        existingFieldValues[k] = v
+      }
 
       // Inject entity metadata so it's persisted and visible in the PDF
       const { data: ent } = await supabase.from('tax_entity').select('*').eq('id', entity_id).single()
