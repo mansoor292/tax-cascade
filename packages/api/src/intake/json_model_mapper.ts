@@ -711,47 +711,51 @@ function mapScheduleLTable(table: TextractTable, out: Record<string, number>) {
   // If 5+ cols: a=1, b=2, c=3, d=4 (with some possibly merged)
   // If 3 cols: b=1, d=2
 
-  for (const row of table.rows) {
-    if (row.length < 2) continue
-    const label = row[0].trim()
+  // Track "b" sub-lines that appear on their own row — Textract splits them.
+  // Example: row "2a Trade notes and accounts receivable" then "b Less allowance for bad debts"
+  let lastLine: string | null = null
 
-    // Extract line number from label (e.g., "1 Cash", "2a Trade notes")
-    const m = label.match(/^([0-9]{1,2}[a-c]?)\s+/)
-    if (!m) continue
-    const lineNum = m[1]
+  for (const row of table.rows) {
+    if (row.length < 3) continue
+
+    // Schedule L layout: [line#, label, a, b, c, d] (6 columns)
+    // Column 0: line number like "1", "2a", "b", "10a"
+    // Column 1: label
+    // Columns 2-5: a (gross BOY), b (net BOY), c (gross EOY), d (net EOY)
+    const col0 = row[0].trim()
+    let lineNum = col0
+
+    // Handle continuation rows where col0 is just "b" — infer parent line from last
+    if (/^[a-c]$/.test(col0) && lastLine) {
+      const parentBase = lastLine.replace(/[a-c]$/, '')  // "10a" → "10"
+      lineNum = parentBase + col0
+    }
+
+    // Also accept "line# in label" layout as a fallback (e.g. "1 Cash" in col0)
+    if (!lineKeys[lineNum]) {
+      const m = col0.match(/^([0-9]{1,2}[a-c]?)\s+/)
+      if (m) lineNum = m[1]
+    }
+
     const prefix = lineKeys[lineNum]
     if (!prefix) continue
+    lastLine = lineNum
 
-    // Collect all numeric values from this row (skip label column)
-    const numericValues = row.slice(1)
-      .map((cell, idx) => ({ idx, val: parseDollar(cell) }))
-      .filter(e => e.val !== null && e.val !== undefined) as Array<{idx: number; val: number}>
+    // Values are in columns beyond the label. Default empty cells within
+    // the 4-column (a/b/c/d) range to 0, since IRS shows blank = $0.
+    const valueCells = row.slice(2)  // skip line# + label
+    const parsed = valueCells.map(c => parseDollar(c))
+    const suffix = ['boy_a', 'boy_b', 'eoy_c', 'eoy_d'] as const
 
-    if (numericValues.length === 0) continue
-
-    // Map based on number of values found:
-    // 1 value — ambiguous, assume EOY net (column d) since returns typically emphasize current year
-    // 2 values — BOY net (b), EOY net (d)
-    // 3 values — either [a,b,d] or [a,c,d] — try to preserve BOY/EOY split
-    // 4 values — [a, b, c, d]
-    if (numericValues.length === 1) {
-      out[`schedL.${prefix}_eoy_d`] = numericValues[0].val
-    } else if (numericValues.length === 2) {
-      out[`schedL.${prefix}_boy_b`] = numericValues[0].val
-      out[`schedL.${prefix}_eoy_d`] = numericValues[1].val
-    } else if (numericValues.length === 3) {
-      // Assume columns are [a, b, d] or [b, c, d] — we take first as BOY net, last as EOY net
-      out[`schedL.${prefix}_boy_b`] = numericValues[0].val
-      out[`schedL.${prefix}_eoy_d`] = numericValues[numericValues.length - 1].val
-      // middle value might be gross BOY or gross EOY
-      if (prefix.endsWith('_bldg') || prefix.endsWith('_dep') || prefix.endsWith('_intang') || prefix.endsWith('_amort') || prefix.endsWith('_trade') || prefix.endsWith('_baddebt')) {
-        out[`schedL.${prefix}_boy_a`] = numericValues[1].val
+    const effectiveCols = Math.min(parsed.length, 4)
+    for (let pos = 0; pos < effectiveCols; pos++) {
+      const key = `schedL.${prefix}_${suffix[pos]}`
+      const val = parsed[pos]
+      if (val !== null && val !== undefined) {
+        out[key] = val
+      } else if (!(key in out)) {
+        out[key] = 0  // default blank to $0
       }
-    } else if (numericValues.length >= 4) {
-      out[`schedL.${prefix}_boy_a`] = numericValues[0].val
-      out[`schedL.${prefix}_boy_b`] = numericValues[1].val
-      out[`schedL.${prefix}_eoy_c`] = numericValues[2].val
-      out[`schedL.${prefix}_eoy_d`] = numericValues[3].val
     }
   }
 }

@@ -72,12 +72,14 @@ async function main() {
     const computed = proforma?.computed_data?.computed || {}
     const fieldValues = proforma?.field_values || {}
 
-    // Run filed Textract KVs through the SAME canonical mapper used at intake
+    // Run filed Textract KVs + tables through the SAME canonical mapper used at intake
+    const tables = filedDoc?.textract_data?.tables || []
     const mapped = mapToCanonical({
       source: 'textract',
       form_type: p.form_type === '1120S' ? '1120S' : p.form_type,
       tax_year: 2024,
       key_value_pairs: kvs.map((kv: any) => ({ key: kv.key, value: kv.value })),
+      tables,
     })
 
     // Structured-field buckets for the FILED return (what the intake mapper produces)

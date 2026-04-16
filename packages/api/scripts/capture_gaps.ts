@@ -37,6 +37,7 @@ async function main() {
     const mapped = mapToCanonical({
       source: 'textract', form_type: t.form as any, tax_year: 2024,
       key_value_pairs: kvs.map((kv: any) => ({ key: kv.key, value: kv.value })),
+      tables: doc.textract_data?.tables || [],
     })
     const aliases = getCanonicalAliases(t.form)
     const captured = new Set<string>()

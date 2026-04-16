@@ -49,6 +49,7 @@ async function main() {
       form_type: p.form_type === '1120S' ? '1120S' : p.form_type,
       tax_year: 2024,
       key_value_pairs: kvs.map((kv: any) => ({ key: kv.key, value: kv.value })),
+      tables: (doc.document || doc)?.textract_data?.tables || [],
     })
 
     const engineMap = getEngineToCanonicalMap(p.form_type)
