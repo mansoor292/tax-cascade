@@ -66,6 +66,7 @@ router.post('/process/:document_id', async (req, res) => {
       key_value_pairs: doc.textract_data.kvs.map((kv: any) => ({
         key: kv.key, value: kv.value,
       })),
+      tables: doc.textract_data.tables,
     }
     const mapped = mapToCanonical(textractInput)
 

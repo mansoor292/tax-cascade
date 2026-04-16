@@ -200,8 +200,24 @@ for kid, kb in km.items():
                 if vid in vm: vb = vm[vid]; break
     vt = gt(vb) if vb else ''
     if kt or vt: kvs.append({'key': kt, 'value': vt})
+tables = []
+for b in blocks:
+    if b['BlockType'] != 'TABLE': continue
+    cells = {}
+    for rel in b.get('Relationships', []):
+        if rel['Type'] == 'CHILD':
+            for cid in rel['Ids']:
+                cb = bm.get(cid, {})
+                if cb.get('BlockType') == 'CELL':
+                    r = cb.get('RowIndex', 0); c = cb.get('ColumnIndex', 0)
+                    cells[(r, c)] = gt(cb)
+    if not cells: continue
+    max_r = max(r for r, _ in cells)
+    max_c = max(c for _, c in cells)
+    rows = [[cells.get((r, c), '') for c in range(1, max_c + 1)] for r in range(1, max_r + 1)]
+    tables.append({'page': b.get('Page', 1), 'rows': rows, 'row_count': max_r, 'col_count': max_c})
 np = sum(1 for b in blocks if b['BlockType'] == 'PAGE')
-print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
+print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': len(blocks)}))
 `
       const txResult = runPython(txScript, { timeout: 180000 })
       textractData = JSON.parse(txResult.trim())
@@ -508,8 +524,24 @@ for kid, kb in km.items():
                 if vid in vm: vb = vm[vid]; break
     vt = gt(vb) if vb else ''
     if kt or vt: kvs.append({'key': kt, 'value': vt})
+tables = []
+for b in blocks:
+    if b['BlockType'] != 'TABLE': continue
+    cells = {}
+    for rel in b.get('Relationships', []):
+        if rel['Type'] == 'CHILD':
+            for cid in rel['Ids']:
+                cb = bm.get(cid, {})
+                if cb.get('BlockType') == 'CELL':
+                    r = cb.get('RowIndex', 0); c = cb.get('ColumnIndex', 0)
+                    cells[(r, c)] = gt(cb)
+    if not cells: continue
+    max_r = max(r for r, _ in cells)
+    max_c = max(c for _, c in cells)
+    rows = [[cells.get((r, c), '') for c in range(1, max_c + 1)] for r in range(1, max_r + 1)]
+    tables.append({'page': b.get('Page', 1), 'rows': rows, 'row_count': max_r, 'col_count': max_c})
 np = sum(1 for b in blocks if b['BlockType'] == 'PAGE')
-print(json.dumps({'kvs': kvs, 'num_pages': np, 'num_blocks': len(blocks)}))
+print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': len(blocks)}))
 `
     const result = runPython(script, { timeout: 120000 })
     const textractData = JSON.parse(result)

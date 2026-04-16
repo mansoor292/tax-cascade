@@ -23,11 +23,19 @@ export interface TextractKVPair {
   page?:      number
 }
 
+export interface TextractTable {
+  page:       number
+  rows:       string[][]   // rows[r][c] = cell text; rows[0] = header row if present
+  row_count:  number
+  col_count:  number
+}
+
 export interface TextractOutput {
   source:           'textract'
   form_type?:       string   // may be absent — we detect it
   tax_year?:        number
   key_value_pairs:  TextractKVPair[]
+  tables?:          TextractTable[]
 }
 
 // Gemini output matches our extraction prompt schema exactly
@@ -595,7 +603,157 @@ function mapFromTextract(input: TextractOutput): MappingResult {
     }
   }
 
+  // ── Process tables (Schedule L balance sheet, etc.) ──
+  if (input.tables?.length) {
+    const tableMatches = mapTables(input.tables, formType)
+    for (const [canonKey, value] of Object.entries(tableMatches)) {
+      if (!(canonKey in model)) {
+        model[canonKey] = value
+        fields.push({
+          canonical_key: canonKey,
+          value,
+          raw_value: String(value),
+          confidence: 0.85,
+          confidence_level: 'high',
+          source: 'extracted',
+          source_key: 'table',
+        })
+      }
+    }
+  }
+
   return buildResult(formType, taxYear, model, fields, unmapped, input.key_value_pairs.length)
+}
+
+/**
+ * Map Textract tables → canonical keys
+ *
+ * Recognizes key tax-form tables by their header row signature:
+ * - Schedule L (1120/1120-S): balance sheet with BOY/EOY columns
+ * - Other tables are ignored for now
+ */
+function mapTables(tables: TextractTable[], formType: string): Record<string, number> {
+  const result: Record<string, number> = {}
+
+  for (const table of tables) {
+    if (table.rows.length < 2) continue
+
+    // Detect Schedule L: header row contains "Balance Sheets" or cells like
+    // "Beginning of tax year" / "End of tax year"
+    const flatHeader = table.rows[0].join(' | ').toLowerCase()
+    const isSchedL = /balance\s+sheet|beginning\s+of\s+tax\s+year|end\s+of\s+tax\s+year/.test(flatHeader)
+      || table.rows.slice(0, 3).some(r => /beginning\s+of\s+(?:tax\s+)?year/i.test(r.join(' ')))
+
+    if (isSchedL) {
+      mapScheduleLTable(table, result)
+      continue
+    }
+
+    // Other tables: look at first column for line-numbered labels
+    // and extract if any row matches a known canonical key pattern
+    // (future: Schedule M-2, COGS, 4562 depreciation tables)
+  }
+
+  return result
+}
+
+/**
+ * Schedule L balance sheet extraction
+ *
+ * Structure: label column + 4 value columns (a=gross BOY, b=net BOY, c=gross EOY, d=net EOY).
+ * Textract often merges/collapses cells. We handle both 5-col and 3-col layouts:
+ *   5-col:  [label, a, b, c, d]
+ *   3-col:  [label, b, d]   (common — Textract combines gross+net into one column)
+ *
+ * Line labels like "1 Cash", "2a Trade notes...", "10a Buildings..."
+ */
+function mapScheduleLTable(table: TextractTable, out: Record<string, number>) {
+  // Schedule L canonical key mapping: line number → key prefix
+  const lineKeys: Record<string, string> = {
+    '1':    'L1_cash',
+    '2a':   'L2a_trade',
+    '2b':   'L2b_baddebt',
+    '3':    'L3_inv',
+    '4':    'L4_usgov',
+    '5':    'L5_taxexempt',
+    '6':    'L6_othercurr',
+    '7':    'L7_loans',
+    '8':    'L8_mortgage',
+    '9':    'L9_otherinv',
+    '10a':  'L10a_bldg',
+    '10b':  'L10b_dep',
+    '11a':  'L11_depletable',
+    '11b':  'L11_depletable_dep',
+    '12':   'L12_land',
+    '13a':  'L13a_intang',
+    '13b':  'L13b_amort',
+    '14':   'L14_other',
+    '15':   'L15_total',
+    '16':   'L16_ap',
+    '17':   'L17_mortshort',
+    '18':   'L18_othercurrliab',
+    '19':   'L19_loansfrom',
+    '20':   'L20_mortlong',
+    '21':   'L21_otherliab',
+    '22a':  'L22a_pref',
+    '22b':  'L22b_common',
+    '23':   'L23_paidin',
+    '24':   'L24_retapp',
+    '25':   'L25_retained',
+    '26':   'L26_adj',
+    '27':   'L27_treasury',
+    '28':   'L28_total',
+  }
+
+  // Determine column layout by examining row widths
+  const maxCols = Math.max(...table.rows.map(r => r.length))
+  // Columns indexes: column 0 = label, last cols = values
+  // If 5+ cols: a=1, b=2, c=3, d=4 (with some possibly merged)
+  // If 3 cols: b=1, d=2
+
+  for (const row of table.rows) {
+    if (row.length < 2) continue
+    const label = row[0].trim()
+
+    // Extract line number from label (e.g., "1 Cash", "2a Trade notes")
+    const m = label.match(/^([0-9]{1,2}[a-c]?)\s+/)
+    if (!m) continue
+    const lineNum = m[1]
+    const prefix = lineKeys[lineNum]
+    if (!prefix) continue
+
+    // Collect all numeric values from this row (skip label column)
+    const numericValues = row.slice(1)
+      .map((cell, idx) => ({ idx, val: parseDollar(cell) }))
+      .filter(e => e.val !== null && e.val !== undefined) as Array<{idx: number; val: number}>
+
+    if (numericValues.length === 0) continue
+
+    // Map based on number of values found:
+    // 1 value — ambiguous, assume EOY net (column d) since returns typically emphasize current year
+    // 2 values — BOY net (b), EOY net (d)
+    // 3 values — either [a,b,d] or [a,c,d] — try to preserve BOY/EOY split
+    // 4 values — [a, b, c, d]
+    if (numericValues.length === 1) {
+      out[`schedL.${prefix}_eoy_d`] = numericValues[0].val
+    } else if (numericValues.length === 2) {
+      out[`schedL.${prefix}_boy_b`] = numericValues[0].val
+      out[`schedL.${prefix}_eoy_d`] = numericValues[1].val
+    } else if (numericValues.length === 3) {
+      // Assume columns are [a, b, d] or [b, c, d] — we take first as BOY net, last as EOY net
+      out[`schedL.${prefix}_boy_b`] = numericValues[0].val
+      out[`schedL.${prefix}_eoy_d`] = numericValues[numericValues.length - 1].val
+      // middle value might be gross BOY or gross EOY
+      if (prefix.endsWith('_bldg') || prefix.endsWith('_dep') || prefix.endsWith('_intang') || prefix.endsWith('_amort') || prefix.endsWith('_trade') || prefix.endsWith('_baddebt')) {
+        out[`schedL.${prefix}_boy_a`] = numericValues[1].val
+      }
+    } else if (numericValues.length >= 4) {
+      out[`schedL.${prefix}_boy_a`] = numericValues[0].val
+      out[`schedL.${prefix}_boy_b`] = numericValues[1].val
+      out[`schedL.${prefix}_eoy_c`] = numericValues[2].val
+      out[`schedL.${prefix}_eoy_d`] = numericValues[3].val
+    }
+  }
 }
 
 /** Map Gemini structured JSON → canonical model */
