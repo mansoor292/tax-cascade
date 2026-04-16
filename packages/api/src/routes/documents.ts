@@ -531,7 +531,7 @@ for b in blocks:
     for rel in b.get('Relationships', []):
         if rel['Type'] == 'CHILD':
             for cid in rel['Ids']:
-                cb = bm.get(cid, {})
+                cb = block_map.get(cid, {})
                 if cb.get('BlockType') == 'CELL':
                     r = cb.get('RowIndex', 0); c = cb.get('ColumnIndex', 0)
                     cells[(r, c)] = gt(cb)
