@@ -746,13 +746,25 @@ router.post('/compute', async (req, res) => {
           if (ent.state) metaFields['meta.state'] = ent.state
           if (ent.zip) metaFields['meta.zip'] = ent.zip
         } else {
-          // 1120/1120S: entity_name + address
+          // 1120/1120S: entity_name + address (split street/suite)
           if (ent.name) metaFields['meta.entity_name'] = ent.name
           if (ent.ein) metaFields['meta.ein'] = ent.ein
-          if (ent.address) metaFields['meta.address'] = ent.address
+          if (ent.address) {
+            // Parse "SUITE/STE/ROOM/UNIT/#X" off the end of the address string
+            const suiteMatch = ent.address.match(/^(.+?)\s+(?:suite|ste|room|rm|unit|#)\s*([\w-]+)\s*$/i)
+            if (suiteMatch) {
+              metaFields['meta.address'] = suiteMatch[1].trim()
+              metaFields['meta.suite'] = suiteMatch[2].trim()
+            } else {
+              metaFields['meta.address'] = ent.address
+            }
+          }
+          if (ent.meta?.suite) metaFields['meta.suite'] = ent.meta.suite  // explicit override
           if (ent.city) metaFields['meta.city'] = ent.city
           if (ent.state) metaFields['meta.state'] = ent.state
           if (ent.zip) metaFields['meta.zip'] = ent.zip
+          // city_state_zip is a legacy alias for forms that have a combined field.
+          // Don't map it to a numeric field ID on forms that have separate cells.
           if (ent.city || ent.state || ent.zip)
             metaFields['meta.city_state_zip'] = [ent.city, ent.state, ent.zip].filter(Boolean).join(', ')
           if (ent.date_incorporated) metaFields['meta.date_incorporated'] = ent.date_incorporated

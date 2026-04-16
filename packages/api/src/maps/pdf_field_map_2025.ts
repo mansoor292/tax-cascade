@@ -90,7 +90,7 @@ export const F1120_2025: Record<string, string> = {
   // Header — f1_1/f1_2 = tax year begin/end, f1_3 = ?, f1_4 = name
   'meta.entity_name':           'f1_4',
   'meta.address':               'f1_5',
-  'meta.city_state_zip':        'f1_6',   // Room or suite no. field
+  'meta.suite':                 'f1_6',   // Room or suite no. (parsed from address if "SUITE X")
   'meta.city':                  'f1_7',
   'meta.state':                 'f1_8',
   'meta.country':               'f1_9',
@@ -244,7 +244,11 @@ export const F1120S_2025: Record<string, string> = {
   // Header
   'meta.entity_name':           'f1_4',
   'meta.address':               'f1_5',
-  'meta.city_state_zip':        'f1_6',   // may need f1_9 or f1_10
+  'meta.suite':                 'f1_6',   // Room or suite no.
+  'meta.city':                  'f1_7',
+  'meta.state':                 'f1_8',
+  'meta.country':               'f1_9',
+  'meta.zip':                   'f1_10',
   'meta.s_election_date':       'f1_11',
   'meta.business_code':         'f1_12',
   'meta.ein':                   'f1_13',
