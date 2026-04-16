@@ -414,9 +414,10 @@ async function fetchAndStoreReport(
   extraQuery?: Record<string, string>,
 ): Promise<{ raw: any; summary: Record<string, number>; fetched_at: string }> {
   const query: Record<string, string> = { accounting_method: accountingMethod, ...extraQuery }
-  // Balance sheet uses 'date' not 'start_date/end_date'
-  if (qboReportName === 'BalanceSheet') {
-    query.date = periodEnd
+  // BalanceSheet is a point-in-time snapshot — QBO uses `end_date` as the "as of" date
+  // (NOT `date`, which QBO ignores silently, returning today's balance)
+  if (qboReportName === 'BalanceSheet' || qboReportName === 'BalanceSheetDetail') {
+    query.end_date = periodEnd
   } else {
     query.start_date = periodStart
     query.end_date = periodEnd
