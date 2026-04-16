@@ -13,13 +13,13 @@ async function get(path: string) {
   return r.json()
 }
 
-function getPdfMap(formType: string) {
+function getPdfMap(formType: string): Record<string, string> {
   const base = `F${formType.replace('-', '')}`
-  for (const y of [2024, 2025]) {
-    const m = (maps2025 as any)[`${base}_${y}`] || (maps2024 as any)[`${base}_${y}`]
-    if (m && Object.keys(m).length > 0) return m
+  return {
+    ...((maps2024 as any)[`${base}_2024`] || {}),
+    ...((maps2024 as any)[`PDF_FIELD_MAP_${formType.replace('-', '')}`] || {}),
+    ...((maps2025 as any)[`${base}_2025`] || {}),
   }
-  return {}
 }
 
 const targets = [

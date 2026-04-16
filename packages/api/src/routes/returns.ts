@@ -777,10 +777,13 @@ router.post('/compute', async (req, res) => {
         const maps2025 = await import('../maps/pdf_field_map_2025.js')
         const maps2024 = await import('../maps/pdf_field_map_2024.js')
         const base = `F${form_type.replace('-', '')}`
-        const pdfMap = (maps2025 as any)[`${base}_2025`]
-          || (maps2024 as any)[`${base}_${tax_year}`]
-          || (maps2024 as any)[`${base}_2024`]
-          || {}
+        // Merge 2024 + 2025 maps so we pick up ALL canonical keys across years
+        // (some detail keys like schedL.L2a_trade_boy_a exist only in 2024)
+        const pdfMap: Record<string, string> = {
+          ...((maps2024 as any)[`${base}_2024`] || {}),
+          ...((maps2024 as any)[`PDF_FIELD_MAP_${form_type.replace('-', '')}`] || {}),
+          ...((maps2025 as any)[`${base}_2025`] || {}),
+        }
         const nonNumericPrefixes = ['meta.', 'preparer.', 'schedB.', 'schedK.L1_method']  // names, addresses, dates, yes/no
         for (const canonKey of Object.keys(pdfMap)) {
           if (canonKey in scheduleFieldValues) continue
