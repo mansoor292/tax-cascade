@@ -501,14 +501,12 @@ function mapFromTextract(input: TextractOutput): MappingResult {
   const usedKeys  = new Set<string>()
 
   for (const { key, value, confidence: rawConf } of input.key_value_pairs) {
-    if (!value?.trim()) continue
-
+    const hasValue = !!value?.trim()
     const keyLower = key.toLowerCase().trim()
     let matched = false
 
     for (const rule of rules) {
       if (rule.pattern.test(keyLower)) {
-        const parsed = parseDollar(value)
         // For text fields, keep as string (don't parse as dollar amount)
         const isText = rule.canonical_key.endsWith('name') ||
                        rule.canonical_key.endsWith('ein') ||
@@ -522,9 +520,29 @@ function mapFromTextract(input: TextractOutput): MappingResult {
                        rule.canonical_key.endsWith('firm_ein') ||
                        rule.canonical_key.endsWith('firm_address') ||
                        rule.canonical_key.endsWith('business_activity') ||
-                       rule.canonical_key.endsWith('product_service')
+                       rule.canonical_key.endsWith('product_service') ||
+                       rule.canonical_key.endsWith('first_name') ||
+                       rule.canonical_key.endsWith('last_name') ||
+                       rule.canonical_key.endsWith('spouse_first') ||
+                       rule.canonical_key.endsWith('spouse_last') ||
+                       rule.canonical_key.endsWith('ssn') ||
+                       rule.canonical_key.endsWith('spouse_ssn') ||
+                       rule.canonical_key.endsWith('apt') ||
+                       rule.canonical_key.endsWith('city') ||
+                       rule.canonical_key.endsWith('state') ||
+                       rule.canonical_key.endsWith('zip') ||
+                       rule.canonical_key.endsWith('occupation') ||
+                       rule.canonical_key.endsWith('spouse_occ') ||
+                       rule.canonical_key.endsWith('firm_name') ||
+                       rule.canonical_key.endsWith('firm_phone')
 
-        const finalValue = isText ? value.trim() : parsed
+        // Text fields require non-empty value; numeric fields default to 0 if blank
+        // (IRS forms leave $0 lines blank — Textract extracts the label but not "0",
+        // and the filer's intent was still "this amount is zero")
+        if (isText && !hasValue) continue
+
+        const parsed = hasValue ? parseDollar(value) : 0
+        const finalValue = isText ? value.trim() : (parsed ?? 0)
 
         // Confidence: base rule confidence × Textract confidence (if available)
         const textractConf = (rawConf ?? 95) / 100
