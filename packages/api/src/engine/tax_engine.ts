@@ -250,8 +250,10 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     'schedM1.L7_add_5_6':               0,
     'schedM1.L8_income_K18':            ordinary_income_loss,
   }
+  // Keep zero values — they're structural (e.g. "no capital gains" still needs the line displayed).
+  // Only drop undefined/null.
   for (const k of Object.keys(field_values)) {
-    if (!field_values[k]) delete field_values[k]
+    if (field_values[k] === undefined || field_values[k] === null) delete field_values[k]
   }
 
   return {
@@ -375,8 +377,10 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
     'payments.L35_amount_owed':        balance_due,
     'payments.L36_overpayment':        overpayment,
   }
+  // Keep zero values — they're structural (e.g. "no capital gains" still needs the line displayed).
+  // Only drop undefined/null.
   for (const k of Object.keys(field_values)) {
-    if (!field_values[k]) delete field_values[k]
+    if (field_values[k] === undefined || field_values[k] === null) delete field_values[k]
   }
 
   return {
@@ -563,9 +567,9 @@ export function calc1040(raw: Form1040_Inputs): {
     'result.L34_overpayment':      refund,
     'owed.L37_amount_owed':        owed,
   }
-  // Filter zeros to avoid noise
+  // Keep zero values — structural. Only drop undefined/null.
   for (const k of Object.keys(field_values)) {
-    if (field_values[k] === 0 || field_values[k] === null || field_values[k] === undefined) {
+    if (field_values[k] === null || field_values[k] === undefined) {
       delete field_values[k]
     }
   }

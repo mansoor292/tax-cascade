@@ -63,10 +63,11 @@ async function main() {
       return out
     }
 
+    // Zero is a valid value — "no capital gains" still means the line is filled with 0
     const proformaFilled = normalize([
-      ...Object.keys(inputs).filter(k => inputs[k] !== 0 && inputs[k] !== null && inputs[k] !== undefined),
-      ...Object.keys(computed).filter(k => computed[k] !== 0 && computed[k] !== null),
-      ...Object.keys(fieldValues).filter(k => fieldValues[k] !== 0 && fieldValues[k] !== null),
+      ...Object.keys(inputs).filter(k => inputs[k] !== null && inputs[k] !== undefined && inputs[k] !== ''),
+      ...Object.keys(computed).filter(k => computed[k] !== null && computed[k] !== undefined),
+      ...Object.keys(fieldValues).filter(k => fieldValues[k] !== null && fieldValues[k] !== undefined),
     ])
     const filedFilled = normalize(Object.keys(mapped.model || {}))
 
