@@ -770,6 +770,25 @@ router.post('/compute', async (req, res) => {
       }
       Object.assign(scheduleFieldValues, metaFields)
 
+      // Zero-default every canonical numeric key the PDF expects
+      // (taxpayer truly has no data for this line → IRS form shows "0")
+      // Skip non-numeric keys (names, addresses, dates) which shouldn't default to 0.
+      try {
+        const maps2025 = await import('../maps/pdf_field_map_2025.js')
+        const maps2024 = await import('../maps/pdf_field_map_2024.js')
+        const base = `F${form_type.replace('-', '')}`
+        const pdfMap = (maps2025 as any)[`${base}_2025`]
+          || (maps2024 as any)[`${base}_${tax_year}`]
+          || (maps2024 as any)[`${base}_2024`]
+          || {}
+        const nonNumericPrefixes = ['meta.', 'preparer.', 'schedB.', 'schedK.L1_method']  // names, addresses, dates, yes/no
+        for (const canonKey of Object.keys(pdfMap)) {
+          if (canonKey in scheduleFieldValues) continue
+          if (nonNumericPrefixes.some(p => canonKey.startsWith(p))) continue
+          scheduleFieldValues[canonKey] = 0
+        }
+      } catch (_) { /* optional — skip if map import fails */ }
+
       const { data, error } = await supabase.from('tax_return').upsert({
         entity_id,
         tax_year,
