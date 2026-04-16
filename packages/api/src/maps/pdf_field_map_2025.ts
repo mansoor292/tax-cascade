@@ -181,8 +181,10 @@ export const F1120_2025: Record<string, string> = {
   // Page 6: Schedule L (Balance Sheet) — same f6_* IDs as 2024
   'schedL.L1_cash_boy_b':            'f6_2',
   'schedL.L1_cash_eoy_d':            'f6_4',
-  'schedL.L2a_trade_boy_b':          'f6_6',
-  'schedL.L2a_trade_eoy_d':          'f6_8',
+  // L2a cols b/d are SHADED on the IRS form (net shown on L2b b/d as
+  // gross - allowance). Only cols a/c (gross) are fillable.
+  // 'schedL.L2a_trade_boy_b': 'f6_6',   ← shaded, don't map
+  // 'schedL.L2a_trade_eoy_d': 'f6_8',   ← shaded, don't map
   'schedL.L6_othercurr_boy_b':       'f6_26',
   'schedL.L6_othercurr_eoy_d':       'f6_28',
   'schedL.L7_loans_boy_b':           'f6_30',

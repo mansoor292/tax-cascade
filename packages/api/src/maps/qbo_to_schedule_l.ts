@@ -35,9 +35,11 @@ export function buildScheduleL(
   model['schedL.L1_cash_boy_b'] = abs(g(boy, 'BankAccounts (Total)'))
   model['schedL.L1_cash_eoy_d'] = abs(g(eoy, 'BankAccounts (Total)'))
 
-  // L2a: Trade notes & accounts receivable
-  model['schedL.L2a_trade_boy_b'] = abs(g(boy, 'AR (Total)'))
-  model['schedL.L2a_trade_eoy_d'] = abs(g(eoy, 'AR (Total)'))
+  // L2a: Trade notes & accounts receivable — GROSS goes in cols a/c (white).
+  // Cols b/d on the 2a row are shaded/gray (net is shown on 2b row b/d
+  // as gross - allowance). Don't write to 2a b/d.
+  model['schedL.L2a_trade_boy_a'] = abs(g(boy, 'AR (Total)'))
+  model['schedL.L2a_trade_eoy_c'] = abs(g(eoy, 'AR (Total)'))
 
   // L6: Other current assets
   model['schedL.L6_othercurr_boy_b'] = abs(g(boy, 'OtherCurrentAssets (Total)'))

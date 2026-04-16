@@ -86,11 +86,12 @@ export const PDF_FIELD_MAP_1120: Record<string, string> = {
   // L1 Cash: f6_1..f6_4
   'schedL.L1_cash_boy_b':            'f6_2',
   'schedL.L1_cash_eoy_d':            'f6_4',
-  // L2a Trade notes: f6_5..f6_8
+  // L2a Trade notes: cols a/c (gross) white, b/d shaded.
+  // Net appears on 2b row b/d (computed as 2a gross - 2b allowance).
   'schedL.L2a_trade_boy_a':          'f6_5',
-  'schedL.L2a_trade_boy_b':          'f6_6',
   'schedL.L2a_trade_eoy_c':          'f6_7',
-  'schedL.L2a_trade_eoy_d':          'f6_8',
+  // 'schedL.L2a_trade_boy_b': 'f6_6',  ← SHADED
+  // 'schedL.L2a_trade_eoy_d': 'f6_8',  ← SHADED
   // L2b Bad debts: f6_9..f6_12
   'schedL.L2b_baddebt_boy_a':        'f6_9',
   'schedL.L2b_baddebt_boy_b':        'f6_10',

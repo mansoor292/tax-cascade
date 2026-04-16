@@ -743,12 +743,23 @@ function mapScheduleLTable(table: TextractTable, out: Record<string, number>) {
 
     // Values are in columns beyond the label. Default empty cells within
     // the 4-column (a/b/c/d) range to 0, since IRS shows blank = $0.
+    //
+    // But: some lines have shaded/gray cells that shouldn't be filled.
+    // For "gross with allowance below" lines (2a, 10a, 13a), cols b/d are
+    // shaded — net is computed on the 2b/10b/13b row.
     const valueCells = row.slice(2)  // skip line# + label
     const parsed = valueCells.map(c => parseDollar(c))
     const suffix = ['boy_a', 'boy_b', 'eoy_c', 'eoy_d'] as const
 
+    // Lines where col b and d are shaded (don't write)
+    const grayBD = new Set(['L2a_trade', 'L10a_bldg', 'L13a_intang'])
+    const skipBD = grayBD.has(prefix)
+
     const effectiveCols = Math.min(parsed.length, 4)
     for (let pos = 0; pos < effectiveCols; pos++) {
+      // pos 1 = col b, pos 3 = col d
+      if (skipBD && (pos === 1 || pos === 3)) continue
+
       const key = `schedL.${prefix}_${suffix[pos]}`
       const val = parsed[pos]
       if (val !== null && val !== undefined) {
