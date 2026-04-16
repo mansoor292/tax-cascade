@@ -98,12 +98,24 @@ router.put('/:id', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const { name, form_type, ein, address } = req.body
+  const { name, form_type, ein, address, city, state, zip, date_incorporated, meta, meta_merge } = req.body
   const updates: any = {}
   if (name !== undefined) updates.name = name
   if (form_type !== undefined) updates.form_type = form_type
   if (ein !== undefined) updates.ein = ein
   if (address !== undefined) updates.address = address
+  if (city !== undefined) updates.city = city
+  if (state !== undefined) updates.state = state
+  if (zip !== undefined) updates.zip = zip
+  if (date_incorporated !== undefined) updates.date_incorporated = date_incorporated
+  if (meta !== undefined) updates.meta = meta  // replaces entire meta
+
+  // meta_merge shallow-merges with existing meta (preserves other keys)
+  if (meta_merge !== undefined) {
+    const { data: existing } = await supabase.from('tax_entity')
+      .select('meta').eq('id', req.params.id).eq('user_id', userId).single()
+    updates.meta = { ...(existing?.meta || {}), ...meta_merge }
+  }
 
   const { data, error } = await supabase.from('tax_entity')
     .update(updates).eq('id', req.params.id).eq('user_id', userId).select().single()

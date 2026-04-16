@@ -703,14 +703,37 @@ router.post('/compute', async (req, res) => {
       const metaFields: Record<string, any> = {}
       if (ent) {
         if (form_type === '1040') {
-          // 1040: split name fields
-          if (ent.meta?.first_name) metaFields['meta.first_name'] = ent.meta.first_name
-          if (ent.meta?.last_name) metaFields['meta.last_name'] = ent.meta.last_name
+          // 1040: split name fields — auto-parse entity.name if first/last not explicit
+          let first = ent.meta?.first_name
+          let last = ent.meta?.last_name
+          let spouseFirst = ent.meta?.spouse_first
+          let spouseLast = ent.meta?.spouse_last
+          if (!first && !last && ent.name) {
+            // Handle "X & Y Razzaq" or "X Razzaq" patterns
+            const match = ent.name.match(/^(\S+?)(?:\s+&\s+(\S+))?\s+(.+)$/)
+            if (match) {
+              first = match[1]
+              last = match[3]
+              if (match[2]) spouseFirst = match[2]
+              if (match[2] && !spouseLast) spouseLast = match[3]  // shared surname
+            }
+          }
+          if (first) metaFields['meta.first_name'] = first
+          if (last) metaFields['meta.last_name'] = last
+          if (spouseFirst) metaFields['meta.spouse_first'] = spouseFirst
+          if (spouseLast) metaFields['meta.spouse_last'] = spouseLast
           if (ent.ein) metaFields['meta.ssn'] = ent.ein  // "ein" holds SSN for 1040
-          if (ent.meta?.spouse_first) metaFields['meta.spouse_first'] = ent.meta.spouse_first
-          if (ent.meta?.spouse_last) metaFields['meta.spouse_last'] = ent.meta.spouse_last
           if (ent.meta?.spouse_ssn) metaFields['meta.spouse_ssn'] = ent.meta.spouse_ssn
-          if (ent.address) metaFields['meta.address'] = ent.address
+          if (ent.address) {
+            // Split apartment/suite off if present
+            const aptMatch = ent.address.match(/^(.+?)\s+(apt|ste|suite|unit|#)\s*(.+)$/i)
+            if (aptMatch) {
+              metaFields['meta.address'] = aptMatch[1]
+              metaFields['meta.apt'] = aptMatch[3]
+            } else {
+              metaFields['meta.address'] = ent.address
+            }
+          }
           if (ent.city) metaFields['meta.city'] = ent.city
           if (ent.state) metaFields['meta.state'] = ent.state
           if (ent.zip) metaFields['meta.zip'] = ent.zip

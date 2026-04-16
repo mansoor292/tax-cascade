@@ -235,10 +235,20 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     'deductions.L20_other':             inp.other_deductions,
     'deductions.L21_total':             total_deductions,
     'tax.L22_ordinary_income':          ordinary_income_loss,
-    // Schedule K pro-rata totals
+    // Schedule K — pro-rata share items (flows to shareholders' K-1s)
     'schedK.L1_ordinary':               ordinary_income_loss,
-    'schedK.L12a_charitable':           inp.charitable_contrib,
     'schedK.L11_section_179':           inp.section_179,
+    'schedK.L12a_charitable':           inp.charitable_contrib,
+    // L18: Income/loss reconciliation = ordinary + separately stated items - separately stated expenses
+    'schedK.L18_income_loss':           ordinary_income_loss + inp.charitable_contrib,
+    // Schedule M-1 — reconciliation of income (loss) per books with return
+    // Line 1 = net income per books, often close to ordinary_income_loss after book-tax adjustments
+    'schedM1.L1_net_income':            ordinary_income_loss,
+    'schedM1.L3_expenses_not_K':        0,  // book-only expenses not on K (e.g. 50% meals difference)
+    'schedM1.L4_add':                   ordinary_income_loss,
+    'schedM1.L6_ded_on_K':              0,  // K deductions not charged against book income
+    'schedM1.L7_add_5_6':               0,
+    'schedM1.L8_income_K18':            ordinary_income_loss,
   }
   for (const k of Object.keys(field_values)) {
     if (!field_values[k]) delete field_values[k]
@@ -507,7 +517,10 @@ export function calc1040(raw: Form1040_Inputs): {
 
   // IRS-line-keyed field_values for direct PDF fill
   const field_values: Record<string, number> = {
-    // Income lines
+    // Income lines — default L1a_w2_wages = wages when no explicit breakdown is provided
+    // (W-2 box 1 matches L1a; in the absence of household/tips/dep-care inputs, all wages
+    // flow through L1a and L1z)
+    'income.L1a_w2_wages':         inp.wages,
     'income.L1z_total_wages':      inp.wages,
     'income.L2b_taxable_int':      inp.taxable_interest,
     'income.L3a_qual_dividends':   inp.qualified_dividends,
@@ -538,10 +551,12 @@ export function calc1040(raw: Form1040_Inputs): {
     // Credits
     'credits.L19_child_tax':       ctc_nonrefundable,
     'credits.L21_add_19_20':       ctc_nonrefundable,
-    // Payments
+    // Payments — default L25a_w2 = withholding (assume all withholding is W-2)
+    'payments.L25a_w2':            inp.withholding,
     'payments.L25d_total':         inp.withholding,
     'payments.L26_estimated':      inp.estimated_payments,
     'payments.L28_child_addl':     ctc_detail.refundable,
+    'payments.L32_other_total':    ctc_detail.refundable,
     'payments.L33_total':          total_payments,
     // Result
     'refund.L35a_refunded':        refund,
