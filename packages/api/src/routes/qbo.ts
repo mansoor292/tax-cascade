@@ -414,14 +414,11 @@ async function fetchAndStoreReport(
   extraQuery?: Record<string, string>,
 ): Promise<{ raw: any; summary: Record<string, number>; fetched_at: string }> {
   const query: Record<string, string> = { accounting_method: accountingMethod, ...extraQuery }
-  // BalanceSheet is a point-in-time snapshot — QBO uses `end_date` as the "as of" date
-  // (NOT `date`, which QBO ignores silently, returning today's balance)
-  if (qboReportName === 'BalanceSheet' || qboReportName === 'BalanceSheetDetail') {
-    query.end_date = periodEnd
-  } else {
-    query.start_date = periodStart
-    query.end_date = periodEnd
-  }
+  // BalanceSheet is point-in-time — QBO treats end_date as the "as of" date.
+  // We also pass start_date (same year) because QBO otherwise defaults to
+  // DateMacro=this-calendar-year-to-date, which ignores our end_date entirely.
+  query.start_date = periodStart
+  query.end_date = periodEnd
 
   const raw = await qboFetch(entityId, `/reports/${qboReportName}`, query)
   const summary = flattenReport(raw)
