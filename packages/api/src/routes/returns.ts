@@ -584,10 +584,16 @@ router.post('/compute', async (req, res) => {
             const { buildScheduleL } = await import('../maps/qbo_to_schedule_l.js')
             // Pull current year and prior year balance sheets
             const eoyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year}`, {
-              headers: { 'Authorization': req.headers.authorization || '' },
+              headers: {
+                'Authorization': req.headers.authorization || '',
+                'x-api-key': (req.headers['x-api-key'] as string) || '',
+              },
             }).then(r => r.json()).catch(() => null)
             const boyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year - 1}`, {
-              headers: { 'Authorization': req.headers.authorization || '' },
+              headers: {
+                'Authorization': req.headers.authorization || '',
+                'x-api-key': (req.headers['x-api-key'] as string) || '',
+              },
             }).then(r => r.json()).catch(() => null)
 
             if (eoyResp?.balance_sheet?.items) {
@@ -636,10 +642,16 @@ router.post('/compute', async (req, res) => {
           if (conn) {
             const { buildScheduleL } = await import('../maps/qbo_to_schedule_l.js')
             const eoyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year}`, {
-              headers: { 'Authorization': req.headers.authorization || '' },
+              headers: {
+                'Authorization': req.headers.authorization || '',
+                'x-api-key': (req.headers['x-api-key'] as string) || '',
+              },
             }).then(r => r.json()).catch(() => null)
             const boyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year - 1}`, {
-              headers: { 'Authorization': req.headers.authorization || '' },
+              headers: {
+                'Authorization': req.headers.authorization || '',
+                'x-api-key': (req.headers['x-api-key'] as string) || '',
+              },
             }).then(r => r.json()).catch(() => null)
 
             if (eoyResp?.balance_sheet?.items) {
