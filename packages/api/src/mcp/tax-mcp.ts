@@ -304,12 +304,17 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: update_entity ───
-  server.tool('update_entity', 'Update a tax entity (name, form_type, EIN, address)', {
+  server.tool('update_entity', 'Update a tax entity. Address is split into separate street/city/state/zip fields since the PDF pulls them individually. Use meta_merge for other metadata (preparer, title, business_code, etc.) without overwriting existing meta.', {
     entity_id: z.string().describe('Entity UUID'),
     name: z.string().optional().describe('Entity name'),
-    form_type: z.string().optional().describe('1040, 1120, or 1120S'),
-    ein: z.string().optional().describe('EIN or SSN'),
-    address: z.string().optional().describe('Address'),
+    form_type: z.string().optional().describe('1040, 1120, 1120S, 1065, 990'),
+    ein: z.string().optional().describe('EIN (9 digits, no dash) or SSN (9 digits for individuals)'),
+    address: z.string().optional().describe('Street address (line 1 only). City/state/zip are separate.'),
+    city: z.string().optional().describe('City'),
+    state: z.string().optional().describe('State (2-letter abbreviation)'),
+    zip: z.string().optional().describe('ZIP code'),
+    date_incorporated: z.string().optional().describe('Date incorporated / S-election date (YYYY-MM-DD)'),
+    meta_merge: z.record(z.any()).optional().describe('Shallow-merge into meta. Use for preparer info ({preparer: {name, ptin, firm_name, firm_ein, firm_address, phone}}), title, business_code, etc. Preserves existing meta keys.'),
   }, async ({ entity_id, ...updates }) => {
     return text(await call('PUT', `/api/entities/${entity_id}`, updates))
   })
