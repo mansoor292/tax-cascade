@@ -13,9 +13,9 @@
 
 import { PDFDocument, PDFTextField, PDFCheckBox, StandardFonts, rgb, PDFPage, PDFFont } from 'pdf-lib'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
-import { mapToCanonical, type TextractOutput } from './json_model_mapper.js'
-import { calc1120 } from './tax_engine.js'
-import { PDF_FIELD_MAP_1120 } from './pdf_field_map.js'
+import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
+import { calc1120 } from '../engine/tax_engine.js'
+import { PDF_FIELD_MAP_1120 } from '../maps/pdf_field_map_2024.js'
 
 const OUT_DIR = 'tax-api/output'
 
@@ -26,8 +26,9 @@ const OUT_DIR = 'tax-api/output'
 interface YearData {
   year: number
   textractPath: string
-  // Schedule K answers (Yes=0 index, No=1 index for checkbox pairs)
-  schedK: Record<string, 'yes' | 'no'>
+  // Schedule K answers — most are yes/no checkboxes, but some fields
+  // take other values (e.g. K1_method: cash/accrual/other)
+  schedK: Record<string, string>
   // Schedule G ownership
   owners: Array<{ name: string; ssn: string; country: string; pct: string }>
   // Other deductions detail

@@ -48,42 +48,27 @@ router.post('/:id/compute', async (req, res) => {
   if (error || !scenario) return res.status(404).json({ error: 'Scenario not found' })
 
   try {
-    const adj = scenario.adjustments
+    const adj = scenario.adjustments || {}
     const formType = scenario.tax_entity?.form_type || adj.form_type
 
-    let result: any
-    if (formType === '1120') {
-      result = calc1120(adj)
-    } else if (formType === '1120S') {
-      result = calc1120S(adj)
-    } else if (formType === '1040') {
-      // Build 1040 computation from adjustments
-      const wages = adj.wages || 0
-      const k1 = adj.k1_ordinary || 0
-      const interest = adj.interest || 0
-      const dividends = adj.dividends || 0
-      const capGains = adj.capital_gains || 0
-      const totalIncome = wages + k1 + interest + dividends + capGains
-      const agi = totalIncome
-      const stdDed = standardDeduction(adj.filing_status || 'mfj', adj.tax_year || scenario.tax_year)
-      const qbi = qbiDeduction(k1, adj.k1_w2_wages || 0, 0, Math.max(0, agi - stdDed), adj.filing_status || 'mfj', adj.tax_year || scenario.tax_year)
-      const taxable = Math.max(0, agi - stdDed - qbi)
-      const incomeTax = ordinaryTax(taxable, adj.filing_status || 'mfj', adj.tax_year || scenario.tax_year)
-      const addlMedicare = Math.round(Math.max(0, wages - 250000) * 0.009)
-      const niit = niitTax(interest + dividends, agi, adj.filing_status || 'mfj', adj.tax_year || scenario.tax_year)
-      const totalTax = incomeTax + addlMedicare + niit
-      const payments = (adj.withholding || 0) + (adj.estimated_payments || 0)
+    // Merge adjustments with base return's input_data (adjustments override)
+    let baseInputs: Record<string, any> = {}
+    if (scenario.base_return_id) {
+      const { data: br } = await supabase.from('tax_return')
+        .select('input_data').eq('id', scenario.base_return_id).single()
+      if (br?.input_data) baseInputs = br.input_data
+    }
+    const mergedInputs: Record<string, any> = { ...baseInputs, ...adj }
 
-      result = {
-        computed: {
-          total_income: totalIncome, agi, standard_deduction: stdDed,
-          qbi_deduction: qbi, taxable_income: taxable,
-          income_tax: incomeTax, additional_medicare: addlMedicare, niit,
-          total_tax: totalTax, total_payments: payments,
-          balance_due: Math.max(0, totalTax - payments),
-          refund: Math.max(0, payments - totalTax),
-        }
-      }
+    let result: any
+    const merged: any = { ...mergedInputs, tax_year: mergedInputs.tax_year || scenario.tax_year }
+    if (formType === '1120') {
+      result = calc1120(merged)
+    } else if (formType === '1120S') {
+      result = calc1120S(merged)
+    } else if (formType === '1040') {
+      // Use the full calc1040 which handles SS taxability, SE, NIIT, AMT, etc.
+      result = calc1040(merged)
     }
 
     // Get base return for comparison if available
@@ -113,15 +98,8 @@ router.post('/:id/compute', async (req, res) => {
 
     // Identify which inputs changed vs base
     let inputChanges: Record<string, { from: any; to: any }> = {}
-    if (scenario.base_return_id) {
-      const { data: baseReturn } = await supabase.from('tax_return')
-        .select('input_data').eq('id', scenario.base_return_id).single()
-      if (baseReturn?.input_data) {
-        const baseInputs = baseReturn.input_data
-        for (const [k, v] of Object.entries(adj)) {
-          if (baseInputs[k] !== v) inputChanges[k] = { from: baseInputs[k] ?? 0, to: v }
-        }
-      }
+    for (const [k, v] of Object.entries(adj)) {
+      if (baseInputs[k] !== v) inputChanges[k] = { from: baseInputs[k] ?? 0, to: v }
     }
 
     // Check what PDF fields would be missing
@@ -133,7 +111,7 @@ router.post('/:id/compute', async (req, res) => {
       scenario.tax_year
     )
     const filledCanonKeys = new Set<string>()
-    for (const [engineKey, value] of Object.entries({ ...adj, ...(result?.computed || {}) })) {
+    for (const [engineKey, value] of Object.entries({ ...mergedInputs, ...(result?.computed || {}) })) {
       const canon = engineMap[engineKey]
       if (canon && value !== undefined && value !== null) filledCanonKeys.add(canon)
     }

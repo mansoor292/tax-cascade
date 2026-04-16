@@ -5,8 +5,8 @@
 
 import { PDFDocument, PDFTextField, PDFCheckBox, StandardFonts, rgb, PDFFont } from 'pdf-lib'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
-import { calc1120S } from './tax_engine.js'
-import { PDF_FIELD_MAP_1120S } from './pdf_field_map.js'
+import { calc1120S } from '../engine/tax_engine.js'
+import { PDF_FIELD_MAP_1120S } from '../maps/pdf_field_map_2024.js'
 
 const OUT_DIR = 'tax-api/output'
 

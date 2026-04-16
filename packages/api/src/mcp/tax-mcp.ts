@@ -34,84 +34,54 @@ function text(data: any): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text' as const, text: typeof data === 'string' ? data : JSON.stringify(data, null, 2) }] }
 }
 
-const INSTRUCTIONS = `You help users prepare and optimize tax returns using the Tax Preparation API.
+const INSTRUCTIONS = `You help users prepare and file tax returns.
 
-## Getting Started
-1. Call list_entities to see existing entities and returns
-2. Call get_schema to discover supported forms (1040/1120/1120S), years (2018-2025), and required inputs
-3. Call get_schema with form_type and year for the exact input fields needed
+## Starting out
+Call list_entities first. Figure out what the user needs from context — don't present a menu.
+To create an entity: create_entity(name, form_type). form_type drives entity_type automatically (1040→individual, 1120→c_corp, 1120S→s_corp).
 
-## Data Entry — Two Paths
-
-### Path A: Upload documents (prior returns, W-2s, 1099s, K-1s)
-1. upload_document → get presigned S3 URL for each document
-2. register_document → triggers OCR + auto-classification (detects w2/1099/k1/prior_return)
-3. For prior returns: process_document → extracts, computes, saves as return
-4. For W-2s, 1099s, K-1s: data is auto-extracted and stored
-5. When compute_return is called, it auto-merges data from all supporting docs for that entity+year
-6. IMPORTANT: Ask the user to upload ALL their W-2s, 1099s, and K-1s before computing
-
-### Path B: Enter data manually or from QuickBooks
-1. Check qbo_status — is QuickBooks connected?
-2. If yes: get_financials to pull P&L + Balance Sheet, then get_qbo_mapping for field mappings
-3. If no: ask the user for the numbers, or use connect_qbo to start OAuth
-4. validate_return to check inputs
-5. compute_return to calculate and save (auto-merges any uploaded supporting docs)
-
-## Analysis & Scenarios
-- run_scenario: create what-if scenarios. Returns: computed result, field-by-field diff vs base, input changes, PDF coverage %
-- compare_scenarios: side-by-side comparison with AI recommendation
-- get_scenario_pdf: generate a preview PDF for any scenario without promoting
-- promote_scenario: finalize a scenario into an official return (only after user approval)
-- analyze_scenario: get Gemini AI analysis of tax impact
-- compute_cascade: S-Corp → K-1 → 1040 pass-through in one call
-- IMPORTANT: Always pass base_return_id when creating scenarios — this enables the diff
-- compute_return also returns pdf_coverage showing how complete the PDF would be
-
-## Extensions
-- validate_extension: check extension inputs before filing
-- file_extension: file Form 4868 (individual), 7004 (business), or 8868 (exempt org)
-- Call get_schema with form_type 4868/7004/8868 to see required fields
-- Extensions can generate a filled PDF and save to the entity
-
-## Output
-- get_pdf: generate filled IRS PDF with download URL
-- compare_returns: year-over-year comparison for an entity
+## Uploading documents
+upload_document → register_document (with entity_id) → process_document.
+OCR + classification is automatic. Prior returns get fully extracted and computed. W-2s, 1099s, K-1s auto-merge into compute_return for the same entity+year.
 
 ## QuickBooks
-- qbo_status: check connection
-- connect_qbo: start OAuth (returns URL for user to click)
-- get_financials: P&L + Balance Sheet summary (cached)
-- get_qbo_report: any report — P&L detail, balance sheet detail, trial balance, GL, cash flow, transaction list, AR/AP aging, vendor/customer balances. All cached in DB.
-- get_accounts: chart of accounts with balances — use to find account names for filtering
-- get_transactions: search transactions by account, date range, or year. Returns individual line items.
-- qbo_resource: CRUD any QBO resource (Invoice, Customer, Bill, Vendor, Employee, JournalEntry, etc). Search with WHERE/ORDERBY, or create/update/delete.
-- qbo_query: raw QBO SQL for anything else
-- IMPORTANT: Reports and transactions are cached in the database. Claude can query them anytime without re-fetching from QBO. Use refresh=true only when the user asks for fresh data.
-- For QBO resource operations, use standard QBO API field names (e.g. DisplayName, TotalAmt, TxnDate).
+
+**Reports are cached.** get_financials and get_qbo_report store results in the database. Subsequent calls return the cached copy. Use refresh=true ONLY when the user explicitly asks for fresh data.
+
+Cached reports: profit-and-loss, profit-and-loss-detail, balance-sheet, balance-sheet-detail, trial-balance, general-ledger, cash-flow, transaction-list, accounts-receivable, accounts-payable, vendor-balance, customer-balance.
+
+**Everything else is live.** qbo_resource, qbo_query, get_accounts, and get_transactions hit the QBO API directly. Use these freely to look up specific items — invoices, bills, vendors, customers, journal entries, account balances, individual transactions. They're fast. Don't pull a full report just to find one number.
+
+get_qbo_mapping shows how QBO P&L categories map to tax form lines.
 
 ## Stripe
-- connect_stripe: link a Stripe account by providing the secret key (sk_live_... or rk_live_...)
-- stripe_revenue: annual summary — gross, fees, net by transaction type (for tax reporting)
-- stripe_invoices: list/filter invoices
-- stripe_payments: list charges
-- stripe_payouts: bank payouts
-- stripe_customers: customer list
-- Use stripe_revenue to get total Stripe income for a tax year
+connect_stripe links an account. stripe_revenue gives annual gross/fees/net for tax reporting. stripe_invoices, stripe_payments, stripe_payouts, stripe_customers for details.
 
-## Adding New Forms
-- If the user needs a form we don't support, call request_form with the IRS form name and year
-- The pipeline downloads the blank PDF from IRS, labels fields, runs Textract, and creates a field map
-- Check progress with check_form_status
-- Once active, the form shows up in get_schema automatically
+## Computing returns
+validate_return → compute_return → get_pdf.
+get_pdf and get_scenario_pdf serve cached PDFs by default. Pass refresh=true after recomputing a return or updating data to regenerate.
+Ask for data conversationally — group by topic (income, deductions, payments). Use get_schema to discover required fields.
+
+## Extensions (4868/7004/8868)
+Extensions are time-sensitive. Collect the minimum: name, SSN/EIN, address, estimated tax liability, payments already made.
+validate_extension → file_extension(generate_pdf: true) → give them the PDF.
+
+Key inputs for 4868: taxpayer_name, taxpayer_id, address, city, state, zip, estimated_tax_liability, total_payments, amount_paying.
+For 7004: add form_code ("12"=1120, "25"=1120-S, "09"=1065).
+For 8868: add return_code ("01"=990, "04"=990-PF).
+
+## Scenarios
+run_scenario (pass base_return_id for diff), compare_scenarios, get_scenario_pdf, promote_scenario, analyze_scenario, compute_cascade (S-Corp→K-1→1040).
+
+## New forms
+request_form + check_form_status. Downloads from IRS, runs Textract. Shows up in get_schema when ready.
 
 ## Rules
-- Never fabricate financial data — ask the user for missing values
-- Always confirm the tax year before computing
-- Call validate_return before compute_return
-- For S-Corps, shareholder percentages must sum to 100%
-- When QBO is connected, pull financials first before asking for manual input
-- Call get_schema to discover required fields — don't guess`
+- Never fabricate financial data
+- Confirm tax year before computing
+- validate_return before compute_return
+- S-Corp shareholders must sum to 100%
+- Use get_schema to discover fields — don't guess`
 
 function extractApiKey(req: Request): string | null {
   const auth = req.headers.authorization
@@ -152,10 +122,12 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: create_entity ───
-  server.tool('create_entity', 'Create a new tax entity (individual, C-Corp, S-Corp)', {
-    name: z.string().describe('Entity name'),
-    form_type: z.string().optional().describe('1040, 1120, or 1120S'),
-    ein: z.string().optional().describe('EIN or SSN'),
+  server.tool('create_entity', 'Create a new tax entity (individual, C-Corp, S-Corp). entity_type is auto-derived from form_type if omitted (1040→individual, 1120→c_corp, 1120S→s_corp).', {
+    name: z.string().describe('Entity name (person or business)'),
+    form_type: z.string().optional().describe('Tax form: 1040, 1120, 1120S, 1065, 990'),
+    entity_type: z.string().optional().describe('Entity type: individual, c_corp, s_corp, partnership, llc, nonprofit. Auto-derived from form_type if omitted.'),
+    ein: z.string().optional().describe('EIN (business) or SSN (individual)'),
+    address: z.string().optional().describe('Street address'),
   }, async (params) => {
     return text(await call('POST', '/api/entities', params))
   })
@@ -237,10 +209,12 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: get_pdf ───
-  server.tool('get_pdf', 'Generate a filled IRS PDF for a computed return. Returns a download URL. Always regenerates from latest data.', {
+  server.tool('get_pdf', 'Generate a filled IRS PDF for a computed return. Returns a presigned download URL. Uses cached PDF if available — pass refresh=true to regenerate from latest data (e.g. after recomputing the return or updating schedules).', {
     return_id: z.string().describe('Tax return UUID'),
-  }, async ({ return_id }) => {
-    return text(await call('GET', `/api/returns/${return_id}/pdf?regenerate=true`))
+    refresh: z.boolean().optional().describe('Force regeneration from latest data (default: false — serves cached PDF if available)'),
+  }, async ({ return_id, refresh }) => {
+    const qs = refresh ? '?regenerate=true' : ''
+    return text(await call('GET', `/api/returns/${return_id}/pdf${qs}`))
   })
 
   // ─── Tool: compare_returns ───
@@ -292,10 +266,12 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: get_scenario_pdf ───
-  server.tool('get_scenario_pdf', 'Generate a preview PDF for a scenario without promoting it to an official return. Use this to let the user review before committing.', {
+  server.tool('get_scenario_pdf', 'Generate a preview PDF for a scenario without promoting it to an official return. Uses cached PDF if available — pass refresh=true to regenerate.', {
     scenario_id: z.string().describe('Scenario UUID'),
-  }, async ({ scenario_id }) => {
-    return text(await call('GET', `/api/scenarios/${scenario_id}/pdf`))
+    refresh: z.boolean().optional().describe('Force regeneration (default: false)'),
+  }, async ({ scenario_id, refresh }) => {
+    const qs = refresh ? '?regenerate=true' : ''
+    return text(await call('GET', `/api/scenarios/${scenario_id}/pdf${qs}`))
   })
 
   // ─── Tool: promote_scenario ───

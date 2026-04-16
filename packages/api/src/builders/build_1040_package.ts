@@ -11,9 +11,9 @@
 
 import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
-import { mapToCanonical, type TextractOutput } from './json_model_mapper.js'
-import { ordinaryTax, qbiDeduction, niitTax, standardDeduction, TAX_TABLES } from './tax_tables.js'
-import { PDF_FIELD_MAP_1120 } from './pdf_field_map.js'
+import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
+import { ordinaryTax, qbiDeduction, niitTax, standardDeduction, TAX_TABLES } from '../engine/tax_tables.js'
+import { PDF_FIELD_MAP_1120 } from '../maps/pdf_field_map_2024.js'
 
 const OUT_DIR = 'tax-api/output'
 

@@ -704,13 +704,13 @@ export function mapToCanonical(input: MapperInput): MappingResult {
 
   // No source tag — try to infer from shape
   if ('key_value_pairs' in input) {
-    return mapFromTextract({ source: 'textract', ...input } as TextractOutput)
+    return mapFromTextract({ ...input, source: 'textract' } as TextractOutput)
   }
   if ('income' in input && 'deductions' in input) {
-    return mapFromGemini({ source: 'gemini', ...input } as GeminiOutput)
+    return mapFromGemini({ ...input, source: 'gemini' } as GeminiOutput)
   }
   if ('rows' in input && 'period_end' in input) {
-    return mapFromQBO({ source: 'qbo', ...input } as QBOReport)
+    return mapFromQBO({ ...input, source: 'qbo' } as QBOReport)
   }
 
   throw new Error('Unknown input format. Expected textract, gemini, or qbo shape.')

@@ -40,6 +40,8 @@ export interface Form1120S_Inputs {
   // Schedule K pass-through items
   charitable_contrib:   number
   section_179:          number
+  // §199A — flows to shareholders on K-1
+  is_sstb?:             boolean
   // Shareholders
   shareholders:         Array<{ name: string; pct: number }>
 }
@@ -93,7 +95,15 @@ export interface Form1120_Inputs {
   other_deductions:     number
   // NOL / special deductions
   nol_deduction:        number
-  special_deductions:   number
+  special_deductions:   number   // Schedule C line 29b — if 0, computed from dividends via DRD
+  dividends_less_20pct_owned?:  number  // for DRD — 50% deduction
+  dividends_20pct_or_more_owned?: number  // for DRD — 65% deduction
+  dividends_affiliated_group?:   number  // for DRD — 100% deduction
+  // Credits
+  foreign_tax_credit?:       number
+  general_business_credit?:  number
+  prior_year_min_tax_credit?: number
+  other_credits?:           number
   // Payments
   estimated_tax_paid:   number
   tax_year:             number
@@ -107,9 +117,11 @@ export interface Form1120_Result {
     total_income:     number
     total_deductions: number
     taxable_income_before_nol: number
+    special_deductions: number  // computed DRD
     taxable_income:   number
-    income_tax:       number  // Schedule J
-    total_tax:        number
+    income_tax:       number  // Schedule J line 2
+    total_credits:    number  // FTC + GBC + PYMTC + other
+    total_tax:        number  // after credits
     total_payments:   number
     balance_due:      number
     overpayment:      number
@@ -129,6 +141,7 @@ export interface Form1040_Inputs {
   pensions_annuities:   number
   social_security:      number
   capital_gains:        number
+  ltcg_portion?:        number   // portion of capital_gains that is long-term (default: 0)
   schedule1_income:     number  // schedule E (K-1s), etc.
   // Above-the-line deductions (Sched 1 Part II)
   student_loan_interest: number
@@ -137,10 +150,15 @@ export interface Form1040_Inputs {
   itemized_deductions:  number  // or use standard
   use_itemized:         boolean
   qbi_from_k1:         number  // §199A pass-through income
+  is_sstb?:            boolean   // Specified Service Trade or Business (§199A(d))
   // K-1 items flowing from 1120-S
   k1_ordinary_income:   number
   k1_w2_wages:          number
   k1_ubia:              number
+  // Self-employment
+  net_se_income?:       number
+  // Dependents
+  num_dependents?:      number
   // Payments
   withholding:          number
   estimated_payments:   number
@@ -149,7 +167,11 @@ export interface Form1040_Inputs {
 // ─────────────────────────────────────────────────────────────
 // Year-specific tax functions imported from tax_tables.ts
 // ─────────────────────────────────────────────────────────────
-import { ordinaryTax, standardDeduction, qbiDeduction } from './tax_tables.js'
+import {
+  ordinaryTax, standardDeduction, qbiDeduction,
+  ltcgTax, niitTax, amtTax, seTax, childTaxCredit, additionalMedicareTax,
+  TAX_TABLES,
+} from './tax_tables.js'
 
 /** Form 1120-S calculation */
 export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
@@ -237,11 +259,27 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
   )  // L27 (simplified — excludes L25 special deductions pre-calc)
 
   const taxable_income_before_nol = total_income - total_deductions  // L28
-  const taxable_income = Math.max(0, taxable_income_before_nol - inp.nol_deduction - inp.special_deductions)  // L30
+
+  // Special deductions (Schedule C — Dividends Received Deduction per IRC §243)
+  // If user didn't supply, compute from the per-ownership-tier dividends
+  const computed_drd = Math.round(
+    (inp.dividends_less_20pct_owned ?? 0) * 0.50 +   // <20% owned: 50% DRD
+    (inp.dividends_20pct_or_more_owned ?? 0) * 0.65 + // ≥20% owned: 65% DRD
+    (inp.dividends_affiliated_group ?? 0) * 1.00      // affiliated: 100% DRD
+  )
+  const special_deductions = inp.special_deductions || computed_drd
+
+  const taxable_income = Math.max(0, taxable_income_before_nol - inp.nol_deduction - special_deductions)  // L30
 
   // Schedule J: 21% flat rate (TCJA 2017, permanent for C-corps)
   const income_tax = Math.round(taxable_income * 0.21)  // Sch J L2
-  const total_tax = income_tax  // simplified (no AMT/credits for demo)
+
+  // Credits (Schedule J Part I)
+  const total_credits = (inp.foreign_tax_credit ?? 0) +
+    (inp.general_business_credit ?? 0) +
+    (inp.prior_year_min_tax_credit ?? 0) +
+    (inp.other_credits ?? 0)
+  const total_tax = Math.max(0, income_tax - total_credits)
 
   const total_payments = inp.estimated_tax_paid
   const net = total_tax - total_payments
@@ -252,20 +290,22 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
     inputs: inp,
     computed: {
       balance_1c, gross_profit, total_income, total_deductions,
-      taxable_income_before_nol, taxable_income,
-      income_tax, total_tax, total_payments, balance_due, overpayment
+      taxable_income_before_nol, special_deductions, taxable_income,
+      income_tax, total_credits, total_tax, total_payments, balance_due, overpayment
     },
     citations: [
-      '1120 Instructions (2024): Line 11 = Lines 3-10',
-      '1120 Instructions (2024): Line 27 = Lines 12-26',
-      '1120 Instructions (2024): Line 30 = Line 28 - Line 29c',
+      '1120 Instructions: Line 11 = Lines 3-10',
+      '1120 Instructions: Line 27 = Lines 12-26',
+      '1120 Instructions: Line 30 = Line 28 - Line 29c',
       'IRC §11(b): Corporate tax rate 21%',
-      'TCJA 2017: Flat 21% rate effective TY2018+',
+      'IRC §243: Dividends Received Deduction (50%/65%/100% by ownership tier)',
+      'IRC §38-39: General Business Credit',
+      'IRC §901: Foreign Tax Credit',
     ]
   }
 }
 
-/** Form 1040 calculation */
+/** Form 1040 calculation — full computation including SE, NIIT, AMT, Additional Medicare, CTC */
 export function calc1040(raw: Form1040_Inputs): {
   computed: Record<string,number>
   citations: string[]
@@ -274,64 +314,121 @@ export function calc1040(raw: Form1040_Inputs): {
     filing_status: 'single' as FilingStatus, tax_year: 2025,
     wages: 0, taxable_interest: 0, ordinary_dividends: 0, qualified_dividends: 0,
     ira_distributions: 0, pensions_annuities: 0, social_security: 0,
-    capital_gains: 0, schedule1_income: 0,
+    capital_gains: 0, ltcg_portion: 0, schedule1_income: 0,
     student_loan_interest: 0, educator_expenses: 0,
     itemized_deductions: 0, use_itemized: false,
-    qbi_from_k1: 0, k1_ordinary_income: 0, k1_w2_wages: 0, k1_ubia: 0,
+    qbi_from_k1: 0, is_sstb: false,
+    k1_ordinary_income: 0, k1_w2_wages: 0, k1_ubia: 0,
+    net_se_income: 0, num_dependents: 0,
     withholding: 0, estimated_payments: 0,
   }, raw)
-  // Line 9: Total income
+  const s = inp.filing_status
+
+  // ── Social Security taxability (§86) ──────────────────────────
+  // Provisional income = AGI (before SS) + tax-exempt interest + 50% of SS
+  const ss_threshold_1 = s === 'mfj' ? 32000 : 25000
+  const ss_threshold_2 = s === 'mfj' ? 44000 : 34000
+  const provisional = inp.wages + inp.taxable_interest + inp.ordinary_dividends +
+    inp.ira_distributions + inp.pensions_annuities + inp.capital_gains +
+    inp.schedule1_income + inp.k1_ordinary_income + (inp.net_se_income || 0) +
+    inp.social_security * 0.5
+  let ss_taxable = 0
+  if (provisional > ss_threshold_2) {
+    ss_taxable = Math.min(
+      inp.social_security * 0.85,
+      (provisional - ss_threshold_2) * 0.85 + Math.min((ss_threshold_2 - ss_threshold_1) * 0.5, inp.social_security * 0.5)
+    )
+  } else if (provisional > ss_threshold_1) {
+    ss_taxable = Math.min(inp.social_security * 0.5, (provisional - ss_threshold_1) * 0.5)
+  }
+  ss_taxable = Math.round(ss_taxable)
+
+  // ── Line 9: Total income ──────────────────────────────────────
   const total_income = (
     inp.wages + inp.taxable_interest + inp.ordinary_dividends +
-    inp.ira_distributions + inp.pensions_annuities +
-    Math.round(inp.social_security * 0.85) +  // simplified: 85% taxable
-    inp.capital_gains + inp.schedule1_income + inp.k1_ordinary_income
+    inp.ira_distributions + inp.pensions_annuities + ss_taxable +
+    inp.capital_gains + inp.schedule1_income + inp.k1_ordinary_income +
+    (inp.net_se_income || 0)
   )
 
-  // Line 10: Adjustments (Schedule 1 Part II)
-  const adjustments = inp.student_loan_interest + inp.educator_expenses
+  // ── Line 10: Adjustments ──────────────────────────────────────
+  const se_detail = seTax(inp.net_se_income || 0, inp.tax_year)
+  const se_deduction = se_detail.deduction  // §164(f) — half SE tax
+  const adjustments = inp.student_loan_interest + inp.educator_expenses + se_deduction
 
   const agi = total_income - adjustments  // Line 11
 
-  // Lines 12-14: Deduction (year-specific standard deduction)
-  const std = standardDeduction(inp.filing_status, inp.tax_year)
+  // ── Lines 12-15: Deduction + QBI ──────────────────────────────
+  const std = standardDeduction(s, inp.tax_year)
   const deduction = inp.use_itemized ? Math.max(inp.itemized_deductions, std) : std
-
-  // QBI deduction (§199A) — Line 13 (year-specific thresholds)
   const tentative_taxable = Math.max(0, agi - deduction)
   const qbi_deduction = qbiDeduction(
     inp.k1_ordinary_income + inp.qbi_from_k1,
     inp.k1_w2_wages,
     inp.k1_ubia,
     tentative_taxable,
-    inp.filing_status,
-    inp.tax_year
+    s, inp.tax_year,
+    inp.is_sstb || false,
   )
-
   const taxable_income = Math.max(0, tentative_taxable - qbi_deduction)  // Line 15
 
-  // Line 16: Tax (year-specific brackets)
-  const income_tax = ordinaryTax(taxable_income, inp.filing_status, inp.tax_year)
+  // ── Line 16: Tax (separate ordinary vs LTCG/qualified dividends) ──
+  const ltcg_income = (inp.ltcg_portion || 0) + inp.qualified_dividends
+  const ordinary_taxable = Math.max(0, taxable_income - ltcg_income)
+  const ordinary_tax = ordinaryTax(ordinary_taxable, s, inp.tax_year)
+  const ltcg_tax = ltcg_income > 0
+    ? ltcgTax(ltcg_income, ordinary_taxable, s, inp.tax_year)
+    : 0
+  const income_tax = ordinary_tax + ltcg_tax
 
-  // Lines 25-33: Payments
-  const total_payments = inp.withholding + inp.estimated_payments
+  // ── Line 17: AMT ──────────────────────────────────────────────
+  const amt_status = (s === 'hoh' || s === 'qw') ? 'single' : s as 'single' | 'mfj' | 'mfs'
+  const amt_gross = amtTax(taxable_income, amt_status, inp.tax_year)
+  const amt = Math.max(0, amt_gross - income_tax)
 
-  const total_tax = income_tax  // simplified (no SE tax, AMT, etc.)
+  // ── Schedule 2: Other taxes ───────────────────────────────────
+  const se_tax = se_detail.se_tax
+  const nii = inp.taxable_interest + inp.ordinary_dividends + inp.capital_gains
+  const niit_status = (s === 'hoh' || s === 'qw') ? 'single' : s as 'single' | 'mfj' | 'mfs'
+  const niit = niitTax(nii, agi, niit_status, inp.tax_year)
+  const additional_medicare = additionalMedicareTax(inp.wages, inp.net_se_income || 0, s)
+
+  // ── Credits ───────────────────────────────────────────────────
+  const ctc_detail = childTaxCredit(inp.num_dependents || 0, agi, s, inp.tax_year)
+  const tax_before_credits = income_tax + amt + niit + additional_medicare + se_tax
+  const ctc_nonrefundable = Math.min(ctc_detail.credit - ctc_detail.refundable, income_tax + amt)
+
+  // ── Line 24: Total tax ────────────────────────────────────────
+  const total_tax = Math.max(0, tax_before_credits - ctc_nonrefundable)
+
+  // ── Line 33: Payments ─────────────────────────────────────────
+  const total_payments = inp.withholding + inp.estimated_payments + ctc_detail.refundable
+
   const net = total_tax - total_payments
-  const refund   = Math.max(0, -net)
-  const owed     = Math.max(0, net)
+  const refund = Math.max(0, -net)
+  const owed   = Math.max(0, net)
 
   return {
     computed: {
       total_income, adjustments, agi, deduction, qbi_deduction,
-      taxable_income, income_tax, total_tax,
+      taxable_income, ordinary_tax, ltcg_tax, income_tax,
+      amt, se_tax, niit, additional_medicare,
+      ctc_credit: ctc_detail.credit, ctc_refundable: ctc_detail.refundable,
+      ctc_nonrefundable,
+      ss_taxable, tax_before_credits, total_tax,
       total_payments, refund, owed,
     },
     citations: [
-      `IRS tax brackets for TY${inp.tax_year} (from TAX_TABLES)`,
+      `IRS tax brackets for TY${inp.tax_year} (Rev. Proc.)`,
       'IRC §63(c): Standard deduction',
-      'IRC §199A: QBI deduction (year-specific thresholds)',
-      'IRC §86: Social security taxability (simplified at 85%)',
+      'IRC §199A: QBI deduction (SSTB-aware)',
+      'IRC §86: Social Security taxability (two-tier 50%/85%)',
+      'IRC §1(h): Long-term capital gains rates',
+      'IRC §55: Alternative Minimum Tax',
+      'IRC §1401/1402: Self-employment tax',
+      'IRC §1411: Net Investment Income Tax (3.8%)',
+      'IRC §3101(b)(2): Additional Medicare Tax (0.9%)',
+      'IRC §24: Child Tax Credit',
     ]
   }
 }
@@ -404,6 +501,238 @@ export function calcExtension(inp: ExtensionInputs): ExtensionResult {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// FORM 4562 — Depreciation and Amortization
+// ─────────────────────────────────────────────────────────────
+
+/** MACRS GDS depreciation rates by recovery period and year */
+const MACRS_RATES: Record<number, number[]> = {
+  3:  [0.3333, 0.4445, 0.1481, 0.0741],
+  5:  [0.2000, 0.3200, 0.1920, 0.1152, 0.1152, 0.0576],
+  7:  [0.1429, 0.2449, 0.1749, 0.1249, 0.0893, 0.0892, 0.0893, 0.0446],
+  10: [0.1000, 0.1800, 0.1440, 0.1152, 0.0922, 0.0737, 0.0655, 0.0655, 0.0656, 0.0655, 0.0328],
+  15: [0.0500, 0.0950, 0.0855, 0.0770, 0.0693, 0.0623, 0.0590, 0.0590, 0.0591, 0.0590, 0.0591, 0.0590, 0.0591, 0.0590, 0.0591, 0.0295],
+  20: [0.0375, 0.0722, 0.0668, 0.0618, 0.0571, 0.0528, 0.0489, 0.0452, 0.0447, 0.0447, 0.0446, 0.0446, 0.0446, 0.0446, 0.0446, 0.0446, 0.0446, 0.0446, 0.0446, 0.0446, 0.0223],
+}
+
+export interface DepreciationAsset {
+  description:      string
+  date_placed:      string    // MM/YYYY or YYYY
+  cost_basis:       number
+  business_pct:     number    // 0-100
+  recovery_period:  number    // 3,5,7,10,15,20,25,27.5,39
+  method:           'MACRS' | 'SL' | 'DB'  // GDS default is MACRS (200% DB switching to SL)
+  convention:       'HY' | 'MM' | 'MQ'  // Half-Year, Mid-Month, Mid-Quarter
+  year_number:      number    // which depreciation year (1-based)
+  section_179_elected?: number
+}
+
+export interface Form4562_Inputs {
+  taxpayer_name:     string
+  business_activity: string
+  taxpayer_id:       string
+  tax_year:          number
+  // Part I — Section 179
+  section_179_max?:           number  // Line 1 (default: 1,250,000 for 2025)
+  section_179_total_cost?:    number  // Line 2
+  section_179_threshold?:     number  // Line 3 (default: 3,130,000 for 2025)
+  section_179_carryover?:     number  // Line 10
+  business_income_limit?:     number  // Line 11
+  // Part II — Special depreciation
+  special_depreciation?:      number  // Line 14 (bonus depreciation)
+  // Part III — MACRS
+  macrs_prior_years?:         number  // Line 17
+  other_depreciation?:        number  // Line 16
+  // Assets placed in service this year (Section B)
+  assets?:                    DepreciationAsset[]
+  // Part VI — Amortization
+  amortization_prior?:        number  // Line 43
+}
+
+export interface Form4562_Result {
+  inputs:   Form4562_Inputs
+  computed: {
+    // Part I
+    section_179_limitation:   number  // Line 5
+    section_179_deduction:    number  // Line 12
+    section_179_carryforward: number  // Line 13
+    // Part III — per-class depreciation
+    depreciation_by_class:    Record<string, number>
+    // Part IV — Summary
+    listed_property:          number  // Line 21
+    total_depreciation:       number  // Line 22
+    // Part VI
+    total_amortization:       number  // Line 44
+  }
+  citations: string[]
+}
+
+/** Calculate MACRS depreciation for a single asset */
+function macrsDepreciation(asset: DepreciationAsset): number {
+  const basis = asset.cost_basis * (asset.business_pct / 100) - (asset.section_179_elected || 0)
+  if (basis <= 0) return 0
+
+  if (asset.method === 'SL') {
+    // Straight-line: half-year convention in first/last year
+    const annual = basis / asset.recovery_period
+    if (asset.year_number === 1 || asset.year_number === Math.ceil(asset.recovery_period) + 1) {
+      return Math.round(annual / 2)
+    }
+    return Math.round(annual)
+  }
+
+  // MACRS GDS (200% DB switching to SL)
+  const rates = MACRS_RATES[asset.recovery_period]
+  if (!rates) {
+    // For 25, 27.5, 39 year property — use straight-line
+    const annual = basis / asset.recovery_period
+    if (asset.convention === 'MM') {
+      // Mid-month: first year = (12 - month_placed + 0.5) / 12
+      const month = parseInt(asset.date_placed?.split('/')[0] || '7') || 7
+      if (asset.year_number === 1) return Math.round(annual * (12 - month + 0.5) / 12)
+    }
+    if (asset.year_number === 1) return Math.round(annual / 2)
+    return Math.round(annual)
+  }
+
+  const idx = asset.year_number - 1
+  if (idx < 0 || idx >= rates.length) return 0
+  return Math.round(basis * rates[idx])
+}
+
+/** Form 4562 calculation */
+export function calc4562(inp: Form4562_Inputs): Form4562_Result {
+  const year = inp.tax_year || 2025
+
+  // Part I — Section 179
+  const max179 = inp.section_179_max ?? 1250000  // 2025 limit
+  const threshold = inp.section_179_threshold ?? 3130000
+  const totalCost = inp.section_179_total_cost ?? 0
+  const reduction = Math.max(0, totalCost - threshold)
+  const limitation = Math.max(0, max179 - reduction)  // Line 5
+
+  // Sum elected 179 from assets
+  const elected179 = (inp.assets || []).reduce((s, a) => s + (a.section_179_elected || 0), 0)
+  const tentative = Math.min(limitation, elected179)  // Line 9
+  const carryover = inp.section_179_carryover ?? 0
+  const bizLimit = inp.business_income_limit ?? limitation
+  const section179_deduction = Math.min(tentative + carryover, bizLimit)  // Line 12
+  const section179_carryforward = Math.max(0, tentative + carryover - section179_deduction)  // Line 13
+
+  // Part III — MACRS by class
+  const depreciation_by_class: Record<string, number> = {}
+  let totalMacrsThisYear = 0
+
+  for (const asset of (inp.assets || [])) {
+    const dep = macrsDepreciation(asset)
+    const classKey = `${asset.recovery_period}yr`
+    depreciation_by_class[classKey] = (depreciation_by_class[classKey] || 0) + dep
+    totalMacrsThisYear += dep
+  }
+
+  const specialDepr = inp.special_depreciation ?? 0  // Line 14
+  const otherDepr = inp.other_depreciation ?? 0  // Line 16
+  const macrsPrior = inp.macrs_prior_years ?? 0  // Line 17
+
+  // Part IV — Summary (Line 22)
+  const total_depreciation = section179_deduction + specialDepr + otherDepr + macrsPrior + totalMacrsThisYear
+
+  // Part VI — Amortization
+  const amortPrior = inp.amortization_prior ?? 0
+  const total_amortization = amortPrior  // Line 44 (no new amortization in simplified model)
+
+  return {
+    inputs: inp,
+    computed: {
+      section_179_limitation: limitation,
+      section_179_deduction: section179_deduction,
+      section_179_carryforward: section179_carryforward,
+      depreciation_by_class,
+      listed_property: 0,
+      total_depreciation,
+      total_amortization,
+    },
+    citations: [
+      `IRC §179: Maximum deduction $${max179.toLocaleString()} for TY${year}`,
+      `IRC §179: Phase-out threshold $${threshold.toLocaleString()}`,
+      'IRC §168: MACRS GDS 200% DB switching to SL (half-year convention)',
+      'Form 4562 Line 22 = Lines 12 + 14-17 + 19-20(g) + 21',
+    ]
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// FORM 8594 — Asset Acquisition Statement (IRC §1060)
+// ─────────────────────────────────────────────────────────────
+
+export interface Form8594_Inputs {
+  taxpayer_name:       string
+  taxpayer_id:         string
+  is_purchaser:        boolean   // true = purchaser, false = seller
+  other_party_name:    string
+  other_party_id:      string
+  other_party_address: string
+  other_party_city:    string
+  date_of_sale:        string   // MM/DD/YYYY
+  total_sales_price:   number
+  // Class allocations — FMV and sales price allocation
+  class_i_fmv:         number   // Cash and cash equivalents
+  class_i_alloc:       number
+  class_ii_fmv:        number   // Actively traded securities
+  class_ii_alloc:      number
+  class_iii_fmv:       number   // Accounts receivable, mortgages
+  class_iii_alloc:     number
+  class_iv_fmv:        number   // Inventory
+  class_iv_alloc:      number
+  class_v_fmv:         number   // All other tangible/intangible assets
+  class_v_alloc:       number
+  class_vi_vii_fmv:    number   // §197 intangibles and goodwill
+  class_vi_vii_alloc:  number
+  // Yes/No questions
+  has_allocation_agreement?: boolean  // Line 5
+  fmv_amounts_agreed?:      boolean  // Line 5 follow-up
+  has_covenant?:             boolean  // Line 6
+}
+
+export interface Form8594_Result {
+  inputs:   Form8594_Inputs
+  computed: {
+    total_fmv:        number
+    total_allocation: number
+    allocation_matches_price: boolean
+    goodwill:         number   // residual in Class VI/VII
+  }
+  citations: string[]
+}
+
+/** Form 8594 calculation — residual method allocation per IRC §1060 */
+export function calc8594(inp: Form8594_Inputs): Form8594_Result {
+  const total_fmv = (inp.class_i_fmv || 0) + (inp.class_ii_fmv || 0) + (inp.class_iii_fmv || 0) +
+    (inp.class_iv_fmv || 0) + (inp.class_v_fmv || 0) + (inp.class_vi_vii_fmv || 0)
+
+  const total_allocation = (inp.class_i_alloc || 0) + (inp.class_ii_alloc || 0) + (inp.class_iii_alloc || 0) +
+    (inp.class_iv_alloc || 0) + (inp.class_v_alloc || 0) + (inp.class_vi_vii_alloc || 0)
+
+  // Goodwill is the residual — Class VI/VII allocation minus FMV of identifiable intangibles
+  const goodwill = Math.max(0, (inp.class_vi_vii_alloc || 0) - (inp.class_vi_vii_fmv || 0))
+
+  return {
+    inputs: inp,
+    computed: {
+      total_fmv,
+      total_allocation,
+      allocation_matches_price: total_allocation === inp.total_sales_price,
+      goodwill,
+    },
+    citations: [
+      'IRC §1060: Residual method for asset acquisitions',
+      'IRC §197: Goodwill and going concern value amortizable over 15 years',
+      'Allocation order: Class I (cash) → II (securities) → III (receivables) → IV (inventory) → V (tangible/intangible) → VI/VII (§197 intangibles/goodwill)',
+      `Total sales price: $${inp.total_sales_price?.toLocaleString()}, Total allocation: $${total_allocation.toLocaleString()}`,
+    ]
+  }
+}
+
 /**
  * CASCADE — multi-entity scenario
  * 1120-S → K-1s → 1040
@@ -431,6 +760,8 @@ export function calcCascade(
     k1_ordinary_income: primary_k1.ordinary_income,
     k1_w2_wages:        primary_k1.w2_wages,
     k1_ubia:            0,
+    // SSTB status flows from S-Corp to shareholder's QBI calc, unless overridden
+    is_sstb:            individual_base.is_sstb ?? s_corp_inputs.is_sstb ?? false,
   })
 
   return {

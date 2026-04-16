@@ -289,6 +289,49 @@ export const F1120S_2025: Record<string, string> = {
   'owed.L26':                   'f1_50',
   'overpayment.L27':            'f1_51',
   'meta.title':                 'f1_54',
+
+  // Schedule L (Balance Sheet — Page 4)
+  // Layout: 4 cols per row (a=gross BOY, b=net BOY, c=gross EOY, d=net EOY)
+  // Field IDs f4_1..f4_128, mapped to match 1120 canonical keys
+  'schedL.L1_cash_boy_b':            'f4_2',
+  'schedL.L1_cash_eoy_d':            'f4_4',
+  'schedL.L2a_trade_boy_b':          'f4_6',
+  'schedL.L2a_trade_eoy_d':          'f4_8',
+  'schedL.L6_othercurr_boy_b':       'f4_26',
+  'schedL.L6_othercurr_eoy_d':       'f4_28',
+  'schedL.L7_loans_boy_b':           'f4_30',
+  'schedL.L7_loans_eoy_d':           'f4_32',
+  'schedL.L10a_bldg_boy_a':          'f4_41',
+  'schedL.L10a_bldg_eoy_c':          'f4_43',
+  'schedL.L10b_dep_boy_a':           'f4_45',
+  'schedL.L10b_dep_boy_b':           'f4_46',
+  'schedL.L10b_dep_eoy_c':           'f4_47',
+  'schedL.L10b_dep_eoy_d':           'f4_48',
+  'schedL.L14_other_boy_b':          'f4_70',
+  'schedL.L14_other_eoy_d':          'f4_72',
+  'schedL.L15_total_boy_b':          'f4_74',
+  'schedL.L15_total_eoy_d':          'f4_76',
+  'schedL.L16_ap_boy_b':             'f4_78',
+  'schedL.L16_ap_eoy_d':             'f4_80',
+  'schedL.L17_mortshort_boy_b':      'f4_82',
+  'schedL.L17_mortshort_eoy_d':      'f4_84',
+  'schedL.L18_othercurrliab_boy_b':  'f4_86',
+  'schedL.L18_othercurrliab_eoy_d':  'f4_88',
+  'schedL.L20_mortlong_boy_b':       'f4_94',
+  'schedL.L20_mortlong_eoy_d':       'f4_96',
+  'schedL.L23_paidin_boy_b':         'f4_110',
+  'schedL.L23_paidin_eoy_d':         'f4_112',
+  'schedL.L25_retained_boy_b':       'f4_118',
+  'schedL.L25_retained_eoy_d':       'f4_120',
+  'schedL.L26_adj_boy_b':            'f4_122',
+  'schedL.L26_adj_eoy_d':            'f4_124',
+  'schedL.L28_total_boy_b':          'f4_126',
+  'schedL.L28_total_eoy_d':          'f4_128',
+
+  // Reconciliation (Page 5 — Schedule M-1 equivalent for S-Corps)
+  'schedM1.L1_net_income_books':     'f5_1',
+  'schedM1.L4_add':                  'f5_10',
+  'schedM1.L8_income_line18':        'f5_18',
 }
 
 // ═══════════════════════════════════════════════════════════════

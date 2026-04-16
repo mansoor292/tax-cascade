@@ -235,9 +235,12 @@ export const FORM_INVENTORY: Record<string, { name: string; years: number[]; map
   // Business supporting forms
   f1125a:   { name: 'Form 1125-A',  years: [2024,2025], maps: [2025] },
   f1125e:   { name: 'Form 1125-E',  years: [2024,2025], maps: [] },
-  f4562:    { name: 'Form 4562',    years: [2024,2025], maps: [] },
+  f4562:    { name: 'Form 4562',    years: [2024,2025], maps: [2024,2025] },
   f1120sg:  { name: 'Schedule G',   years: [2024,2025], maps: [] },
   f1120sk1: { name: 'Schedule K-1', years: [2024,2025], maps: [2025] },
+
+  // Asset acquisition
+  f8594:    { name: 'Form 8594',    years: [2025], maps: [2025] },
 
   // Extension forms
   f4868:    { name: 'Form 4868',    years: [2025], maps: [2025] },

@@ -70,13 +70,21 @@ router.post('/', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const { name, form_type, ein, address } = req.body
+  const { name, form_type, ein, address, entity_type } = req.body
   if (!name) return res.status(400).json({ error: 'name is required' })
+
+  // Derive entity_type from form_type if not provided
+  const FORM_TO_ENTITY: Record<string, string> = {
+    '1040': 'individual', '1120': 'c_corp', '1120S': 's_corp', '1065': 'partnership',
+    '990': 'nonprofit', '4868': 'individual', '7004': 'c_corp', '8868': 'nonprofit',
+  }
+  const resolvedEntityType = entity_type || FORM_TO_ENTITY[form_type] || 'individual'
 
   const { data, error } = await supabase.from('tax_entity').insert({
     user_id: userId,
     name,
     form_type: form_type || null,
+    entity_type: resolvedEntityType,
     ein: ein || null,
     address: address || null,
   }).select().single()

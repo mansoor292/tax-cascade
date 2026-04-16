@@ -10,7 +10,7 @@
 import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
-import { calc1120, calc1120S, calc1040, calcExtension, type ExtensionInputs, type ExtensionType } from '../engine/tax_engine.js'
+import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs } from '../engine/tax_engine.js'
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { buildCanonicalModel, buildReturnPdf } from '../builders/build_return_pdf.js'
@@ -574,12 +574,104 @@ router.post('/compute', async (req, res) => {
 
     if (form_type === '1120') {
       engineResult = calc1120({ ...mergedInputs, tax_year })
+
+      // Auto-pull Schedule L from QBO if entity has a connection and inputs don't already have it
+      if (entity_id && !mergedInputs['schedL.L15_total_eoy_d']) {
+        try {
+          const { data: conn } = await supabase.from('qbo_connection')
+            .select('realm_id').eq('entity_id', entity_id).single()
+          if (conn) {
+            const { buildScheduleL } = await import('../maps/qbo_to_schedule_l.js')
+            // Pull current year and prior year balance sheets
+            const eoyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year}`, {
+              headers: { 'Authorization': req.headers.authorization || '' },
+            }).then(r => r.json()).catch(() => null)
+            const boyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year - 1}`, {
+              headers: { 'Authorization': req.headers.authorization || '' },
+            }).then(r => r.json()).catch(() => null)
+
+            if (eoyResp?.balance_sheet?.items) {
+              const schedL = buildScheduleL(
+                eoyResp.balance_sheet.items,
+                boyResp?.balance_sheet?.items,
+              )
+              // Merge Schedule L into field_values (canonical keys pass through to PDF)
+              if (!engineResult.field_values) engineResult.field_values = {}
+              for (const [k, v] of Object.entries(schedL)) {
+                if (v !== 0) engineResult.field_values[k] = v
+              }
+
+              // Schedule M-1: line 1 = net income per books, line 10 = taxable income
+              const computed = engineResult.computed || {}
+              engineResult.field_values['schedM1.L1_net_income_books'] = computed.taxable_income ?? 0
+              engineResult.field_values['schedM1.L2_fed_tax_books'] = computed.income_tax ?? 0
+              engineResult.field_values['schedM1.L10_income_line28'] = computed.taxable_income_before_nol ?? computed.taxable_income ?? 0
+
+              // Schedule M-2: line 1 = BOY retained, line 8 = EOY retained
+              engineResult.field_values['schedM2.L1_beg_balance'] = schedL['schedL.L25_retained_boy_b'] || 0
+              engineResult.field_values['schedM2.L8_end_balance'] = schedL['schedL.L25_retained_eoy_d'] || 0
+            }
+          }
+        } catch (_) { /* QBO not connected or fetch failed — skip silently */ }
+      }
+
+      // Pass through any schedL/schedM/schedK keys from user inputs into field_values
+      const scheduleKeys = Object.entries(mergedInputs).filter(([k]) =>
+        k.startsWith('schedL.') || k.startsWith('schedM1.') || k.startsWith('schedM2.') || k.startsWith('schedK.')
+      )
+      if (scheduleKeys.length) {
+        if (!engineResult.field_values) engineResult.field_values = {}
+        for (const [k, v] of scheduleKeys) {
+          engineResult.field_values[k] = v  // user-provided overrides QBO-derived
+        }
+      }
     } else if (form_type === '1120S') {
       engineResult = calc1120S(mergedInputs)
+
+      // Auto-pull Schedule L from QBO (same logic as 1120)
+      if (entity_id && !mergedInputs['schedL.L15_total_eoy_d']) {
+        try {
+          const { data: conn } = await supabase.from('qbo_connection')
+            .select('realm_id').eq('entity_id', entity_id).single()
+          if (conn) {
+            const { buildScheduleL } = await import('../maps/qbo_to_schedule_l.js')
+            const eoyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year}`, {
+              headers: { 'Authorization': req.headers.authorization || '' },
+            }).then(r => r.json()).catch(() => null)
+            const boyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year - 1}`, {
+              headers: { 'Authorization': req.headers.authorization || '' },
+            }).then(r => r.json()).catch(() => null)
+
+            if (eoyResp?.balance_sheet?.items) {
+              const schedL = buildScheduleL(eoyResp.balance_sheet.items, boyResp?.balance_sheet?.items)
+              if (!engineResult.field_values) engineResult.field_values = {}
+              for (const [k, v] of Object.entries(schedL)) {
+                if (v !== 0) engineResult.field_values[k] = v
+              }
+              // Reconciliation: L1 = ordinary income per books
+              const computed = engineResult.computed || {}
+              engineResult.field_values['schedM1.L1_net_income_books'] = computed.ordinary_income_loss ?? 0
+            }
+          }
+        } catch (_) { /* skip */ }
+      }
+
+      // Pass through schedule keys from user inputs
+      const scheduleKeys1120S = Object.entries(mergedInputs).filter(([k]) =>
+        k.startsWith('schedL.') || k.startsWith('schedM1.') || k.startsWith('schedK.')
+      )
+      if (scheduleKeys1120S.length) {
+        if (!engineResult.field_values) engineResult.field_values = {}
+        for (const [k, v] of scheduleKeys1120S) engineResult.field_values[k] = v
+      }
     } else if (form_type === '1040') {
       engineResult = calc1040({ ...mergedInputs, tax_year })
     } else if (['4868', '7004', '8868'].includes(form_type)) {
       engineResult = calcExtension({ ...inputs, extension_type: form_type as ExtensionType, tax_year })
+    } else if (form_type === '4562') {
+      engineResult = calc4562({ ...inputs, tax_year } as Form4562_Inputs)
+    } else if (form_type === '8594') {
+      engineResult = calc8594(inputs as Form8594_Inputs)
     } else {
       return res.status(400).json({ error: `Unsupported form_type: ${form_type}` })
     }
@@ -587,6 +679,13 @@ router.post('/compute', async (req, res) => {
     let taxReturn = null
     if (save !== false && entity_id) {
       const isExtension = ['4868', '7004', '8868'].includes(form_type)
+      // Merge schedule field_values from engine result into the field_values column
+      const scheduleFieldValues = engineResult?.field_values || {}
+      const existingFieldValues = (await supabase.from('tax_return')
+        .select('field_values')
+        .eq('entity_id', entity_id).eq('tax_year', tax_year).eq('form_type', form_type).eq('is_amended', false)
+        .single())?.data?.field_values || {}
+
       const { data, error } = await supabase.from('tax_return').upsert({
         entity_id,
         tax_year,
@@ -596,6 +695,7 @@ router.post('/compute', async (req, res) => {
         is_amended: false,
         input_data: mergedInputs,
         computed_data: engineResult,
+        field_values: { ...existingFieldValues, ...scheduleFieldValues },
         computed_at: new Date().toISOString(),
         pdf_s3_path: null,
       }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
@@ -615,6 +715,11 @@ router.post('/compute', async (req, res) => {
     for (const [k, v] of Object.entries({ ...inputs, ...computed })) {
       const canon = engineMap[k]
       if (canon && v !== undefined && v !== null) filledCanonKeys.add(canon)
+    }
+    // Count schedule field_values (already canonical-keyed)
+    const schedFv = engineResult?.field_values || {}
+    for (const [k, v] of Object.entries(schedFv)) {
+      if (v !== undefined && v !== null && v !== 0) filledCanonKeys.add(k)
     }
     const totalMapFields = fieldMapEntries.length
     const filledCount = filledCanonKeys.size

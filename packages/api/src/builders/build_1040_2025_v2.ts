@@ -5,7 +5,7 @@
 
 import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
-import { ordinaryTax, qbiDeduction, niitTax, standardDeduction } from './tax_tables.js'
+import { ordinaryTax, qbiDeduction, niitTax, standardDeduction } from '../engine/tax_tables.js'
 
 const FORMS = 'tax-api/irs_forms'
 const OUT = 'tax-api/output/2025'

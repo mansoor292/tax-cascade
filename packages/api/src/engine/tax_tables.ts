@@ -537,38 +537,66 @@ export function amtTax(
   return Math.round(break_point * 0.26 + (amt_taxable - break_point) * 0.28)
 }
 
-/** §199A QBI deduction — simplified (wage/capital limitation applies above threshold) */
+/**
+ * §199A QBI deduction
+ *
+ * Handles three regimes:
+ *  1. Below threshold: 20% of QBI, capped at 20% of taxable income
+ *  2. Above phaseout: SSTB → $0, non-SSTB → wage/UBIA limited
+ *  3. Phase-in: linear ramp; SSTBs ramp QBI itself to zero, non-SSTBs ramp the limitation
+ */
 export function qbiDeduction(
   qbi_income:     number,
   w2_wages:       number,
   ubia:           number,        // Unadjusted basis of qualified property
   taxable_income: number,        // Before the QBI deduction
   status:         FilingStatus,
-  year:           number
+  year:           number,
+  is_sstb:        boolean = false,
 ): number {
   if (qbi_income <= 0) return 0
   const t = TAX_TABLES[year]
-  const threshold   = t.qbi_threshold[status]
-  const phaseout    = t.qbi_phaseout[status]
-  const tentative   = Math.round(qbi_income * 0.20)
-  const cap         = Math.round(taxable_income * 0.20)
+  const threshold = t.qbi_threshold[status]
+  const phaseout  = t.qbi_phaseout[status]
+  const cap       = Math.round(taxable_income * 0.20)
 
+  // Regime 1: below threshold — SSTBs get full 20% just like non-SSTBs
   if (taxable_income <= threshold) {
-    return Math.min(tentative, cap)
+    return Math.min(Math.round(qbi_income * 0.20), cap)
   }
 
-  // Wage / UBIA limitation
-  const wage_limit      = Math.round(w2_wages * 0.50)
-  const wage_ubia_limit = Math.round(w2_wages * 0.25 + ubia * 0.025)
-  const limitation      = Math.max(wage_limit, wage_ubia_limit)
-
+  // Regime 2: above phaseout
   if (taxable_income >= phaseout) {
-    // Above phaseout: QBI limited to lesser of (a) wage/UBIA limit, (b) 20% of QBI, (c) 20% of TI
+    if (is_sstb) return 0  // SSTBs get zero above phaseout
+    const tentative   = Math.round(qbi_income * 0.20)
+    const wage_limit  = Math.round(w2_wages * 0.50)
+    const wage_ubia   = Math.round(w2_wages * 0.25 + ubia * 0.025)
+    const limitation  = Math.max(wage_limit, wage_ubia)
     return Math.min(tentative, limitation, cap)
   }
 
-  // Phase-in between threshold and phaseout
+  // Regime 3: phase-in between threshold and phaseout
   const phase_ratio = (taxable_income - threshold) / (phaseout - threshold)
+
+  if (is_sstb) {
+    // SSTB: ramp QBI/wages/UBIA down to zero as ratio approaches 1
+    const applicable_pct = 1 - phase_ratio
+    const adj_qbi   = qbi_income * applicable_pct
+    const adj_wages = w2_wages * applicable_pct
+    const adj_ubia  = ubia * applicable_pct
+    const tentative   = Math.round(adj_qbi * 0.20)
+    const wage_limit  = Math.round(adj_wages * 0.50)
+    const wage_ubia   = Math.round(adj_wages * 0.25 + adj_ubia * 0.025)
+    const limitation  = Math.max(wage_limit, wage_ubia)
+    const excess = Math.max(0, tentative - limitation)
+    return Math.min(Math.round(tentative - phase_ratio * excess), cap)
+  }
+
+  // Non-SSTB phase-in: only the wage/UBIA limitation phases in
+  const tentative   = Math.round(qbi_income * 0.20)
+  const wage_limit  = Math.round(w2_wages * 0.50)
+  const wage_ubia   = Math.round(w2_wages * 0.25 + ubia * 0.025)
+  const limitation  = Math.max(wage_limit, wage_ubia)
   const phased = Math.round(tentative - phase_ratio * Math.max(0, tentative - limitation))
   return Math.min(tentative, phased, cap)
 }
@@ -596,16 +624,44 @@ export function childTaxCredit(
   return { credit, refundable }
 }
 
+/** Social Security wage base per year (SSA-published annual COLA) */
+export const SS_WAGE_BASE: Record<number, number> = {
+  2018: 128400, 2019: 132900, 2020: 137700, 2021: 142800,
+  2022: 147000, 2023: 160200, 2024: 168600, 2025: 176100,
+}
+
 /** Self-employment tax (Schedule SE) */
-export function seTax(net_se_income: number): { se_tax: number; deduction: number } {
+export function seTax(
+  net_se_income: number,
+  year: number = 2025,
+): { se_tax: number; deduction: number } {
   if (net_se_income <= 0) return { se_tax: 0, deduction: 0 }
   // 92.35% of net SE income is subject to SE tax
   const subject = Math.round(net_se_income * 0.9235)
-  // SS wage base 2024: $168,600 — simplified: cap social security portion
-  const ss_base = Math.min(subject, 168600)
+  const ss_base_cap = SS_WAGE_BASE[year] ?? 176100
+  const ss_base = Math.min(subject, ss_base_cap)
   const se_tax = Math.round(ss_base * 0.124 + subject * 0.029)  // 12.4% SS + 2.9% Medicare
   const deduction = Math.round(se_tax * 0.50)  // §164(f) deduction
   return { se_tax, deduction }
+}
+
+/** Additional Medicare Tax (0.9%) — Form 8959 */
+export function additionalMedicareTax(
+  wages: number,
+  se_income: number,
+  status: FilingStatus,
+): number {
+  const thresholds: Record<FilingStatus, number> = {
+    single: 200000, mfj: 250000, mfs: 125000, hoh: 200000, qw: 200000,
+  }
+  const threshold = thresholds[status]
+  // Wages above threshold are subject directly
+  const wage_excess = Math.max(0, wages - threshold)
+  // SE income uses reduced threshold (threshold minus wages)
+  const se_subject = Math.round(se_income * 0.9235)  // same 92.35% basis
+  const remaining_threshold = Math.max(0, threshold - wages)
+  const se_excess = Math.max(0, se_subject - remaining_threshold)
+  return Math.round((wage_excess + se_excess) * 0.009)
 }
 
 // ─────────────────────────────────────────────────────────────

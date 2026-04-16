@@ -14,7 +14,7 @@
  */
 import { PDFDocument, PDFTextField, PDFCheckBox, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib'
 import { readFileSync, existsSync } from 'fs'
-import { getEngineToCanonicalMap, CANON_1040_ALIASES } from '../maps/engine_to_pdf.js'
+import { getEngineToCanonicalMap, CANON_1040_ALIASES, getCanonicalAliases } from '../maps/engine_to_pdf.js'
 import * as maps2024 from '../maps/pdf_field_map_2024.js'
 import * as maps2025 from '../maps/pdf_field_map_2025.js'
 
@@ -86,8 +86,13 @@ function parseBSVal(s: string): number {
 }
 
 function getFieldMap(formType: string, year: number): Record<string, string> {
-  const mapKey = `F${formType.replace('-', '')}_${year}`
-  return (maps2025 as any)[mapKey] || (maps2024 as any)[mapKey] || {}
+  const base = `F${formType.replace('-', '')}`
+  // Try exact year first, then fall back — Schedule L field IDs are stable across years
+  for (const y of [year, 2025, 2024]) {
+    const map = (maps2025 as any)[`${base}_${y}`] || (maps2024 as any)[`${base}_${y}`]
+    if (map && Object.keys(map).length > 0) return map
+  }
+  return {}
 }
 
 function loadForm(formName: string, year: number): string | null {
@@ -122,10 +127,16 @@ function buildModel(input: BuildPdfInput): Record<string, string | number> {
     }
   }
 
-  // 3. field_values override (already canonical-keyed from Textract extraction)
+  // 3. field_values override (canonical-keyed from Textract extraction or QBO)
+  //    Apply canonical aliases: descriptive keys → IRS-line keys
   if (input.fieldValues) {
+    const aliases = getCanonicalAliases(input.formType)
     for (const [key, value] of Object.entries(input.fieldValues)) {
-      if (value !== undefined && value !== null) model[key] = value
+      if (value === undefined || value === null) continue
+      // Write under both the original and the aliased key so either PDF map year works
+      model[key] = value
+      const aliased = aliases[key]
+      if (aliased) model[aliased] = value
     }
   }
 
@@ -246,17 +257,115 @@ async function fillForm(
 
   const pdf = await PDFDocument.load(readFileSync(path))
   const form = pdf.getForm()
-  const fieldMap = getFieldMap(formType, year)
+
+  // Primary: hand-coded canonical map (year-specific field IDs, verified)
+  const typedMap = getFieldMap(formType, year)
+
+  // Fallback: Textract-discovered JSON map (label → field_id)
+  // This lets ANY discovered form be filled without a hand-coded TS map
+  const { getFieldMap: getJsonMap } = await import('../maps/field_maps.js')
+  const jsonEntries = getJsonMap(formName, year)
+  const labelToFieldId: Record<string, string> = {}
+  for (const e of jsonEntries) {
+    labelToFieldId[e.label] = e.field_id
+  }
 
   let filled = 0
   for (const [canonKey, value] of Object.entries(model)) {
     if (value === undefined || value === null || value === '') continue
-    const fieldId = fieldMap[canonKey]
+
+    // 1. Try typed canonical map first (schedL.L1_cash_boy_b → f6_2)
+    let fieldId = typedMap[canonKey]
+
+    // 2. Fallback: try matching the canonical key directly as a label
+    //    This works when field_values use the Textract label as the key
+    if (!fieldId) fieldId = labelToFieldId[canonKey]
+
+    // 3. Fuzzy fallback: strip prefix and match against labels
+    //    e.g. "schedL.L1_cash_boy_b" → look for label containing "1" and "cash"
+    if (!fieldId && jsonEntries.length) {
+      fieldId = fuzzyMatchLabel(canonKey, jsonEntries) || ''
+    }
+
     if (!fieldId) continue
     if (setField(form, fieldId, value)) filled++
   }
 
   return { pdf, filled }
+}
+
+/**
+ * Fuzzy-match a canonical key to a Textract label.
+ * Extracts the IRS line number and keywords from the canonical key,
+ * then finds the best matching label in the JSON field map.
+ *
+ * e.g. "schedL.L15_total_eoy_d" → matches label "15 Total assets" on the right column
+ * e.g. "income.L1a_gross_receipts" → matches label "1a Gross receipts or sales"
+ */
+function fuzzyMatchLabel(
+  canonKey: string,
+  entries: Array<{ field_id: string; label: string }>,
+): string | undefined {
+  // Extract line number and keywords from canonical key
+  // Pattern: "prefix.L{number}_{description}" or "prefix.L{number}{letter}_{description}"
+  const m = canonKey.match(/\.L(\d+[a-z]?)_(.+)$/)
+  if (!m) return undefined
+
+  const lineNum = m[1]          // e.g. "1a", "15", "28"
+  const parts = m[2].split('_') // e.g. ["gross", "receipts"] or ["cash", "boy", "b"]
+
+  // Column hints: boy/eoy × a/b/c/d
+  // Schedule L has 4 columns: (a) gross BOY, (b) net BOY, (c) gross EOY, (d) net EOY
+  // The field IDs in the PDF go sequentially: f6_1(a), f6_2(b), f6_3(c), f6_4(d) for line 1
+  const colHint = parts[parts.length - 1]  // last part: "a", "b", "c", or "d"
+  const isColumnHint = ['a', 'b', 'c', 'd'].includes(colHint)
+  const keywords = isColumnHint ? parts.slice(0, -2) : parts  // strip column + boy/eoy
+
+  // Find entries whose label starts with the line number
+  const lineMatches = entries.filter(e => {
+    const label = e.label.toLowerCase().trim()
+    return label.startsWith(lineNum + ' ') || label.startsWith(lineNum + '\t')
+  })
+
+  if (lineMatches.length === 0) return undefined
+
+  // If only one match, return it (simple case)
+  if (lineMatches.length === 1 && !isColumnHint) {
+    return lineMatches[0].field_id
+  }
+
+  // For Schedule L multi-column fields, pick by column position
+  // Field IDs for the same line are sequential: ...f6_1, f6_2, f6_3, f6_4
+  // Column a=0, b=1, c=2, d=3
+  if (isColumnHint && lineMatches.length >= 1) {
+    // Sort by field_id numerically
+    const sorted = [...lineMatches].sort((a, b) => {
+      const na = parseInt(a.field_id.replace(/\D/g, ''))
+      const nb = parseInt(b.field_id.replace(/\D/g, ''))
+      return na - nb
+    })
+    const colIdx = colHint.charCodeAt(0) - 'a'.charCodeAt(0)
+    if (colIdx < sorted.length) return sorted[colIdx].field_id
+    // If column index exceeds matches, try the last one
+    return sorted[sorted.length - 1].field_id
+  }
+
+  // Score by keyword overlap
+  let best: string | undefined
+  let bestScore = 0
+  for (const entry of lineMatches) {
+    const label = entry.label.toLowerCase()
+    let score = 0
+    for (const kw of keywords) {
+      if (label.includes(kw)) score++
+    }
+    if (score > bestScore) {
+      bestScore = score
+      best = entry.field_id
+    }
+  }
+
+  return best
 }
 
 // ─── Schedule K checkboxes (1120) ───
