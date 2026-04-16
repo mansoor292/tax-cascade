@@ -1350,4 +1350,32 @@ print(json.dumps({'url': url}))
   }
 })
 
+// ─── Delete a return ───
+router.delete('/:id', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  // Verify ownership via entity
+  const { data: ret } = await supabase.from('tax_return')
+    .select('id, entity_id, form_type, tax_year, source')
+    .eq('id', req.params.id).single()
+  if (!ret) return res.status(404).json({ error: 'Return not found' })
+
+  const { data: entity } = await supabase.from('tax_entity')
+    .select('user_id').eq('id', ret.entity_id).single()
+  if (!entity || entity.user_id !== userId) return res.status(403).json({ error: 'Forbidden' })
+
+  // Cascade: delete scenarios that reference this return as their base
+  await supabase.from('scenario').delete().eq('base_return_id', req.params.id)
+
+  // Delete the return itself
+  const { error } = await supabase.from('tax_return').delete().eq('id', req.params.id)
+  if (error) return res.status(500).json({ error: error.message })
+
+  res.json({
+    success: true,
+    deleted: { id: ret.id, form_type: ret.form_type, tax_year: ret.tax_year, source: ret.source },
+  })
+})
+
 export default router

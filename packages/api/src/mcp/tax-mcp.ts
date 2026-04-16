@@ -248,6 +248,13 @@ function createServer(apiKey: string): McpServer {
     return text(await call('GET', `/api/returns/${return_id}/pdf${qs}`))
   })
 
+  // ─── Tool: delete_return ───
+  server.tool('delete_return', 'Delete a tax return permanently. Also deletes any what-if scenarios that referenced this return as their base. Confirm with the user before calling — this is destructive and irreversible.', {
+    return_id: z.string().describe('Tax return UUID'),
+  }, async ({ return_id }) => {
+    return text(await call('DELETE', `/api/returns/${return_id}`))
+  })
+
   // ─── Tool: review_return ───
   server.tool('review_return', 'QC review of a saved return: lists fields still at 0/blank so you can walk the user through them before finalizing the PDF. For each missing field, ask the user (a) leave blank, (b) use prior year, or (c) provide a value.', {
     return_id: z.string().describe('Tax return UUID'),
