@@ -748,7 +748,12 @@ router.post('/compute', async (req, res) => {
           if (ent.city || ent.state || ent.zip)
             metaFields['meta.city_state_zip'] = [ent.city, ent.state, ent.zip].filter(Boolean).join(', ')
           if (ent.date_incorporated) metaFields['meta.date_incorporated'] = ent.date_incorporated
-          if (ent.meta?.business_code) metaFields['meta.business_activity_code'] = ent.meta.business_code
+          if (ent.meta?.business_code) {
+            metaFields['meta.business_activity_code'] = ent.meta.business_code
+            metaFields['meta.business_code'] = ent.meta.business_code  // 1120S canonical key
+          }
+          // Country defaults to "United States" for domestic corps
+          metaFields['meta.country'] = ent.meta?.country || 'United States'
           if (ent.meta?.s_election_date) metaFields['meta.s_election_date'] = ent.meta.s_election_date
           if (ent.meta?.num_shareholders) metaFields['meta.num_shareholders'] = ent.meta.num_shareholders
           if (ent.meta?.total_assets) metaFields['meta.total_assets'] = ent.meta.total_assets
@@ -784,9 +789,14 @@ router.post('/compute', async (req, res) => {
           ...((maps2024 as any)[`PDF_FIELD_MAP_${form_type.replace('-', '')}`] || {}),
           ...((maps2025 as any)[`${base}_2025`] || {}),
         }
-        const nonNumericPrefixes = ['meta.', 'preparer.', 'schedB.', 'schedK.L1_method']  // names, addresses, dates, yes/no
+        // Skip truly non-numeric keys (names, addresses, dates, yes/no checkboxes).
+        // schedB fields on 1120S are a mix: L5a/L5b are numeric (share counts), L1c/L2b are text —
+        // include the numeric ones, skip the text ones individually.
+        const nonNumericPrefixes = ['meta.', 'preparer.', 'schedK.L1_method']
+        const nonNumericExact = new Set(['schedB.L1c_other', 'schedB.L2b_product'])
         for (const canonKey of Object.keys(pdfMap)) {
           if (canonKey in scheduleFieldValues) continue
+          if (nonNumericExact.has(canonKey)) continue
           if (nonNumericPrefixes.some(p => canonKey.startsWith(p))) continue
           scheduleFieldValues[canonKey] = 0
         }
