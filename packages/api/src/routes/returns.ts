@@ -698,6 +698,55 @@ router.post('/compute', async (req, res) => {
         .eq('entity_id', entity_id).eq('tax_year', tax_year).eq('form_type', form_type).eq('is_amended', false)
         .single())?.data?.field_values || {}
 
+      // Inject entity metadata so it's persisted and visible in the PDF
+      const { data: ent } = await supabase.from('tax_entity').select('*').eq('id', entity_id).single()
+      const metaFields: Record<string, any> = {}
+      if (ent) {
+        if (form_type === '1040') {
+          // 1040: split name fields
+          if (ent.meta?.first_name) metaFields['meta.first_name'] = ent.meta.first_name
+          if (ent.meta?.last_name) metaFields['meta.last_name'] = ent.meta.last_name
+          if (ent.ein) metaFields['meta.ssn'] = ent.ein  // "ein" holds SSN for 1040
+          if (ent.meta?.spouse_first) metaFields['meta.spouse_first'] = ent.meta.spouse_first
+          if (ent.meta?.spouse_last) metaFields['meta.spouse_last'] = ent.meta.spouse_last
+          if (ent.meta?.spouse_ssn) metaFields['meta.spouse_ssn'] = ent.meta.spouse_ssn
+          if (ent.address) metaFields['meta.address'] = ent.address
+          if (ent.city) metaFields['meta.city'] = ent.city
+          if (ent.state) metaFields['meta.state'] = ent.state
+          if (ent.zip) metaFields['meta.zip'] = ent.zip
+        } else {
+          // 1120/1120S: entity_name + address
+          if (ent.name) metaFields['meta.entity_name'] = ent.name
+          if (ent.ein) metaFields['meta.ein'] = ent.ein
+          if (ent.address) metaFields['meta.address'] = ent.address
+          if (ent.city) metaFields['meta.city'] = ent.city
+          if (ent.state) metaFields['meta.state'] = ent.state
+          if (ent.zip) metaFields['meta.zip'] = ent.zip
+          if (ent.city || ent.state || ent.zip)
+            metaFields['meta.city_state_zip'] = [ent.city, ent.state, ent.zip].filter(Boolean).join(', ')
+          if (ent.date_incorporated) metaFields['meta.date_incorporated'] = ent.date_incorporated
+          if (ent.meta?.business_code) metaFields['meta.business_activity_code'] = ent.meta.business_code
+          if (ent.meta?.s_election_date) metaFields['meta.s_election_date'] = ent.meta.s_election_date
+          if (ent.meta?.num_shareholders) metaFields['meta.num_shareholders'] = ent.meta.num_shareholders
+          if (ent.meta?.total_assets) metaFields['meta.total_assets'] = ent.meta.total_assets
+          if (ent.meta?.business_activity) metaFields['meta.business_activity'] = ent.meta.business_activity
+          if (ent.meta?.product_service) metaFields['meta.product_service'] = ent.meta.product_service
+        }
+        if (ent.meta?.title) metaFields['meta.title'] = ent.meta.title
+        // Preparer info
+        const prep = ent.meta?.preparer
+        if (prep) {
+          if (prep.name) metaFields['preparer.name'] = prep.name
+          if (prep.ptin) metaFields['preparer.ptin'] = prep.ptin
+          if (prep.firm_name) metaFields['preparer.firm_name'] = prep.firm_name
+          if (prep.firm_ein) metaFields['preparer.firm_ein'] = prep.firm_ein
+          if (prep.firm_address) metaFields['preparer.firm_address'] = prep.firm_address
+          if (prep.firm_phone || prep.phone) metaFields['preparer.firm_phone'] = prep.firm_phone || prep.phone
+          if (prep.phone) metaFields['preparer.phone'] = prep.phone
+        }
+      }
+      Object.assign(scheduleFieldValues, metaFields)
+
       const { data, error } = await supabase.from('tax_return').upsert({
         entity_id,
         tax_year,

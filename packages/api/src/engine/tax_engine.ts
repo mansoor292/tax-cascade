@@ -63,6 +63,7 @@ export interface Form1120S_Result {
       w2_wages:        number
     }>
   }
+  field_values?: Record<string, number>
   liabilities: { tax_due: number }  // Usually 0 for S-corp
   citations: string[]
 }
@@ -126,6 +127,7 @@ export interface Form1120_Result {
     balance_due:      number
     overpayment:      number
   }
+  field_values?: Record<string, number>
   citations: string[]
 }
 
@@ -208,14 +210,49 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     w2_wages:        Math.round((inp.salaries_wages + inp.officer_compensation) * s.pct / 100),
   }))
 
+  // IRS-line canonical field_values for direct PDF fill
+  const field_values: Record<string, number> = {
+    'income.L1a_gross_receipts': inp.gross_receipts,
+    'income.L1b_returns':        inp.returns_allowances,
+    'income.L1c_balance':        balance_1c,
+    'income.L2_cogs':            inp.cost_of_goods_sold,
+    'income.L3_gross_profit':    gross_profit,
+    'income.L4_net_gain_4797':   inp.net_gain_4797,
+    'income.L5_other_income':    inp.other_income,
+    'income.L6_total_income':    total_income,
+    'deductions.L7_officer_comp':       inp.officer_compensation,
+    'deductions.L8_salaries':           inp.salaries_wages,
+    'deductions.L9_repairs':            inp.repairs_maintenance,
+    'deductions.L10_bad_debts':         inp.bad_debts,
+    'deductions.L11_rents':             inp.rents,
+    'deductions.L12_taxes':             inp.taxes_licenses,
+    'deductions.L13_interest':          inp.interest,
+    'deductions.L14_depreciation':      inp.depreciation,
+    'deductions.L15_depletion':         inp.depletion,
+    'deductions.L16_advertising':       inp.advertising,
+    'deductions.L17_pension':           inp.pension_plans,
+    'deductions.L18_employee_benefits': inp.employee_benefits,
+    'deductions.L20_other':             inp.other_deductions,
+    'deductions.L21_total':             total_deductions,
+    'tax.L22_ordinary_income':          ordinary_income_loss,
+    // Schedule K pro-rata totals
+    'schedK.L1_ordinary':               ordinary_income_loss,
+    'schedK.L12a_charitable':           inp.charitable_contrib,
+    'schedK.L11_section_179':           inp.section_179,
+  }
+  for (const k of Object.keys(field_values)) {
+    if (!field_values[k]) delete field_values[k]
+  }
+
   return {
     inputs: inp,
     computed: { balance_1c, gross_profit, total_income, total_deductions, ordinary_income_loss, k1s },
+    field_values,
     liabilities: { tax_due: 0 },  // S-corp: tax paid at shareholder level
     citations: [
-      '1120-S Instructions (2024): Line 6 = Lines 3+4+5',
-      '1120-S Instructions (2024): Line 20 = Sum of Lines 7-19',
-      '1120-S Instructions (2024): Line 21 = Line 6 - Line 20',
+      '1120-S Instructions: Line 6 = Lines 3+4+5',
+      '1120-S Instructions: Line 20 = Sum of Lines 7-19',
+      '1120-S Instructions: Line 21 = Line 6 - Line 20',
       'Schedule K-1: Pro-rata allocation per IRC §1366',
     ]
   }
@@ -286,6 +323,52 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
   const balance_due  = Math.max(0, net)
   const overpayment  = Math.max(0, -net)
 
+  // IRS-line canonical field_values for direct PDF fill
+  const field_values: Record<string, number> = {
+    'income.L1a_gross_receipts':       inp.gross_receipts,
+    'income.L1b_returns':              inp.returns_allowances,
+    'income.L1c_balance':              balance_1c,
+    'income.L2_cogs':                  inp.cost_of_goods_sold,
+    'income.L3_gross_profit':          gross_profit,
+    'income.L4_dividends':             inp.dividends,
+    'income.L5_interest':              inp.interest_income,
+    'income.L6_gross_rents':           inp.gross_rents,
+    'income.L7_gross_royalties':       inp.gross_royalties,
+    'income.L8_capital_gains':         inp.capital_gains,
+    'income.L9_net_gain_4797':         inp.net_gain_4797,
+    'income.L10_other_income':         inp.other_income,
+    'income.L11_total_income':         total_income,
+    'deductions.L12_officer_comp':     inp.officer_compensation,
+    'deductions.L13_salaries':         inp.salaries_wages,
+    'deductions.L14_repairs':          inp.repairs_maintenance,
+    'deductions.L15_bad_debts':        inp.bad_debts,
+    'deductions.L16_rents':            inp.rents,
+    'deductions.L17_taxes_licenses':   inp.taxes_licenses,
+    'deductions.L18_interest':         inp.interest_expense,
+    'deductions.L19_charitable':       inp.charitable_contrib,
+    'deductions.L20_depreciation':     inp.depreciation,
+    'deductions.L21_depletion':        inp.depletion,
+    'deductions.L22_advertising':      inp.advertising,
+    'deductions.L23_pension':          inp.pension_plans,
+    'deductions.L24_employee_benefits': inp.employee_benefits,
+    'deductions.L26_other_deductions': inp.other_deductions,
+    'deductions.L27_total_deductions': total_deductions,
+    'tax.L28_ti_before_nol':           taxable_income_before_nol,
+    'tax.L29a_nol':                    inp.nol_deduction,
+    'tax.L29b_special_ded':            special_deductions,
+    'tax.L29c_total_29':               inp.nol_deduction + special_deductions,
+    'tax.L30_taxable_income':          taxable_income,
+    'schedJ.J1a_income_tax':           income_tax,
+    'tax.L31_total_tax':               total_tax,
+    'schedJ.J14_estimated_payments':   inp.estimated_tax_paid,
+    'payments.L33_total_payments':     total_payments,
+    'payments.L35_amount_owed':        balance_due,
+    'payments.L36_overpayment':        overpayment,
+  }
+  for (const k of Object.keys(field_values)) {
+    if (!field_values[k]) delete field_values[k]
+  }
+
   return {
     inputs: inp,
     computed: {
@@ -293,6 +376,7 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
       taxable_income_before_nol, special_deductions, taxable_income,
       income_tax, total_credits, total_tax, total_payments, balance_due, overpayment
     },
+    field_values,
     citations: [
       '1120 Instructions: Line 11 = Lines 3-10',
       '1120 Instructions: Line 27 = Lines 12-26',
@@ -308,6 +392,7 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
 /** Form 1040 calculation — full computation including SE, NIIT, AMT, Additional Medicare, CTC */
 export function calc1040(raw: Form1040_Inputs): {
   computed: Record<string,number>
+  field_values?: Record<string,number>
   citations: string[]
 } {
   const inp: Form1040_Inputs = Object.assign({
@@ -408,16 +493,71 @@ export function calc1040(raw: Form1040_Inputs): {
   const refund = Math.max(0, -net)
   const owed   = Math.max(0, net)
 
+  // Build a field_values bag with both short keys AND IRS-line canonical keys
+  // so both the engine_to_pdf map and direct canonical keys work.
+  const computedCore = {
+    total_income, adjustments, agi, deduction, qbi_deduction,
+    taxable_income, ordinary_tax, ltcg_tax, income_tax,
+    amt, se_tax, niit, additional_medicare,
+    ctc_credit: ctc_detail.credit, ctc_refundable: ctc_detail.refundable,
+    ctc_nonrefundable,
+    ss_taxable, tax_before_credits, total_tax,
+    total_payments, refund, owed,
+  }
+
+  // IRS-line-keyed field_values for direct PDF fill
+  const field_values: Record<string, number> = {
+    // Income lines
+    'income.L1z_total_wages':      inp.wages,
+    'income.L2b_taxable_int':      inp.taxable_interest,
+    'income.L3a_qual_dividends':   inp.qualified_dividends,
+    'income.L3b_ord_dividends':    inp.ordinary_dividends,
+    'income.L4a_ira':              inp.ira_distributions,
+    'income.L4b_ira_taxable':      inp.ira_distributions,
+    'income.L5a_pensions':         inp.pensions_annuities,
+    'income.L5b_pensions_tax':     inp.pensions_annuities,
+    'income.L6a_social_sec':       inp.social_security,
+    'income.L6b_ss_taxable':       ss_taxable,
+    'income.L7a_capital_gains':    inp.capital_gains,
+    'income.L8_schedule1':         inp.schedule1_income,
+    'income.L9_total_income':      total_income,
+    'income.L10_adjustments':      adjustments,
+    'income.L11b_agi':             agi,
+    // Deductions
+    'deductions.L12e_standard':    deduction,
+    'deductions.L13a_qbi':         qbi_deduction,
+    'deductions.L14_total':        deduction + qbi_deduction,
+    // Tax
+    'tax.L15_taxable_income':      taxable_income,
+    'tax.L16_income_tax':          income_tax,
+    'tax.L17_sched2':              amt,   // Schedule 2 line 3 (AMT) flows to 1040 L17
+    'tax.L18_add_16_17':           income_tax + amt,
+    'tax.L22_subtract':            income_tax + amt - ctc_nonrefundable,
+    'tax.L23_other_taxes':         niit + additional_medicare + se_tax,  // Schedule 2 L21
+    'tax.L24_total_tax':           total_tax,
+    // Credits
+    'credits.L19_child_tax':       ctc_nonrefundable,
+    'credits.L21_add_19_20':       ctc_nonrefundable,
+    // Payments
+    'payments.L25d_total':         inp.withholding,
+    'payments.L26_estimated':      inp.estimated_payments,
+    'payments.L28_child_addl':     ctc_detail.refundable,
+    'payments.L33_total':          total_payments,
+    // Result
+    'refund.L35a_refunded':        refund,
+    'result.L34_overpayment':      refund,
+    'owed.L37_amount_owed':        owed,
+  }
+  // Filter zeros to avoid noise
+  for (const k of Object.keys(field_values)) {
+    if (field_values[k] === 0 || field_values[k] === null || field_values[k] === undefined) {
+      delete field_values[k]
+    }
+  }
+
   return {
-    computed: {
-      total_income, adjustments, agi, deduction, qbi_deduction,
-      taxable_income, ordinary_tax, ltcg_tax, income_tax,
-      amt, se_tax, niit, additional_medicare,
-      ctc_credit: ctc_detail.credit, ctc_refundable: ctc_detail.refundable,
-      ctc_nonrefundable,
-      ss_taxable, tax_before_credits, total_tax,
-      total_payments, refund, owed,
-    },
+    computed: computedCore,
+    field_values,
     citations: [
       `IRS tax brackets for TY${inp.tax_year} (Rev. Proc.)`,
       'IRC §63(c): Standard deduction',
