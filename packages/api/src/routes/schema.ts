@@ -327,9 +327,12 @@ router.get('/', (_req, res) => {
 })
 
 // ─── GET /api/schema/:form_type/:year — Input schema for a form+year ───
-router.get('/:form_type/:year', (req, res) => {
+router.get('/:form_type/:year', (req, res, next) => {
   const { form_type, year } = req.params
+  // If the second segment isn't numeric (e.g. "qbo-mapping"), fall through
+  // to the next matching route rather than returning "No tax tables for NaN"
   const yearNum = parseInt(year)
+  if (!/^\d+$/.test(year)) return next()
 
   const schema = INPUT_SCHEMAS[form_type]
   if (!schema) {
