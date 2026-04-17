@@ -21,7 +21,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 const FORMS_DIR = 'data/irs_forms'
 const MAPS_DIR = 'data/field_maps'
 
-interface FieldEntry { page: number; field_id: string; label: string }
+interface FieldEntry { page: number; field_id: string; label: string; acro_name?: string }
 interface DiscoveryResult {
   status: string; form_name: string; tax_year: number
   field_count?: number; map_count?: number
@@ -121,12 +121,15 @@ async function detectFillable(localPath: string): Promise<{ fillable: boolean; f
   return { fillable: textFields.length > 0, fieldCount: textFields.length }
 }
 
-// Step 4: Label fields with their IDs
-async function labelFields(formName: string, year: number): Promise<{ count: number; fields: string[]; path: string }> {
+// Step 4: Label fields with their IDs.
+// Returns acroMap so downstream steps (verify, fill) can find each field by its
+// real AcroForm name instead of guessing from the short id.
+async function labelFields(formName: string, year: number): Promise<{ count: number; fields: string[]; path: string; acroMap: Record<string, string> }> {
   const blankPath = `${FORMS_DIR}/${formName}_${year}.pdf`
   const pdf = await PDFDocument.load(readFileSync(blankPath))
   const form = pdf.getForm()
   const fields: string[] = []
+  const acroMap: Record<string, string> = {}
 
   for (const f of form.getFields()) {
     if (f instanceof PDFTextField) {
@@ -149,6 +152,7 @@ async function labelFields(formName: string, year: number): Promise<{ count: num
           if (ml !== undefined) f.setMaxLength(50)
           f.setText(short)
           fields.push(short)
+          acroMap[short] = name
         } catch {}
       }
     }
@@ -158,7 +162,7 @@ async function labelFields(formName: string, year: number): Promise<{ count: num
   const labeledPath = `output/discovery/${formName}_${year}_LABELS.pdf`
   writeFileSync(labeledPath, await pdf.save())
 
-  return { count: fields.length, fields, path: labeledPath }
+  return { count: fields.length, fields, path: labeledPath, acroMap }
 }
 
 // Step 5: Textract the labeled PDF to build field map
@@ -246,16 +250,31 @@ async function verifyFieldMap(formName: string, year: number, fieldMap: FieldEnt
   const testValues: Record<string, string> = {}
   for (const tf of testFields) {
     const testVal = `TEST_${tf.field_id}`
-    for (const f of form.getFields()) {
-      if (f.getName().includes(tf.field_id + '[') && f instanceof PDFTextField) {
-        try {
-          const ml = f.getMaxLength()
-          if (ml !== undefined) f.setMaxLength(50)
-          f.setText(testVal)
-          testValues[tf.label.substring(0, 40)] = testVal
-        } catch {}
-        break
+    // Prefer the real AcroForm name when we captured it at labeling time.
+    // Fall back to the IRS-style "includes field_id + '['" match for legacy
+    // maps that predate acro_name.
+    let target: PDFTextField | undefined
+    if (tf.acro_name) {
+      try {
+        const f = form.getField(tf.acro_name)
+        if (f instanceof PDFTextField) target = f
+      } catch {}
+    }
+    if (!target) {
+      for (const f of form.getFields()) {
+        if (f instanceof PDFTextField && f.getName().includes(tf.field_id + '[')) {
+          target = f
+          break
+        }
       }
+    }
+    if (target) {
+      try {
+        const ml = target.getMaxLength()
+        if (ml !== undefined) target.setMaxLength(50)
+        target.setText(testVal)
+        testValues[tf.label.substring(0, 40)] = testVal
+      } catch {}
     }
   }
 
@@ -337,6 +356,7 @@ async function saveFieldMap(formName: string, year: number, fieldMap: FieldEntry
     await supabase.from('field_map').upsert({
       form_name: formName, tax_year: year,
       page: entry.page, field_id: entry.field_id, label: entry.label,
+      acro_name: entry.acro_name ?? null,
       verified: true,
     }, { onConflict: 'form_name,tax_year,field_id' })
   }
@@ -376,12 +396,14 @@ export async function discoverForm(
     result.field_count = fieldCount
 
     // Step 3: Label
-    const { count, path: labeledPath } = await labelFields(formName, year)
+    const { count, path: labeledPath, acroMap } = await labelFields(formName, year)
     await updateStatus(formName, year, 'labeling', { labeled_s3_key: `discovery/labels/${formName}_${year}_LABELS.pdf` })
 
     // Step 4: Textract map
     await updateStatus(formName, year, 'mapping')
-    const fieldMap = await textractMap(formName, year, labeledPath)
+    const rawMap = await textractMap(formName, year, labeledPath)
+    // Attach the real AcroForm name to each entry — verify + fill use it for direct lookup.
+    const fieldMap: FieldEntry[] = rawMap.map(e => ({ ...e, acro_name: acroMap[e.field_id] }))
     result.map_count = fieldMap.length
     await updateStatus(formName, year, 'mapping', { map_count: fieldMap.length })
 
