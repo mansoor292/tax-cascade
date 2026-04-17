@@ -102,14 +102,23 @@ print(json.dumps({'url': url}))
   }
 })
 
-// Ingest document from inline base64 (e.g. image pasted by user into chat)
-// Uploads to S3 then delegates to the same classify+extract pipeline as /register
+// Ingest document — dual-mode:
+//   Mode A: inline base64 (image pasted in chat) → uploads to S3 first
+//   Mode B: s3_key (already uploaded via presign) → skips upload
+// Either way, delegates to the same classify+extract pipeline as /register.
 router.post('/ingest', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const { filename, base64, entity_id } = req.body
-  if (!filename || !base64) return res.status(400).json({ error: 'filename and base64 required' })
+  const { filename, base64, s3_key: existingKey, file_size, entity_id } = req.body
+  if (!filename) return res.status(400).json({ error: 'filename required' })
+  if (!base64 && !existingKey) return res.status(400).json({ error: 'base64 or s3_key required' })
+
+  // Mode B: s3_key already provided (file was pre-uploaded via presign) — skip straight to register
+  if (existingKey && !base64) {
+    req.body = { s3_key: existingKey, filename, file_size, entity_id }
+    return registerHandler(req, res)
+  }
 
   const ext = filename.split('.').pop()?.toLowerCase() || 'pdf'
   const s3Key = `documents/${userId}/${uuidv4()}.${ext}`
@@ -540,10 +549,11 @@ print(base64.b64encode(obj['Body'].read()).decode())
   }
 })
 
-// List documents
+// List documents — includes presigned download_url per doc so callers
+// don't have to round-trip through /:id/download.
 router.get('/', async (req, res) => {
   const userId = await getUser(req)
-  
+
   if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
   const { data, error } = await supabase.from('document')
@@ -552,7 +562,36 @@ router.get('/', async (req, res) => {
     .order('created_at', { ascending: false })
 
   if (error) return res.status(500).json({ error: error.message })
-  res.json({ documents: data })
+
+  const docs = data || []
+  const keys = docs.map((d: any) => d.s3_path).filter(Boolean)
+
+  // Batch-generate presigned URLs for all docs in one boto3 call
+  let urlMap: Record<string, string> = {}
+  if (keys.length) {
+    try {
+      const script = `
+import boto3, json
+s3 = boto3.client('s3', region_name='us-east-1')
+keys = ${JSON.stringify(keys)}
+out = {}
+for k in keys:
+    out[k] = s3.generate_presigned_url('get_object',
+        Params={'Bucket': '${S3_BUCKET}', 'Key': k}, ExpiresIn=3600)
+print(json.dumps(out))
+`
+      urlMap = JSON.parse(runPython(script, { timeout: 15000 }).trim())
+    } catch (e: any) {
+      console.error('list_documents presign batch failed:', e.message)
+    }
+  }
+
+  const documents = docs.map((d: any) => ({
+    ...d,
+    download_url: d.s3_path ? urlMap[d.s3_path] || null : null,
+  }))
+
+  res.json({ documents })
 })
 
 // Get single document

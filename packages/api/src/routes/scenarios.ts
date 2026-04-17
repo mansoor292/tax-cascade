@@ -213,25 +213,69 @@ Keep it under 500 words. Use specific dollar amounts.`
   }
 })
 
-// Compare two scenarios
+// Compare scenarios (1+) with optional AI analysis.
+// Single-scenario mode folds in the old /:id/analyze tool.
 router.post('/compare', async (req, res) => {
-  if (!GEMINI_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' })
-
   const userId = (req as any).userId
-  const { scenario_ids } = req.body
+  const { scenario_ids, include_analysis } = req.body
+
+  if (!Array.isArray(scenario_ids) || scenario_ids.length < 1) {
+    return res.status(400).json({ error: 'scenario_ids must be a non-empty array' })
+  }
 
   const { data: scenarios } = await supabase
-    .from('scenario').select('*, tax_entity(name)')
+    .from('scenario').select('*, tax_entity(name, form_type)')
     .in('id', scenario_ids).eq('user_id', userId)
 
-  if (!scenarios || scenarios.length < 2) {
-    return res.status(400).json({ error: 'Need at least 2 scenarios to compare' })
+  if (!scenarios || scenarios.length === 0) {
+    return res.status(404).json({ error: 'No scenarios found' })
   }
+
+  // Build structured side-by-side — always available (no AI call needed)
+  const summary = scenarios.map((s: any) => {
+    const c = s.computed_result?.computed || {}
+    return {
+      id: s.id,
+      name: s.name,
+      entity: s.tax_entity?.name,
+      tax_year: s.tax_year,
+      adjustments: s.adjustments,
+      total_tax: c.total_tax ?? c.income_tax ?? null,
+      balance_due: c.balance_due ?? null,
+      refund: c.refund ?? null,
+      agi: c.agi ?? null,
+      taxable_income: c.taxable_income ?? null,
+    }
+  })
+
+  if (!include_analysis) {
+    return res.json({
+      scenarios: summary,
+      note: 'Structured comparison only. Pass include_analysis=true to add AI recommendation.',
+    })
+  }
+
+  if (!GEMINI_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' })
 
   const genAI = new GoogleGenerativeAI(GEMINI_KEY)
   const model = genAI.getGenerativeModel({ model: 'gemini-3.1-pro-preview' })
 
-  const prompt = `Compare these ${scenarios.length} tax scenarios and recommend the best approach:
+  const prompt = scenarios.length === 1
+    ? `You are a tax advisor analyzing a single tax scenario for ${scenarios[0].tax_entity?.name || 'a taxpayer'} (${scenarios[0].tax_entity?.form_type || 'unknown form'}).
+
+Scenario: "${scenarios[0].name}"
+Tax Year: ${scenarios[0].tax_year}
+Adjustments: ${JSON.stringify(scenarios[0].adjustments, null, 2)}
+Computed result: ${JSON.stringify(scenarios[0].computed_result, null, 2)}
+
+Provide a concise analysis covering:
+1. Tax impact summary
+2. Key risks or issues to flag
+3. Alternative approaches worth considering
+4. Compliance considerations
+
+Keep it under 500 words. Use specific dollar amounts.`
+    : `Compare these ${scenarios.length} tax scenarios and recommend the best approach:
 
 ${scenarios.map((s: any, i: number) => `
 --- Scenario ${i + 1}: "${s.name}" ---
@@ -251,7 +295,16 @@ Keep it under 600 words.`
 
   try {
     const result = await model.generateContent(prompt)
-    res.json({ comparison: result.response.text(), scenarios: scenarios.map((s: any) => ({ id: s.id, name: s.name })) })
+    const analysis = result.response.text()
+
+    // Persist on single-scenario analyses (preserves the old /analyze behavior)
+    if (scenarios.length === 1) {
+      await supabase.from('scenario').update({
+        ai_analysis: analysis, updated_at: new Date().toISOString(),
+      }).eq('id', scenarios[0].id)
+    }
+
+    res.json({ scenarios: summary, analysis })
   } catch (e: any) {
     res.status(500).json({ error: e.message })
   }

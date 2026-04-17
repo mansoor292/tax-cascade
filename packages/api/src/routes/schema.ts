@@ -357,6 +357,8 @@ router.get('/:form_type/:year', (req, res) => {
     ...schema,
     tax_year: yearNum,
     categories,
+    // Folds in the old /api/tax-tables/:year — brackets, standard deduction, etc.
+    tax_tables: TAX_TABLES[yearNum],
   })
 })
 

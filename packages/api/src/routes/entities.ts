@@ -125,4 +125,30 @@ router.put('/:id', async (req, res) => {
   res.json({ entity: data })
 })
 
+// Delete entity — cascades to tax_return, scenario, document
+router.delete('/:id', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { data: entity } = await supabase.from('tax_entity')
+    .select('id, name, form_type, user_id').eq('id', req.params.id).single()
+  if (!entity) return res.status(404).json({ error: 'Entity not found' })
+  if (entity.user_id !== userId) return res.status(403).json({ error: 'Forbidden' })
+
+  // Cascade: scenarios → returns → documents → qbo_connection → stripe_connection
+  await supabase.from('scenario').delete().eq('entity_id', req.params.id)
+  await supabase.from('tax_return').delete().eq('entity_id', req.params.id)
+  await supabase.from('document').delete().eq('entity_id', req.params.id)
+  await supabase.from('qbo_connection').delete().eq('entity_id', req.params.id)
+  await supabase.from('stripe_connection').delete().eq('entity_id', req.params.id)
+
+  const { error } = await supabase.from('tax_entity').delete().eq('id', req.params.id)
+  if (error) return res.status(500).json({ error: error.message })
+
+  res.json({
+    success: true,
+    deleted: { id: entity.id, name: entity.name, form_type: entity.form_type },
+  })
+})
+
 export default router

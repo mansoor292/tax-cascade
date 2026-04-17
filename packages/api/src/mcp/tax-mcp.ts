@@ -39,23 +39,24 @@ const INSTRUCTIONS = `You help users prepare and file tax returns.
 ## Starting out
 Call list_entities first. Figure out what the user needs from context — don't present a menu.
 To create an entity: create_entity(name, form_type). form_type drives entity_type automatically (1040→individual, 1120→c_corp, 1120S→s_corp).
+delete_entity wipes an entity + all its returns/scenarios/documents/connections — confirm first.
 
 ## Uploading documents
 
-**Inline images (user shares in chat)**: Use ingest_document(filename, base64, entity_id).
-This is the closed-loop path — it uploads to S3, classifies, extracts, and saves in one call.
+**ingest_document is the single entry point.** Two modes:
+- Inline (chat images, pasted files): \`ingest_document(filename, base64, entity_id)\`
+- Pre-uploaded (user has an S3 key): \`ingest_document(filename, s3_key, entity_id)\`
+
 Always pass entity_id or the doc won't flow into compute_return.
 
-**File path / large files**: upload_document → register_document (with entity_id).
+**Stated in conversation (no document)**: Use \`record_tax_fact(entity_id, tax_year, category, values, source_note)\`.
+When the user tells you values directly ("my W-2 wages were $150K"), persist them as a virtual document
+so they flow into compute_return and survive to the next session. category matches the doc_type vocabulary
+(w2, 1099_int, etc.). Always include source_note so the fact is audit-traceable.
 
-**Stated in conversation (no document)**: Use record_tax_fact(entity_id, tax_year, category, values, source_note).
-When the user tells you tax values directly ("my W-2 wages were $150K", "I had $10K interest from Chase"),
-persist them as a virtual document so they flow into compute_return for THIS session AND survive to the
-next session. category matches the doc_type vocabulary (w2, 1099_int, etc.). Always include source_note
-so the fact is audit-traceable back to its conversational origin.
-
-**After either path**: Gemini classifies (w2, 1099_int, 1099_div, 1099_r, 1099_nec, k1, prior_return_*, etc.),
-Textract extracts KVs and tables, meta.key_values stores the specific boxes.
+**After ingestion**: Gemini classifies (w2, 1099_int, 1099_div, 1099_r, 1099_nec, k1, prior_return_*, etc.),
+Textract extracts KVs and tables, meta.key_values stores the specific boxes. Prior returns auto-process
+into computed returns. list_documents returns presigned download_url for each doc.
 
 Auto-merge into compute_return for matching entity+year:
 - W-2s → wages, withholding
@@ -69,27 +70,35 @@ Auto-merge into compute_return for matching entity+year:
 
 IMPORTANT: the compute response includes supporting_documents.auto_merged — a list of
 {field, value, sources} showing what got auto-filled. Echo these to the user for
-confirmation before finalizing ("I pulled $413,296 in wages from 2 W-2s you uploaded
-— does that match what you expected?"). A misread OCR value silently becomes the
-filed number otherwise.
+confirmation before finalizing. A misread OCR value silently becomes the filed number otherwise.
 
 ## QuickBooks
 
-**Reports are cached.** get_financials and get_qbo_report store results in the database. Subsequent calls return the cached copy. Use refresh=true ONLY when the user explicitly asks for fresh data.
+**qbo_report** is the single dispatcher for QBO data:
+- \`qbo_report(entity_id, report_type='financials', year)\` — P&L + Balance Sheet bundle (the default for tax prep)
+- \`qbo_report(entity_id, report_type='profit-and-loss' | 'balance-sheet' | 'trial-balance' | ...)\` — individual reports
+- \`qbo_report(form_type='1120', report_type='mapping')\` — QBO P&L categories → tax form line mapping
 
-Cached reports: profit-and-loss, profit-and-loss-detail, balance-sheet, balance-sheet-detail, trial-balance, general-ledger, cash-flow, transaction-list, accounts-receivable, accounts-payable, vendor-balance, customer-balance.
+Reports are cached. Pass refresh=true only when the user explicitly asks for fresh data.
 
-**Everything else is live.** qbo_resource, qbo_query, get_accounts, and get_transactions hit the QBO API directly. Use these freely to look up specific items — invoices, bills, vendors, customers, journal entries, account balances, individual transactions. They're fast. Don't pull a full report just to find one number.
+**Live, uncached** — use these freely to look up specific items without pulling a whole report:
+- \`qbo_resource\` — CRUD any resource (Invoice, Customer, Bill, Vendor, Employee, JournalEntry, Account, Transaction, etc.). For transactions, use operation='search' with a where clause.
+- \`qbo_query\` — raw QBO SQL
+- \`get_accounts\` — chart of accounts with balances
 
-get_qbo_mapping shows how QBO P&L categories map to tax form lines.
+**Connection**: \`connect_qbo(entity_id)\` both starts OAuth and reports current status — no separate status check needed. Pass entity_id='new' to auto-create an entity from QBO company info.
 
 ## Stripe
-connect_stripe links an account. stripe_revenue gives annual gross/fees/net for tax reporting. stripe_invoices, stripe_payments, stripe_payouts, stripe_customers for details.
+\`connect_stripe\` links an account. \`stripe_data\` is the single query dispatcher:
+- \`stripe_data(entity_id, data_type='revenue', year)\` — gross/fees/net summary for tax reporting
+- \`stripe_data(entity_id, data_type='invoices' | 'payments' | 'payouts' | 'customers', ...filters)\` — lists
 
 ## Computing returns
 validate_return → compute_return → get_pdf.
-get_pdf and get_scenario_pdf serve cached PDFs by default. Pass refresh=true after recomputing a return or updating data to regenerate.
-Ask for data conversationally — group by topic (income, deductions, payments). Use get_schema to discover required fields.
+get_pdf serves cached PDFs by default. Pass refresh=true after recomputing to regenerate.
+run_scenario auto-generates a preview_pdf_url in its response — no separate PDF call needed.
+get_schema returns the input spec AND the tax tables (brackets, standard deduction) in one call.
+Ask for data conversationally — group by topic (income, deductions, payments).
 
 ## Missing-field review — HARD GATE
 
@@ -140,10 +149,13 @@ For 7004: add form_code ("12"=1120, "25"=1120-S, "09"=1065).
 For 8868: add return_code ("01"=990, "04"=990-PF).
 
 ## Scenarios
-run_scenario (pass base_return_id for diff), compare_scenarios, get_scenario_pdf, promote_scenario, analyze_scenario, compute_cascade (S-Corp→K-1→1040).
+- \`run_scenario\` (pass base_return_id for diff) — returns computed result + diff + pdf_coverage + preview_pdf_url in one call.
+- \`compare_scenarios(scenario_ids, include_analysis)\` — works with 1+ scenarios. One scenario = focused analysis mode; two or more = side-by-side. Structured diff is always returned; include_analysis=true adds Gemini recommendation text.
+- \`promote_scenario\` — finalize into an official return (only after user approval).
+- \`compute_cascade\` — S-Corp → K-1 → 1040 in one call.
 
 ## New forms
-request_form + check_form_status. Downloads from IRS, runs Textract. Shows up in get_schema when ready.
+\`request_form(form_name, year)\` downloads from IRS and runs field detection. The response inlines current discovery status — call again to poll until status=active.
 
 ## Rules
 - Never fabricate financial data
@@ -201,36 +213,34 @@ function createServer(apiKey: string): McpServer {
     return text(await call('POST', '/api/entities', params))
   })
 
-  // ─── Tool: get_financials ───
-  server.tool('get_financials', 'Pull QuickBooks P&L and Balance Sheet for an entity. Returns cached data unless refresh=true.', {
-    entity_id: z.string().describe('Entity UUID'),
-    year: z.number().optional().describe('Tax year (default: current year)'),
-    refresh: z.boolean().optional().describe('Force re-fetch from QuickBooks'),
-  }, async ({ entity_id, year, refresh }) => {
+  // ─── Tool: qbo_report ───
+  // Dispatcher — replaces get_financials + get_qbo_report + get_qbo_mapping.
+  server.tool('qbo_report', 'Pull a QuickBooks report or the P&L→tax-form mapping. All reports are cached — pass refresh=true to re-fetch. Use report_type=financials for the combined P&L + balance sheet used in tax prep. Use report_type=mapping to get the QBO category → tax line mapping (requires form_type).', {
+    entity_id: z.string().describe('Entity UUID (not required for mapping)').optional(),
+    report_type: z.enum([
+      'financials', 'mapping',
+      'profit-and-loss', 'profit-and-loss-detail',
+      'balance-sheet', 'balance-sheet-detail',
+      'trial-balance', 'general-ledger', 'cash-flow', 'transaction-list',
+      'accounts-receivable', 'accounts-payable',
+      'vendor-balance', 'customer-balance',
+    ]).describe('Which report to pull'),
+    year: z.number().optional().describe('Tax year (reports only)'),
+    refresh: z.boolean().optional().describe('Force re-fetch from QuickBooks (reports only)'),
+    form_type: z.string().optional().describe('For report_type=mapping: 1040, 1120, or 1120S'),
+  }, async ({ entity_id, report_type, year, refresh, form_type }) => {
+    if (report_type === 'mapping') {
+      if (!form_type) return text({ error: 'form_type required for mapping' })
+      return text(await call('GET', `/api/schema/${form_type}/qbo-mapping`))
+    }
+    if (!entity_id) return text({ error: 'entity_id required' })
     const qs = new URLSearchParams()
     if (year) qs.set('year', String(year))
     if (refresh) qs.set('refresh', 'true')
-    return text(await call('GET', `/api/qbo/${entity_id}/financials?${qs}`))
-  })
-
-  // ─── Tool: get_qbo_report ───
-  server.tool('get_qbo_report', 'Pull a QBO report. All reports are cached — add refresh=true to re-fetch. Available: profit-and-loss, profit-and-loss-detail, balance-sheet, balance-sheet-detail, trial-balance, general-ledger, cash-flow, transaction-list, accounts-receivable, accounts-payable, vendor-balance, customer-balance', {
-    entity_id: z.string().describe('Entity UUID'),
-    report: z.enum(['profit-and-loss', 'profit-and-loss-detail', 'balance-sheet', 'balance-sheet-detail', 'trial-balance', 'general-ledger', 'cash-flow', 'transaction-list', 'accounts-receivable', 'accounts-payable', 'vendor-balance', 'customer-balance']),
-    year: z.number().optional(),
-    refresh: z.boolean().optional(),
-  }, async ({ entity_id, report, year, refresh }) => {
-    const qs = new URLSearchParams()
-    if (year) qs.set('year', String(year))
-    if (refresh) qs.set('refresh', 'true')
-    return text(await call('GET', `/api/qbo/${entity_id}/reports/${report}?${qs}`))
-  })
-
-  // ─── Tool: get_qbo_mapping ───
-  server.tool('get_qbo_mapping', 'Get QBO P&L category to tax form field mappings', {
-    form_type: z.string().describe('1040, 1120, or 1120S'),
-  }, async ({ form_type }) => {
-    return text(await call('GET', `/api/schema/${form_type}/qbo-mapping`))
+    if (report_type === 'financials') {
+      return text(await call('GET', `/api/qbo/${entity_id}/financials?${qs}`))
+    }
+    return text(await call('GET', `/api/qbo/${entity_id}/reports/${report_type}?${qs}`))
   })
 
   // ─── Tool: validate_return ───
@@ -254,7 +264,7 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: run_scenario ───
-  server.tool('run_scenario', 'Create and compute a what-if tax scenario. Returns computed result, diff vs base return, input changes, and PDF coverage. Pass base_return_id to get a field-by-field comparison.', {
+  server.tool('run_scenario', 'Create and compute a what-if tax scenario. Returns computed result, diff vs base return, input changes, PDF coverage, and a preview_pdf_url you can hand directly to the user. Pass base_return_id to get a field-by-field comparison.', {
     entity_id: z.string().describe('Entity UUID'),
     name: z.string().describe('Scenario name'),
     tax_year: z.number().describe('Tax year'),
@@ -265,16 +275,25 @@ function createServer(apiKey: string): McpServer {
       entity_id, name, tax_year, adjustments, base_return_id,
     })
     if (scenario.error) return text(scenario)
-    // Compute returns rich detail: result + diff + input_changes + pdf_coverage
-    const computed = await call('POST', `/api/scenarios/${scenario.scenario.id}/compute`)
-    return text(computed)
+    const scenarioId = scenario.scenario.id
+    const computed = await call('POST', `/api/scenarios/${scenarioId}/compute`)
+    // Auto-generate preview PDF so the caller has a link without a second round-trip
+    let preview_pdf_url: string | null = null
+    try {
+      const pdfResp = await call('GET', `/api/scenarios/${scenarioId}/pdf`)
+      preview_pdf_url = pdfResp?.url || null
+    } catch {}
+    return text({ ...computed, preview_pdf_url })
   })
 
   // ─── Tool: compare_scenarios ───
-  server.tool('compare_scenarios', 'Compare multiple scenarios with AI analysis', {
-    scenario_ids: z.array(z.string()).describe('Array of scenario UUIDs to compare'),
-  }, async ({ scenario_ids }) => {
-    return text(await call('POST', '/api/scenarios/compare', { scenario_ids }))
+  // Works for 1 scenario (analyze mode) or 2+ (side-by-side). Pass include_analysis=true
+  // to get Gemini's recommendation/analysis text; default returns structured diff only.
+  server.tool('compare_scenarios', 'Compare one or more scenarios. Default returns structured side-by-side (total tax, balance due, AGI, adjustments). Pass include_analysis=true for Gemini-generated recommendation text. Single-scenario mode gives a focused AI analysis of that scenario.', {
+    scenario_ids: z.array(z.string()).describe('Scenario UUIDs. One scenario → AI analysis mode; two or more → side-by-side comparison.'),
+    include_analysis: z.boolean().optional().describe('Include Gemini-generated analysis/recommendation text (slower). Default: false — structured data only.'),
+  }, async ({ scenario_ids, include_analysis }) => {
+    return text(await call('POST', '/api/scenarios/compare', { scenario_ids, include_analysis }))
   })
 
   // ─── Tool: get_pdf ───
@@ -367,65 +386,21 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: ingest_document ───
-  // For inline base64 content (e.g. user pastes image of W-2/1099 into the chat).
-  // Closes the gap where upload_document returns a presigned URL but the AI
-  // has no way to actually push the bytes back.
-  server.tool('ingest_document', 'Upload a tax document (W-2, 1099, K-1, prior return, etc.) from inline base64 content. Use this when the user shares an image or file directly in chat — it uploads to S3, runs Gemini classification + Textract extraction, and saves the record. Always pass entity_id so the doc is linked to the right taxpayer.', {
+  // Dual-mode: pass `base64` for inline content (image pasted in chat),
+  // or pass `s3_key` when the file was pre-uploaded via the presign flow.
+  server.tool('ingest_document', 'Upload a tax document (W-2, 1099, K-1, prior return, etc.). Two modes: (a) inline — pass {filename, base64, entity_id} when the user shares a file directly in chat; (b) pre-uploaded — pass {filename, s3_key, entity_id} if a presigned upload URL was used separately. Runs Gemini classification + Textract extraction, saves the record, auto-processes prior returns. Always pass entity_id — without it the doc won\'t flow into compute_return.', {
     filename: z.string().describe('Filename with extension (e.g. "W2_2024.jpg", "1099-INT.pdf", "K1.png")'),
-    base64: z.string().describe('Base64-encoded file content (no data: prefix, just the encoded bytes)'),
+    base64: z.string().optional().describe('Base64-encoded file content (no data: prefix). Use this for inline images/files from chat. Mutually exclusive with s3_key.'),
+    s3_key: z.string().optional().describe('S3 key for a file already uploaded via /api/documents/presign. Mutually exclusive with base64.'),
     entity_id: z.string().describe('Entity UUID to link this document to. REQUIRED — without it the doc won\'t flow into compute_return.'),
-  }, async ({ filename, base64, entity_id }) => {
-    return text(await call('POST', '/api/documents/ingest', { filename, base64, entity_id }))
-  })
-
-  // ─── Tool: upload_document ───
-  server.tool('upload_document', 'Get a presigned S3 upload URL for a tax document (PDF, image, CSV). After uploading, call register_document.', {
-    filename: z.string().describe('Filename with extension (e.g. "2022_1120.pdf")'),
-  }, async ({ filename }) => {
-    return text(await call('GET', `/api/documents/presign?filename=${encodeURIComponent(filename)}`))
-  })
-
-  // ─── Tool: register_document ───
-  server.tool('register_document', 'Register an uploaded document (prior return, W-2, 1099, K-1, bank statement). Triggers OCR + auto-classification + Textract extraction. W-2/1099/K-1 data auto-merges into compute_return for the same entity+year. ALWAYS pass entity_id to link the document to the correct entity.', {
-    s3_key: z.string().describe('S3 key returned from upload_document'),
-    filename: z.string().describe('Original filename'),
-    entity_id: z.string().optional().describe('Entity UUID to link this document to — strongly recommended'),
-    file_size: z.number().optional().describe('File size in bytes'),
+    file_size: z.number().optional().describe('File size in bytes (s3_key mode)'),
   }, async (params) => {
-    return text(await call('POST', '/api/documents/register', params))
-  })
-
-  // ─── Tool: process_document ───
-  server.tool('process_document', 'Process an uploaded tax document into a computed return. Extracts data via Textract, maps to canonical model, runs tax engine, and saves the return.', {
-    document_id: z.string().describe('Document UUID from register_document'),
-    form_type: z.string().optional().describe('Override form type (1040, 1120, 1120S) if auto-detection was wrong'),
-    tax_year: z.number().optional().describe('Override tax year if auto-detection was wrong'),
-  }, async ({ document_id, form_type, tax_year }) => {
-    const body: any = {}
-    if (form_type) body.form_type = form_type
-    if (tax_year) body.tax_year = tax_year
-    return text(await call('POST', `/api/returns/process/${document_id}`, body))
+    return text(await call('POST', '/api/documents/ingest', params))
   })
 
   // ─── Tool: list_documents ───
-  server.tool('list_documents', 'List all uploaded documents', {}, async () => {
+  server.tool('list_documents', 'List all uploaded documents. Each document includes a download_url (presigned, 1-hour expiry) so you can give the user a direct link without a second call.', {}, async () => {
     return text(await call('GET', '/api/documents'))
-  })
-
-  // ─── Tool: download_document ───
-  server.tool('download_document', 'Get a presigned download URL for an uploaded document', {
-    document_id: z.string().describe('Document UUID'),
-  }, async ({ document_id }) => {
-    return text(await call('GET', `/api/documents/${document_id}/download`))
-  })
-
-  // ─── Tool: get_scenario_pdf ───
-  server.tool('get_scenario_pdf', 'Generate a preview PDF for a scenario without promoting it to an official return. Uses cached PDF if available — pass refresh=true to regenerate.', {
-    scenario_id: z.string().describe('Scenario UUID'),
-    refresh: z.boolean().optional().describe('Force regeneration (default: false)'),
-  }, async ({ scenario_id, refresh }) => {
-    const qs = refresh ? '?regenerate=true' : ''
-    return text(await call('GET', `/api/scenarios/${scenario_id}/pdf${qs}`))
   })
 
   // ─── Tool: promote_scenario ───
@@ -435,26 +410,12 @@ function createServer(apiKey: string): McpServer {
     return text(await call('POST', `/api/scenarios/${scenario_id}/promote`))
   })
 
-  // ─── Tool: analyze_scenario ───
-  server.tool('analyze_scenario', 'Get AI analysis of a tax scenario — tax impact, risks, alternatives, compliance', {
-    scenario_id: z.string().describe('Scenario UUID'),
-  }, async ({ scenario_id }) => {
-    return text(await call('POST', `/api/scenarios/${scenario_id}/analyze`))
-  })
-
   // ─── Tool: compute_cascade ───
   server.tool('compute_cascade', 'Compute S-Corp → K-1 → Individual 1040 cascade. Shows combined tax impact and QBI savings.', {
     s_corp_inputs: z.record(z.any()).describe('Form 1120-S inputs'),
     individual_base: z.record(z.any()).describe('Form 1040 base inputs (wages, filing_status, etc.)'),
   }, async (params) => {
     return text(await call('POST', '/api/compute/cascade', params))
-  })
-
-  // ─── Tool: get_tax_tables ───
-  server.tool('get_tax_tables', 'Get tax brackets, standard deduction, and rate tables for a specific year', {
-    year: z.number().describe('Tax year (2018-2025)'),
-  }, async ({ year }) => {
-    return text(await call('GET', `/api/tax-tables/${year}`))
   })
 
   // ─── Tool: update_entity ───
@@ -473,11 +434,26 @@ function createServer(apiKey: string): McpServer {
     return text(await call('PUT', `/api/entities/${entity_id}`, updates))
   })
 
+  // ─── Tool: delete_entity ───
+  server.tool('delete_entity', 'Delete an entity and everything linked to it: returns, scenarios, documents, and QBO/Stripe connections. Destructive and irreversible — confirm with the user first.', {
+    entity_id: z.string().describe('Entity UUID'),
+  }, async ({ entity_id }) => {
+    return text(await call('DELETE', `/api/entities/${entity_id}`))
+  })
+
   // ─── Tool: connect_qbo ───
-  server.tool('connect_qbo', 'Start QuickBooks OAuth connection. Pass entity_id to link to existing entity, or pass "new" to auto-create an entity from the QBO company info. Returns an auth_url for the user to click.', {
+  // Also reports current connection status (folds in the old qbo_status tool).
+  server.tool('connect_qbo', 'Start or check a QuickBooks OAuth connection. Pass entity_id to link to existing entity, or pass "new" to auto-create from QBO company info. Response includes the current connection status — if already connected, an auth_url is not needed.', {
     entity_id: z.string().describe('Entity UUID, or "new" to auto-create from QBO company info'),
   }, async ({ entity_id }) => {
-    return text(await call('GET', `/api/qbo/connect/${entity_id}`))
+    const connect = await call('GET', `/api/qbo/connect/${entity_id}`)
+    if (entity_id === 'new') return text(connect)
+    try {
+      const status = await call('GET', `/api/qbo/${entity_id}/status`)
+      return text({ ...connect, status })
+    } catch {
+      return text(connect)
+    }
   })
 
   // ─── Tool: qbo_query ───
@@ -493,22 +469,6 @@ function createServer(apiKey: string): McpServer {
     entity_id: z.string().describe('Entity UUID'),
   }, async ({ entity_id }) => {
     return text(await call('GET', `/api/qbo/${entity_id}/accounts`))
-  })
-
-  // ─── Tool: get_transactions ───
-  server.tool('get_transactions', 'Get transactions from QuickBooks. Filter by account name, date range, or year. Returns date, type, name, memo, account, amount. Results are cached.', {
-    entity_id: z.string().describe('Entity UUID'),
-    year: z.number().optional().describe('Tax year to filter'),
-    account: z.string().optional().describe('Account name to filter (from get_accounts)'),
-    start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
-    end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
-  }, async ({ entity_id, year, account, start_date, end_date }) => {
-    const qs = new URLSearchParams()
-    if (year) qs.set('year', String(year))
-    if (account) qs.set('account', account)
-    if (start_date) qs.set('start_date', start_date)
-    if (end_date) qs.set('end_date', end_date)
-    return text(await call('GET', `/api/qbo/${entity_id}/transactions?${qs}`))
   })
 
   // ─── Tool: qbo_resource ───
@@ -542,21 +502,13 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: request_form ───
-  server.tool('request_form', 'Request support for a new IRS form or tax year. Downloads the blank PDF from IRS, runs field detection via Textract, and creates the field map. Check status with get_schema afterward.', {
+  // Response includes the live discovery status record inline (folds in the old check_form_status tool).
+  // Call again later to poll; when status becomes "active" the form is ready to use.
+  server.tool('request_form', 'Request support for a new IRS form/year. Downloads the blank PDF from IRS, runs field detection via Textract, and creates the field map. Response includes the current discovery status — call again to poll until status=active.', {
     form_name: z.string().describe('IRS form name (e.g. f8829, f1065, f940, f941, f1099misc). Use the f-prefix naming.'),
     year: z.number().describe('Tax year'),
   }, async ({ form_name, year }) => {
-    // Trigger discovery
-    const result = await call('POST', `/api/discover/${form_name}/${year}`)
-    return text(result)
-  })
-
-  // ─── Tool: check_form_status ───
-  server.tool('check_form_status', 'Check if a form/year is supported and its discovery status.', {
-    form_name: z.string().describe('Form name (e.g. f8829, f1065)'),
-    year: z.number().describe('Tax year'),
-  }, async ({ form_name, year }) => {
-    return text(await call('GET', `/api/discover/${form_name}/${year}/status`))
+    return text(await call('POST', `/api/discover/${form_name}/${year}`))
   })
 
   // ─── Tool: connect_stripe ───
@@ -567,67 +519,28 @@ function createServer(apiKey: string): McpServer {
     return text(await call('POST', `/api/stripe/${entity_id}/connect`, { stripe_key }))
   })
 
-  // ─── Tool: stripe_invoices ───
-  server.tool('stripe_invoices', 'Get invoices from Stripe. Filter by status, customer, date range.', {
+  // ─── Tool: stripe_data ───
+  // Dispatcher — replaces stripe_invoices, stripe_payments, stripe_payouts, stripe_customers, stripe_revenue.
+  server.tool('stripe_data', 'Query Stripe data for an entity. Use data_type=revenue for the annual gross/fees/net summary used in tax reporting. Other types return lists — support common filters.', {
     entity_id: z.string().describe('Entity UUID'),
-    status: z.string().optional().describe('Filter: draft, open, paid, void, uncollectible'),
-    customer: z.string().optional().describe('Stripe customer ID'),
-    limit: z.number().optional().describe('Max results (default 25)'),
-    created_gte: z.string().optional().describe('Created after (Unix timestamp or YYYY-MM-DD)'),
-    created_lte: z.string().optional().describe('Created before'),
-  }, async ({ entity_id, ...params }) => {
+    data_type: z.enum(['invoices', 'payments', 'payouts', 'customers', 'revenue']).describe('What to pull'),
+    year: z.number().optional().describe('Tax year (revenue only)'),
+    status: z.string().optional().describe('Invoice status: draft, open, paid, void, uncollectible'),
+    customer: z.string().optional().describe('Stripe customer ID (invoices only)'),
+    email: z.string().optional().describe('Email filter (customers only)'),
+    limit: z.number().optional().describe('Max results'),
+    created_gte: z.string().optional().describe('Date floor (Unix ts or YYYY-MM-DD) — invoices/payments'),
+    created_lte: z.string().optional().describe('Date ceiling — invoices/payments'),
+  }, async ({ entity_id, data_type, year, ...filters }) => {
+    if (data_type === 'revenue') {
+      const qs = year ? `?year=${year}` : ''
+      return text(await call('GET', `/api/stripe/${entity_id}/revenue${qs}`))
+    }
     const qs = new URLSearchParams()
-    for (const [k, v] of Object.entries(params)) { if (v !== undefined) qs.set(k, String(v)) }
-    return text(await call('GET', `/api/stripe/${entity_id}/invoices?${qs}`))
-  })
-
-  // ─── Tool: stripe_payments ───
-  server.tool('stripe_payments', 'Get payment charges from Stripe.', {
-    entity_id: z.string().describe('Entity UUID'),
-    limit: z.number().optional(),
-    created_gte: z.string().optional(),
-    created_lte: z.string().optional(),
-  }, async ({ entity_id, ...params }) => {
-    const qs = new URLSearchParams()
-    for (const [k, v] of Object.entries(params)) { if (v !== undefined) qs.set(k, String(v)) }
-    return text(await call('GET', `/api/stripe/${entity_id}/payments?${qs}`))
-  })
-
-  // ─── Tool: stripe_revenue ───
-  server.tool('stripe_revenue', 'Get annual revenue summary from Stripe — gross, fees, net, broken down by transaction type. For tax reporting.', {
-    entity_id: z.string().describe('Entity UUID'),
-    year: z.number().optional().describe('Tax year (default current year)'),
-  }, async ({ entity_id, year }) => {
-    const qs = year ? `?year=${year}` : ''
-    return text(await call('GET', `/api/stripe/${entity_id}/revenue${qs}`))
-  })
-
-  // ─── Tool: stripe_payouts ───
-  server.tool('stripe_payouts', 'Get payouts from Stripe to bank account.', {
-    entity_id: z.string().describe('Entity UUID'),
-    limit: z.number().optional(),
-  }, async ({ entity_id, limit }) => {
-    const qs = limit ? `?limit=${limit}` : ''
-    return text(await call('GET', `/api/stripe/${entity_id}/payouts${qs}`))
-  })
-
-  // ─── Tool: stripe_customers ───
-  server.tool('stripe_customers', 'Get customers from Stripe.', {
-    entity_id: z.string().describe('Entity UUID'),
-    email: z.string().optional().describe('Filter by email'),
-    limit: z.number().optional(),
-  }, async ({ entity_id, email, limit }) => {
-    const qs = new URLSearchParams()
-    if (email) qs.set('email', email)
-    if (limit) qs.set('limit', String(limit))
-    return text(await call('GET', `/api/stripe/${entity_id}/customers?${qs}`))
-  })
-
-  // ─── Tool: qbo_status ───
-  server.tool('qbo_status', 'Check if QuickBooks is connected for an entity', {
-    entity_id: z.string().describe('Entity UUID'),
-  }, async ({ entity_id }) => {
-    return text(await call('GET', `/api/qbo/${entity_id}/status`))
+    for (const [k, v] of Object.entries(filters)) {
+      if (v !== undefined && v !== null && v !== '') qs.set(k, String(v))
+    }
+    return text(await call('GET', `/api/stripe/${entity_id}/${data_type}?${qs}`))
   })
 
   // ─── Tool: file_extension ───
