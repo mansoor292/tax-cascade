@@ -599,11 +599,16 @@ function createServer(apiKey: string): McpServer {
   // ─── Tool: request_form ───
   // Response includes the live discovery status record inline (folds in the old check_form_status tool).
   // Call again later to poll; when status becomes "active" the form is ready to use.
-  server.tool('request_form', 'Request support for a new IRS form/year. Downloads the blank PDF from IRS, runs field detection via Textract, and creates the field map. Response includes the current discovery status — call again to poll until status=active.', {
-    form_name: z.string().describe('IRS form name (e.g. f8829, f1065, f940, f941, f1099misc). Use the f-prefix naming.'),
+  server.tool('request_form', 'Request support for a tax form. Default: downloads the blank PDF from IRS. For state forms (NY IT-201, CA 540, etc.) or anything not on irs.gov, pass base64 OR s3_key so the API processes your PDF directly — field detection via Textract then builds the field map. Response includes current discovery status; call again to poll until status=active.', {
+    form_name: z.string().describe('Form name used as the storage key (e.g. f8829 for IRS, it201 for NY IT-201, ca540 for CA 540). Becomes part of the local path and field-map key.'),
     year: z.number().describe('Tax year'),
-  }, async ({ form_name, year }) => {
-    return text(await call('POST', `/api/discover/${form_name}/${year}`))
+    base64: z.string().optional().describe('Base64-encoded blank PDF (no data: prefix). Use for state forms or any form not on irs.gov. Mutually exclusive with s3_key.'),
+    s3_key: z.string().optional().describe('S3 key of a pre-uploaded blank PDF. Mutually exclusive with base64.'),
+  }, async ({ form_name, year, base64, s3_key }) => {
+    const body: any = {}
+    if (base64) body.base64 = base64
+    if (s3_key) body.s3_key = s3_key
+    return text(await call('POST', `/api/discover/${form_name}/${year}`, body))
   })
 
   // ─── Tool: connect_stripe ───

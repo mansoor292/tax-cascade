@@ -44,7 +44,7 @@ export function resolveIrsUrl(formName: string, year: number, currentYear = 2025
   return `https://www.irs.gov/pub/irs-prior/${formName}--${year}.pdf`
 }
 
-// Step 2: Download blank PDF
+// Step 2: Download blank PDF (from IRS)
 async function downloadBlankPdf(formName: string, year: number): Promise<string> {
   const url = resolveIrsUrl(formName, year)
   const localPath = `${FORMS_DIR}/${formName}_${year}.pdf`
@@ -75,6 +75,44 @@ print("ok")
   return localPath
 }
 
+// Alternate step 2: caller supplies the PDF directly (state forms, private forms, etc.)
+// Writes to the same local path the rest of the pipeline expects.
+export async function ingestProvidedPdf(
+  formName: string,
+  year: number,
+  source: { base64?: string; s3_key?: string },
+): Promise<string> {
+  const localPath = `${FORMS_DIR}/${formName}_${year}.pdf`
+  mkdirSync(FORMS_DIR, { recursive: true })
+
+  if (source.base64) {
+    runPython(`
+import base64
+with open("${localPath}", "wb") as f:
+    f.write(base64.b64decode('${source.base64}'))
+print("ok")
+`, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })
+  } else if (source.s3_key) {
+    runPython(`
+import boto3
+boto3.client('s3', region_name='us-east-1').download_file("${S3_BUCKET}", "${source.s3_key}", "${localPath}")
+print("ok")
+`, { timeout: 30000 })
+  } else {
+    throw new Error('ingestProvidedPdf: base64 or s3_key required')
+  }
+
+  // Mirror to S3 for downstream Textract (same convention as IRS path)
+  const s3Key = `blank-forms/${formName}_${year}.pdf`
+  runPython(`
+import boto3
+boto3.client('s3', region_name='us-east-1').upload_file("${localPath}", "${S3_BUCKET}", "${s3Key}")
+print("ok")
+`, { timeout: 15000 })
+
+  return localPath
+}
+
 // Step 3: Detect if PDF has fillable fields
 async function detectFillable(localPath: string): Promise<{ fillable: boolean; fieldCount: number }> {
   const pdf = await PDFDocument.load(readFileSync(localPath))
@@ -92,7 +130,19 @@ async function labelFields(formName: string, year: number): Promise<{ count: num
 
   for (const f of form.getFields()) {
     if (f instanceof PDFTextField) {
-      const short = f.getName().match(/\.(f\d+_\d+)\[/)?.[1] || ''
+      const name = f.getName()
+      // IRS naming: .f1_47[0] → f1_47
+      let short = name.match(/\.(f\d+_\d+)\[/)?.[1] || ''
+      if (!short) {
+        // Fallback for state / non-IRS forms. Handles nested AcroForm names
+        // ("topmostSubform[0].Page1[0].p1-t1[0]") and flat ones ("TP_first_name").
+        // Prefix with "f_" so the result keeps the "starts-with-f + contains-_"
+        // shape that textractMap filters on. Index suffix guarantees uniqueness.
+        const nestedLast = name.match(/\.([\w-]+)\[\d*\]$/)?.[1]
+        const raw = nestedLast || name
+        const sanitized = raw.replace(/[^\w]/g, '_').slice(0, 32)
+        short = `f_${sanitized}_${fields.length}`
+      }
       if (short) {
         try {
           const ml = f.getMaxLength()
@@ -294,16 +344,26 @@ async function saveFieldMap(formName: string, year: number, fieldMap: FieldEntry
 
 // ─── Main orchestrator ───
 
-export async function discoverForm(formName: string, year: number): Promise<DiscoveryResult> {
+export async function discoverForm(
+  formName: string,
+  year: number,
+  opts: { base64?: string; s3_key?: string } = {},
+): Promise<DiscoveryResult> {
   const result: DiscoveryResult = { status: 'pending', form_name: formName, tax_year: year }
+  const userProvided = !!(opts.base64 || opts.s3_key)
 
   try {
     // Create/update discovery record
-    await updateStatus(formName, year, 'pending', { source_url: resolveIrsUrl(formName, year) })
+    const sourceUrl = userProvided
+      ? (opts.s3_key ? `s3://${S3_BUCKET}/${opts.s3_key}` : 'user-provided:base64')
+      : resolveIrsUrl(formName, year)
+    await updateStatus(formName, year, 'pending', { source_url: sourceUrl })
 
-    // Step 1: Download
+    // Step 1: Obtain PDF — either from the caller or from IRS
     await updateStatus(formName, year, 'downloading')
-    const localPath = await downloadBlankPdf(formName, year)
+    const localPath = userProvided
+      ? await ingestProvidedPdf(formName, year, opts)
+      : await downloadBlankPdf(formName, year)
     await updateStatus(formName, year, 'downloading', { pdf_s3_key: `blank-forms/${formName}_${year}.pdf` })
 
     // Step 2: Check fillable
