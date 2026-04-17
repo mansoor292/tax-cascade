@@ -34,7 +34,68 @@ function text(data: any): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text' as const, text: typeof data === 'string' ? data : JSON.stringify(data, null, 2) }] }
 }
 
+// Describe a JSON value compactly — enough to orient the model without the raw bytes.
+function describeShape(v: any): any {
+  if (Array.isArray(v)) return { type: 'array', length: v.length }
+  if (v && typeof v === 'object') {
+    const keys = Object.keys(v)
+    return { type: 'object', keys: keys.slice(0, 25), total_keys: keys.length }
+  }
+  return { type: typeof v }
+}
+
+function buildPreview(v: any): any {
+  if (Array.isArray(v)) return v.slice(0, 3)
+  if (v && typeof v === 'object') {
+    const out: any = {}
+    for (const k of Object.keys(v).slice(0, 12)) {
+      const val = v[k]
+      if (Array.isArray(val)) out[k] = { _array_length: val.length, first_3: val.slice(0, 3) }
+      else if (val && typeof val === 'object') out[k] = { _keys: Object.keys(val).slice(0, 12) }
+      else out[k] = val
+    }
+    return out
+  }
+  return v
+}
+
+// If spill_to is set, persist the response under that scratch key and return a compact
+// ref + shape + preview instead of the full payload. Keeps the chat context small.
+async function maybeSpill(
+  call: (m: string, p: string, b?: any) => Promise<any>,
+  response: any,
+  spill_to: string | undefined,
+): Promise<any> {
+  if (!spill_to) return response
+  const saved = await call('PUT', `/api/scratch/${encodeURIComponent(spill_to)}`, response)
+  if (saved?.error) return { ...response, _spill_error: saved.error }
+  return {
+    spilled_to: spill_to,
+    size_bytes: saved.size_bytes,
+    shape: describeShape(response),
+    preview: buildPreview(response),
+    note: `Full payload parked in scratch. Retrieve with scratch(op:'load', key:'${spill_to}').`,
+  }
+}
+
 const INSTRUCTIONS = `You help users prepare and file tax returns.
+
+## Managing large payloads — read this first
+
+Some tools return a LOT of data (full QBO reports, a year of Stripe transactions, uncapped qbo_query
+results). Pulling those directly into chat burns the context window and cuts the task short.
+
+Default pattern:
+1. Prefer summaries/aggregates over raw rows when you only need a total, count, or range.
+2. If you need to hold a large dataset for multi-step work, pass \`spill_to: '<descriptive-key>'\`
+   to qbo_report / qbo_query / qbo_resource / stripe_data. The full payload is parked in scratch
+   storage; you get back only shape + preview + a ref.
+   Example: \`qbo_report(entity_id, report_type:'general-ledger', year:2024, spill_to:'edgewater-2024-gl')\`.
+3. Load from scratch only when you need the bytes: \`scratch(op:'load', key:'edgewater-2024-gl')\`.
+4. Clean up at task end: \`scratch(op:'delete', key:'edgewater-2024-gl')\`.
+5. \`scratch(op:'list')\` shows what's parked (per-user).
+
+Scratch keys are per-user, not per-entity — you pick names. 10 MB per blob ceiling.
 
 ## Starting out
 Call list_entities first. Figure out what the user needs from context — don't present a menu.
@@ -215,7 +276,7 @@ function createServer(apiKey: string): McpServer {
 
   // ─── Tool: qbo_report ───
   // Dispatcher — replaces get_financials + get_qbo_report + get_qbo_mapping.
-  server.tool('qbo_report', 'Pull a QuickBooks report or the P&L→tax-form mapping. All reports are cached — pass refresh=true to re-fetch. Use report_type=financials for the combined P&L + balance sheet used in tax prep. Use report_type=mapping to get the QBO category → tax line mapping (requires form_type).', {
+  server.tool('qbo_report', 'Pull a QuickBooks report or the P&L→tax-form mapping. All reports are cached — pass refresh=true to re-fetch. Use report_type=financials for the combined P&L + balance sheet used in tax prep. Use report_type=mapping to get the QBO category → tax line mapping (requires form_type). Full reports (general-ledger, transaction-list) can be huge — pass spill_to to park the payload in scratch storage and receive only a summary.', {
     entity_id: z.string().describe('Entity UUID (not required for mapping)').optional(),
     report_type: z.enum([
       'financials', 'mapping',
@@ -228,7 +289,8 @@ function createServer(apiKey: string): McpServer {
     year: z.number().optional().describe('Tax year (reports only)'),
     refresh: z.boolean().optional().describe('Force re-fetch from QuickBooks (reports only)'),
     form_type: z.string().optional().describe('For report_type=mapping: 1040, 1120, or 1120S'),
-  }, async ({ entity_id, report_type, year, refresh, form_type }) => {
+    spill_to: z.string().optional().describe('Scratch key to park the full response under. Returns shape+preview+ref instead of the raw payload. Use for general-ledger, transaction-list, or any multi-year pull.'),
+  }, async ({ entity_id, report_type, year, refresh, form_type, spill_to }) => {
     if (report_type === 'mapping') {
       if (!form_type) return text({ error: 'form_type required for mapping' })
       return text(await call('GET', `/api/schema/${form_type}/qbo-mapping`))
@@ -237,10 +299,11 @@ function createServer(apiKey: string): McpServer {
     const qs = new URLSearchParams()
     if (year) qs.set('year', String(year))
     if (refresh) qs.set('refresh', 'true')
-    if (report_type === 'financials') {
-      return text(await call('GET', `/api/qbo/${entity_id}/financials?${qs}`))
-    }
-    return text(await call('GET', `/api/qbo/${entity_id}/reports/${report_type}?${qs}`))
+    const path = report_type === 'financials'
+      ? `/api/qbo/${entity_id}/financials?${qs}`
+      : `/api/qbo/${entity_id}/reports/${report_type}?${qs}`
+    const response = await call('GET', path)
+    return text(await maybeSpill(call, response, spill_to))
   })
 
   // ─── Tool: validate_return ───
@@ -403,6 +466,34 @@ function createServer(apiKey: string): McpServer {
     return text(await call('GET', '/api/documents'))
   })
 
+  // ─── Tool: scratch ───
+  // Per-user JSON blob store for parking large intermediate results outside the chat
+  // context. Keyed by names the caller picks. Backed by the `ai-scratch` Supabase bucket.
+  server.tool('scratch', 'Park large intermediate results outside the chat context. Use for: full QBO transaction lists, Stripe exports, multi-year snapshots, anything you need to hold but don\'t need to read right now. Keys you choose — use descriptive names like "edgewater-2024-gl". Scoped to the current user (not per-entity). 10 MB per blob.', {
+    op: z.enum(['save', 'load', 'list', 'delete']).describe('save: store data under key. load: fetch stored data. list: see what\'s parked (optional prefix). delete: remove.'),
+    key: z.string().optional().describe('Scratch key (required for save/load/delete). Alphanumeric + . _ - : — no slashes.'),
+    data: z.any().optional().describe('JSON to store (save only)'),
+    prefix: z.string().optional().describe('List filter (list only)'),
+  }, async ({ op, key, data, prefix }) => {
+    if (op === 'save') {
+      if (!key) return text({ error: 'key required for save' })
+      return text(await call('PUT', `/api/scratch/${encodeURIComponent(key)}`, data ?? {}))
+    }
+    if (op === 'load') {
+      if (!key) return text({ error: 'key required for load' })
+      return text(await call('GET', `/api/scratch/${encodeURIComponent(key)}`))
+    }
+    if (op === 'list') {
+      const qs = prefix ? `?prefix=${encodeURIComponent(prefix)}` : ''
+      return text(await call('GET', `/api/scratch${qs}`))
+    }
+    if (op === 'delete') {
+      if (!key) return text({ error: 'key required for delete' })
+      return text(await call('DELETE', `/api/scratch/${encodeURIComponent(key)}`))
+    }
+    return text({ error: 'Invalid op' })
+  })
+
   // ─── Tool: promote_scenario ───
   server.tool('promote_scenario', 'Finalize a computed scenario into an official tax return. Only do this after the user has reviewed and approved the scenario.', {
     scenario_id: z.string().describe('Scenario UUID'),
@@ -457,11 +548,13 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: qbo_query ───
-  server.tool('qbo_query', 'Run a raw QuickBooks query (e.g. SELECT * FROM Account, SELECT * FROM Invoice WHERE TotalAmt > 1000)', {
+  server.tool('qbo_query', 'Run a raw QuickBooks query (e.g. SELECT * FROM Account, SELECT * FROM Invoice WHERE TotalAmt > 1000). Uncapped — large SELECTs can blow the context window; pass spill_to to park the result in scratch storage.', {
     entity_id: z.string().describe('Entity UUID'),
     query: z.string().describe('QBO SQL query'),
-  }, async ({ entity_id, query }) => {
-    return text(await call('GET', `/api/qbo/${entity_id}/query?q=${encodeURIComponent(query)}`))
+    spill_to: z.string().optional().describe('Scratch key to park the full response under. Use when the query is broad (SELECT * FROM Transaction, multi-year pulls, etc.).'),
+  }, async ({ entity_id, query, spill_to }) => {
+    const response = await call('GET', `/api/qbo/${entity_id}/query?q=${encodeURIComponent(query)}`)
+    return text(await maybeSpill(call, response, spill_to))
   })
 
   // ─── Tool: get_accounts ───
@@ -472,7 +565,7 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: qbo_resource ───
-  server.tool('qbo_resource', 'CRUD any QuickBooks resource (Invoice, Customer, Bill, Vendor, Employee, JournalEntry, Purchase, Estimate, Account, Item, Payment, etc). Supports read, search, create, update, delete.', {
+  server.tool('qbo_resource', 'CRUD any QuickBooks resource (Invoice, Customer, Bill, Vendor, Employee, JournalEntry, Purchase, Estimate, Account, Item, Payment, etc). Supports read, search, create, update, delete. For broad searches (many rows) pass spill_to to park the full result set in scratch storage and receive only a shape summary.', {
     entity_id: z.string().describe('Entity UUID'),
     operation: z.enum(['read', 'search', 'create', 'update', 'delete']).describe('CRUD operation'),
     resource: z.string().describe('QBO resource type: Invoice, Customer, Bill, Vendor, Employee, JournalEntry, Purchase, Estimate, Account, Item, Payment, SalesReceipt, CreditMemo, Deposit, Transfer, etc.'),
@@ -481,7 +574,8 @@ function createServer(apiKey: string): McpServer {
     orderby: z.string().optional().describe('ORDER BY for search (e.g. "TxnDate DESC")'),
     limit: z.number().optional().describe('Max results for search (default 100)'),
     data: z.record(z.any()).optional().describe('Resource data for create/update/delete (QBO API format)'),
-  }, async ({ entity_id, operation, resource, id, where, orderby, limit, data }) => {
+    spill_to: z.string().optional().describe('Scratch key to park a search response under (applies to operation=search only).'),
+  }, async ({ entity_id, operation, resource, id, where, orderby, limit, data, spill_to }) => {
     if (operation === 'read') {
       if (!id) return text({ error: 'id is required for read' })
       return text(await call('GET', `/api/qbo/${entity_id}/resource/${resource}/${id}`))
@@ -490,7 +584,8 @@ function createServer(apiKey: string): McpServer {
       if (where) qs.set('where', where)
       if (orderby) qs.set('orderby', orderby)
       if (limit) qs.set('limit', String(limit))
-      return text(await call('GET', `/api/qbo/${entity_id}/resource/${resource}?${qs}`))
+      const response = await call('GET', `/api/qbo/${entity_id}/resource/${resource}?${qs}`)
+      return text(await maybeSpill(call, response, spill_to))
     } else if (operation === 'create') {
       return text(await call('POST', `/api/qbo/${entity_id}/resource/${resource}`, data || {}))
     } else if (operation === 'update') {
@@ -521,7 +616,7 @@ function createServer(apiKey: string): McpServer {
 
   // ─── Tool: stripe_data ───
   // Dispatcher — replaces stripe_invoices, stripe_payments, stripe_payouts, stripe_customers, stripe_revenue.
-  server.tool('stripe_data', 'Query Stripe data for an entity. Use data_type=revenue for the annual gross/fees/net summary used in tax reporting. Other types return lists — support common filters.', {
+  server.tool('stripe_data', 'Query Stripe data for an entity. Use data_type=revenue for the annual gross/fees/net summary used in tax reporting. Other types return lists — support common filters. Year-long invoice/payment pulls can be huge — pass spill_to to park them in scratch storage.', {
     entity_id: z.string().describe('Entity UUID'),
     data_type: z.enum(['invoices', 'payments', 'payouts', 'customers', 'revenue']).describe('What to pull'),
     year: z.number().optional().describe('Tax year (revenue only)'),
@@ -531,16 +626,20 @@ function createServer(apiKey: string): McpServer {
     limit: z.number().optional().describe('Max results'),
     created_gte: z.string().optional().describe('Date floor (Unix ts or YYYY-MM-DD) — invoices/payments'),
     created_lte: z.string().optional().describe('Date ceiling — invoices/payments'),
-  }, async ({ entity_id, data_type, year, ...filters }) => {
+    spill_to: z.string().optional().describe('Scratch key to park the full response under. Use for year-spanning invoice/payment/customer lists.'),
+  }, async ({ entity_id, data_type, year, spill_to, ...filters }) => {
+    let response: any
     if (data_type === 'revenue') {
       const qs = year ? `?year=${year}` : ''
-      return text(await call('GET', `/api/stripe/${entity_id}/revenue${qs}`))
+      response = await call('GET', `/api/stripe/${entity_id}/revenue${qs}`)
+    } else {
+      const qs = new URLSearchParams()
+      for (const [k, v] of Object.entries(filters)) {
+        if (v !== undefined && v !== null && v !== '') qs.set(k, String(v))
+      }
+      response = await call('GET', `/api/stripe/${entity_id}/${data_type}?${qs}`)
     }
-    const qs = new URLSearchParams()
-    for (const [k, v] of Object.entries(filters)) {
-      if (v !== undefined && v !== null && v !== '') qs.set(k, String(v))
-    }
-    return text(await call('GET', `/api/stripe/${entity_id}/${data_type}?${qs}`))
+    return text(await maybeSpill(call, response, spill_to))
   })
 
   // ─── Tool: file_extension ───

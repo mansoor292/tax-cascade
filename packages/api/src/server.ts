@@ -36,6 +36,7 @@ import entityRoutes from './routes/entities.js'
 import schemaRoutes from './routes/schema.js'
 import qboRoutes from './routes/qbo.js'
 import stripeRoutes from './routes/stripe.js'
+import scratchRoutes from './routes/scratch.js'
 import discoveryRoutes from './discovery/discovery_routes.js'
 import { mountMCP } from './mcp/tax-mcp.js'
 import { mountOAuth } from './mcp/oauth.js'
@@ -129,6 +130,7 @@ app.use('/api/entities', entityRoutes)
 app.use('/api/schema', schemaRoutes)
 app.use('/api/qbo', qboRoutes)
 app.use('/api/stripe', stripeRoutes)
+app.use('/api/scratch', scratchRoutes)
 app.use('/api/discover', discoveryRoutes)
 
 // ─── Health ───

@@ -318,6 +318,19 @@ router.get('/', (_req, res) => {
         transactions: 'GET /api/qbo/:entity_id/transactions?year=&account=&start_date=&end_date= — filtered transaction list',
         query: 'GET /api/qbo/:entity_id/query?q=SELECT... — raw QBO query',
       },
+      scratch: {
+        save: 'PUT /api/scratch/:key — body: any JSON (<=10MB)',
+        load: 'GET /api/scratch/:key',
+        list: 'GET /api/scratch?prefix=',
+        delete: 'DELETE /api/scratch/:key',
+      },
+    },
+    scratch: {
+      bucket: 'ai-scratch',
+      path_convention: '{user_id}/{key}.json',
+      size_limit_bytes: 10 * 1024 * 1024,
+      key_pattern: '^[a-zA-Z0-9][\\w.:-]{0,127}$',
+      purpose: 'AI-managed scratch blobs for parking large intermediate payloads outside the chat context. Also the destination for spill_to on qbo_report / qbo_query / qbo_resource / stripe_data.',
     },
     auth: {
       method: 'API key via x-api-key header',
