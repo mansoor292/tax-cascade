@@ -8,13 +8,9 @@
  * attached to `req` — same convention as documents.ts / entities.ts.
  */
 import { Router, type Request } from 'express'
-import { createClient } from '@supabase/supabase-js'
-
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
-const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || ''
-const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
-  auth: { persistSession: false, autoRefreshToken: false },
-})
+import { supabase as admin } from './auth.js'
+// Bucket has permissive RLS policies (anon allowed); app layer enforces {user_id}/ scoping.
+// If SUPABASE_SERVICE_ROLE_KEY is later added to env, swap this import for a service-role client.
 
 const BUCKET = 'ai-scratch'
 const MAX_BYTES = 10 * 1024 * 1024
