@@ -48,6 +48,12 @@ Always pass entity_id or the doc won't flow into compute_return.
 
 **File path / large files**: upload_document → register_document (with entity_id).
 
+**Stated in conversation (no document)**: Use record_tax_fact(entity_id, tax_year, category, values, source_note).
+When the user tells you tax values directly ("my W-2 wages were $150K", "I had $10K interest from Chase"),
+persist them as a virtual document so they flow into compute_return for THIS session AND survive to the
+next session. category matches the doc_type vocabulary (w2, 1099_int, etc.). Always include source_note
+so the fact is audit-traceable back to its conversational origin.
+
 **After either path**: Gemini classifies (w2, 1099_int, 1099_div, 1099_r, 1099_nec, k1, prior_return_*, etc.),
 Textract extracts KVs and tables, meta.key_values stores the specific boxes.
 
@@ -339,6 +345,25 @@ function createServer(apiKey: string): McpServer {
     entity_id: z.string().describe('Entity UUID'),
   }, async ({ entity_id }) => {
     return text(await call('GET', `/api/returns/compare/${entity_id}`))
+  })
+
+  // ─── Tool: record_tax_fact ───
+  // When the user states tax info in conversation (no document attached),
+  // persist it so it flows into THIS compute AND future recomputes.
+  server.tool('record_tax_fact', 'Persist a tax fact from conversation (no document needed). Use when the user tells you values directly: "I got $10K interest from Chase", "My W-2 wages were $150K". Creates a virtual document that auto-merges into compute_return for this entity+year, just like an uploaded W-2 or 1099. Always include a source_note describing where the info came from (e.g. "client stated on call 2026-04-17") so it\'s audit-traceable.', {
+    entity_id: z.string().describe('Entity UUID'),
+    tax_year: z.number().describe('Tax year this fact applies to'),
+    category: z.enum([
+      'w2', 'k1',
+      '1099_int', '1099_div', '1099_b', '1099_r', '1099_misc', '1099_nec',
+      '1099_k', '1099_g', '1099_sa', '1099_oid', '1099',
+      'bank_statement', 'rental_income', 'business_income', 'other',
+    ]).describe('What kind of tax data this is — matches the doc_type vocabulary so auto-merge routes it correctly'),
+    values: z.record(z.any()).describe('The box-level values. Use the same field names Gemini uses on real documents: W-2 → {box_1: 150000, box_2: 25000}, 1099-INT → {interest: 10000}, 1099-DIV → {ordinary_dividends: 500, qualified_dividends: 300}, 1099-R → {gross_distribution: 20000, distribution_code: "7"}, K-1 → {ordinary_income: 50000, w2_wages: 10000}'),
+    source_note: z.string().optional().describe('Provenance — where this info came from. E.g. "client phone call 2026-04-17", "from attached bank statement summary", "user confirmed via chat". Shows up in audit trail.'),
+    summary: z.string().optional().describe('One-line human description'),
+  }, async (params) => {
+    return text(await call('POST', '/api/documents/fact', params))
   })
 
   // ─── Tool: ingest_document ───

@@ -423,6 +423,59 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
 // Expose the register handler as a route
 router.post('/register', registerHandler)
 
+// Record a tax fact directly from conversation (no file upload required).
+// Creates a document row with doc_type set to the category — flows through
+// the same auto-merge pipeline as uploaded W-2s / 1099s / K-1s.
+router.post('/fact', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { entity_id, tax_year, category, values, source_note, summary } = req.body
+  if (!entity_id || !tax_year || !category || !values) {
+    return res.status(400).json({ error: 'entity_id, tax_year, category, values required' })
+  }
+
+  // Whitelist categories to match doc_type vocabulary
+  const validCategories = [
+    'w2', 'k1',
+    '1099_int', '1099_div', '1099_b', '1099_r', '1099_misc', '1099_nec',
+    '1099_k', '1099_g', '1099_sa', '1099_oid', '1099',
+    'bank_statement', 'rental_income', 'business_income', 'other',
+  ]
+  if (!validCategories.includes(category)) {
+    return res.status(400).json({
+      error: `Invalid category: ${category}`,
+      supported: validCategories,
+    })
+  }
+
+  const { data, error } = await supabase.from('document').insert({
+    user_id: userId,
+    entity_id,
+    filename: `manual: ${category}${source_note ? ` — ${source_note.slice(0, 50)}` : ''}`,
+    file_type: 'fact',
+    s3_path: null,
+    doc_type: category,
+    tax_year,
+    textract_data: null,
+    extracted_at: new Date().toISOString(),
+    meta: {
+      source: 'manual',
+      source_note: source_note || '',
+      summary: summary || `Recorded ${category} fact`,
+      key_values: values,
+    },
+  }).select().single()
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({
+    document_id: data.id,
+    category,
+    values,
+    note: 'Recorded as a virtual document. Will auto-merge into compute_return for this entity+year.',
+  })
+})
+
 // Re-categorize an existing document with Gemini
 router.post('/:id/categorize', async (req, res) => {
   const userId = await getUser(req)
