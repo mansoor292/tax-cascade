@@ -102,8 +102,44 @@ print(json.dumps({'url': url}))
   }
 })
 
-// Register uploaded file + Gemini categorization
-router.post('/register', async (req, res) => {
+// Ingest document from inline base64 (e.g. image pasted by user into chat)
+// Uploads to S3 then delegates to the same classify+extract pipeline as /register
+router.post('/ingest', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { filename, base64, entity_id } = req.body
+  if (!filename || !base64) return res.status(400).json({ error: 'filename and base64 required' })
+
+  const ext = filename.split('.').pop()?.toLowerCase() || 'pdf'
+  const s3Key = `documents/${userId}/${uuidv4()}.${ext}`
+  const contentType = ({
+    pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+    heic: 'image/heic', webp: 'image/webp',
+  } as any)[ext] || 'application/octet-stream'
+
+  // Upload to S3 via boto3 (base64 decoded Python-side to avoid JS buffer bloat)
+  try {
+    const uploadScript = `
+import boto3, base64
+s3 = boto3.client('s3', region_name='us-east-1')
+data = base64.b64decode('${base64}')
+s3.put_object(Bucket='${S3_BUCKET}', Key='${s3Key}', Body=data, ContentType='${contentType}')
+print(len(data))
+`
+    const size = parseInt(runPython(uploadScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }).trim()) || 0
+
+    // Forward to /register by calling the same handler logic
+    req.body = { s3_key: s3Key, filename, file_size: size, entity_id }
+    // Continue to /register — we're now on the same code path
+    return registerHandler(req, res)
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Factored so /ingest can reuse it
+const registerHandler = async (req: any, res: any) => {
   const userId = await getUser(req)
   
   if (!userId) return res.status(401).json({ error: "Unauthorized" })
@@ -136,13 +172,29 @@ print(base64.b64encode(data).decode())
         { inlineData: { data: base64, mimeType } },
         { text: `Analyze this tax document. Respond ONLY with valid JSON (no markdown):
 {
-  "doc_type": one of "w2" | "1099" | "k1" | "prior_return_1040" | "prior_return_1120" | "prior_return_1120s" | "bank_statement" | "invoice" | "receipt" | "tax_transcript" | "other",
+  "doc_type": one of
+    "w2" | "1099_int" | "1099_div" | "1099_b" | "1099_r" | "1099_misc" | "1099_nec" | "1099_k" | "1099_g" | "1099_sa" | "1099_oid" | "1099"
+    | "k1" | "prior_return_1040" | "prior_return_1120" | "prior_return_1120s"
+    | "bank_statement" | "invoice" | "receipt" | "tax_transcript" | "other",
   "tax_year": integer or null,
   "entity_name": string or "",
   "ein_or_ssn": string or "",
   "summary": one-line description,
-  "key_values": { up to 10 key financial values }
-}` }
+  "key_values": {
+    // Use specific field names — e.g. for W-2: box_1, box_2, box_3, box_4, box_5, box_6
+    //   1099-INT: interest (box 1), early_withdrawal_penalty, us_bonds_interest (box 3), federal_tax_withheld (box 4)
+    //   1099-DIV: ordinary_dividends (box 1a), qualified_dividends (box 1b), capital_gain_dist (box 2a)
+    //   1099-R: gross_distribution (box 1), taxable_amount (box 2a), federal_tax_withheld (box 4), distribution_code (box 7)
+    //   1099-MISC: rents (box 1), royalties (box 2), other_income (box 3), fishing (box 5)
+    //   1099-NEC: nonemployee_comp (box 1), federal_tax_withheld (box 4)
+    //   1099-K: gross_amount (box 1a)
+    //   K-1: ordinary_income (box 1), w2_wages, rental_income (box 2)
+    // Up to ~15 key financial values. Strip $ and commas from numeric values.
+  }
+}
+
+Use the specific 1099 variant (1099_int, 1099_div, etc.) when identifiable.
+Fall back to "1099" only if the variant is unclear.` }
       ])
 
       const text = result.response.text().trim().replace(/^```json?\s*/i, '').replace(/\s*```$/i, '')
@@ -366,7 +418,10 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
     processed_return: processedReturn,
     discovery_started: discoveryStarted,
   })
-})
+}
+
+// Expose the register handler as a route
+router.post('/register', registerHandler)
 
 // Re-categorize an existing document with Gemini
 router.post('/:id/categorize', async (req, res) => {

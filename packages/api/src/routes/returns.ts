@@ -519,55 +519,97 @@ router.post('/compute', async (req, res) => {
   }
 
   try {
-    // Pull supporting documents (W-2s, 1099s, K-1s) for this entity+year
-    // and merge their extracted data into the inputs
+    // Pull supporting documents for this entity+year and merge into inputs
     let supportingDocs: any[] = []
     const mergedInputs = { ...inputs }
+    const autoMergeLog: Array<{ field: string; value: number; sources: string[] }> = []
+
+    const sum = (docs: any[], ...keys: string[]): number => {
+      let total = 0
+      for (const d of docs) {
+        const kv = d.meta?.key_values || {}
+        for (const k of keys) {
+          const v = parseFloat(String(kv[k] ?? '').replace(/[\$,]/g, '')) || 0
+          if (v) { total += v; break }  // first matching key wins per doc
+        }
+      }
+      return Math.round(total)
+    }
+    const setIfUnset = (field: string, value: number, sourceType: string, count: number) => {
+      if (value && !mergedInputs[field]) {
+        mergedInputs[field] = value
+        autoMergeLog.push({ field, value, sources: [`${count} × ${sourceType}`] })
+      }
+    }
+
     if (entity_id) {
+      const supportedTypes = [
+        'w2', 'k1',
+        '1099', '1099_int', '1099_div', '1099_b', '1099_r',
+        '1099_misc', '1099_nec', '1099_k', '1099_g', '1099_sa', '1099_oid',
+      ]
       const { data: docs } = await supabase.from('document')
-        .select('doc_type, meta, textract_data')
+        .select('id, doc_type, meta, textract_data, filename')
         .eq('entity_id', entity_id)
         .eq('tax_year', tax_year)
-        .in('doc_type', ['w2', '1099', 'k1'])
+        .in('doc_type', supportedTypes)
       if (docs?.length) {
         supportingDocs = docs
-        // Aggregate W-2 data
-        const w2s = docs.filter(d => d.doc_type === 'w2')
-        if (w2s.length && form_type === '1040') {
-          let totalWages = 0, totalWithholding = 0
-          for (const w2 of w2s) {
-            const kv = w2.meta?.key_values || {}
-            totalWages += parseFloat(kv.wages || kv['box_1'] || '0') || 0
-            totalWithholding += parseFloat(kv.federal_tax || kv['box_2'] || '0') || 0
+        const byType = (t: string) => docs.filter(d => d.doc_type === t)
+        const isIndividual = form_type === '1040'
+
+        if (isIndividual) {
+          // W-2s → wages, withholding
+          const w2s = byType('w2')
+          setIfUnset('wages',       sum(w2s, 'wages', 'box_1'),      'W-2', w2s.length)
+          setIfUnset('withholding', sum(w2s, 'federal_tax', 'box_2'), 'W-2', w2s.length)
+
+          // 1099-INT → interest
+          const int99 = [...byType('1099_int'), ...byType('1099')]
+          setIfUnset('taxable_interest', sum(int99, 'interest', 'box_1'), '1099-INT', int99.length)
+
+          // 1099-DIV → dividends
+          const div99 = [...byType('1099_div'), ...byType('1099')]
+          setIfUnset('ordinary_dividends', sum(div99, 'ordinary_dividends', 'box_1a'), '1099-DIV', div99.length)
+          setIfUnset('qualified_dividends', sum(div99, 'qualified_dividends', 'box_1b'), '1099-DIV', div99.length)
+
+          // 1099-B → capital gains (proceeds or gain/loss aggregation is complex — punt to net)
+          const b99 = byType('1099_b')
+          setIfUnset('capital_gains', sum(b99, 'net_gain_loss', 'gain_loss', 'proceeds'), '1099-B', b99.length)
+
+          // 1099-R → IRA / pension distributions
+          const r99 = byType('1099_r')
+          setIfUnset('ira_distributions', sum(r99.filter(d => (d.meta?.key_values?.distribution_code || '').match(/[147]/)),
+                                                'gross_distribution', 'box_1'), '1099-R (IRA)', r99.length)
+          setIfUnset('pensions_annuities', sum(r99.filter(d => !(d.meta?.key_values?.distribution_code || '').match(/[147]/)),
+                                                 'gross_distribution', 'box_1'), '1099-R (pension)', r99.length)
+
+          // 1099-NEC → self-employment income (Schedule C)
+          const nec99 = byType('1099_nec')
+          setIfUnset('net_se_income', sum(nec99, 'nonemployee_comp', 'box_1'), '1099-NEC', nec99.length)
+
+          // 1099-MISC → rents, royalties, other → schedule1_income aggregate
+          const misc99 = byType('1099_misc')
+          const miscIncome = sum(misc99, 'rents', 'box_1') + sum(misc99, 'royalties', 'box_2')
+                           + sum(misc99, 'other_income', 'box_3')
+          setIfUnset('schedule1_income', miscIncome, '1099-MISC', misc99.length)
+
+          // K-1 → ordinary_income, w2_wages
+          const k1s = byType('k1')
+          const k1Total = sum(k1s, 'ordinary_income', 'box_1')
+          const k1W2 = sum(k1s, 'w2_wages')
+          if (k1Total && !mergedInputs.k1_ordinary_income) {
+            mergedInputs.k1_ordinary_income = k1Total
+            autoMergeLog.push({ field: 'k1_ordinary_income', value: k1Total, sources: [`${k1s.length} × K-1`] })
           }
-          if (totalWages && !mergedInputs.wages) mergedInputs.wages = Math.round(totalWages)
-          if (totalWithholding && !mergedInputs.withholding) mergedInputs.withholding = Math.round(totalWithholding)
-        }
-        // Aggregate 1099 data
-        const f1099s = docs.filter(d => d.doc_type === '1099')
-        if (f1099s.length && form_type === '1040') {
-          let totalInterest = 0, totalDividends = 0
-          for (const f of f1099s) {
-            const kv = f.meta?.key_values || {}
-            totalInterest += parseFloat(kv.interest || kv['box_1'] || '0') || 0
-            totalDividends += parseFloat(kv.dividends || kv.ordinary_dividends || '0') || 0
+          if (k1Total && !mergedInputs.schedule1_income) {
+            mergedInputs.schedule1_income = (mergedInputs.schedule1_income || 0) + k1Total
           }
-          if (totalInterest && !mergedInputs.taxable_interest) mergedInputs.taxable_interest = Math.round(totalInterest)
-          if (totalDividends && !mergedInputs.ordinary_dividends) mergedInputs.ordinary_dividends = Math.round(totalDividends)
+          setIfUnset('k1_w2_wages', k1W2, 'K-1', k1s.length)
         }
-        // K-1 data
-        const k1s = docs.filter(d => d.doc_type === 'k1')
-        if (k1s.length && form_type === '1040') {
-          let totalK1 = 0, totalK1W2 = 0
-          for (const k of k1s) {
-            const kv = k.meta?.key_values || {}
-            totalK1 += parseFloat(kv.ordinary_income || kv['box_1'] || '0') || 0
-            totalK1W2 += parseFloat(kv.w2_wages || '0') || 0
-          }
-          if (totalK1 && !mergedInputs.k1_ordinary_income) mergedInputs.k1_ordinary_income = Math.round(totalK1)
-          if (totalK1 && !mergedInputs.schedule1_income) mergedInputs.schedule1_income = Math.round(totalK1)
-          if (totalK1W2 && !mergedInputs.k1_w2_wages) mergedInputs.k1_w2_wages = Math.round(totalK1W2)
-        }
+
+        // 1120/1120-S: could merge 1099-MISC rents into deductions.rents if received (rare for corps)
+        // Skipping for now — corps typically don't receive 1099s
       }
     }
 
@@ -983,8 +1025,11 @@ router.post('/compute', async (req, res) => {
       supporting_documents: supportingDocs.length > 0 ? {
         count: supportingDocs.length,
         types: supportingDocs.map(d => d.doc_type),
+        auto_merged: autoMergeLog,  // [{field, value, sources}]
         merged_fields: Object.keys(mergedInputs).filter(k => !(k in inputs)),
-        note: 'Data from uploaded W-2s, 1099s, and K-1s was auto-merged into inputs',
+        note: autoMergeLog.length > 0
+          ? 'Values auto-merged from uploaded tax docs. CONFIRM with user before finalizing — a typo or misread value flows straight into the return.'
+          : 'Documents found but no numeric fields extracted. Check doc classification.',
       } : undefined,
       pdf_coverage: {
         filled: filledCount,

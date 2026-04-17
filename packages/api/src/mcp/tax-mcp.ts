@@ -41,8 +41,31 @@ Call list_entities first. Figure out what the user needs from context — don't 
 To create an entity: create_entity(name, form_type). form_type drives entity_type automatically (1040→individual, 1120→c_corp, 1120S→s_corp).
 
 ## Uploading documents
-upload_document → register_document (with entity_id) → process_document.
-OCR + classification is automatic. Prior returns get fully extracted and computed. W-2s, 1099s, K-1s auto-merge into compute_return for the same entity+year.
+
+**Inline images (user shares in chat)**: Use ingest_document(filename, base64, entity_id).
+This is the closed-loop path — it uploads to S3, classifies, extracts, and saves in one call.
+Always pass entity_id or the doc won't flow into compute_return.
+
+**File path / large files**: upload_document → register_document (with entity_id).
+
+**After either path**: Gemini classifies (w2, 1099_int, 1099_div, 1099_r, 1099_nec, k1, prior_return_*, etc.),
+Textract extracts KVs and tables, meta.key_values stores the specific boxes.
+
+Auto-merge into compute_return for matching entity+year:
+- W-2s → wages, withholding
+- 1099-INT → taxable_interest
+- 1099-DIV → ordinary_dividends, qualified_dividends
+- 1099-B → capital_gains
+- 1099-R → ira_distributions or pensions_annuities (based on box 7 distribution code)
+- 1099-NEC → net_se_income
+- 1099-MISC → schedule1_income (rents + royalties + other)
+- K-1 → k1_ordinary_income, schedule1_income, k1_w2_wages
+
+IMPORTANT: the compute response includes supporting_documents.auto_merged — a list of
+{field, value, sources} showing what got auto-filled. Echo these to the user for
+confirmation before finalizing ("I pulled $413,296 in wages from 2 W-2s you uploaded
+— does that match what you expected?"). A misread OCR value silently becomes the
+filed number otherwise.
 
 ## QuickBooks
 
@@ -316,6 +339,18 @@ function createServer(apiKey: string): McpServer {
     entity_id: z.string().describe('Entity UUID'),
   }, async ({ entity_id }) => {
     return text(await call('GET', `/api/returns/compare/${entity_id}`))
+  })
+
+  // ─── Tool: ingest_document ───
+  // For inline base64 content (e.g. user pastes image of W-2/1099 into the chat).
+  // Closes the gap where upload_document returns a presigned URL but the AI
+  // has no way to actually push the bytes back.
+  server.tool('ingest_document', 'Upload a tax document (W-2, 1099, K-1, prior return, etc.) from inline base64 content. Use this when the user shares an image or file directly in chat — it uploads to S3, runs Gemini classification + Textract extraction, and saves the record. Always pass entity_id so the doc is linked to the right taxpayer.', {
+    filename: z.string().describe('Filename with extension (e.g. "W2_2024.jpg", "1099-INT.pdf", "K1.png")'),
+    base64: z.string().describe('Base64-encoded file content (no data: prefix, just the encoded bytes)'),
+    entity_id: z.string().describe('Entity UUID to link this document to. REQUIRED — without it the doc won\'t flow into compute_return.'),
+  }, async ({ filename, base64, entity_id }) => {
+    return text(await call('POST', '/api/documents/ingest', { filename, base64, entity_id }))
   })
 
   // ─── Tool: upload_document ───
