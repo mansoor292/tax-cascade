@@ -794,7 +794,15 @@ router.post('/compute', async (req, res) => {
           metaFields['meta.country'] = ent.meta?.country || 'United States'
           if (ent.meta?.s_election_date) metaFields['meta.s_election_date'] = ent.meta.s_election_date
           if (ent.meta?.num_shareholders) metaFields['meta.num_shareholders'] = ent.meta.num_shareholders
-          if (ent.meta?.total_assets) metaFields['meta.total_assets'] = ent.meta.total_assets
+          // meta.total_assets (form line D) — auto-populate from Schedule L
+          // EOY total (schedL.L15_total_eoy_d) so the header matches the
+          // balance sheet. Entity.meta.total_assets overrides if explicitly set.
+          const l15Total = (engineResult?.field_values || {})['schedL.L15_total_eoy_d']
+          if (ent.meta?.total_assets) {
+            metaFields['meta.total_assets'] = ent.meta.total_assets
+          } else if (l15Total && l15Total !== 0) {
+            metaFields['meta.total_assets'] = l15Total
+          }
           if (ent.meta?.business_activity) metaFields['meta.business_activity'] = ent.meta.business_activity
           if (ent.meta?.product_service) metaFields['meta.product_service'] = ent.meta.product_service
           // Title is an officer title (e.g. PRESIDENT) — only applies to business returns
