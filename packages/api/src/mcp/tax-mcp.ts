@@ -61,6 +61,20 @@ function buildPreview(v: any): any {
 
 // If spill_to is set, persist the response under that scratch key and return a compact
 // ref + shape + preview instead of the full payload. Keeps the chat context small.
+// Transactional QBO resources — searching these without a WHERE clause typically
+// pulls thousands of rows. We require filters (or a report/spill_to) for these.
+const TRANSACTIONAL_RESOURCES = new Set([
+  'Transaction', 'Invoice', 'Bill', 'Purchase', 'Payment', 'SalesReceipt',
+  'CreditMemo', 'Deposit', 'Transfer', 'RefundReceipt', 'BillPayment',
+  'VendorCredit', 'TimeActivity', 'JournalEntry', 'Estimate',
+])
+
+// Caps applied at the MCP layer to keep chat context small by default.
+// AI can always set spill_to to park a larger result, or set limit explicitly
+// (up to HARD_MAX) when it knows what it's doing.
+const DEFAULT_LIMIT = 50
+const HARD_MAX = 200
+
 async function maybeSpill(
   call: (m: string, p: string, b?: any) => Promise<any>,
   response: any,
@@ -80,22 +94,41 @@ async function maybeSpill(
 
 const INSTRUCTIONS = `You help users prepare and file tax returns.
 
-## Managing large payloads — read this first
+## Financial data — reports first, ALWAYS
 
-Some tools return a LOT of data (full QBO reports, a year of Stripe transactions, uncapped qbo_query
-results). Pulling those directly into chat burns the context window and cuts the task short.
+This is the biggest source of context blowouts. Read carefully.
 
-Default pattern:
-1. Prefer summaries/aggregates over raw rows when you only need a total, count, or range.
-2. If you need to hold a large dataset for multi-step work, pass \`spill_to: '<descriptive-key>'\`
-   to qbo_report / qbo_query / qbo_resource / stripe_data. The full payload is parked in scratch
-   storage; you get back only shape + preview + a ref.
-   Example: \`qbo_report(entity_id, report_type:'general-ledger', year:2024, spill_to:'edgewater-2024-gl')\`.
-3. Load from scratch only when you need the bytes: \`scratch(op:'load', key:'edgewater-2024-gl')\`.
-4. Clean up at task end: \`scratch(op:'delete', key:'edgewater-2024-gl')\`.
-5. \`scratch(op:'list')\` shows what's parked (per-user).
+**The rule: never open a QBO task by pulling transactions.** Start with a report, then drill down.
 
-Scratch keys are per-user, not per-entity — you pick names. 10 MB per blob ceiling.
+Bad (context will die):
+- "Show me all sales GL entries" → qbo_report(general-ledger) or qbo_resource(Transaction) with no filter
+- "Get invoices for 2024" → qbo_resource(Invoice) with no where clause
+
+Good (reports-first):
+1. Call \`qbo_report(entity_id, report_type:'profit-and-loss', year:2024)\` or \`'balance-sheet'\`
+   — a summary fits in a few KB. Read it, understand the shape, identify the specific line/account
+   that needs deeper inspection.
+2. Only then pull transaction-level data, and ALWAYS with a filter:
+   \`qbo_resource(operation:'search', resource:'Invoice', where:"TxnDate >= '2024-01-01' AND TxnDate <= '2024-01-31'", limit:50)\`
+3. Transactional resources (Invoice, Bill, JournalEntry, Transaction, Payment, SalesReceipt, CreditMemo,
+   Deposit, Transfer, Estimate, TimeActivity, Purchase, RefundReceipt, BillPayment, VendorCredit)
+   REQUIRE a \`where\` clause — the tool will reject unfiltered searches with a guidance message.
+4. qbo_query auto-injects \`MAXRESULTS 50\` when you leave it off. Hard cap: 200 rows.
+   Unfiltered \`SELECT FROM <transactional>\` is rejected.
+5. stripe_data list modes (invoices/payments/payouts/customers) default to 50 rows, hard cap 200.
+
+## Parking large payloads when you really need them
+
+When you do need a bigger dataset for multi-step analysis (e.g. a full general ledger for
+reconciliation), use the spill pattern:
+
+1. \`qbo_report(entity_id, report_type:'general-ledger', year:2024, spill_to:'edgewater-2024-gl')\`
+   → the full payload is written to scratch storage; you get shape + preview + a ref instead of rows.
+2. \`scratch(op:'load', key:'edgewater-2024-gl')\` — fetch the bytes only when you actually need them.
+3. \`scratch(op:'delete', key:'edgewater-2024-gl')\` at task end.
+4. \`scratch(op:'list')\` shows what's parked (per-user, 10 MB per blob).
+
+\`spill_to\` is supported on qbo_report, qbo_query, qbo_resource, and stripe_data.
 
 ## Starting out
 Call list_entities first. Figure out what the user needs from context — don't present a menu.
@@ -135,17 +168,23 @@ confirmation before finalizing. A misread OCR value silently becomes the filed n
 
 ## QuickBooks
 
-**qbo_report** is the single dispatcher for QBO data:
-- \`qbo_report(entity_id, report_type='financials', year)\` — P&L + Balance Sheet bundle (the default for tax prep)
-- \`qbo_report(entity_id, report_type='profit-and-loss' | 'balance-sheet' | 'trial-balance' | ...)\` — individual reports
-- \`qbo_report(form_type='1120', report_type='mapping')\` — QBO P&L categories → tax form line mapping
+Start with reports, drill down only with filters (see "Financial data — reports first" above).
+
+**qbo_report** — primary tool for financial questions. Summaries are small, cache-friendly:
+- \`qbo_report(entity_id, report_type:'financials', year)\` — P&L + Balance Sheet bundle (default for tax prep)
+- \`qbo_report(entity_id, report_type:'profit-and-loss' | 'balance-sheet' | 'trial-balance' | 'cash-flow')\` — individual summary reports, all small
+- \`qbo_report(entity_id, report_type:'general-ledger' | 'transaction-list' | 'profit-and-loss-detail' | 'balance-sheet-detail')\` — detail reports, can be huge; pass spill_to
+- \`qbo_report(form_type:'1120', report_type:'mapping')\` — QBO P&L categories → tax form line mapping
 
 Reports are cached. Pass refresh=true only when the user explicitly asks for fresh data.
 
-**Live, uncached** — use these freely to look up specific items without pulling a whole report:
-- \`qbo_resource\` — CRUD any resource (Invoice, Customer, Bill, Vendor, Employee, JournalEntry, Account, Transaction, etc.). For transactions, use operation='search' with a where clause.
-- \`qbo_query\` — raw QBO SQL
-- \`get_accounts\` — chart of accounts with balances
+**Drill-down tools** — capped at 50 rows by default to protect context:
+- \`qbo_resource\` — CRUD any resource. Search on transactional resources (Invoice, Bill, JournalEntry,
+  Transaction, Payment, …) REQUIRES a where clause. Master data (Account, Customer, Vendor, Employee, Item,
+  Class, Department) is fine without a where.
+- \`qbo_query\` — raw QBO SQL. MAXRESULTS 50 auto-injected if you leave it off, hard cap 200. Unfiltered
+  SELECTs from transactional tables are rejected.
+- \`get_accounts\` — chart of accounts with balances (master data, no cap).
 
 **Connection**: \`connect_qbo(entity_id)\` both starts OAuth and reports current status — no separate status check needed. Pass entity_id='new' to auto-create an entity from QBO company info.
 
@@ -548,12 +587,35 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: qbo_query ───
-  server.tool('qbo_query', 'Run a raw QuickBooks query (e.g. SELECT * FROM Account, SELECT * FROM Invoice WHERE TotalAmt > 1000). Uncapped — large SELECTs can blow the context window; pass spill_to to park the result in scratch storage.', {
+  server.tool('qbo_query', `Run a raw QuickBooks SQL query. Auto-injects MAXRESULTS ${DEFAULT_LIMIT} when you don't specify one (hard cap ${HARD_MAX}). Transactional tables (Invoice, Bill, JournalEntry, Transaction, Payment, …) REQUIRE a WHERE clause — unfiltered SELECTs are rejected. Use qbo_report for summaries (P&L, BS, GL) before drilling into transactions.`, {
     entity_id: z.string().describe('Entity UUID'),
-    query: z.string().describe('QBO SQL query'),
-    spill_to: z.string().optional().describe('Scratch key to park the full response under. Use when the query is broad (SELECT * FROM Transaction, multi-year pulls, etc.).'),
+    query: z.string().describe(`QBO SQL. Examples: "SELECT * FROM Account" (master data, fine), "SELECT * FROM Invoice WHERE TxnDate >= '2024-01-01' MAXRESULTS 50". Unfiltered SELECTs from transactional tables are rejected.`),
+    spill_to: z.string().optional().describe('Scratch key to park the full response under. Use when the query is broad.'),
   }, async ({ entity_id, query, spill_to }) => {
-    const response = await call('GET', `/api/qbo/${entity_id}/query?q=${encodeURIComponent(query)}`)
+    // Guardrail 1: unbounded SELECT on transactional tables
+    const tableMatch = query.match(/FROM\s+(\w+)/i)
+    const table = tableMatch?.[1]
+    if (table && TRANSACTIONAL_RESOURCES.has(table) && !/\bWHERE\b/i.test(query)) {
+      return text({
+        error: `SELECT from ${table} requires a WHERE clause.`,
+        reason: `Unfiltered ${table} queries pull thousands of rows and blow the context window.`,
+        suggestions: [
+          `Add a date filter: WHERE TxnDate >= '2024-01-01' AND TxnDate <= '2024-01-31'`,
+          `Add an amount filter: WHERE TotalAmt > '1000'`,
+          `For summary analysis, call qbo_report(report_type='profit-and-loss' or 'balance-sheet' or 'general-ledger') instead`,
+          `If you must pull everything, set spill_to:'<key>' to park the result in scratch`,
+        ],
+      })
+    }
+    // Guardrail 2: inject MAXRESULTS if not specified, cap at hard max
+    let effectiveQuery = query.trim()
+    const maxMatch = effectiveQuery.match(/MAXRESULTS\s+(\d+)/i)
+    if (!maxMatch) {
+      effectiveQuery = `${effectiveQuery} MAXRESULTS ${DEFAULT_LIMIT}`
+    } else if (parseInt(maxMatch[1]) > HARD_MAX) {
+      effectiveQuery = effectiveQuery.replace(/MAXRESULTS\s+\d+/i, `MAXRESULTS ${HARD_MAX}`)
+    }
+    const response = await call('GET', `/api/qbo/${entity_id}/query?q=${encodeURIComponent(effectiveQuery)}`)
     return text(await maybeSpill(call, response, spill_to))
   })
 
@@ -565,14 +627,14 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: qbo_resource ───
-  server.tool('qbo_resource', 'CRUD any QuickBooks resource (Invoice, Customer, Bill, Vendor, Employee, JournalEntry, Purchase, Estimate, Account, Item, Payment, etc). Supports read, search, create, update, delete. For broad searches (many rows) pass spill_to to park the full result set in scratch storage and receive only a shape summary.', {
+  server.tool('qbo_resource', `CRUD any QuickBooks resource (Invoice, Customer, Bill, Vendor, Employee, JournalEntry, Purchase, Estimate, Account, Item, Payment, etc). Supports read, search, create, update, delete. Search defaults to ${DEFAULT_LIMIT} rows, hard-capped at ${HARD_MAX}. Transactional resources (Invoice, Bill, JournalEntry, Transaction, Payment, …) REQUIRE a where clause — without one, the call is rejected. For broader analysis, call qbo_report(report_type='profit-and-loss'/'balance-sheet'/'general-ledger') first and drill down afterward.`, {
     entity_id: z.string().describe('Entity UUID'),
     operation: z.enum(['read', 'search', 'create', 'update', 'delete']).describe('CRUD operation'),
     resource: z.string().describe('QBO resource type: Invoice, Customer, Bill, Vendor, Employee, JournalEntry, Purchase, Estimate, Account, Item, Payment, SalesReceipt, CreditMemo, Deposit, Transfer, etc.'),
     id: z.string().optional().describe('Resource ID (for read)'),
-    where: z.string().optional().describe('WHERE clause for search (e.g. "TotalAmt > \'1000\'" or "DisplayName LIKE \'%Smith%\'")'),
+    where: z.string().optional().describe('WHERE clause for search. REQUIRED for transactional resources. Example: "TxnDate >= \'2024-01-01\' AND TxnDate <= \'2024-01-31\'" or "TotalAmt > \'1000\'".'),
     orderby: z.string().optional().describe('ORDER BY for search (e.g. "TxnDate DESC")'),
-    limit: z.number().optional().describe('Max results for search (default 100)'),
+    limit: z.number().optional().describe(`Max results for search. Default ${DEFAULT_LIMIT}, hard cap ${HARD_MAX}. Values above ${HARD_MAX} are clamped.`),
     data: z.record(z.any()).optional().describe('Resource data for create/update/delete (QBO API format)'),
     spill_to: z.string().optional().describe('Scratch key to park a search response under (applies to operation=search only).'),
   }, async ({ entity_id, operation, resource, id, where, orderby, limit, data, spill_to }) => {
@@ -580,10 +642,24 @@ function createServer(apiKey: string): McpServer {
       if (!id) return text({ error: 'id is required for read' })
       return text(await call('GET', `/api/qbo/${entity_id}/resource/${resource}/${id}`))
     } else if (operation === 'search') {
+      // Force a filter on transactional resources — otherwise the result set is huge.
+      if (TRANSACTIONAL_RESOURCES.has(resource) && !where) {
+        return text({
+          error: `Search on ${resource} requires a where clause.`,
+          reason: `Unfiltered ${resource} queries pull thousands of rows and blow the context window.`,
+          suggestions: [
+            `Add a date filter: where:"TxnDate >= '2024-01-01' AND TxnDate <= '2024-01-31'"`,
+            `Add an amount filter: where:"TotalAmt > '1000'"`,
+            `For trend/summary analysis, call qbo_report(report_type='profit-and-loss' or 'balance-sheet' or 'general-ledger') instead`,
+            `If you must pull everything, set spill_to:'<key>' to park the result in scratch storage`,
+          ],
+        })
+      }
+      const effectiveLimit = Math.min(limit ?? DEFAULT_LIMIT, HARD_MAX)
       const qs = new URLSearchParams()
       if (where) qs.set('where', where)
       if (orderby) qs.set('orderby', orderby)
-      if (limit) qs.set('limit', String(limit))
+      qs.set('limit', String(effectiveLimit))
       const response = await call('GET', `/api/qbo/${entity_id}/resource/${resource}?${qs}`)
       return text(await maybeSpill(call, response, spill_to))
     } else if (operation === 'create') {
@@ -638,10 +714,15 @@ function createServer(apiKey: string): McpServer {
       const qs = year ? `?year=${year}` : ''
       response = await call('GET', `/api/stripe/${entity_id}/revenue${qs}`)
     } else {
+      // Cap list responses at DEFAULT_LIMIT / HARD_MAX to keep chat context small.
+      // Caller can still bump it up to HARD_MAX; above that we clamp.
+      const effectiveLimit = Math.min(Number(filters.limit) || DEFAULT_LIMIT, HARD_MAX)
       const qs = new URLSearchParams()
       for (const [k, v] of Object.entries(filters)) {
+        if (k === 'limit') continue
         if (v !== undefined && v !== null && v !== '') qs.set(k, String(v))
       }
+      qs.set('limit', String(effectiveLimit))
       response = await call('GET', `/api/stripe/${entity_id}/${data_type}?${qs}`)
     }
     return text(await maybeSpill(call, response, spill_to))
