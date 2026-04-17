@@ -861,6 +861,7 @@ router.post('/compute', async (req, res) => {
         field_values: { ...existingFieldValues, ...scheduleFieldValues },
         computed_at: new Date().toISOString(),
         pdf_s3_path: null,
+        reviewed_at: null,  // reset review status whenever inputs change
       }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
 
       if (error) return res.status(500).json({ error: error.message })
@@ -1086,6 +1087,47 @@ router.get('/:id/pdf', async (req, res) => {
   const { data: entity } = await supabase.from('tax_entity')
     .select('user_id').eq('id', taxReturn.entity_id).single()
   if (!entity || entity.user_id !== userId) return res.status(403).json({ error: 'Forbidden' })
+
+  // ─── Completeness gate ─────────────────────────────────────
+  // Block PDF generation if critical fields are missing, UNLESS:
+  //   - skip_review=true (caller has confirmed with user)
+  //   - the return is marked reviewed_at (confirmed previously)
+  //   - it's an extension (4868/7004/8868 — minimal fields by nature)
+  const isExtensionType = ['4868', '7004', '8868'].includes(taxReturn.form_type)
+  const skipReview = req.query.skip_review === 'true' || taxReturn.reviewed_at
+  if (!isExtensionType && !skipReview) {
+    // Recompute to get fresh missing_fields
+    const apiKey = req.headers['x-api-key'] as string || req.headers.authorization?.replace('Bearer ', '') || ''
+    const reviewResp = await fetch(`${req.protocol}://${req.get('host')}/api/returns/compute`, {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entity_id: taxReturn.entity_id,
+        tax_year: taxReturn.tax_year,
+        form_type: taxReturn.form_type,
+        inputs: taxReturn.input_data || {},
+        save: false,
+      }),
+    }).then(r => r.json()).catch(() => null)
+
+    const mf = reviewResp?.missing_fields
+    const critical = (mf?.fields || []).filter((f: any) => f.severity === 'critical')
+
+    if (critical.length > 0) {
+      return res.status(400).json({
+        error: 'Return has unreviewed critical fields — walk the user through each before generating the PDF',
+        missing_fields: mf,
+        pdf_coverage: reviewResp?.pdf_coverage,
+        how_to_proceed: [
+          '1. Call review_return or compute_return to see the full missing list',
+          '2. Ask the user for each critical field: (a) leave blank, (b) use prior year, (c) provide value',
+          '3. Recompute with updated inputs',
+          '4. When ready, retry get_pdf with skip_review=true to bypass this check',
+          '   OR call mark_reviewed(return_id) if available',
+        ],
+      })
+    }
+  }
 
   // If we already have a cached PDF, return presigned URL (skip with ?regenerate=true)
   if (taxReturn.pdf_s3_path && req.query.regenerate !== 'true') {
@@ -1356,6 +1398,26 @@ print(json.dumps({'url': url}))
   } catch (e: any) {
     res.status(500).json({ error: e.message })
   }
+})
+
+// ─── Mark return as reviewed (bypass completeness gate) ───
+router.post('/:id/review', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { data: ret } = await supabase.from('tax_return')
+    .select('entity_id').eq('id', req.params.id).single()
+  if (!ret) return res.status(404).json({ error: 'Return not found' })
+
+  const { data: ent } = await supabase.from('tax_entity')
+    .select('user_id').eq('id', ret.entity_id).single()
+  if (!ent || ent.user_id !== userId) return res.status(403).json({ error: 'Forbidden' })
+
+  const { error } = await supabase.from('tax_return')
+    .update({ reviewed_at: new Date().toISOString() })
+    .eq('id', req.params.id)
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ success: true, reviewed_at: new Date().toISOString() })
 })
 
 // ─── Delete a return ───

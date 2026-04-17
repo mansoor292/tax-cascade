@@ -62,16 +62,25 @@ validate_return → compute_return → get_pdf.
 get_pdf and get_scenario_pdf serve cached PDFs by default. Pass refresh=true after recomputing a return or updating data to regenerate.
 Ask for data conversationally — group by topic (income, deductions, payments). Use get_schema to discover required fields.
 
-## Missing-field review — critical
+## Missing-field review — HARD GATE
 
-Before finalizing a return, compute_return's response includes a \`missing_fields\`
-list (lines the taxpayer has no value for). When it's non-trivial, DO NOT silently
-generate the PDF. Walk the user through each missing line and ask how to resolve:
+get_pdf REFUSES to generate when the return has critical fields still at zero
+(NOL, IRA distributions, prior-year line items ≥ $1,000). You'll get a 400
+error with \`missing_fields\` and next-steps guidance.
 
-  For each missing field, offer three options:
-    a. "Leave blank (zero)" — confirm they truly had no activity on this line
-    b. "Use prior year" — pull the value from last year's return if available
-    c. Provide a value now — they answer the question directly
+Flow:
+  1. compute_return → check missing_fields in response
+  2. If missing_fields.count > 0 with any severity="critical" items:
+     - Walk the user through each one conversationally
+     - Offer three options per field:
+       a. "Leave blank (zero)" — confirm no activity
+       b. "Use prior year" — pull last year's value (shown in prior_year_value)
+       c. Provide a value now
+     - Recompute with updated inputs as needed
+  3. When done: either
+     - Call mark_reviewed(return_id) to permanently unblock (recompute clears it)
+     - Or call get_pdf(skip_review=true) for a one-off bypass
+  4. get_pdf now succeeds
 
 Examples where this matters:
   - 1040 line 4 IRA distributions: silently defaulting to 0 is wrong if they
@@ -240,12 +249,23 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: get_pdf ───
-  server.tool('get_pdf', 'Generate a filled IRS PDF for a computed return. Returns a presigned download URL. Uses cached PDF if available — pass refresh=true to regenerate from latest data (e.g. after recomputing the return or updating schedules).', {
+  server.tool('get_pdf', 'Generate a filled IRS PDF for a computed return. The API REFUSES to generate if critical fields are still missing — walk the user through review_return first, then call this with skip_review=true (or mark_reviewed) to confirm. Uses cached PDF if available — pass refresh=true to regenerate.', {
     return_id: z.string().describe('Tax return UUID'),
-    refresh: z.boolean().optional().describe('Force regeneration from latest data (default: false — serves cached PDF if available)'),
-  }, async ({ return_id, refresh }) => {
-    const qs = refresh ? '?regenerate=true' : ''
-    return text(await call('GET', `/api/returns/${return_id}/pdf${qs}`))
+    refresh: z.boolean().optional().describe('Force regeneration from latest data (default: false)'),
+    skip_review: z.boolean().optional().describe('Bypass the critical-fields-missing gate. ONLY use after confirming with the user that missing fields should stay blank.'),
+  }, async ({ return_id, refresh, skip_review }) => {
+    const qs = new URLSearchParams()
+    if (refresh) qs.set('regenerate', 'true')
+    if (skip_review) qs.set('skip_review', 'true')
+    const q = qs.toString() ? '?' + qs.toString() : ''
+    return text(await call('GET', `/api/returns/${return_id}/pdf${q}`))
+  })
+
+  // ─── Tool: mark_reviewed ───
+  server.tool('mark_reviewed', 'Mark a return as reviewed — user has confirmed the missing fields are intentional. Unblocks get_pdf. Automatically cleared if the return is recomputed (inputs change).', {
+    return_id: z.string().describe('Tax return UUID'),
+  }, async ({ return_id }) => {
+    return text(await call('POST', `/api/returns/${return_id}/review`))
   })
 
   // ─── Tool: delete_return ───
