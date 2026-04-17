@@ -1134,14 +1134,18 @@ router.get('/:id/pdf', async (req, res) => {
   if (!entity || entity.user_id !== userId) return res.status(403).json({ error: 'Forbidden' })
 
   // ─── Completeness gate ─────────────────────────────────────
-  // Block PDF generation if critical fields are missing, UNLESS:
-  //   - skip_review=true (caller has confirmed with user)
-  //   - the return is marked reviewed_at (confirmed previously)
-  //   - it's an extension (4868/7004/8868 — minimal fields by nature)
+  // Block PDF generation only when there's STRONG evidence something is wrong:
+  //   - Prior year had the value ≥ $1,000 and current year is $0 (suggests missed entry)
+  // Mere presence in a hard-coded "critical" set isn't enough — many critical
+  // fields are legitimately $0 (no NOL, no foreign tax credit, etc.).
+  //
+  // Bypass paths:
+  //   - skip_review=true query param
+  //   - tax_return.reviewed_at is set (confirmed previously, cleared on recompute)
+  //   - extensions (4868/7004/8868 — minimal by design)
   const isExtensionType = ['4868', '7004', '8868'].includes(taxReturn.form_type)
   const skipReview = req.query.skip_review === 'true' || taxReturn.reviewed_at
   if (!isExtensionType && !skipReview) {
-    // Recompute to get fresh missing_fields
     const apiKey = req.headers['x-api-key'] as string || req.headers.authorization?.replace('Bearer ', '') || ''
     const reviewResp = await fetch(`${req.protocol}://${req.get('host')}/api/returns/compute`, {
       method: 'POST',
@@ -1156,19 +1160,23 @@ router.get('/:id/pdf', async (req, res) => {
     }).then(r => r.json()).catch(() => null)
 
     const mf = reviewResp?.missing_fields
-    const critical = (mf?.fields || []).filter((f: any) => f.severity === 'critical')
+    // Only block on fields where prior year had real money AND current is blank.
+    // That's strong evidence of a missed entry vs. a genuinely zero year.
+    const suspicious = (mf?.fields || []).filter((f: any) =>
+      typeof f.prior_year_value === 'number' && f.prior_year_value >= 1000
+    )
 
-    if (critical.length > 0) {
+    if (suspicious.length > 0) {
       return res.status(400).json({
-        error: 'Return has unreviewed critical fields — walk the user through each before generating the PDF',
-        missing_fields: mf,
+        error: `Return has ${suspicious.length} field(s) that were non-zero in prior year but are now blank — confirm with user before finalizing`,
+        suspicious_fields: suspicious,
+        all_missing: mf,
         pdf_coverage: reviewResp?.pdf_coverage,
         how_to_proceed: [
-          '1. Call review_return or compute_return to see the full missing list',
-          '2. Ask the user for each critical field: (a) leave blank, (b) use prior year, (c) provide value',
-          '3. Recompute with updated inputs',
-          '4. When ready, retry get_pdf with skip_review=true to bypass this check',
-          '   OR call mark_reviewed(return_id) if available',
+          '1. Review each suspicious_fields entry: prior year had this value, this year is $0',
+          '2. Ask user: is this genuinely $0, or did we miss something?',
+          '3. If $0 is correct: call mark_reviewed(return_id) or retry with skip_review=true',
+          '4. If data was missed: provide values and call compute_return again',
         ],
       })
     }
