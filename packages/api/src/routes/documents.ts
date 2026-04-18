@@ -378,7 +378,7 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
 
         const { data: taxReturn } = await supabase.from('tax_return').upsert({
           entity_id: entityId, tax_year: txYear, form_type: formType,
-          status: 'computed', is_amended: false,
+          status: 'computed', source: 'filed_import', is_amended: false,
           input_data: {}, computed_data: engineResult,
           field_values: Object.fromEntries(mapped.fields.map(f => [f.canonical_key, f.value])),
           verification: { mapper_stats: mapped.stats, extracted_count: mapped.fields.length },

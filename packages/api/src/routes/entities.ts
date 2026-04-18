@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
   const { data, error } = await supabase.from('tax_entity')
-    .select('*, tax_return(id, tax_year, form_type, status)')
+    .select('*, tax_return(id, tax_year, form_type, status, source)')
     .eq('user_id', userId)
     .order('name')
 
@@ -53,7 +53,7 @@ router.get('/:id', async (req, res) => {
 
   const [{ data: returns }, { data: scenarios }] = await Promise.all([
     supabase.from('tax_return')
-      .select('id, tax_year, form_type, status, computed_at')
+      .select('id, tax_year, form_type, status, source, computed_at')
       .eq('entity_id', entity.id)
       .order('tax_year', { ascending: false }),
     supabase.from('scenario')

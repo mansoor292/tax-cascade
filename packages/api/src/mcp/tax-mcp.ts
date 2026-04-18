@@ -149,8 +149,31 @@ so they flow into compute_return and survive to the next session. category match
 (w2, 1099_int, etc.). Always include source_note so the fact is audit-traceable.
 
 **After ingestion**: Gemini classifies (w2, 1099_int, 1099_div, 1099_r, 1099_nec, k1, prior_return_*, etc.),
-Textract extracts KVs and tables, meta.key_values stores the specific boxes. Prior returns auto-process
-into computed returns. list_documents returns presigned download_url for each doc.
+Textract extracts KVs and tables, meta.key_values stores the specific boxes.
+list_documents returns presigned download_url for each doc.
+
+## Filed returns vs. computed returns — DON'T CONFLATE
+
+Three artifacts, two places, one mental model:
+
+1. **Filed PDF** → \`document\` row (doc_type=\`prior_return_1040\`/\`prior_return_1120\`/\`prior_return_1120s\`).
+   The authoritative, signed-and-submitted PDF the user uploaded. Reached via \`list_documents\` /
+   \`ingest_document\`. Has an S3 download_url. This is the *archival original* — never overwrite.
+
+2. **Imported computed row** → \`tax_return\` with \`source='filed_import'\`.
+   When a prior_return_* PDF is ingested, we auto-parse its Textract KVs into a structured
+   \`tax_return\` row so \`use_prior_year\` and \`compare_returns\` can read line values without
+   re-OCRing every time. Think of it as the machine-readable *cache* of #1.
+
+3. **Proforma computed row** → \`tax_return\` with \`source='proforma'\` (or \`extension\`, \`amendment\`).
+   Current-year work the user/AI is building via \`compute_return\`. Drafts, what-ifs, finalized returns.
+
+Every return you see in \`list_entities\`, \`get_entity\`, \`compare_returns\`, \`review_return\`, and
+\`use_prior_year\` responses carries a \`source\` field — use it to disambiguate. When the user says
+"my 2024 return," clarify if ambiguous:
+  - If they want the signed PDF → \`list_documents\` (filter by doc_type starting with \`prior_return_\`)
+  - If they want line-by-line values → \`tax_return\` row with the matching tax_year
+  - Both exist for imported returns; they're two views of the same filing.
 
 Auto-merge into compute_return for matching entity+year:
 - W-2s → wages, withholding
@@ -281,7 +304,7 @@ function createServer(apiKey: string): McpServer {
   const call = (method: string, path: string, body?: any) => api(apiKey, method, path, body)
 
   // ─── Tool: list_entities ───
-  server.tool('list_entities', 'List all tax entities and their returns', {}, async () => {
+  server.tool('list_entities', 'List all tax entities and their tax_return rows (computed/parsed — NOT filed PDFs). Each return carries a `source` field: `filed_import` (parsed from an uploaded prior-year PDF), `proforma` (current-year work), `extension`, `amendment`. For the signed/filed PDF itself, use list_documents filtered by doc_type starting with `prior_return_`.', {}, async () => {
     return text(await call('GET', '/api/entities'))
   })
 
@@ -296,7 +319,7 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: get_entity ───
-  server.tool('get_entity', 'Get entity details with all returns and scenarios', {
+  server.tool('get_entity', 'Get entity details with all tax_return rows and scenarios. Each return has a `source` field — see list_entities for the filed_import vs. proforma distinction. Filed PDFs live in list_documents, not here.', {
     entity_id: z.string().describe('Entity UUID'),
   }, async ({ entity_id }) => {
     return text(await call('GET', `/api/entities/${entity_id}`))
@@ -445,6 +468,7 @@ function createServer(apiKey: string): McpServer {
       return_id,
       form_type: ret.form_type,
       tax_year: ret.tax_year,
+      source: ret.source,
       missing_fields: (recomputed as any)?.missing_fields,
       pdf_coverage: (recomputed as any)?.pdf_coverage,
       note: 'Walk the user through each missing field before calling get_pdf. Group by category for efficient questions.',
@@ -452,7 +476,7 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: use_prior_year ───
-  server.tool('use_prior_year', 'Copy values from the prior-year return into the current-year input for specific fields. Use this when the client says "use last year" for missing items. Only fills blanks — won\'t overwrite values the user has already provided. Returns merged_inputs that you then pass to compute_return.', {
+  server.tool('use_prior_year', 'Copy values from the prior-year tax_return row (NOT the filed PDF — from the parsed/structured cache). Works equally on filed_import rows (parsed from an uploaded PDF) and proforma rows (computed earlier). Response includes `prior_source` so you can tell the user whether you pulled from a filed return or a prior proforma. Only fills blanks — won\'t overwrite user-provided values. Returns merged_inputs that you pass to compute_return.', {
     entity_id: z.string().describe('Entity UUID'),
     tax_year: z.number().describe('CURRENT tax year (prior year = this - 1)'),
     form_type: z.string().describe('1040, 1120, 1120S'),
@@ -501,7 +525,7 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: list_documents ───
-  server.tool('list_documents', 'List all uploaded documents. Each document includes a download_url (presigned, 1-hour expiry) so you can give the user a direct link without a second call.', {}, async () => {
+  server.tool('list_documents', 'List all uploaded documents (authoritative source for filed/signed PDFs). Documents with doc_type starting with `prior_return_` (prior_return_1040/1120/1120s) ARE the filed returns the user uploaded. Each doc includes a presigned download_url (1-hour expiry). For the parsed line-by-line data from those filed returns, see the matching tax_return row via list_entities (source=filed_import).', {}, async () => {
     return text(await call('GET', '/api/documents'))
   })
 

@@ -221,7 +221,7 @@ router.post('/process/:document_id', async (req, res) => {
       tax_year: taxYear,
       form_type: formType,
       status: 'computed',
-      source: 'filed',
+      source: 'filed_import',
       input_data: engineInput,
       computed_data: engineResult,
       field_values: extracted,
@@ -1066,7 +1066,7 @@ router.post('/use-prior-year', async (req, res) => {
 
   // Fetch prior-year return
   const { data: priorRet } = await supabase.from('tax_return')
-    .select('input_data, computed_data, tax_year')
+    .select('input_data, computed_data, tax_year, source')
     .eq('entity_id', entity_id).eq('tax_year', tax_year - 1).eq('form_type', form_type).eq('is_amended', false)
     .single()
   if (!priorRet) {
@@ -1104,6 +1104,7 @@ router.post('/use-prior-year', async (req, res) => {
 
   res.json({
     prior_tax_year: priorRet.tax_year,
+    prior_source: priorRet.source,
     target_tax_year: tax_year,
     copied_count: Object.keys(copied).length,
     copied,
