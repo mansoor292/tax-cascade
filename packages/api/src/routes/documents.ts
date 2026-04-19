@@ -309,13 +309,16 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
 
   if (error) return res.status(500).json({ error: error.message })
 
-  // Auto-process if it's a recognized tax return with textract data
+  // Auto-archive if it's a recognized prior-year return. We do NOT recompute —
+  // the filed PDF is authoritative. Every extracted canonical field goes into
+  // field_values verbatim; comparison-friendly totals go into computed_data.computed.
+  // Each ingest creates a NEW filed_import row (amendments/re-ingests accumulate).
   let processedReturn = null
   const isReturn = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s'].includes(classification.doc_type || '')
   if (isReturn && textractData?.kvs?.length && doc) {
     try {
       const { mapToCanonical } = await import('../intake/json_model_mapper.js')
-      const { calc1120, calc1120S, calc1040 } = await import('../engine/tax_engine.js')
+      const { archiveFiledReturn } = await import('../intake/archive_filed_return.js')
 
       const formTypeMap: Record<string, string> = {
         prior_return_1040: '1040', prior_return_1120: '1120', prior_return_1120s: '1120S',
@@ -328,72 +331,52 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
         tax_year: txYear, key_value_pairs: textractData.kvs,
       })
 
-      const getNum = (key: string): number => {
-        const v = mapped.model[key]; return typeof v === 'number' ? v : 0
+      // Resolve entity — prefer document.entity_id (passed by ingest), fall back to name match
+      let entityId = entity_id || null
+      if (!entityId && classification.entity_name) {
+        const firstName = classification.entity_name.split(' ')[0]
+        const { data: existing } = await supabase.from('tax_entity')
+          .select('id').eq('user_id', userId).ilike('name', `%${firstName}%`).single()
+        entityId = existing?.id || null
       }
 
-      let engineResult: any = null
-      if (formType === '1120') {
-        engineResult = calc1120({
-          gross_receipts: getNum('income.L1a_gross_receipts') || getNum('income.gross_receipts'),
-          returns_allowances: 0, cost_of_goods_sold: getNum('income.L2_cogs') || getNum('income.cost_of_goods_sold'),
-          dividends: 0, interest_income: getNum('income.L5_interest'), gross_rents: 0, gross_royalties: 0,
-          capital_gains: 0, net_gain_4797: 0, other_income: 0,
-          officer_compensation: getNum('deductions.L12_officer_comp'),
-          salaries_wages: getNum('deductions.L13_salaries') || getNum('deductions.salaries_wages'),
-          repairs_maintenance: 0, bad_debts: 0, rents: 0,
-          taxes_licenses: getNum('deductions.L17_taxes_licenses') || getNum('deductions.taxes_licenses'),
-          interest_expense: 0, charitable_contrib: getNum('deductions.L19_charitable'),
-          depreciation: getNum('deductions.L20_depreciation'), depletion: 0,
-          advertising: getNum('deductions.L22_advertising'), pension_plans: 0, employee_benefits: 0,
-          other_deductions: getNum('deductions.L26_other_deductions') || getNum('deductions.other_deductions'),
-          nol_deduction: getNum('tax.L29a_nol'), special_deductions: 0,
-          estimated_tax_paid: getNum('schedJ.J13_prior_overpayment') + getNum('schedJ.J14_estimated_payments'),
+      if (entityId && txYear) {
+        const archive = archiveFiledReturn(mapped, formType, classification.entity_name || null)
+
+        const { data: taxReturn } = await supabase.from('tax_return').insert({
+          entity_id: entityId,
           tax_year: txYear,
-        })
-      } else if (formType === '1120S') {
-        engineResult = calc1120S({
-          gross_receipts: getNum('income.L1a_gross_receipts') || getNum('income.gross_receipts'),
-          returns_allowances: 0, cost_of_goods_sold: getNum('income.L2_cogs') || getNum('income.cost_of_goods_sold'),
-          net_gain_4797: 0, other_income: getNum('income.L5_other_income'),
-          officer_compensation: getNum('deductions.L7_officer_comp') || getNum('deductions.officer_compensation'),
-          salaries_wages: getNum('deductions.L8_salaries') || getNum('deductions.salaries_wages'),
-          repairs_maintenance: 0, bad_debts: 0, rents: 0,
-          taxes_licenses: getNum('deductions.L12_taxes') || getNum('deductions.taxes_licenses'),
-          interest: 0, depreciation: 0, depletion: 0, advertising: 0, pension_plans: 0, employee_benefits: 0,
-          other_deductions: getNum('deductions.L20_other') || getNum('deductions.other_deductions'),
-          charitable_contrib: 0, section_179: 0,
-          shareholders: [{ name: classification.entity_name || 'Shareholder', pct: 100 }],
-        })
-      }
-
-      if (engineResult) {
-        // Find entity
-        let entityId = null
-        if (classification.entity_name) {
-          const { data: existing } = await supabase.from('tax_entity')
-            .select('id').ilike('name', `%${classification.entity_name.split(' ')[0]}%`).single()
-          entityId = existing?.id || null
-        }
-
-        const { data: taxReturn } = await supabase.from('tax_return').upsert({
-          entity_id: entityId, tax_year: txYear, form_type: formType,
-          status: 'computed', source: 'filed_import', is_amended: false,
-          input_data: {}, computed_data: engineResult,
-          field_values: Object.fromEntries(mapped.fields.map(f => [f.canonical_key, f.value])),
-          verification: { mapper_stats: mapped.stats, extracted_count: mapped.fields.length },
+          form_type: formType,
+          status: 'filed',
+          source: 'filed_import',
+          is_amended: false,
+          input_data: {
+            source_document_id: doc.id,
+            mapper_model: mapped.model,
+            mapper_unmapped: mapped.unmapped,
+          },
+          computed_data: { computed: archive.totals, field_values: archive.field_values },
+          field_values: archive.field_values,
+          verification: {
+            mapper_stats: mapped.stats,
+            extracted_count: mapped.fields.length,
+            unmapped_count: mapped.unmapped.length,
+            source: 'filed_import',
+          },
           computed_at: new Date().toISOString(),
-        }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
+        }).select().single()
 
         processedReturn = {
           id: taxReturn?.id,
           form_type: formType, tax_year: txYear,
-          computed: engineResult?.computed,
+          source: 'filed_import',
+          totals: archive.totals,
           mapped_fields: mapped.fields.length,
+          unmapped_count: mapped.unmapped.length,
         }
       }
     } catch (e: any) {
-      console.error('Auto-process failed:', e.message)
+      console.error('Auto-archive failed:', e.message)
     }
   }
 

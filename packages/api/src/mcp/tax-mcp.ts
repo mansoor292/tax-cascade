@@ -152,28 +152,39 @@ so they flow into compute_return and survive to the next session. category match
 Textract extracts KVs and tables, meta.key_values stores the specific boxes.
 list_documents returns presigned download_url for each doc.
 
-## Filed returns vs. computed returns — DON'T CONFLATE
+## Filed returns vs. computed returns — STRICT SEPARATION
 
-Three artifacts, two places, one mental model:
+Returns live in two worlds. Don't cross them.
 
-1. **Filed PDF** → \`document\` row (doc_type=\`prior_return_1040\`/\`prior_return_1120\`/\`prior_return_1120s\`).
-   The authoritative, signed-and-submitted PDF the user uploaded. Reached via \`list_documents\` /
-   \`ingest_document\`. Has an S3 download_url. This is the *archival original* — never overwrite.
+**Filed world — IMMUTABLE.** A \`prior_return_1040/1120/1120s\` document uploaded via
+\`ingest_document\` gets fully extracted into a \`tax_return\` row with \`source='filed_import'\`.
+Every canonical field the mapper recognizes lands in \`field_values\` verbatim; comparison totals
+(taxable_income, total_tax, total_payments, etc.) land in \`computed_data.computed\`. These rows
+are ARCHIVES — \`compute_return\` will refuse to touch them. You cannot recompute a filed return.
 
-2. **Imported computed row** → \`tax_return\` with \`source='filed_import'\`.
-   When a prior_return_* PDF is ingested, we auto-parse its Textract KVs into a structured
-   \`tax_return\` row so \`use_prior_year\` and \`compare_returns\` can read line values without
-   re-OCRing every time. Think of it as the machine-readable *cache* of #1.
+**Working world — MUTABLE.**
+- \`source='proforma'\` — current-year work. compute_return writes here by default.
+- \`source='extension'\` — 4868/7004/8868 returns.
+- \`source='amendment'\` — amendments are first-class peers of filed returns (not flags on them).
+  Created by calling \`compute_return(amend_of: <filed_return_id>)\` which inserts a NEW row
+  with \`supersedes_id\` pointing at what it amends.
 
-3. **Proforma computed row** → \`tax_return\` with \`source='proforma'\` (or \`extension\`, \`amendment\`).
-   Current-year work the user/AI is building via \`compute_return\`. Drafts, what-ifs, finalized returns.
+Multiple rows per (entity, year, form) are allowed. compute_return routes the write:
+- \`return_id: <id>\`      → UPDATE that specific row (rejected if filed_import).
+- \`amend_of: <id>\`       → INSERT a new amendment row superseding that one.
+- \`new_row: true\`        → force INSERT a fresh proforma (for scenario snapshots).
+- (none)                 → UPDATE the latest proforma, or INSERT if none exists.
 
-Every return you see in \`list_entities\`, \`get_entity\`, \`compare_returns\`, \`review_return\`, and
-\`use_prior_year\` responses carries a \`source\` field — use it to disambiguate. When the user says
-"my 2024 return," clarify if ambiguous:
-  - If they want the signed PDF → \`list_documents\` (filter by doc_type starting with \`prior_return_\`)
-  - If they want line-by-line values → \`tax_return\` row with the matching tax_year
-  - Both exist for imported returns; they're two views of the same filing.
+**User says "my 2024 return":**
+  - For the signed PDF → \`list_documents\` (doc_type starts with \`prior_return_\`)
+  - For line values   → \`tax_return\` row for 2024 (check \`source\` — filed_import is canonical)
+  - Both exist once a filed PDF has been ingested.
+
+\`compare_returns\` picks one row per year using preference filed_import > amendment > proforma
+and returns the full list in \`all_rows\` so you can drill into any specific version.
+
+\`use_prior_year\` follows the same preference and bridges filed_import canonical keys
+(\`income.L1a_gross_receipts\`) → engine input names (\`gross_receipts\`) automatically.
 
 Auto-merge into compute_return for matching entity+year:
 - W-2s → wages, withholding
@@ -378,12 +389,15 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: compute_return ───
-  server.tool('compute_return', 'Compute a tax return from structured inputs and save it', {
+  server.tool('compute_return', 'Compute a tax return from structured inputs and save it. By default, updates the latest proforma row for (entity, year, form) or creates one if none exists. Never touches filed_import rows. For amendments, pass amend_of=<filed_return_id>. For scenario snapshots, pass new_row=true. To update a specific row, pass return_id.', {
     entity_id: z.string().describe('Entity UUID'),
     tax_year: z.number().describe('Tax year'),
     form_type: z.string().describe('1040, 1120, or 1120S'),
     inputs: z.record(z.any()).describe('Tax return input fields'),
     save: z.boolean().optional().describe('Save as tax_return record (default true)'),
+    return_id: z.string().optional().describe('Update this specific row. Rejected if it is a filed_import row.'),
+    amend_of: z.string().optional().describe('Start an amendment: insert a new amendment row superseding this return_id (usually a filed_import).'),
+    new_row: z.boolean().optional().describe('Force INSERT a fresh proforma row instead of updating the latest one. Useful for saving scenario snapshots.'),
   }, async (params) => {
     return text(await call('POST', '/api/returns/compute', params))
   })

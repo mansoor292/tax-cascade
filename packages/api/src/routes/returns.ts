@@ -395,18 +395,33 @@ router.get('/compare/:entity_id', async (req, res) => {
   
   if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  const { data: returns } = await supabase.from('tax_return')
+  const { data: allRows } = await supabase.from('tax_return')
     .select('*, tax_entity(name)')
     .eq('entity_id', req.params.entity_id)
-    .eq('is_amended', false)
     .order('tax_year', { ascending: true })
+    .order('computed_at', { ascending: false })
 
-  if (!returns?.length) return res.json({ comparison: null })
+  if (!allRows?.length) return res.json({ comparison: null })
 
-  // Build comparison matrix
+  // Pick one authoritative row per tax_year. Preference order: filed_import >
+  // latest amendment > latest proforma > extension. For side-by-side comparison
+  // the most-recently-filed view wins, but every row is still returned in
+  // `all_rows` for drill-down.
+  const SOURCE_RANK: Record<string, number> = { filed_import: 0, amendment: 1, proforma: 2, extension: 3 }
+  const byYear = new Map<number, any>()
+  for (const r of allRows) {
+    const existing = byYear.get(r.tax_year)
+    const rank = SOURCE_RANK[r.source as string] ?? 9
+    if (!existing || rank < (SOURCE_RANK[existing.source as string] ?? 9)) {
+      byYear.set(r.tax_year, r)
+    }
+  }
+  const returns = [...byYear.values()].sort((a, b) => a.tax_year - b.tax_year)
+
   const years = returns.map(r => r.tax_year)
   const metrics = ['gross_profit', 'total_income', 'total_deductions', 'taxable_income',
-    'income_tax', 'total_tax', 'overpayment', 'balance_due', 'ordinary_income_loss']
+    'income_tax', 'total_tax', 'overpayment', 'balance_due', 'ordinary_income_loss',
+    'agi', 'amount_owed', 'refund', 'total_payments']
 
   const matrix: Record<string, Record<number, number>> = {}
   for (const m of metrics) matrix[m] = {}
@@ -414,7 +429,7 @@ router.get('/compare/:entity_id', async (req, res) => {
   for (const r of returns) {
     const c = r.computed_data?.computed || {}
     for (const m of metrics) {
-      if (c[m] !== undefined) matrix[m][r.tax_year] = c[m]
+      if (c[m] !== undefined && c[m] !== null) matrix[m][r.tax_year] = c[m]
     }
   }
 
@@ -437,7 +452,14 @@ router.get('/compare/:entity_id', async (req, res) => {
   res.json({
     entity: returns[0]?.tax_entity,
     years,
-    returns: returns.map(r => ({ id: r.id, year: r.tax_year, form: r.form_type, status: r.status })),
+    returns: returns.map(r => ({
+      id: r.id, year: r.tax_year, form: r.form_type, status: r.status,
+      source: r.source, supersedes_id: r.supersedes_id,
+    })),
+    all_rows: allRows.map(r => ({
+      id: r.id, year: r.tax_year, form: r.form_type, status: r.status,
+      source: r.source, supersedes_id: r.supersedes_id, computed_at: r.computed_at,
+    })),
     matrix,
     changes,
   })
@@ -509,13 +531,40 @@ router.post('/compute', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const { entity_id, tax_year, form_type, inputs, save } = req.body
+  const { entity_id, tax_year, form_type, inputs, save, return_id, amend_of, new_row } = req.body
   if (!form_type || !tax_year || !inputs) {
     return res.status(400).json({ error: 'form_type, tax_year, and inputs are required' })
   }
 
   if (!TAX_TABLES[tax_year]) {
     return res.status(400).json({ error: `No tax tables for year ${tax_year}` })
+  }
+
+  // ── Target-row resolution ──────────────────────────────────────────
+  // compute_return never mutates filed_import rows. Caller steers the write via:
+  //   return_id   — update this specific row (must be proforma or amendment)
+  //   amend_of    — create a new `amendment` row that supersedes this one
+  //   new_row     — force INSERT a new proforma even if one exists
+  //   (default)   — update latest proforma for (entity, year, form); insert if none
+  let targetRow: { id: string; source: string; entity_id: string; tax_year: number; form_type: string } | null = null
+  if (return_id) {
+    const { data } = await supabase.from('tax_return')
+      .select('id, source, entity_id, tax_year, form_type').eq('id', return_id).single()
+    if (!data) return res.status(404).json({ error: `return_id ${return_id} not found` })
+    if (data.source === 'filed_import') {
+      return res.status(409).json({
+        error: 'Cannot compute onto a filed_import row — filed returns are immutable archives.',
+        hint: 'Pass amend_of=<return_id> to start a new amendment, or omit return_id to write a fresh proforma.',
+      })
+    }
+    targetRow = data
+  }
+  let amendOfRow: { id: string; entity_id: string; tax_year: number; form_type: string; field_values: any } | null = null
+  if (amend_of) {
+    const { data } = await supabase.from('tax_return')
+      .select('id, entity_id, tax_year, form_type, field_values').eq('id', amend_of).single()
+    if (!data) return res.status(404).json({ error: `amend_of ${amend_of} not found` })
+    amendOfRow = data
   }
 
   try {
@@ -756,10 +805,24 @@ router.post('/compute', async (req, res) => {
       // Strip meta.* and preparer.* from existing — they should always come from
       // the entity record, never persist stale values from prior computes.
       const scheduleFieldValues = engineResult?.field_values || {}
-      const rawExisting = (await supabase.from('tax_return')
-        .select('field_values')
-        .eq('entity_id', entity_id).eq('tax_year', tax_year).eq('form_type', form_type).eq('is_amended', false)
-        .single())?.data?.field_values || {}
+      // Seed existing field_values from the row we're about to write.
+      // Priority: explicit return_id > amend_of (copy from parent) > latest proforma for this year.
+      let seededFieldValues: any = {}
+      if (targetRow) {
+        const { data } = await supabase.from('tax_return')
+          .select('field_values').eq('id', targetRow.id).single()
+        seededFieldValues = data?.field_values || {}
+      } else if (amendOfRow) {
+        seededFieldValues = amendOfRow.field_values || {}
+      } else {
+        const { data } = await supabase.from('tax_return')
+          .select('field_values')
+          .eq('entity_id', entity_id).eq('tax_year', tax_year).eq('form_type', form_type)
+          .eq('source', isExtension ? 'extension' : 'proforma')
+          .order('computed_at', { ascending: false }).limit(1).maybeSingle()
+        seededFieldValues = data?.field_values || {}
+      }
+      const rawExisting: Record<string, any> = seededFieldValues
       const existingFieldValues: Record<string, any> = {}
       for (const [k, v] of Object.entries(rawExisting)) {
         if (k.startsWith('meta.') || k.startsWith('preparer.')) continue
@@ -891,20 +954,50 @@ router.post('/compute', async (req, res) => {
         }
       } catch (_) { /* optional — skip if map import fails */ }
 
-      const { data, error } = await supabase.from('tax_return').upsert({
+      const rowPayload = {
         entity_id,
         tax_year,
         form_type,
         status: 'computed',
-        source: isExtension ? 'extension' : 'proforma',
-        is_amended: false,
         input_data: mergedInputs,
         computed_data: engineResult,
         field_values: { ...existingFieldValues, ...scheduleFieldValues },
         computed_at: new Date().toISOString(),
         pdf_s3_path: null,
-        reviewed_at: null,  // reset review status whenever inputs change
-      }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
+        reviewed_at: null,
+      }
+
+      // Route the write: UPDATE an existing row, INSERT an amendment, or
+      // find-or-insert the latest proforma. Never mutates filed_import.
+      let data: any = null, error: any = null
+      if (targetRow) {
+        ;({ data, error } = await supabase.from('tax_return').update(rowPayload)
+          .eq('id', targetRow.id).select().single())
+      } else if (amendOfRow) {
+        ;({ data, error } = await supabase.from('tax_return').insert({
+          ...rowPayload,
+          source: 'amendment',
+          is_amended: true,
+          supersedes_id: amendOfRow.id,
+        }).select().single())
+      } else {
+        // Find latest proforma/extension for this year; update if present & new_row not requested
+        const src = isExtension ? 'extension' : 'proforma'
+        const { data: existingRow } = new_row ? { data: null } : await supabase.from('tax_return')
+          .select('id').eq('entity_id', entity_id).eq('tax_year', tax_year)
+          .eq('form_type', form_type).eq('source', src)
+          .order('computed_at', { ascending: false }).limit(1).maybeSingle()
+        if (existingRow?.id) {
+          ;({ data, error } = await supabase.from('tax_return').update(rowPayload)
+            .eq('id', existingRow.id).select().single())
+        } else {
+          ;({ data, error } = await supabase.from('tax_return').insert({
+            ...rowPayload,
+            source: src,
+            is_amended: false,
+          }).select().single())
+        }
+      }
 
       if (error) return res.status(500).json({ error: error.message })
       taxReturn = data
@@ -1064,40 +1157,63 @@ router.post('/use-prior-year', async (req, res) => {
     return res.status(400).json({ error: 'entity_id, tax_year, form_type required' })
   }
 
-  // Fetch prior-year return
-  const { data: priorRet } = await supabase.from('tax_return')
-    .select('input_data, computed_data, tax_year, source')
-    .eq('entity_id', entity_id).eq('tax_year', tax_year - 1).eq('form_type', form_type).eq('is_amended', false)
-    .single()
-  if (!priorRet) {
+  // Fetch prior-year rows and pick the authoritative one.
+  // Preference: filed_import > latest amendment > latest proforma.
+  const { data: priorRows } = await supabase.from('tax_return')
+    .select('id, input_data, computed_data, field_values, tax_year, source, computed_at')
+    .eq('entity_id', entity_id).eq('tax_year', tax_year - 1).eq('form_type', form_type)
+    .order('computed_at', { ascending: false })
+  if (!priorRows?.length) {
     return res.status(404).json({ error: `No ${tax_year - 1} ${form_type} return found for this entity` })
   }
+  const SOURCE_RANK: Record<string, number> = { filed_import: 0, amendment: 1, proforma: 2, extension: 3 }
+  const priorRet = [...priorRows].sort((a, b) => {
+    const ra = SOURCE_RANK[a.source as string] ?? 9
+    const rb = SOURCE_RANK[b.source as string] ?? 9
+    return ra - rb  // lower rank = preferred
+  })[0]
 
-  // Fetch current-year return (or start fresh)
-  const { data: currentRet } = await supabase.from('tax_return')
-    .select('input_data')
-    .eq('entity_id', entity_id).eq('tax_year', tax_year).eq('form_type', form_type).eq('is_amended', false)
-    .single()
+  // Fetch current-year return (latest proforma/amendment, not filed_import)
+  const { data: currentRows } = await supabase.from('tax_return')
+    .select('input_data, source')
+    .eq('entity_id', entity_id).eq('tax_year', tax_year).eq('form_type', form_type)
+    .in('source', ['proforma', 'amendment', 'extension'])
+    .order('computed_at', { ascending: false }).limit(1)
+  const currentRet = currentRows?.[0] || null
 
   const priorInputs: Record<string, any> = priorRet.input_data || {}
   const priorComputed: Record<string, any> = priorRet.computed_data?.computed || {}
+  const priorFieldValues: Record<string, any> = (priorRet as any).field_values || {}
   const currentInputs: Record<string, any> = currentRet?.input_data || {}
+  // For filed_import rows, input_data carries archival metadata not engine keys —
+  // bridge via canonical PDF keys so "use last year's depreciation" still works.
+  const { getEngineToCanonicalMap } = await import('../maps/engine_to_pdf.js')
+  const engineToCanon = getEngineToCanonicalMap(form_type)
 
   // If no specific fields requested, copy every numeric input that's currently blank
   const schema = INPUT_SCHEMAS[form_type]
   const allNumeric = schema ? schema.fields.filter((f: any) => f.type === 'number').map((f: any) => f.name) : []
   const targetFields: string[] = fields && fields.length ? fields : allNumeric
 
-  const copied: Record<string, { from_prior: number }> = {}
+  const copied: Record<string, { from_prior: number; via?: string }> = {}
   const updatedInputs = { ...currentInputs }
   for (const f of targetFields) {
-    const priorVal = priorInputs[f] ?? priorComputed[f]
+    // Resolve prior-year value: engine input > computed total > canonical field_value
+    let priorVal: any = priorInputs[f]
+    let via: string | undefined
+    if (priorVal === undefined || priorVal === null) {
+      priorVal = priorComputed[f]
+      if (priorVal !== undefined) via = 'computed'
+    }
+    if ((priorVal === undefined || priorVal === null) && engineToCanon[f]) {
+      priorVal = priorFieldValues[engineToCanon[f]]
+      if (priorVal !== undefined) via = `field_values.${engineToCanon[f]}`
+    }
     if (typeof priorVal === 'number' && priorVal !== 0) {
-      // Only overwrite if current is blank/zero — don't clobber user-provided values
       const cur = updatedInputs[f]
       if (cur === undefined || cur === null || cur === 0) {
         updatedInputs[f] = priorVal
-        copied[f] = { from_prior: priorVal }
+        copied[f] = { from_prior: priorVal, ...(via ? { via } : {}) }
       }
     }
   }
