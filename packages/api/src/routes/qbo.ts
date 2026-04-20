@@ -1217,6 +1217,201 @@ Return ONLY a JSON array, no prose, no markdown fences.`
   }
 })
 
+// ─── Apply recategorizations (AI-curated batch) ───
+// Takes an array of decisions — typically the output of dry-run
+// recategorize with edits/filters applied by the caller — and loops
+// them into QBO. For each entry: GET the transaction, find the line
+// currently hitting an Uncategorized/Ask-My-Accountant account, swap
+// its AccountRef to the new account, PUT back with SyncToken.
+//
+// POST /api/qbo/:entity_id/recategorize/apply
+// Body: {
+//   entries: [
+//     { txn_id, txn_type, new_account_id, memo?: string },
+//     ...
+//   ],
+//   confirm: true   // safety: server refuses without it
+// }
+router.post('/:entity_id/recategorize/apply', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { entries, confirm } = req.body || {}
+  if (confirm !== true) {
+    return res.status(400).json({
+      error: 'CONFIRM_REQUIRED',
+      message: 'Pass confirm:true in the body to acknowledge you intend to modify QBO transactions. This endpoint is destructive-by-design.',
+    })
+  }
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return res.status(400).json({ error: 'entries[] (non-empty array) required' })
+  }
+
+  const entityId = req.params.entity_id
+
+  try {
+    // Pull COA so we can identify Uncategorized accounts and validate new_account_ids
+    const coaResp = await qboFetch(entityId, '/query', {
+      query: 'SELECT Id, Name, FullyQualifiedName, AccountType FROM Account WHERE Active=true MAXRESULTS 500',
+    })
+    const allAccounts: any[] = coaResp?.QueryResponse?.Account || []
+    const validAcctIds = new Set(allAccounts.map((a: any) => a.Id))
+    const uncategorizedIds = new Set(
+      allAccounts
+        .filter((a: any) => {
+          const n = (a.FullyQualifiedName || a.Name || '').toLowerCase()
+          return n.startsWith('uncategorized') || n.startsWith('ask my account')
+        })
+        .map((a: any) => a.Id),
+    )
+
+    // Map TransactionList txn_type → QBO resource path
+    const typeMap: Record<string, string> = {
+      'Expense': 'purchase',
+      'Check': 'purchase',
+      'Credit Card Expense': 'purchase',
+      'Credit Card Credit': 'purchase',
+      'Cash Expense': 'purchase',
+      'Deposit': 'deposit',
+      'Journal Entry': 'journalentry',
+      'Bill': 'bill',
+      'Bill Payment': 'billpayment',
+      'Transfer': 'transfer',
+      'Credit Memo': 'creditmemo',
+      'Sales Receipt': 'salesreceipt',
+      'Payment': 'payment',
+    }
+
+    type EntryResult = {
+      txn_id: string
+      txn_type: string
+      new_account_id: string
+      ok: boolean
+      old_account_id?: string
+      old_account_name?: string
+      new_account_name?: string
+      error?: string
+    }
+    const results: EntryResult[] = []
+
+    for (const entry of entries) {
+      const out: EntryResult = {
+        txn_id: String(entry?.txn_id || ''),
+        txn_type: String(entry?.txn_type || ''),
+        new_account_id: String(entry?.new_account_id || ''),
+        ok: false,
+      }
+      try {
+        if (!out.txn_id || !out.txn_type || !out.new_account_id) {
+          out.error = 'Missing required field (txn_id / txn_type / new_account_id)'
+          results.push(out); continue
+        }
+        if (!validAcctIds.has(out.new_account_id)) {
+          out.error = `new_account_id ${out.new_account_id} is not a valid active account in this entity's COA`
+          results.push(out); continue
+        }
+        const resource = typeMap[out.txn_type]
+        if (!resource) {
+          out.error = `Unsupported txn_type "${out.txn_type}" — supported: ${Object.keys(typeMap).join(', ')}`
+          results.push(out); continue
+        }
+
+        // 1. Fetch the full transaction
+        const txnResp = await qboFetch(entityId, `/${resource}/${out.txn_id}`, {})
+        const capResource = resource[0].toUpperCase() + resource.slice(1)
+        // QBO sometimes returns TitleCase, sometimes lowercase — try both
+        const txn: any = txnResp?.[capResource] || txnResp?.[resource] || txnResp
+        if (!txn || !txn.Line) {
+          out.error = `Transaction not found or has no Line[] — QBO response shape unexpected`
+          results.push(out); continue
+        }
+
+        // 2. Find the line(s) hitting an Uncategorized account and swap AccountRef
+        let modifiedLines = 0
+        for (const line of txn.Line) {
+          const detail = line.AccountBasedExpenseLineDetail
+                      || line.DepositLineDetail
+                      || line.JournalEntryLineDetail
+                      || line.AccountRef ? line : null
+          // Handle AccountBasedExpenseLineDetail (Purchase/Bill)
+          if (line.AccountBasedExpenseLineDetail?.AccountRef) {
+            const curId = line.AccountBasedExpenseLineDetail.AccountRef.value
+            if (uncategorizedIds.has(curId)) {
+              if (!out.old_account_id) {
+                out.old_account_id = curId
+                out.old_account_name = allAccounts.find((a: any) => a.Id === curId)?.FullyQualifiedName
+              }
+              line.AccountBasedExpenseLineDetail.AccountRef = { value: out.new_account_id }
+              if (entry?.memo) line.Description = entry.memo
+              modifiedLines++
+            }
+          }
+          // DepositLineDetail (Deposit)
+          else if (line.DepositLineDetail?.AccountRef) {
+            const curId = line.DepositLineDetail.AccountRef.value
+            if (uncategorizedIds.has(curId)) {
+              if (!out.old_account_id) {
+                out.old_account_id = curId
+                out.old_account_name = allAccounts.find((a: any) => a.Id === curId)?.FullyQualifiedName
+              }
+              line.DepositLineDetail.AccountRef = { value: out.new_account_id }
+              if (entry?.memo) line.Description = entry.memo
+              modifiedLines++
+            }
+          }
+          // JournalEntryLineDetail
+          else if (line.JournalEntryLineDetail?.AccountRef) {
+            const curId = line.JournalEntryLineDetail.AccountRef.value
+            if (uncategorizedIds.has(curId)) {
+              if (!out.old_account_id) {
+                out.old_account_id = curId
+                out.old_account_name = allAccounts.find((a: any) => a.Id === curId)?.FullyQualifiedName
+              }
+              line.JournalEntryLineDetail.AccountRef = { value: out.new_account_id }
+              if (entry?.memo) line.Description = entry.memo
+              modifiedLines++
+            }
+          }
+        }
+
+        if (modifiedLines === 0) {
+          out.error = 'No line in this transaction hits an Uncategorized / Ask-My-Accountant account — nothing to change'
+          results.push(out); continue
+        }
+
+        // 3. PUT back with operation=update
+        const updateResp = await qboPost(entityId, `/${resource}?operation=update`, txn)
+        const updated = updateResp?.[capResource] || updateResp
+        if (updated?.Id) {
+          out.ok = true
+          out.new_account_name = allAccounts.find((a: any) => a.Id === out.new_account_id)?.FullyQualifiedName
+        } else {
+          out.error = 'Update response did not include a new Id — unknown QBO error'
+        }
+      } catch (e: any) {
+        out.error = e.message
+      }
+      results.push(out)
+    }
+
+    const applied = results.filter(r => r.ok).length
+    const failed = results.length - applied
+    const status = failed > 0 ? 207 : 200
+    res.status(status).json({
+      entity_id: entityId,
+      total: results.length,
+      applied,
+      failed,
+      results,
+      note: failed > 0
+        ? 'Partial success — check results[].error for per-item failure reasons.'
+        : 'All entries applied successfully.',
+    })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── Bank CSV reconciliation ───
 // Inputs (body):
 //   { document_id, qbo_account_id, date_range? }            // CSV already uploaded

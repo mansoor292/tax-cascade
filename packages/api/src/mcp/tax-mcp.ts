@@ -434,6 +434,32 @@ function createServer(apiKey: string): McpServer {
     return text(await call('POST', '/api/returns/compute_from_qbo', params))
   })
 
+  // ─── Tool: recategorize_uncategorized ───
+  server.tool('recategorize_uncategorized', 'Classify transactions currently sitting in Uncategorized / Ask-My-Accountant accounts against the entity chart of accounts via Gemini Flash Lite. Returns per-transaction suggestions with confidence + reasoning (dry-run by default). Pair with apply_recategorizations to commit the curated set.', {
+    entity_id: z.string().describe('Entity UUID'),
+    source_account_ids: z.array(z.string()).optional().describe('Override default auto-detect of Uncategorized* accounts'),
+    start_date: z.string().optional().describe('YYYY-MM-DD (default 2020-01-01)'),
+    end_date: z.string().optional().describe('YYYY-MM-DD (default today)'),
+    min_confidence: z.number().optional().describe('Threshold used to compute would_apply flag (default 0.80)'),
+    dry_run: z.boolean().optional().describe('Default true. Always true in current impl — apply happens via apply_recategorizations.'),
+  }, async (params) => {
+    return text(await call('POST', `/api/qbo/${params.entity_id}/recategorize`, params))
+  })
+
+  // ─── Tool: apply_recategorizations ───
+  server.tool('apply_recategorizations', 'Apply a curated array of recategorization decisions to QBO. For each entry, fetches the transaction by (txn_id, txn_type), finds the line hitting Uncategorized, swaps its AccountRef to new_account_id, PUTs the update with SyncToken. Returns per-entry result + summary. Safety: requires confirm:true to acknowledge this modifies posted transactions. Typical flow: call recategorize_uncategorized (dry-run) → edit/filter suggestions to the ones you trust → pass the shortened list here.', {
+    entity_id: z.string().describe('Entity UUID'),
+    entries: z.array(z.object({
+      txn_id: z.string().describe('QBO transaction Id (from recategorize suggestions[].txn_id)'),
+      txn_type: z.string().describe('Transaction type label — "Expense", "Deposit", "Journal Entry", "Bill", "Credit Card Expense", etc.'),
+      new_account_id: z.string().describe('Destination account ID — will be validated against the entity COA before any PUT'),
+      memo: z.string().optional().describe('Optional replacement for the line Description'),
+    })).describe('Curated list of decisions to apply. Omit any suggestion you disagreed with.'),
+    confirm: z.boolean().describe('MUST be true — safety acknowledgement that you intend to modify QBO'),
+  }, async (params) => {
+    return text(await call('POST', `/api/qbo/${params.entity_id}/recategorize/apply`, params))
+  })
+
   // ─── Tool: reconcile_bank_import ───
   server.tool('reconcile_bank_import', 'Reconcile a bank CSV against QBO transactions for an account. Server-side pipeline: (1) heuristic CSV column detection, (2) QBO TransactionList pull for the account+date range, (3) 3-tier deterministic match (exact date+amount → ±3d → fuzzy description overlap), (4) Gemini Flash Lite classifies unmatched rows against the entity chart of accounts, returning suggested_posting payloads with confidence scores. Each account_id is validated against the live COA server-side (no hallucinated IDs). Pipe the confirmed suggestions into post_transactions_batch. Eliminates the previous "parse CSV in Python → QBO query → manual date/amount match → build 77 posting payloads" workflow into one MCP turn.', {
     entity_id: z.string().describe('Entity UUID'),
