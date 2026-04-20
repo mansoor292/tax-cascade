@@ -3,6 +3,12 @@
  */
 import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
+import { encryptedFields, encryptionEnabled, hydrate, hydrateAll } from '../lib/row_crypto.js'
+import { blindIndex } from '../lib/crypto.js'
+
+const ENCRYPTED_ENTITY_FIELDS = { text: ['ein'] }
+const safeBlindIndex = (v: string | null | undefined) =>
+  (v && encryptionEnabled() && process.env.TAX_API_BLIND_HMAC) ? blindIndex(v) : null
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -32,6 +38,8 @@ router.get('/', async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message })
 
+  await hydrateAll(supabase, data || [], ENCRYPTED_ENTITY_FIELDS)
+
   const entities = (data || []).map((e: any) => ({
     ...e,
     return_count: e.tax_return?.length || 0,
@@ -50,6 +58,7 @@ router.get('/:id', async (req, res) => {
   const { data: entity } = await supabase.from('tax_entity')
     .select('*').eq('id', req.params.id).eq('user_id', userId).single()
   if (!entity) return res.status(404).json({ error: 'Entity not found' })
+  await hydrate(supabase, entity, ENCRYPTED_ENTITY_FIELDS)
 
   const [{ data: returns }, { data: scenarios }] = await Promise.all([
     supabase.from('tax_return')
@@ -80,16 +89,20 @@ router.post('/', async (req, res) => {
   }
   const resolvedEntityType = entity_type || FORM_TO_ENTITY[form_type] || 'individual'
 
+  const einEnc = await encryptedFields(supabase, userId, { ein }, ENCRYPTED_ENTITY_FIELDS)
   const { data, error } = await supabase.from('tax_entity').insert({
     user_id: userId,
     name,
     form_type: form_type || null,
     entity_type: resolvedEntityType,
     ein: ein || null,
+    ein_hash: safeBlindIndex(ein),
+    ...einEnc,
     address: address || null,
   }).select().single()
 
   if (error) return res.status(500).json({ error: error.message })
+  await hydrate(supabase, data, ENCRYPTED_ENTITY_FIELDS)
   res.json({ entity: data })
 })
 
@@ -102,7 +115,11 @@ router.put('/:id', async (req, res) => {
   const updates: any = {}
   if (name !== undefined) updates.name = name
   if (form_type !== undefined) updates.form_type = form_type
-  if (ein !== undefined) updates.ein = ein
+  if (ein !== undefined) {
+    updates.ein = ein
+    updates.ein_hash = safeBlindIndex(ein)
+    Object.assign(updates, await encryptedFields(supabase, userId, { ein }, ENCRYPTED_ENTITY_FIELDS))
+  }
   if (address !== undefined) updates.address = address
   if (city !== undefined) updates.city = city
   if (state !== undefined) updates.state = state

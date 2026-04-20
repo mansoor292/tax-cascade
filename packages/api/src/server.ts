@@ -111,12 +111,33 @@ app.use('/api', async (req, res, next) => {
   // Check Supabase JWT
   const { data: { user } } = await supabase.auth.getUser(key)
   if (user) { (req as any).userId = user.id; return next() }
-  // Check Supabase-provisioned API keys
+  // Check Supabase-provisioned API keys. Prefer argon2 hash verification
+  // (constant-time; no plaintext key exposure in the DB). Falls back to the
+  // plaintext column during dual-storage transition.
+  const prefix = key.slice(0, 8)
+  const { data: candidates } = await supabase.from('api_key')
+    .select('id, user_id, key_value, key_value_hash')
+    .eq('is_active', true)
+    .eq('key_prefix', prefix)
+  if (candidates?.length) {
+    const argon2 = await import('argon2')
+    for (const row of candidates) {
+      const match = row.key_value_hash
+        ? await argon2.verify(row.key_value_hash, key).catch(() => false)
+        : row.key_value === key
+      if (match) {
+        (req as any).userId = row.user_id
+        supabase.from('api_key').update({ last_used_at: new Date().toISOString() }).eq('id', row.id).then()
+        return next()
+      }
+    }
+  }
+  // Legacy fallback for rows without key_prefix set yet
   const { data } = await supabase.from('api_key')
-    .select('user_id').eq('key_value', key).eq('is_active', true).single()
+    .select('id, user_id').eq('key_value', key).eq('is_active', true).single()
   if (data) {
     (req as any).userId = data.user_id
-    supabase.from('api_key').update({ last_used_at: new Date().toISOString() }).eq('key_value', key).then()
+    supabase.from('api_key').update({ last_used_at: new Date().toISOString() }).eq('id', data.id).then()
     return next()
   }
   res.status(401).json({ error: 'Invalid API key' })

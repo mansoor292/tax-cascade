@@ -59,12 +59,23 @@ router.post('/api-keys', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'Invalid token' })
 
   const apiKey = `txk_${uuidv4().replace(/-/g, '').slice(0, 24)}`
+  // Hash with argon2id for at-rest protection. key_value is still written
+  // during dual-storage transition so existing auth middleware keeps working;
+  // a follow-up nulls it once hash verification is proven on all traffic.
+  const argon2 = await import('argon2')
+  const hash = await argon2.hash(apiKey, { type: argon2.argon2id })
   const { data, error } = await sb.from('api_key').insert({
-    user_id: user.id, key_value: apiKey, name: req.body.name || 'API Key'
+    user_id: user.id,
+    key_value: apiKey,
+    key_value_hash: hash,
+    key_prefix: apiKey.slice(0, 8),
+    name: req.body.name || 'API Key',
   }).select().single()
 
   if (error) return res.status(500).json({ error: error.message })
-  res.json({ api_key: data })
+  // The plaintext key is returned to the user ONCE here — they copy it and
+  // we never store it again in plaintext after the cutover.
+  res.json({ api_key: { ...data, key_value: apiKey } })
 })
 
 // Revoke API key

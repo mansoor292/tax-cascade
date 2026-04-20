@@ -6,6 +6,9 @@ import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
 import { ordinaryTax, qbiDeduction, niitTax, standardDeduction } from '../engine/tax_tables.js'
+import { encryptedFields } from '../lib/row_crypto.js'
+
+const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -326,6 +329,9 @@ router.post('/:id/promote', async (req, res) => {
   // supabase is the module-level client
 
   // Create tax_return from scenario
+  const scRaw = { input_data: scenario.adjustments, computed_data: scenario.computed_result }
+  const scEnc = await encryptedFields(supabase, userId, scRaw, ENCRYPTED_RETURN_FIELDS)
+  const c = scenario.computed_result?.computed || {}
   const { data: taxReturn, error } = await supabase.from('tax_return').upsert({
     entity_id: scenario.entity_id,
     tax_year: scenario.tax_year,
@@ -334,8 +340,12 @@ router.post('/:id/promote', async (req, res) => {
     source: 'proforma',
     scenario_id: req.params.id,
     is_amended: false,
-    input_data: scenario.adjustments,
-    computed_data: scenario.computed_result,
+    ...scRaw,
+    ...scEnc,
+    agg_total_income:   c.total_income   ?? null,
+    agg_taxable_income: c.taxable_income ?? null,
+    agg_total_tax:      c.total_tax      ?? null,
+    agg_agi:            c.agi            ?? null,
     computed_at: new Date().toISOString(),
     pdf_s3_path: null,
   }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()

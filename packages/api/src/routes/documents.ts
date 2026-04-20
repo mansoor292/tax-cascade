@@ -12,6 +12,10 @@ import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
 import { runPython } from '../lib/run_python.js'
+import { encryptedFields, hydrate, hydrateAll } from '../lib/row_crypto.js'
+
+const ENCRYPTED_DOC_FIELDS = { json: ['meta', 'textract_data'] }
+const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -70,13 +74,7 @@ async function archiveDocumentAsReturn(
 
     const archive = archiveFiledReturn(mapped, formType, classification.entity_name || null)
 
-    const { data: taxReturn } = await supabase.from('tax_return').insert({
-      entity_id: entityId,
-      tax_year: txYear,
-      form_type: formType,
-      status: 'filed',
-      source: 'filed_import',
-      is_amended: false,
+    const archiveRaw = {
       input_data: {
         source_document_id: doc.id,
         mapper_model: mapped.model,
@@ -90,6 +88,24 @@ async function archiveDocumentAsReturn(
         unmapped_count: mapped.unmapped.length,
         source: 'filed_import',
       },
+    }
+    const archiveEnc = await encryptedFields(supabase, userId, archiveRaw, ENCRYPTED_RETURN_FIELDS)
+    const archiveAggs = {
+      agg_total_income:   archive.totals.total_income   ?? null,
+      agg_taxable_income: archive.totals.taxable_income ?? null,
+      agg_total_tax:      archive.totals.total_tax      ?? null,
+      agg_agi:            (archive.totals as any).agi   ?? null,
+    }
+    const { data: taxReturn } = await supabase.from('tax_return').insert({
+      entity_id: entityId,
+      tax_year: txYear,
+      form_type: formType,
+      status: 'filed',
+      source: 'filed_import',
+      is_amended: false,
+      ...archiveRaw,
+      ...archiveEnc,
+      ...archiveAggs,
       computed_at: new Date().toISOString(),
     }).select().single()
 
@@ -360,7 +376,16 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
     }
   }
 
-  // Save to DB
+  // Save to DB (dual-write plaintext + _enc for meta + textract_data)
+  const metaPayload = {
+    size: file_size,
+    entity_name: classification.entity_name || '',
+    ein_or_ssn: classification.ein_or_ssn || '',
+    summary: classification.summary || '',
+    key_values: classification.key_values || {},
+  }
+  const docEnc = await encryptedFields(supabase, userId,
+    { meta: metaPayload, textract_data: textractData }, ENCRYPTED_DOC_FIELDS)
   const { data: doc, error } = await supabase.from('document').insert({
     user_id: userId,
     entity_id: entity_id || null,
@@ -371,16 +396,12 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
     tax_year: classification.tax_year || null,
     textract_data: textractData,
     extracted_at: textractData ? new Date().toISOString() : null,
-    meta: {
-      size: file_size,
-      entity_name: classification.entity_name || '',
-      ein_or_ssn: classification.ein_or_ssn || '',
-      summary: classification.summary || '',
-      key_values: classification.key_values || {},
-    }
+    meta: metaPayload,
+    ...docEnc,
   }).select().single()
 
   if (error) return res.status(500).json({ error: error.message })
+  await hydrate(supabase, doc, ENCRYPTED_DOC_FIELDS)
 
   // Auto-archive if it's a recognized prior-year return. Inserts a filed_import
   // tax_return row with every extracted canonical field in field_values, verbatim.
@@ -436,6 +457,7 @@ router.post('/:id/rearchive', async (req, res) => {
   const { data: doc } = await supabase.from('document')
     .select('*').eq('id', req.params.id).eq('user_id', userId).single()
   if (!doc) return res.status(404).json({ error: 'Not found' })
+  await hydrate(supabase, doc, ENCRYPTED_DOC_FIELDS)
 
   const isReturn = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s'].includes(doc.doc_type)
   if (!isReturn) return res.status(400).json({ error: `doc_type ${doc.doc_type} is not a prior return` })
@@ -479,6 +501,14 @@ router.post('/fact', async (req, res) => {
     })
   }
 
+  const factMeta = {
+    source: 'manual',
+    source_note: source_note || '',
+    summary: summary || `Recorded ${category} fact`,
+    key_values: values,
+  }
+  const factEnc = await encryptedFields(supabase, userId,
+    { meta: factMeta }, ENCRYPTED_DOC_FIELDS)
   const { data, error } = await supabase.from('document').insert({
     user_id: userId,
     entity_id,
@@ -489,12 +519,8 @@ router.post('/fact', async (req, res) => {
     tax_year,
     textract_data: null,
     extracted_at: new Date().toISOString(),
-    meta: {
-      source: 'manual',
-      source_note: source_note || '',
-      summary: summary || `Recorded ${category} fact`,
-      key_values: values,
-    },
+    meta: factMeta,
+    ...factEnc,
   }).select().single()
 
   if (error) return res.status(500).json({ error: error.message })
@@ -549,6 +575,7 @@ router.post('/:id/categorize', async (req, res) => {
   const { data: doc } = await supabase.from('document')
     .select('*').eq('id', req.params.id).eq('user_id', userId!).single()
   if (!doc) return res.status(404).json({ error: 'Not found' })
+  await hydrate(supabase, doc, ENCRYPTED_DOC_FIELDS)
 
   if (!GEMINI_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' })
 
@@ -586,16 +613,20 @@ print(base64.b64encode(obj['Body'].read()).decode())
     const text = result.response.text().trim().replace(/^```json?\s*/i, '').replace(/\s*```$/i, '')
     const classification = JSON.parse(text)
 
+    const newMeta = {
+      ...doc.meta,
+      entity_name: classification.entity_name || '',
+      ein_or_ssn: classification.ein_or_ssn || '',
+      summary: classification.summary || '',
+      key_values: classification.key_values || {},
+    }
+    const recatEnc = await encryptedFields(supabase, userId,
+      { meta: newMeta }, ENCRYPTED_DOC_FIELDS)
     await supabase.from('document').update({
       doc_type: classification.doc_type || doc.doc_type,
       tax_year: classification.tax_year || doc.tax_year,
-      meta: {
-        ...doc.meta,
-        entity_name: classification.entity_name || '',
-        ein_or_ssn: classification.ein_or_ssn || '',
-        summary: classification.summary || '',
-        key_values: classification.key_values || {},
-      }
+      meta: newMeta,
+      ...recatEnc,
     }).eq('id', req.params.id)
 
     res.json({ document_id: req.params.id, classification })
@@ -619,6 +650,7 @@ router.get('/', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message })
 
   const docs = data || []
+  await hydrateAll(supabase, docs, ENCRYPTED_DOC_FIELDS)
   const keys = docs.map((d: any) => d.s3_path).filter(Boolean)
 
   // Batch-generate presigned URLs for all docs in one boto3 call
@@ -658,6 +690,7 @@ router.get('/:id', async (req, res) => {
   const { data, error } = await supabase.from('document')
     .select('*').eq('id', req.params.id).eq('user_id', userId!).single()
   if (error || !data) return res.status(404).json({ error: 'Not found' })
+  await hydrate(supabase, data, ENCRYPTED_DOC_FIELDS)
   res.json({ document: data })
 })
 
@@ -748,8 +781,11 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
     const result = runPython(script, { timeout: 120000 })
     const textractData = JSON.parse(result)
 
+    const extractEnc = await encryptedFields(supabase, userId,
+      { textract_data: textractData }, ENCRYPTED_DOC_FIELDS)
     await supabase.from('document').update({
       textract_data: textractData,
+      ...extractEnc,
       extracted_at: new Date().toISOString(),
     }).eq('id', req.params.id)
 

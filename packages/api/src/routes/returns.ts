@@ -11,6 +11,22 @@ import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
 import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
+import { encryptedFields } from '../lib/row_crypto.js'
+
+const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
+
+/** Pull the 4 aggregate numerics (agg_*) out of a computed engine result so
+ *  compare_returns and dashboards can query in plaintext even after the
+ *  JSON columns are nulled out. Missing fields are left as null. */
+function extractAggregates(engineResult: any): Record<string, number | null> {
+  const c = engineResult?.computed || {}
+  return {
+    agg_total_income:   c.total_income   ?? null,
+    agg_taxable_income: c.taxable_income ?? null,
+    agg_total_tax:      c.total_tax      ?? null,
+    agg_agi:            c.agi            ?? null,
+  }
+}
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { buildCanonicalModel, buildReturnPdf } from '../builders/build_return_pdf.js'
@@ -219,13 +235,7 @@ router.post('/process/:document_id', async (req, res) => {
     // /process call creates a new row (unique constraint was removed so
     // multiple filed_imports per year are allowed if the PDF is re-ingested
     // after corrections). Callers pick the authoritative one by computed_at.
-    const { data: taxReturn, error } = await supabase.from('tax_return').insert({
-      entity_id: entityId,
-      tax_year: taxYear,
-      form_type: formType,
-      status: 'computed',
-      source: 'filed_import',
-      is_amended: false,
+    const processRaw = {
       input_data: engineInput,
       computed_data: engineResult,
       field_values: extracted,
@@ -235,6 +245,18 @@ router.post('/process/:document_id', async (req, res) => {
         extracted_count: mapped.fields.length,
         unmapped_count: mapped.unmapped.length,
       },
+    }
+    const processEnc = await encryptedFields(supabase, userId, processRaw, ENCRYPTED_RETURN_FIELDS)
+    const { data: taxReturn, error } = await supabase.from('tax_return').insert({
+      entity_id: entityId,
+      tax_year: taxYear,
+      form_type: formType,
+      status: 'computed',
+      source: 'filed_import',
+      is_amended: false,
+      ...processRaw,
+      ...processEnc,
+      ...extractAggregates(engineResult),
       computed_at: new Date().toISOString(),
       pdf_s3_path: null,
     }).select().single()
@@ -1294,7 +1316,7 @@ router.post('/compute', async (req, res) => {
         }
       } catch (_) { /* optional — skip if map import fails */ }
 
-      const rowPayload = {
+      const rawPayload = {
         entity_id,
         tax_year,
         form_type,
@@ -1305,6 +1327,12 @@ router.post('/compute', async (req, res) => {
         computed_at: new Date().toISOString(),
         pdf_s3_path: null,
         reviewed_at: null,
+      }
+      const encPayload = await encryptedFields(supabase, userId, rawPayload, ENCRYPTED_RETURN_FIELDS)
+      const rowPayload = {
+        ...rawPayload,
+        ...encPayload,
+        ...extractAggregates(engineResult),
       }
 
       // Route the write: UPDATE an existing row, INSERT an amendment, or
@@ -1985,6 +2013,8 @@ print(json.dumps({'url': url}))
     // (entity, year, form_type); update if present, else insert.
     let taxReturn = null
     if (save && entity_id) {
+      const extRaw = { input_data: inputs, computed_data: result }
+      const extEnc = await encryptedFields(supabase, userId, extRaw, ENCRYPTED_RETURN_FIELDS)
       const rowPayload = {
         entity_id,
         tax_year,
@@ -1992,8 +2022,9 @@ print(json.dumps({'url': url}))
         status: 'computed',
         source: 'extension',
         is_amended: false,
-        input_data: inputs,
-        computed_data: result,
+        ...extRaw,
+        ...extEnc,
+        ...extractAggregates(result),
         computed_at: new Date().toISOString(),
         pdf_s3_path: null,
       }
