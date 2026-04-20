@@ -11,7 +11,7 @@
  * without KMS while prod and staging write encrypted from day one.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { encrypt, decryptString, getDek } from './crypto.js'
+import { encrypt, decryptString, getDek, bytea, byteaWrite } from './crypto.js'
 
 function encryptionEnabled(): boolean {
   return !!process.env.TAX_API_KMS_KEY
@@ -35,8 +35,8 @@ export async function buildTokenPayload(
   }
   if (!encryptionEnabled()) return base
   const dek = await getDek(supabase, userId)
-  base.access_token_enc  = encrypt(dek, tokens.access_token)
-  base.refresh_token_enc = encrypt(dek, tokens.refresh_token)
+  base.access_token_enc  = byteaWrite(encrypt(dek, tokens.access_token))
+  base.refresh_token_enc = byteaWrite(encrypt(dek, tokens.refresh_token))
   return base
 }
 
@@ -55,8 +55,8 @@ export async function readTokensFromRow(
   if (encryptionEnabled() && row.access_token_enc && row.refresh_token_enc) {
     try {
       const dek = await getDek(supabase, row.user_id)
-      const at = decryptString(dek, toBuffer(row.access_token_enc))
-      const rt = decryptString(dek, toBuffer(row.refresh_token_enc))
+      const at = decryptString(dek, bytea(row.access_token_enc))
+      const rt = decryptString(dek, bytea(row.refresh_token_enc))
       if (at && rt) return { access_token: at, refresh_token: rt }
     } catch (e: any) {
       console.error(`qbo_tokens: decrypt failed for user ${row.user_id}, falling back to plaintext: ${e.message}`)
@@ -66,16 +66,4 @@ export async function readTokensFromRow(
     return { access_token: row.access_token, refresh_token: row.refresh_token }
   }
   return null
-}
-
-/**
- * Supabase returns bytea columns as Buffers when using the service-role key,
- * but as \x-prefixed hex strings when going through PostgREST under the anon
- * key. Normalize to Buffer.
- */
-function toBuffer(v: Buffer | string): Buffer {
-  if (Buffer.isBuffer(v)) return v
-  if (typeof v === 'string' && v.startsWith('\\x')) return Buffer.from(v.slice(2), 'hex')
-  if (typeof v === 'string') return Buffer.from(v, 'base64')
-  return Buffer.from(v as any)
 }

@@ -118,19 +118,48 @@ export async function getDek(supabase: SupabaseClient, userId: string): Promise<
     const gen = await kmsGenerateDataKey(userId)
     const { error } = await supabase.from('user_key').insert({
       user_id: userId,
-      dek_encrypted: gen.ciphertext,
+      dek_encrypted: byteaWrite(gen.ciphertext),
       kms_key_id: gen.keyId,
     })
     if (error) throw new Error(`user_key insert failed: ${error.message}`)
     dek = gen.plaintext
   } else {
-    const ciphertext = Buffer.isBuffer(existing.dek_encrypted)
-      ? existing.dek_encrypted
-      : Buffer.from(existing.dek_encrypted as any, 'hex')  // Supabase may return \x-prefixed hex
+    const ciphertext = bytea(existing.dek_encrypted)
+    if (ciphertext.length === 0) throw new Error(`user_key.dek_encrypted is empty for ${userId}`)
     dek = await kmsDecryptDataKey(userId, ciphertext, existing.kms_key_id)
   }
   touchCache(userId, dek)
   return dek
+}
+
+/**
+ * Normalize bytea values from Supabase/PostgREST into a Buffer. Depending on
+ * the client and headers, bytea can come through as:
+ *   - Buffer (service-role direct Postgres wire)
+ *   - "\\x<hex>" (PostgREST default text form)
+ *   - "<base64>" (if accept-profile requests it)
+ *   - Uint8Array / array of bytes
+ */
+export function bytea(v: any): Buffer {
+  if (Buffer.isBuffer(v)) return v
+  if (v instanceof Uint8Array) return Buffer.from(v)
+  if (Array.isArray(v)) return Buffer.from(v)
+  if (typeof v === 'string') {
+    if (v.startsWith('\\x')) return Buffer.from(v.slice(2), 'hex')
+    if (/^[0-9a-fA-F]+$/.test(v) && v.length % 2 === 0) return Buffer.from(v, 'hex')
+    return Buffer.from(v, 'base64')
+  }
+  return Buffer.alloc(0)
+}
+
+/**
+ * Format a Buffer for writing to a Postgres bytea column via PostgREST /
+ * Supabase JS client. The client JSON-stringifies Buffers into
+ * {"type":"Buffer","data":[…]} garbage; sending the canonical `\x<hex>`
+ * escape string gets stored as raw bytes as intended.
+ */
+export function byteaWrite(buf: Buffer): string {
+  return '\\x' + buf.toString('hex')
 }
 
 /** Drop a user's DEK from the in-process cache. */
