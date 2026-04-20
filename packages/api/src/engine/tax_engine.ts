@@ -994,6 +994,128 @@ export interface ScheduleE_Inputs {
   remic_income?:         number  // Line 39
   // Part V reconciliation
   farm_rental?:          number  // Line 40 (Form 4835)
+  // §469 passive activity loss limitation (Form 8582).
+  // If omitted, all rental RE losses flow through as-is (optimistic).
+  pal_limitation?: {
+    filing_status:       'single' | 'mfj' | 'mfs' | 'hoh' | 'qw'
+    magi:                number  // modified AGI (AGI + passive-loss addback)
+    active_participation: boolean  // §469(i) special allowance gate
+    prior_year_suspended_re?: number  // unallowed rental RE losses carried forward
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// FORM 8582 — Passive Activity Loss Limitations (§469)
+// MVP: rental real estate with active participation. Other passive
+// activities (Part II "other") and real estate professional status
+// not yet wired.
+// ─────────────────────────────────────────────────────────────
+
+export interface Form8582_Inputs {
+  tax_year:                  number
+  filing_status:             'single' | 'mfj' | 'mfs' | 'hoh' | 'qw'
+  magi:                      number
+  active_participation:      boolean
+  rental_re_current_income:  number   // L1a — positive current-year RE L21 sum
+  rental_re_current_loss:    number   // |L1b|
+  rental_re_prior_unallowed: number   // |L1c|
+  other_current_income:      number   // L2a
+  other_current_loss:        number   // |L2b|
+  other_prior_unallowed:     number   // |L2c|
+}
+
+export interface Form8582_Result {
+  inputs:   Form8582_Inputs
+  computed: {
+    L1a: number; L1b: number; L1c: number; L1d: number
+    L2a: number; L2b: number; L2c: number; L2d: number
+    L3:  number
+    L4:  number; L5: number; L6: number; L7: number; L8: number; L9: number
+    L10: number; L11: number
+    rental_re_allowed_loss: number   // total RE loss that deducts this year
+    rental_re_suspended:    number
+    other_allowed_loss:     number
+    other_suspended:        number
+  }
+  field_values: Record<string, number>
+  citations: string[]
+}
+
+export function calcForm8582(inp: Form8582_Inputs): Form8582_Result {
+  const L1a =  Math.round(inp.rental_re_current_income || 0)
+  const L1b = -Math.round(Math.abs(inp.rental_re_current_loss || 0))
+  const L1c = -Math.round(Math.abs(inp.rental_re_prior_unallowed || 0))
+  const L1d = L1a + L1b + L1c
+  const L2a =  Math.round(inp.other_current_income || 0)
+  const L2b = -Math.round(Math.abs(inp.other_current_loss || 0))
+  const L2c = -Math.round(Math.abs(inp.other_prior_unallowed || 0))
+  const L2d = L2a + L2b + L2c
+  const L3  = L1d + L2d
+
+  // Part II — Special allowance (active participation rental RE only)
+  let L4 = 0, L5 = 0, L6 = 0, L7 = 0, L8 = 0, L9 = 0
+  if (inp.active_participation && L1d < 0 && L3 < 0) {
+    L4 = Math.min(Math.abs(L1d), Math.abs(L3))          // smaller of the two net losses
+    L5 = inp.filing_status === 'mfs' ? 75000 : 150000
+    L6 = Math.round(inp.magi || 0)
+    L7 = Math.max(0, L5 - L6)
+    const maxAllowance = inp.filing_status === 'mfs' ? 12500 : 25000
+    L8 = Math.min(Math.round(L7 * 0.5), maxAllowance)
+    L9 = Math.min(L4, L8)
+  }
+
+  // Part III — Total losses allowed
+  const L10 = L1a + L2a
+  const L11 = L9 + L10
+
+  // Apportion L11 between rental RE (gets special allowance) and other (only netting).
+  const total_re_gross_loss    = Math.abs(L1b) + Math.abs(L1c)
+  const total_other_gross_loss = Math.abs(L2b) + Math.abs(L2c)
+
+  // "Other" losses can only be offset by "other" income.
+  const other_allowed  = Math.min(total_other_gross_loss, Math.max(0, L2a))
+  const other_suspended = total_other_gross_loss - other_allowed
+
+  // Rental RE: gets its own income offset plus the special allowance.
+  const re_allowed = Math.min(total_re_gross_loss, L1a + L9 + Math.max(0, L2a - other_allowed))
+  const re_suspended = total_re_gross_loss - re_allowed
+
+  const field_values: Record<string, number> = {
+    'f8582.L1a_rental_re_income':       L1a,
+    'f8582.L1b_rental_re_loss':         L1b,
+    'f8582.L1c_rental_re_prior':        L1c,
+    'f8582.L1d_combine_1a_1b_1c':       L1d,
+    'f8582.L2a_other_income':           L2a,
+    'f8582.L2b_other_loss':             L2b,
+    'f8582.L2c_other_prior':            L2c,
+    'f8582.L2d_combine_2a_2b_2c':       L2d,
+    'f8582.L3_combine_1d_2d':           L3,
+    'f8582.L4_smaller_1d_3':            L4,
+    'f8582.L5_threshold':               L5,
+    'f8582.L6_magi':                    L6,
+    'f8582.L7_excess':                  L7,
+    'f8582.L8_allowance_after_phase':   L8,
+    'f8582.L9_special_allowance':       L9,
+    'f8582.L10_passive_income':         L10,
+    'f8582.L11_total_allowed':          L11,
+  }
+
+  return {
+    inputs: inp,
+    computed: {
+      L1a, L1b, L1c, L1d, L2a, L2b, L2c, L2d, L3, L4, L5, L6, L7, L8, L9, L10, L11,
+      rental_re_allowed_loss: re_allowed,
+      rental_re_suspended:    re_suspended,
+      other_allowed_loss:     other_allowed,
+      other_suspended:        other_suspended,
+    },
+    field_values,
+    citations: [
+      'IRC §469 — Passive activity losses and credits limited',
+      'IRC §469(i) — $25,000 offset for rental real estate activities',
+      'IRS Form 8582 Instructions',
+    ],
+  }
 }
 
 export interface ScheduleE_Result {
@@ -1003,6 +1125,7 @@ export interface ScheduleE_Result {
       address: string
       total_expenses:     number   // Line 20
       net_income_loss:    number   // Line 21
+      deductible_loss:    number   // Line 22 — after PAL pro-ration (if applied)
     }>
     // Part I totals
     L23a_total_rents:        number
@@ -1011,13 +1134,19 @@ export interface ScheduleE_Result {
     L23d_total_depreciation: number
     L23e_total_expenses:     number
     L24_income:              number   // sum of positive L21s
-    L25_losses:              number   // sum of |negative L21s|
+    L25_losses:              number   // sum of |L22s|  (deductible losses post-PAL)
     L26_rental_royalty_net:  number   // L24 - L25
     L32_partnership_total:   number   // Part II
     L37_estate_trust_total:  number   // Part III
     L39_remic_total:         number   // Part IV
     L40_farm_rental:         number
     L41_total_income_loss:   number   // flows to 1040 Sch 1 L5
+    // PAL metadata (present when pal_limitation was provided)
+    pal?: {
+      form_8582:          Form8582_Result
+      suspended_rental:   number   // RE loss carryforward to next year
+      suspended_other:    number
+    }
   }
   field_values: Record<string, number>
   citations: string[]
@@ -1028,7 +1157,7 @@ export function calcScheduleE(inp: ScheduleE_Inputs): ScheduleE_Result {
   const props = inp.rental_properties || []
   const parts = inp.partnerships || []
 
-  const per_property = props.map(p => {
+  const per_property_raw = props.map(p => {
     const expenses = (p.advertising || 0) + (p.auto_travel || 0) + (p.cleaning_maintenance || 0)
       + (p.commissions || 0) + (p.insurance || 0) + (p.legal_professional || 0)
       + (p.management_fees || 0) + (p.mortgage_interest || 0) + (p.other_interest || 0)
@@ -1042,13 +1171,60 @@ export function calcScheduleE(inp: ScheduleE_Inputs): ScheduleE_Result {
     }
   })
 
+  // Apply Form 8582 PAL limitation if requested. We pro-rate the allowed loss
+  // across loss-making properties by their magnitude so each property's L22
+  // reflects its share of the special-allowance envelope.
+  let pal: ScheduleE_Result['computed']['pal'] = undefined
+  let per_property: ScheduleE_Result['computed']['per_property'] = per_property_raw.map(p => ({
+    ...p, deductible_loss: p.net_income_loss < 0 ? p.net_income_loss : 0,
+  }))
+  if (inp.pal_limitation) {
+    const pp = inp.pal_limitation
+    const gross_re_income = per_property_raw.filter(p => p.net_income_loss > 0)
+      .reduce((s, p) => s + p.net_income_loss, 0)
+    const gross_re_loss = Math.abs(per_property_raw.filter(p => p.net_income_loss < 0)
+      .reduce((s, p) => s + p.net_income_loss, 0))
+    const f8582 = calcForm8582({
+      tax_year:                   inp.tax_year,
+      filing_status:              pp.filing_status,
+      magi:                       pp.magi,
+      active_participation:       pp.active_participation,
+      rental_re_current_income:   gross_re_income,
+      rental_re_current_loss:     gross_re_loss,
+      rental_re_prior_unallowed:  pp.prior_year_suspended_re || 0,
+      other_current_income:       0,
+      other_current_loss:         0,
+      other_prior_unallowed:      0,
+    })
+    const allowed_loss_pool = f8582.computed.rental_re_allowed_loss
+    // Pro-rate allowed loss across loss-making properties by magnitude.
+    // Properties with positive L21 are fully deductible (income flows through).
+    const total_raw_loss_mag = gross_re_loss + (pp.prior_year_suspended_re || 0)
+    per_property = per_property_raw.map(p => {
+      if (p.net_income_loss >= 0) {
+        return { ...p, deductible_loss: 0 }
+      }
+      // Loss property: share = magnitude / total_raw_loss_mag (excluding prior year — prior is already outside per-property)
+      const share = gross_re_loss > 0 ? Math.abs(p.net_income_loss) / gross_re_loss : 0
+      const allowed_for_current_year = Math.max(0, allowed_loss_pool - (pp.prior_year_suspended_re || 0))
+      const deductible = -Math.min(Math.abs(p.net_income_loss), Math.round(share * allowed_for_current_year))
+      return { ...p, deductible_loss: deductible }
+    })
+    pal = {
+      form_8582: f8582,
+      suspended_rental: f8582.computed.rental_re_suspended,
+      suspended_other:  f8582.computed.other_suspended,
+    }
+  }
+
   const L23a = Math.round(props.reduce((s, p) => s + (p.rents || 0), 0))
   const L23b = Math.round(props.reduce((s, p) => s + (p.royalties || 0), 0))
   const L23c = Math.round(props.reduce((s, p) => s + (p.mortgage_interest || 0), 0))
   const L23d = Math.round(props.reduce((s, p) => s + (p.depreciation || 0), 0))
   const L23e = Math.round(per_property.reduce((s, p) => s + p.total_expenses, 0))
   const L24  = per_property.filter(p => p.net_income_loss > 0).reduce((s, p) => s + p.net_income_loss, 0)
-  const L25  = Math.abs(per_property.filter(p => p.net_income_loss < 0).reduce((s, p) => s + p.net_income_loss, 0))
+  // L25 uses deductible_loss (post-PAL) so Schedule E flows PAL-limited losses
+  const L25  = Math.abs(per_property.reduce((s, p) => s + p.deductible_loss, 0))
   const L26  = L24 - L25
 
   const L32 = Math.round(parts.reduce((s, k) => s + (k.ordinary_income || 0), 0))
@@ -1083,13 +1259,18 @@ export function calcScheduleE(inp: ScheduleE_Inputs): ScheduleE_Result {
       L26_rental_royalty_net: L26, L32_partnership_total: L32,
       L37_estate_trust_total: L37, L39_remic_total: L39,
       L40_farm_rental: L40, L41_total_income_loss: L41,
+      ...(pal ? { pal } : {}),
     },
-    field_values,
+    field_values: {
+      ...field_values,
+      ...(pal ? pal.form_8582.field_values : {}),
+    },
     citations: [
       'IRC §61(a)(5) — rental income',
       'IRC §212 — expenses for production of income',
       'IRC §469 — passive activity limitations',
       'IRS Form 1040 Schedule E Instructions',
+      ...(pal ? pal.form_8582.citations : []),
     ],
   }
 }

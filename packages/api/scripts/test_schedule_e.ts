@@ -3,7 +3,7 @@
  *
  * Run: npx tsx packages/api/scripts/test_schedule_e.ts
  */
-import { calcScheduleE, calc1040 } from '../src/engine/tax_engine.js'
+import { calcScheduleE, calc1040, calcForm8582 } from '../src/engine/tax_engine.js'
 import { buildScheduleEPdf } from '../src/builders/build_schedule_e.js'
 import { writeFileSync, mkdirSync } from 'fs'
 
@@ -136,6 +136,109 @@ async function main() {
     console.log(`  FAIL: PDF build threw — ${e.message}`)
     fail++
   }
+
+  // ═══ §469 PAL cases via calcForm8582 + calcScheduleE integration ═══
+
+  console.log('\n=== Form 8582 — below phaseout, full $25K allowance ===')
+  const pal1 = calcForm8582({
+    tax_year: 2025, filing_status: 'mfj', magi: 80000, active_participation: true,
+    rental_re_current_income: 0, rental_re_current_loss: 20000, rental_re_prior_unallowed: 0,
+    other_current_income: 0, other_current_loss: 0, other_prior_unallowed: 0,
+  })
+  check('L7 phaseout excess',      pal1.computed.L7, 70000)      // 150K - 80K
+  check('L8 allowance',            pal1.computed.L8, 25000)      // capped at 25K
+  check('L9 special allowance',    pal1.computed.L9, 20000)      // min(|L4|, L8) = min(20K, 25K)
+  check('RE allowed loss',         pal1.computed.rental_re_allowed_loss, 20000)
+  check('RE suspended',            pal1.computed.rental_re_suspended, 0)
+
+  console.log('\n=== Form 8582 — mid phaseout, partial allowance ===')
+  const pal2 = calcForm8582({
+    tax_year: 2025, filing_status: 'mfj', magi: 130000, active_participation: true,
+    rental_re_current_income: 0, rental_re_current_loss: 20000, rental_re_prior_unallowed: 0,
+    other_current_income: 0, other_current_loss: 0, other_prior_unallowed: 0,
+  })
+  check('L7 excess (150K - 130K)', pal2.computed.L7, 20000)
+  check('L8 allowance (L7 * 0.5)', pal2.computed.L8, 10000)
+  check('L9 = min(20K, 10K)',      pal2.computed.L9, 10000)
+  check('RE allowed loss',         pal2.computed.rental_re_allowed_loss, 10000)
+  check('RE suspended',            pal2.computed.rental_re_suspended, 10000)
+
+  console.log('\n=== Form 8582 — MAGI ≥ $150K, allowance fully phased out ===')
+  const pal3 = calcForm8582({
+    tax_year: 2025, filing_status: 'mfj', magi: 160000, active_participation: true,
+    rental_re_current_income: 0, rental_re_current_loss: 15000, rental_re_prior_unallowed: 0,
+    other_current_income: 0, other_current_loss: 0, other_prior_unallowed: 0,
+  })
+  check('L7 clamped to 0',         pal3.computed.L7, 0)
+  check('L9 no allowance',         pal3.computed.L9, 0)
+  check('all $15K suspended',      pal3.computed.rental_re_suspended, 15000)
+  check('nothing allowed',         pal3.computed.rental_re_allowed_loss, 0)
+
+  console.log('\n=== Form 8582 — passive income absorbs losses, no allowance used ===')
+  const pal4 = calcForm8582({
+    tax_year: 2025, filing_status: 'single', magi: 120000, active_participation: true,
+    rental_re_current_income: 12000, rental_re_current_loss: 8000, rental_re_prior_unallowed: 0,
+    other_current_income: 0, other_current_loss: 0, other_prior_unallowed: 0,
+  })
+  check('L1d net positive',        pal4.computed.L1d, 4000)
+  check('no special allowance',    pal4.computed.L9, 0)  // L3 >= 0 so no Part II
+  check('all loss allowed',        pal4.computed.rental_re_allowed_loss, 8000)
+  check('nothing suspended',       pal4.computed.rental_re_suspended, 0)
+
+  console.log('\n=== Form 8582 — MFS thresholds ($75K/$12.5K) ===')
+  const pal5 = calcForm8582({
+    tax_year: 2025, filing_status: 'mfs', magi: 60000, active_participation: true,
+    rental_re_current_income: 0, rental_re_current_loss: 10000, rental_re_prior_unallowed: 0,
+    other_current_income: 0, other_current_loss: 0, other_prior_unallowed: 0,
+  })
+  check('MFS threshold L5',        pal5.computed.L5, 75000)
+  check('MFS L8 capped at 12.5K',  pal5.computed.L8, Math.min(Math.round((75000-60000)*0.5), 12500))
+  check('MFS L9',                  pal5.computed.L9, 7500)  // min(|L4|=10K, L8=7.5K)
+
+  console.log('\n=== Form 8582 — not active participant, no allowance ===')
+  const pal6 = calcForm8582({
+    tax_year: 2025, filing_status: 'mfj', magi: 80000, active_participation: false,
+    rental_re_current_income: 0, rental_re_current_loss: 20000, rental_re_prior_unallowed: 0,
+    other_current_income: 0, other_current_loss: 0, other_prior_unallowed: 0,
+  })
+  check('non-AP allowance zeroed', pal6.computed.L9, 0)
+  check('non-AP all suspended',    pal6.computed.rental_re_suspended, 20000)
+
+  console.log('\n=== calcScheduleE + PAL — pro-rate allowance across loss props ===')
+  const schPal = calcScheduleE({
+    tax_year: 2025,
+    rental_properties: [
+      { address: 'A',  rents: 30000, mortgage_interest: 10000, depreciation: 4000, repairs: 1000, taxes: 3000 },  // +12K
+      { address: 'B',  rents: 10000, mortgage_interest: 12000, depreciation: 5000, taxes: 2500, insurance: 1500 }, // -11K
+      { address: 'C',  rents: 8000,  mortgage_interest: 9000,  depreciation: 3000, taxes: 2000 },                  // -6K
+    ],
+    pal_limitation: { filing_status: 'mfj', magi: 130000, active_participation: true },
+  })
+  // Gross loss B+C = 17K, gross income A = 12K, net = -5K
+  // MAGI 130K → L8 = 10K allowance → L9 = min(5K, 10K) = 5K
+  // RE allowed loss = income (12K) + allowance (5K) = 17K — all loss deductible
+  check('no suspension (full absorb)', schPal.computed.pal?.suspended_rental, 0)
+  check('L24 income (prop A)',         schPal.computed.L24_income, 12000)
+  check('L25 losses (B+C all allowed)', schPal.computed.L25_losses, 17000)
+  check('L26 net',                      schPal.computed.L26_rental_royalty_net, -5000)
+
+  console.log('\n=== calcScheduleE + PAL — loss exceeds allowance, pro-rate by magnitude ===')
+  const schPal2 = calcScheduleE({
+    tax_year: 2025,
+    rental_properties: [
+      { address: 'Lossmaker A', rents: 5000, mortgage_interest: 15000 },   // -10K
+      { address: 'Lossmaker B', rents: 2000, mortgage_interest: 12000 },   // -10K
+    ],
+    pal_limitation: { filing_status: 'mfj', magi: 140000, active_participation: true },
+  })
+  // Gross loss 20K, MAGI 140K → L7=10K, L8=5K, L9=5K. Allowed loss = 5K total.
+  // Pro-rated 50/50 → each property gets -$2,500 deductible
+  const propA = schPal2.computed.per_property[0]
+  const propB = schPal2.computed.per_property[1]
+  check('propA deductible pro-rated',   propA.deductible_loss, -2500)
+  check('propB deductible pro-rated',   propB.deductible_loss, -2500)
+  check('suspended = gross - allowed',  schPal2.computed.pal?.suspended_rental, 15000)
+  check('L26 reflects allowed only',    schPal2.computed.L26_rental_royalty_net, -5000)
 
   // ═══ Case 8: PDF round-trip — fill then read back via form API ═══
   console.log('\n=== Schedule E PDF — round-trip property values ===')

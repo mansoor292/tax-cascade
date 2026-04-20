@@ -82,6 +82,7 @@ function fillProperty(
   p: RentalProperty,
   totalExpenses: number,
   netIncomeLoss: number,
+  deductibleLoss: number,
 ): number {
   let n = 0
   const fill = (key: keyof typeof GRID, value: string | number | null | undefined) => {
@@ -111,9 +112,9 @@ function fillProperty(
   fill('other_expenses', p.other_expenses)
   fill('total_expenses', totalExpenses)
   fill('net_income_loss', netIncomeLoss)
-  // Line 22 — deductible loss. Without Form 8582 PAL limitation, assume full
-  // loss is deductible. Only populate if net is negative.
-  if (netIncomeLoss < 0) fill('deductible_re_loss', netIncomeLoss)
+  // Line 22 — deductible RE loss after Form 8582 PAL limitation (if applied).
+  // If no PAL input, deductibleLoss equals netIncomeLoss (full loss allowed).
+  if (deductibleLoss < 0) fill('deductible_re_loss', deductibleLoss)
   return n
 }
 
@@ -156,7 +157,10 @@ export async function buildScheduleEPdf(
   let gridFilled = 0
   for (let i = 0; i < Math.min(props.length, 3); i++) {
     const perProp = c.per_property[i]
-    gridFilled += fillProperty(form, i as 0 | 1 | 2, props[i], perProp.total_expenses, perProp.net_income_loss)
+    gridFilled += fillProperty(
+      form, i as 0 | 1 | 2, props[i],
+      perProp.total_expenses, perProp.net_income_loss, perProp.deductible_loss,
+    )
   }
 
   return { pdf, filled: filled + gridFilled, missed }
