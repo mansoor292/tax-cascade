@@ -434,6 +434,18 @@ function createServer(apiKey: string): McpServer {
     return text(await call('POST', '/api/returns/compute_from_qbo', params))
   })
 
+  // ─── Tool: post_transactions_batch ───
+  server.tool('post_transactions_batch', 'Post an array of QBO transactions in one call. Serial (QBO v3 has no native batch for arbitrary entities) with per-item success/error reported. `rollback_on_error: true` reverses any successful posts on first failure via delete/void. Use this after loan_amortization_schedule or reconcile_bank_import to land 10-120 journal entries / purchases / deposits in a single MCP turn instead of 10-120 sequential qbo_resource calls.', {
+    entity_id: z.string().describe('Entity UUID'),
+    transactions: z.array(z.object({
+      type: z.string().describe('QBO resource type: JournalEntry, Purchase, Deposit, Transfer, Bill, Payment, etc.'),
+      data: z.record(z.any()).describe('Resource payload in QBO v3 format (Line[], TxnDate, DocNumber, etc.)'),
+    })).describe('Array of transactions to post'),
+    rollback_on_error: z.boolean().optional().describe('If true, reverse any successful posts when the first failure hits (best-effort). Default false — partial success is kept as-is.'),
+  }, async ({ entity_id, transactions, rollback_on_error }) => {
+    return text(await call('POST', `/api/qbo/${entity_id}/transactions_batch`, { transactions, rollback_on_error }))
+  })
+
   // ─── Tool: loan_amortization_schedule ───
   server.tool('loan_amortization_schedule', 'Compute a full loan amortization schedule given terms, and emit balanced QBO JournalEntry payloads ready for batch posting. Does NOT post — returns { summary, schedule[], journal_entries[] } for review. Pipe journal_entries into post_transactions_batch when ready. Useful for booking a multi-year loan (e.g. 120-month PETERLoan at 7% on $210k principal = 120 JEs), which previously required 12+ sequential qbo_resource calls.', {
     entity_id: z.string().describe('Entity UUID (used for routing; schedule is pure math)'),

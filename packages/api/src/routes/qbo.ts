@@ -875,6 +875,105 @@ router.put('/:entity_id/resource/:resource', async (req, res) => {
   }
 })
 
+// Batch post: POST /api/qbo/:entity_id/transactions_batch
+// Body: { transactions: [{ type: 'JournalEntry'|'Purchase'|..., data: {...} }],
+//         rollback_on_error?: boolean }
+// Serial posts each transaction through qboPost. QBO v3 has no native
+// batch API for arbitrary entities so we loop. With rollback_on_error,
+// any successful posts prior to the first failure are voided / deleted
+// via /<resource>?operation=delete (best-effort) so partial state is
+// reversed. Reversals are tagged PrivateNote:'auto-reversed on batch error'
+// for auditability.
+router.post('/:entity_id/transactions_batch', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const transactions: Array<{ type: string; data: any }> = req.body?.transactions
+  const rollbackOnError: boolean = !!req.body?.rollback_on_error
+  if (!Array.isArray(transactions) || transactions.length === 0) {
+    return res.status(400).json({ error: 'transactions[] (non-empty array) required' })
+  }
+
+  const results: Array<{
+    index: number
+    type: string
+    ok: boolean
+    id?: string
+    doc_number?: string
+    error?: string
+    rolled_back?: boolean
+  }> = []
+  const toRollback: Array<{ type: string; id: string; syncToken: string; index: number }> = []
+
+  for (let i = 0; i < transactions.length; i++) {
+    const { type, data } = transactions[i]
+    const matchedType = QBO_RESOURCES.find(r => r.toLowerCase() === (type || '').toLowerCase())
+    if (!matchedType) {
+      results.push({ index: i, type, ok: false, error: `Unknown resource type: ${type}` })
+      if (rollbackOnError) break
+      continue
+    }
+    try {
+      const resp = await qboPost(req.params.entity_id, `/${matchedType.toLowerCase()}`, data)
+      const created = resp?.[matchedType] || resp
+      const id = created?.Id
+      const syncToken = created?.SyncToken
+      results.push({ index: i, type: matchedType, ok: true, id, doc_number: created?.DocNumber })
+      if (id && syncToken !== undefined) {
+        toRollback.push({ type: matchedType, id, syncToken, index: i })
+      }
+    } catch (e: any) {
+      results.push({ index: i, type: matchedType, ok: false, error: e.message })
+      if (rollbackOnError) break
+    }
+  }
+
+  // If we hit a failure and rollback is on, void everything we created so far
+  let rollback_summary: { attempted: number; succeeded: number; failed: number } | null = null
+  const anyFailed = results.some(r => !r.ok)
+  if (rollbackOnError && anyFailed && toRollback.length > 0) {
+    let succeeded = 0, failed = 0
+    for (const tx of toRollback) {
+      try {
+        // Try delete first (most resources support operation=delete)
+        await qboPost(req.params.entity_id, `/${tx.type.toLowerCase()}?operation=delete`, {
+          Id: tx.id,
+          SyncToken: tx.syncToken,
+          PrivateNote: 'auto-reversed on batch error',
+        })
+        succeeded++
+        const r = results[tx.index]
+        if (r) r.rolled_back = true
+      } catch {
+        // Fall back to void for JournalEntry / Invoice / etc.
+        try {
+          await qboPost(req.params.entity_id, `/${tx.type.toLowerCase()}?operation=void`, {
+            Id: tx.id,
+            SyncToken: tx.syncToken,
+            PrivateNote: 'auto-voided on batch error',
+          })
+          succeeded++
+          const r = results[tx.index]
+          if (r) r.rolled_back = true
+        } catch {
+          failed++
+        }
+      }
+    }
+    rollback_summary = { attempted: toRollback.length, succeeded, failed }
+  }
+
+  const status = anyFailed ? 207 : 200  // 207 Multi-Status when partial
+  res.status(status).json({
+    total: transactions.length,
+    succeeded: results.filter(r => r.ok).length,
+    failed: results.filter(r => !r.ok).length,
+    results,
+    rollback_on_error: rollbackOnError,
+    rollback_summary,
+  })
+})
+
 // Delete: DELETE /api/qbo/:entity_id/resource/:resource
 router.delete('/:entity_id/resource/:resource', async (req, res) => {
   const userId = await getUser(req)
