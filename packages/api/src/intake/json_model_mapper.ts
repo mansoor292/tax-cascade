@@ -404,6 +404,19 @@ const FUZZY_RULES_1040: FuzzyRule[] = [
   { pattern: /estimated\s+tax\s+penalty|38\s+estimated\s+tax\s+penalty/,                       canonical_key: 'penalty.L38_est_penalty',   confidence: 0.93 },
   // Schedule 1 / E (K-1 flow)
   { pattern: /rental\s+real\s+estate.*partnerships.*s\s+corporations|5\s+rental\s+real\s+estate/, canonical_key: 'schedule1.k1_income',     confidence: 0.94 },
+  // Schedule E — Supplemental Income and Loss (totals only; per-property detail not mapped)
+  { pattern: /23a\s+total.*amounts\s+reported\s+on\s+line\s+3|total\s+of\s+all\s+amounts.*line\s+3.*rental/,  canonical_key: 'schedE.L23a_total_rents',        confidence: 0.95 },
+  { pattern: /23b\s+total.*amounts\s+reported\s+on\s+line\s+4|total\s+of\s+all\s+amounts.*line\s+4.*royalty/, canonical_key: 'schedE.L23b_total_royalties',    confidence: 0.95 },
+  { pattern: /23c\s+total.*amounts\s+reported\s+on\s+line\s+12|total\s+of\s+all\s+amounts.*line\s+12/,        canonical_key: 'schedE.L23c_total_mortgage_int', confidence: 0.94 },
+  { pattern: /23d\s+total.*amounts\s+reported\s+on\s+line\s+18|total\s+of\s+all\s+amounts.*line\s+18/,        canonical_key: 'schedE.L23d_total_depreciation', confidence: 0.94 },
+  { pattern: /23e\s+total.*amounts\s+reported\s+on\s+line\s+20|total\s+of\s+all\s+amounts.*line\s+20/,        canonical_key: 'schedE.L23e_total_expenses',     confidence: 0.94 },
+  { pattern: /^24\s+income.*add\s+positive\s+amounts.*line\s+21|income.*add\s+positive.*line\s+21/,           canonical_key: 'schedE.L24_income',              confidence: 0.95 },
+  { pattern: /^25\s+losses.*enter\s+total\s+losses|^25\s+losses.*line\s+21/,                                  canonical_key: 'schedE.L25_losses',              confidence: 0.94 },
+  { pattern: /^26\s+total\s+rental\s+real\s+estate|total\s+rental\s+real\s+estate\s+and\s+royalty/,           canonical_key: 'schedE.L26_rental_royalty_net',  confidence: 0.96 },
+  { pattern: /^32\s+total\s+partnership\s+and\s+s\s+corporation|total\s+partnership\s+and\s+s\s+corporation/, canonical_key: 'schedE.L32_partnership_total',   confidence: 0.95 },
+  { pattern: /^37\s+total\s+estate\s+and\s+trust|total\s+estate\s+and\s+trust\s+income/,                      canonical_key: 'schedE.L37_estate_trust_total',  confidence: 0.94 },
+  { pattern: /^40\s+net\s+farm\s+rental|net\s+farm\s+rental.*form\s+4835/,                                    canonical_key: 'schedE.L40_farm_rental',         confidence: 0.93 },
+  { pattern: /^41\s+total\s+income\s+or.*combine\s+lines\s+26.*32.*37|combine\s+lines\s+26.*32.*37.*39.*40/,  canonical_key: 'schedE.L41_total_income_loss',   confidence: 0.96 },
   // Meta: taxpayer identity and address
   { pattern: /your\s+first\s+name\s+and\s+middle\s+initial/i,                                        canonical_key: 'meta.first_name',           confidence: 0.95 },
   { pattern: /^last\s+name\s*$|your\s+last\s+name/i,                                                 canonical_key: 'meta.last_name',            confidence: 0.95 },

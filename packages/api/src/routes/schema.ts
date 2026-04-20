@@ -14,7 +14,7 @@ const router = Router()
 
 interface FieldDef {
   name: string
-  type: 'number' | 'string' | 'boolean' | 'array'
+  type: 'number' | 'string' | 'boolean' | 'array' | 'object'
   required: boolean
   description: string
   category: string
@@ -44,7 +44,8 @@ export const INPUT_SCHEMAS: Record<string, FormSchema> = {
       { name: 'pensions_annuities', type: 'number', required: false, description: 'Taxable pensions and annuities', category: 'income', irs_line: '5b' },
       { name: 'social_security', type: 'number', required: false, description: 'Taxable Social Security benefits', category: 'income', irs_line: '6b' },
       { name: 'capital_gains', type: 'number', required: false, description: 'Capital gain or loss (Schedule D)', category: 'income', irs_line: '7' },
-      { name: 'schedule1_income', type: 'number', required: false, description: 'Additional income from Schedule 1 (K-1s, rental, etc.)', category: 'income', irs_line: '8' },
+      { name: 'schedule1_income', type: 'number', required: false, description: 'Additional income from Schedule 1 line 10 (K-1s, rental, etc.). If schedule_e is provided, its total is added to this automatically.', category: 'income', irs_line: '8' },
+      { name: 'schedule_e', type: 'object', required: false, description: 'Structured Schedule E input. Shape: { rental_properties: [{address, rents, royalties, advertising, auto_travel, cleaning_maintenance, commissions, insurance, legal_professional, management_fees, mortgage_interest, other_interest, repairs, supplies, taxes, utilities, depreciation, other_expenses}], partnerships: [{name, ein, type: "P"|"S", passive, ordinary_income}], estate_trust_income, remic_income, farm_rental }. Line 41 total flows into schedule1_income and then to 1040 line 8.', category: 'income', irs_line: 'Sch E' },
       { name: 'student_loan_interest', type: 'number', required: false, description: 'Student loan interest deduction', category: 'adjustments', irs_line: 'Sch1 L21' },
       { name: 'educator_expenses', type: 'number', required: false, description: 'Educator expenses deduction', category: 'adjustments', irs_line: 'Sch1 L11' },
       { name: 'itemized_deductions', type: 'number', required: false, description: 'Total itemized deductions (Schedule A). If 0 or omitted, standard deduction is used.', category: 'deductions' },

@@ -941,6 +941,159 @@ export function calc8594(inp: Form8594_Inputs): Form8594_Result {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// SCHEDULE E — Supplemental Income and Loss (Form 1040)
+// Parts I (rental/royalty), II (partnerships/S-corps), III (estates/
+// trusts), IV (REMICs), V (summary). Feeds into 1040 Schedule 1 Line 5.
+// ─────────────────────────────────────────────────────────────
+
+export interface RentalProperty {
+  address?:             string
+  property_type?:       string   // 1=Single Family, 2=Multi-Family, 3=Vacation, 4=Commercial, 5=Land, 6=Royalties, 7=Self-Rental, 8=Other
+  fair_rental_days?:    number
+  personal_use_days?:   number
+  // Income
+  rents:                number   // Line 3
+  royalties?:           number   // Line 4
+  // Expenses — Lines 5-19
+  advertising?:         number
+  auto_travel?:         number
+  cleaning_maintenance?: number
+  commissions?:         number
+  insurance?:           number
+  legal_professional?:  number
+  management_fees?:     number
+  mortgage_interest?:   number   // Line 12 (→ L23c)
+  other_interest?:      number
+  repairs?:             number
+  supplies?:            number
+  taxes?:               number
+  utilities?:           number
+  depreciation?:        number   // Line 18 (→ L23d)
+  other_expenses?:      number
+}
+
+export interface PartnershipK1 {
+  name:            string
+  ein?:            string
+  type:            'P' | 'S'  // partnership or S-corp
+  passive?:        boolean
+  ordinary_income: number     // K-1 Part III Line 1 (→ Schedule E line 28/29)
+  section_179?:    number
+}
+
+export interface ScheduleE_Inputs {
+  taxpayer_name?:        string
+  taxpayer_id?:          string
+  tax_year:              number
+  rental_properties?:    RentalProperty[]
+  partnerships?:         PartnershipK1[]
+  // Part III — estates/trusts: summary only (detail not modeled)
+  estate_trust_income?:  number  // Line 37
+  // Part IV — REMICs
+  remic_income?:         number  // Line 39
+  // Part V reconciliation
+  farm_rental?:          number  // Line 40 (Form 4835)
+}
+
+export interface ScheduleE_Result {
+  inputs: ScheduleE_Inputs
+  computed: {
+    per_property: Array<{
+      address: string
+      total_expenses:     number   // Line 20
+      net_income_loss:    number   // Line 21
+    }>
+    // Part I totals
+    L23a_total_rents:        number
+    L23b_total_royalties:    number
+    L23c_total_mortgage_int: number
+    L23d_total_depreciation: number
+    L23e_total_expenses:     number
+    L24_income:              number   // sum of positive L21s
+    L25_losses:              number   // sum of |negative L21s|
+    L26_rental_royalty_net:  number   // L24 - L25
+    L32_partnership_total:   number   // Part II
+    L37_estate_trust_total:  number   // Part III
+    L39_remic_total:         number   // Part IV
+    L40_farm_rental:         number
+    L41_total_income_loss:   number   // flows to 1040 Sch 1 L5
+  }
+  field_values: Record<string, number>
+  citations: string[]
+}
+
+/** Schedule E calculation — totals-only; per-property cells not filled (PDF map covers summary only) */
+export function calcScheduleE(inp: ScheduleE_Inputs): ScheduleE_Result {
+  const props = inp.rental_properties || []
+  const parts = inp.partnerships || []
+
+  const per_property = props.map(p => {
+    const expenses = (p.advertising || 0) + (p.auto_travel || 0) + (p.cleaning_maintenance || 0)
+      + (p.commissions || 0) + (p.insurance || 0) + (p.legal_professional || 0)
+      + (p.management_fees || 0) + (p.mortgage_interest || 0) + (p.other_interest || 0)
+      + (p.repairs || 0) + (p.supplies || 0) + (p.taxes || 0) + (p.utilities || 0)
+      + (p.depreciation || 0) + (p.other_expenses || 0)
+    const income = (p.rents || 0) + (p.royalties || 0)
+    return {
+      address:         p.address || '',
+      total_expenses:  Math.round(expenses),
+      net_income_loss: Math.round(income - expenses),
+    }
+  })
+
+  const L23a = Math.round(props.reduce((s, p) => s + (p.rents || 0), 0))
+  const L23b = Math.round(props.reduce((s, p) => s + (p.royalties || 0), 0))
+  const L23c = Math.round(props.reduce((s, p) => s + (p.mortgage_interest || 0), 0))
+  const L23d = Math.round(props.reduce((s, p) => s + (p.depreciation || 0), 0))
+  const L23e = Math.round(per_property.reduce((s, p) => s + p.total_expenses, 0))
+  const L24  = per_property.filter(p => p.net_income_loss > 0).reduce((s, p) => s + p.net_income_loss, 0)
+  const L25  = Math.abs(per_property.filter(p => p.net_income_loss < 0).reduce((s, p) => s + p.net_income_loss, 0))
+  const L26  = L24 - L25
+
+  const L32 = Math.round(parts.reduce((s, k) => s + (k.ordinary_income || 0), 0))
+  const L37 = Math.round(inp.estate_trust_income || 0)
+  const L39 = Math.round(inp.remic_income || 0)
+  const L40 = Math.round(inp.farm_rental || 0)
+  const L41 = L26 + L32 + L37 + L39 + L40
+
+  const field_values: Record<string, number> = {
+    'schedE.L23a_total_rents':        L23a,
+    'schedE.L23b_total_royalties':    L23b,
+    'schedE.L23c_total_mortgage_int': L23c,
+    'schedE.L23d_total_depreciation': L23d,
+    'schedE.L23e_total_expenses':     L23e,
+    'schedE.L24_income':              L24,
+    'schedE.L25_losses':              L25,
+    'schedE.L26_rental_royalty_net':  L26,
+    'schedE.L32_partnership_total':   L32,
+    'schedE.L37_estate_trust_total':  L37,
+    'schedE.L39_remic_total':         L39,
+    'schedE.L40_farm_rental':         L40,
+    'schedE.L41_total_income_loss':   L41,
+  }
+
+  return {
+    inputs: inp,
+    computed: {
+      per_property,
+      L23a_total_rents: L23a, L23b_total_royalties: L23b,
+      L23c_total_mortgage_int: L23c, L23d_total_depreciation: L23d,
+      L23e_total_expenses: L23e, L24_income: L24, L25_losses: L25,
+      L26_rental_royalty_net: L26, L32_partnership_total: L32,
+      L37_estate_trust_total: L37, L39_remic_total: L39,
+      L40_farm_rental: L40, L41_total_income_loss: L41,
+    },
+    field_values,
+    citations: [
+      'IRC §61(a)(5) — rental income',
+      'IRC §212 — expenses for production of income',
+      'IRC §469 — passive activity limitations',
+      'IRS Form 1040 Schedule E Instructions',
+    ],
+  }
+}
+
 /**
  * CASCADE — multi-entity scenario
  * 1120-S → K-1s → 1040

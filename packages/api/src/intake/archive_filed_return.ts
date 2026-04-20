@@ -54,6 +54,10 @@ export function archiveFiledReturn(
     totals.qualified_dividends   = num(m, 'income.L3a_qual_dividends')
     totals.standard_deduction    = num(m, 'deductions.L12e_standard')
     totals.qbi_deduction         = num(m, 'deductions.L13a_qbi')
+    // Schedule E totals (if the ingested bundle included it)
+    totals.sched_e_rental_net    = num(m, 'schedE.L26_rental_royalty_net')
+    totals.sched_e_partnership   = num(m, 'schedE.L32_partnership_total')
+    totals.sched_e_total         = num(m, 'schedE.L41_total_income_loss')
   } else if (formType === '1120') {
     totals.gross_receipts        = num(m, 'income.L1a_gross_receipts')
     totals.cost_of_goods_sold    = num(m, 'income.L2_cogs')

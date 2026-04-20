@@ -10,7 +10,7 @@
 import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
-import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs } from '../engine/tax_engine.js'
+import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { buildCanonicalModel, buildReturnPdf } from '../builders/build_return_pdf.js'
@@ -875,7 +875,19 @@ router.post('/compute', async (req, res) => {
         for (const [k, v] of scheduleKeys1120S) engineResult.field_values[k] = v
       }
     } else if (form_type === '1040') {
+      // Schedule E — compute first if structured inputs provided, then inject
+      // its total into schedule1_income so it flows to Form 1040 line 8.
+      let scheduleE: any = null
+      if (mergedInputs.schedule_e && typeof mergedInputs.schedule_e === 'object') {
+        scheduleE = calcScheduleE({ ...mergedInputs.schedule_e, tax_year } as ScheduleE_Inputs)
+        const prior = mergedInputs.schedule1_income || 0
+        mergedInputs.schedule1_income = prior + scheduleE.computed.L41_total_income_loss
+      }
       engineResult = calc1040({ ...mergedInputs, tax_year })
+      if (scheduleE) {
+        engineResult.schedule_e = scheduleE
+        engineResult.field_values = { ...(engineResult.field_values || {}), ...scheduleE.field_values }
+      }
     } else if (['4868', '7004', '8868'].includes(form_type)) {
       engineResult = calcExtension({ ...inputs, extension_type: form_type as ExtensionType, tax_year })
     } else if (form_type === '4562') {
@@ -1202,6 +1214,10 @@ router.post('/compute', async (req, res) => {
       source: isExtension ? 'extension' : 'proforma',
       saved: save !== false && !!entity_id,
       computed,
+      schedule_e: engineResult?.schedule_e ? {
+        computed: engineResult.schedule_e.computed,
+        field_values: engineResult.schedule_e.field_values,
+      } : undefined,
       citations: engineResult?.citations,
       supporting_documents: supportingDocs.length > 0 ? {
         count: supportingDocs.length,
