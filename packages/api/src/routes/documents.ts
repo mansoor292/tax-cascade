@@ -34,6 +34,79 @@ async function getUser(req: Request): Promise<string | null> {
 
 const router = Router()
 
+// Shared archive orchestrator — runs the mapper + archiveFiledReturn against
+// a document's stored textract_data and inserts a filed_import tax_return row.
+// Used on first ingest and by the /:id/rearchive endpoint (after mapper fixes).
+async function archiveDocumentAsReturn(
+  doc: any,
+  classification: any,
+  userId: string,
+  entityIdHint: string | null,
+  textractData: any,
+): Promise<any> {
+  try {
+    const { mapToCanonical } = await import('../intake/json_model_mapper.js')
+    const { archiveFiledReturn } = await import('../intake/archive_filed_return.js')
+
+    const formTypeMap: Record<string, string> = {
+      prior_return_1040: '1040', prior_return_1120: '1120', prior_return_1120s: '1120S',
+    }
+    const formType = formTypeMap[classification.doc_type] || '1120'
+    const txYear = classification.tax_year || doc.tax_year
+
+    const mapped = mapToCanonical({
+      source: 'textract', form_type: formType === '1120S' ? '1120S' : formType,
+      tax_year: txYear, key_value_pairs: textractData.kvs,
+    })
+
+    let entityId = entityIdHint || doc.entity_id || null
+    if (!entityId && classification.entity_name) {
+      const firstName = classification.entity_name.split(' ')[0]
+      const { data: existing } = await supabase.from('tax_entity')
+        .select('id').eq('user_id', userId).ilike('name', `%${firstName}%`).single()
+      entityId = existing?.id || null
+    }
+    if (!entityId || !txYear) return null
+
+    const archive = archiveFiledReturn(mapped, formType, classification.entity_name || null)
+
+    const { data: taxReturn } = await supabase.from('tax_return').insert({
+      entity_id: entityId,
+      tax_year: txYear,
+      form_type: formType,
+      status: 'filed',
+      source: 'filed_import',
+      is_amended: false,
+      input_data: {
+        source_document_id: doc.id,
+        mapper_model: mapped.model,
+        mapper_unmapped: mapped.unmapped,
+      },
+      computed_data: { computed: archive.totals, field_values: archive.field_values },
+      field_values: archive.field_values,
+      verification: {
+        mapper_stats: mapped.stats,
+        extracted_count: mapped.fields.length,
+        unmapped_count: mapped.unmapped.length,
+        source: 'filed_import',
+      },
+      computed_at: new Date().toISOString(),
+    }).select().single()
+
+    return {
+      id: taxReturn?.id,
+      form_type: formType, tax_year: txYear,
+      source: 'filed_import',
+      totals: archive.totals,
+      mapped_fields: mapped.fields.length,
+      unmapped_count: mapped.unmapped.length,
+    }
+  } catch (e: any) {
+    console.error('Auto-archive failed:', e.message)
+    return null
+  }
+}
+
 // Get presigned upload URL
 router.get('/presign', async (req, res) => {
   const userId = await getUser(req)
@@ -309,76 +382,12 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
 
   if (error) return res.status(500).json({ error: error.message })
 
-  // Auto-archive if it's a recognized prior-year return. We do NOT recompute —
-  // the filed PDF is authoritative. Every extracted canonical field goes into
-  // field_values verbatim; comparison-friendly totals go into computed_data.computed.
-  // Each ingest creates a NEW filed_import row (amendments/re-ingests accumulate).
-  let processedReturn = null
+  // Auto-archive if it's a recognized prior-year return. Inserts a filed_import
+  // tax_return row with every extracted canonical field in field_values, verbatim.
   const isReturn = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s'].includes(classification.doc_type || '')
-  if (isReturn && textractData?.kvs?.length && doc) {
-    try {
-      const { mapToCanonical } = await import('../intake/json_model_mapper.js')
-      const { archiveFiledReturn } = await import('../intake/archive_filed_return.js')
-
-      const formTypeMap: Record<string, string> = {
-        prior_return_1040: '1040', prior_return_1120: '1120', prior_return_1120s: '1120S',
-      }
-      const formType = formTypeMap[classification.doc_type] || '1120'
-      const txYear = classification.tax_year
-
-      const mapped = mapToCanonical({
-        source: 'textract', form_type: formType === '1120S' ? '1120S' : formType,
-        tax_year: txYear, key_value_pairs: textractData.kvs,
-      })
-
-      // Resolve entity — prefer document.entity_id (passed by ingest), fall back to name match
-      let entityId = entity_id || null
-      if (!entityId && classification.entity_name) {
-        const firstName = classification.entity_name.split(' ')[0]
-        const { data: existing } = await supabase.from('tax_entity')
-          .select('id').eq('user_id', userId).ilike('name', `%${firstName}%`).single()
-        entityId = existing?.id || null
-      }
-
-      if (entityId && txYear) {
-        const archive = archiveFiledReturn(mapped, formType, classification.entity_name || null)
-
-        const { data: taxReturn } = await supabase.from('tax_return').insert({
-          entity_id: entityId,
-          tax_year: txYear,
-          form_type: formType,
-          status: 'filed',
-          source: 'filed_import',
-          is_amended: false,
-          input_data: {
-            source_document_id: doc.id,
-            mapper_model: mapped.model,
-            mapper_unmapped: mapped.unmapped,
-          },
-          computed_data: { computed: archive.totals, field_values: archive.field_values },
-          field_values: archive.field_values,
-          verification: {
-            mapper_stats: mapped.stats,
-            extracted_count: mapped.fields.length,
-            unmapped_count: mapped.unmapped.length,
-            source: 'filed_import',
-          },
-          computed_at: new Date().toISOString(),
-        }).select().single()
-
-        processedReturn = {
-          id: taxReturn?.id,
-          form_type: formType, tax_year: txYear,
-          source: 'filed_import',
-          totals: archive.totals,
-          mapped_fields: mapped.fields.length,
-          unmapped_count: mapped.unmapped.length,
-        }
-      }
-    } catch (e: any) {
-      console.error('Auto-archive failed:', e.message)
-    }
-  }
+  const processedReturn = isReturn && textractData?.kvs?.length && doc
+    ? await archiveDocumentAsReturn(doc, classification, userId, entity_id || null, textractData)
+    : null
 
   // Auto-trigger discovery if form/year has no field map
   let discoveryStarted = false
@@ -414,6 +423,35 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
 
 // Expose the register handler as a route
 router.post('/register', registerHandler)
+
+// Re-run archive on a previously-ingested prior_return_* document. Uses the
+// stored textract_data (no new AWS calls) with the CURRENT mapper rules —
+// inserts a fresh filed_import row so mapper/archive improvements can be
+// applied without re-running Textract. Older filed_import rows are left in
+// place; compare_returns prefers the newest by computed_at.
+router.post('/:id/rearchive', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { data: doc } = await supabase.from('document')
+    .select('*').eq('id', req.params.id).eq('user_id', userId).single()
+  if (!doc) return res.status(404).json({ error: 'Not found' })
+
+  const isReturn = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s'].includes(doc.doc_type)
+  if (!isReturn) return res.status(400).json({ error: `doc_type ${doc.doc_type} is not a prior return` })
+  if (!doc.textract_data?.kvs?.length) {
+    return res.status(400).json({ error: 'Document has no textract data — run /extract first' })
+  }
+
+  const classification = {
+    doc_type: doc.doc_type,
+    tax_year: doc.tax_year,
+    entity_name: doc.meta?.entity_name || '',
+  }
+  const result = await archiveDocumentAsReturn(doc, classification, userId, doc.entity_id, doc.textract_data)
+  if (!result) return res.status(500).json({ error: 'Archive failed (see server logs)' })
+  res.json({ rearchived: result })
+})
 
 // Record a tax fact directly from conversation (no file upload required).
 // Creates a document row with doc_type set to the category — flows through

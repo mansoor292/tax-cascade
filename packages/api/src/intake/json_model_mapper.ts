@@ -277,8 +277,10 @@ const FUZZY_RULES_1120: FuzzyRule[] = [
   { pattern: /^27\s+total\s+deductions.*add\s+lines\s+12/,                canonical_key: 'deductions.L27_total_deductions',    confidence: 0.97 },
 
   // ── Page 1: Taxable Income & Tax (Lines 28-37) ──
-  { pattern: /^28\s+taxable\s+income.*before.*nol/,                        canonical_key: 'tax.L28_ti_before_nol',             confidence: 0.97 },
-  { pattern: /^29a\s+net\s+operating\s+loss/,                              canonical_key: 'tax.L29a_nol',                      confidence: 0.97 },
+  // Line 28 PDFs often say "before net operating loss deduction", not literal "nol"
+  { pattern: /^28\s+taxable\s+income.*before.*(?:net\s+operating\s+loss|nol)/,  canonical_key: 'tax.L28_ti_before_nol',         confidence: 0.97 },
+  // Line 29a is labeled "29 Net operating loss deduction ... 29a" — line-id can be at start or end
+  { pattern: /^29a?\s+net\s+operating\s+loss\s+deduction|net\s+operating\s+loss\s+deduction.*\b29a\b/, canonical_key: 'tax.L29a_nol',        confidence: 0.97 },
   { pattern: /^29b\s+special\s+deductions/,                                canonical_key: 'tax.L29b_special_ded',              confidence: 0.97 },
   { pattern: /^30\s+taxable\s+income.*subtract.*29c/,                     canonical_key: 'tax.L30_taxable_income',             confidence: 0.97 },
   { pattern: /^31\s+total\s+tax.*schedule\s+j/,                           canonical_key: 'tax.L31_total_tax',                  confidence: 0.97 },
