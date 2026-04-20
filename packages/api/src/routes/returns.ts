@@ -215,13 +215,17 @@ router.post('/process/:document_id', async (req, res) => {
       if (byForm) { entityId = byForm.id }
     }
 
-    // 5. Save tax_return
-    const { data: taxReturn, error } = await supabase.from('tax_return').upsert({
+    // 5. Save tax_return — filed_import rows are write-once per ingest; each
+    // /process call creates a new row (unique constraint was removed so
+    // multiple filed_imports per year are allowed if the PDF is re-ingested
+    // after corrections). Callers pick the authoritative one by computed_at.
+    const { data: taxReturn, error } = await supabase.from('tax_return').insert({
       entity_id: entityId,
       tax_year: taxYear,
       form_type: formType,
       status: 'computed',
       source: 'filed_import',
+      is_amended: false,
       input_data: engineInput,
       computed_data: engineResult,
       field_values: extracted,
@@ -232,8 +236,8 @@ router.post('/process/:document_id', async (req, res) => {
         unmapped_count: mapped.unmapped.length,
       },
       computed_at: new Date().toISOString(),
-      pdf_s3_path: null,  // invalidate cached PDF
-    }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
+      pdf_s3_path: null,
+    }).select().single()
 
     if (error) return res.status(500).json({ error: error.message })
 
@@ -1558,10 +1562,11 @@ print(json.dumps({'url': url}))
       pdfUrl = JSON.parse(uploadResult.trim()).url
     }
 
-    // Optionally save to database
+    // Optionally save to database — find-or-insert the latest extension for
+    // (entity, year, form_type); update if present, else insert.
     let taxReturn = null
     if (save && entity_id) {
-      const { data, error } = await supabase.from('tax_return').upsert({
+      const rowPayload = {
         entity_id,
         tax_year,
         form_type: extension_type,
@@ -1571,9 +1576,16 @@ print(json.dumps({'url': url}))
         input_data: inputs,
         computed_data: result,
         computed_at: new Date().toISOString(),
-        pdf_s3_path: null,  // invalidate cached PDF on recompute
-      }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
-
+        pdf_s3_path: null,
+      }
+      const { data: existing } = await supabase.from('tax_return')
+        .select('id').eq('entity_id', entity_id).eq('tax_year', tax_year)
+        .eq('form_type', extension_type).eq('source', 'extension')
+        .order('computed_at', { ascending: false }).limit(1).maybeSingle()
+      const q = existing?.id
+        ? supabase.from('tax_return').update(rowPayload).eq('id', existing.id)
+        : supabase.from('tax_return').insert(rowPayload)
+      const { data, error } = await q.select().single()
       if (error) return res.status(500).json({ error: error.message })
       taxReturn = data
     }
