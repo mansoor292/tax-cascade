@@ -568,9 +568,32 @@ router.post('/compute', async (req, res) => {
   }
 
   try {
-    // Pull supporting documents for this entity+year and merge into inputs
+    // Pull supporting documents for this entity+year and merge into inputs.
+    // CRITICAL: seed from whichever row this compute will land on so that an
+    // empty or partial `inputs` does not wipe previously-saved values.
+    // Priority: explicit return_id > amend_of source > latest proforma.
+    let existingInputData: Record<string, any> = {}
+    if (!new_row && save !== false && entity_id) {
+      let seedId: string | null = null
+      if (targetRow) seedId = targetRow.id
+      else if (amendOfRow) seedId = amendOfRow.id
+      else {
+        const isExtensionForm = ['4868', '7004', '8868'].includes(form_type)
+        const { data: latest } = await supabase.from('tax_return')
+          .select('id').eq('entity_id', entity_id).eq('tax_year', tax_year)
+          .eq('form_type', form_type).eq('source', isExtensionForm ? 'extension' : 'proforma')
+          .order('computed_at', { ascending: false }).limit(1).maybeSingle()
+        if (latest?.id) seedId = latest.id
+      }
+      if (seedId) {
+        const { data: seedRow } = await supabase.from('tax_return')
+          .select('input_data').eq('id', seedId).single()
+        existingInputData = (seedRow?.input_data || {}) as Record<string, any>
+      }
+    }
     let supportingDocs: any[] = []
-    const mergedInputs = { ...inputs }
+    // Caller's inputs override existing; unspecified fields fall through to prior state.
+    const mergedInputs: any = { ...existingInputData, ...inputs }
     const autoMergeLog: Array<{ field: string; value: number; sources: string[] }> = []
 
     const sum = (docs: any[], ...keys: string[]): number => {
