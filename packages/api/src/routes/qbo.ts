@@ -1051,37 +1051,48 @@ router.post('/:entity_id/recategorize', async (req, res) => {
       return res.status(404).json({ error: 'no Uncategorized / Ask-My-Accountant accounts found for this entity' })
     }
 
-    // ── 3. Pull TransactionList report for each source account ──
-    // QBO's TransactionList report accepts a single `account` filter. Loop.
+    // ── 3. Pull transactions in source accounts via GeneralLedger sections ──
+    // QBO's TransactionList `accounts` filter is unreliable across minorversions.
+    // The GeneralLedger report has per-account sections we can walk — more
+    // robust. Pulls the full year by default since GL already groups txns.
     type Row = { txn_id: string; txn_type: string; date: string; name: string; memo: string; amount: number; account_from: string }
     const rows: Row[] = []
     const startQ = start_date || '2020-01-01'
     const endQ = end_date || new Date().toISOString().slice(0, 10)
-    for (const acctId of sourceAccounts) {
-      const report = await qboFetch(entityId, '/reports/TransactionList', {
-        start_date: startQ, end_date: endQ, account: acctId, minorversion: '65',
-      })
-      const walk = (sections: any[]) => {
-        for (const r of sections) {
-          if (r.type === 'Section' && r.Rows?.Row) walk(r.Rows.Row)
-          else if (r.ColData) {
-            const cd = r.ColData
-            const date = cd[0]?.value
-            const type = cd[1]?.value
-            const id = cd[1]?.id || cd[0]?.id || ''
-            const name = cd[3]?.value || ''
-            const memo = cd[4]?.value || ''
-            const amountStr = cd[7]?.value
-            const amount = parseFloat(String(amountStr || '0').replace(/[,$]/g, ''))
-            if (id && date && !isNaN(amount)) {
-              const acctName = accounts.find((a: any) => a.id === acctId)?.name || acctId
-              rows.push({ txn_id: id, txn_type: type || 'Unknown', date, name, memo, amount, account_from: acctName })
+    const sourceNameSet = new Set(sourceAccounts.map(id => (accounts.find((a: any) => a.id === id)?.name || '')).filter(Boolean))
+    const gl = await qboFetch(entityId, '/reports/GeneralLedger', {
+      start_date: startQ, end_date: endQ, minorversion: '65',
+    })
+    const walkGl = (sections: any[]) => {
+      for (const sec of sections) {
+        if (sec.type === 'Section') {
+          const hdrCells = sec.Header?.ColData || []
+          const secName = hdrCells[0]?.value || ''
+          const isTargetSection = sourceNameSet.has(secName)
+            || Array.from(sourceNameSet).some(n => n && secName.includes(n))
+          if (isTargetSection) {
+            const rowsIn = sec.Rows?.Row || []
+            for (const r of rowsIn) {
+              if (r.type === 'Section') continue
+              const cd = r.ColData || []
+              // GL columns: Date | Type | Num | Name | Memo/Description | Split | Amount | Balance
+              const date = cd[0]?.value
+              const ttype = cd[1]?.value
+              const id = cd[1]?.id || ''
+              const name = cd[3]?.value || ''
+              const memo = cd[4]?.value || ''
+              const amountStr = cd[6]?.value
+              const amount = parseFloat(String(amountStr || '0').replace(/[,$]/g, ''))
+              if (id && date && !isNaN(amount) && amount !== 0) {
+                rows.push({ txn_id: id, txn_type: ttype || 'Unknown', date, name, memo, amount, account_from: secName })
+              }
             }
           }
+          walkGl(sec.Rows?.Row || [])
         }
       }
-      walk(report?.Rows?.Row || [])
     }
+    walkGl(gl?.Rows?.Row || [])
 
     if (rows.length === 0) {
       return res.json({
