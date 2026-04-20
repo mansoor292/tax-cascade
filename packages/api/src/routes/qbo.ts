@@ -991,6 +991,267 @@ router.delete('/:entity_id/resource/:resource', async (req, res) => {
   }
 })
 
+// ─── Bank CSV reconciliation ───
+// Inputs (body):
+//   { document_id, qbo_account_id, date_range? }            // CSV already uploaded
+//   { csv_data_b64, qbo_account_id, date_range? }            // inline CSV
+//
+// Pipeline:
+//   1. Parse CSV via lightweight heuristic column detector (bank_csv_parser.ts)
+//   2. Pull QBO transactions for the account + date range via TransactionList report
+//   3. Three-tier deterministic match (reconciler.ts)
+//   4. For unmatched CSV rows, ask Gemini Flash Lite to classify each against
+//      the entity's chart of accounts; validate suggested account_ids server-side
+//
+// Response:
+//   { summary, matched, missing_in_qbo: [{row, suggested_posting, confidence}],
+//     missing_in_bank, parser_issues, gemini_used }
+router.post('/:entity_id/reconcile_bank', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { csv_data_b64, qbo_account_id, date_range } = req.body || {}
+  if (!qbo_account_id) return res.status(400).json({ error: 'qbo_account_id required' })
+  if (!csv_data_b64) return res.status(400).json({ error: 'csv_data_b64 required (base64-encoded CSV text). document_id fetch path not yet implemented — upload the CSV content directly.' })
+
+  try {
+    // ── 1. Load CSV text ──
+    const csvText = Buffer.from(csv_data_b64, 'base64').toString('utf-8')
+
+    // ── 2. Parse CSV ──
+    const { parseBankCsv } = await import('../lib/bank_csv_parser.js')
+    const parsed = parseBankCsv(csvText)
+    if (parsed.rows.length === 0) {
+      return res.status(422).json({
+        error: 'CSV_PARSE_FAILED',
+        parser_issues: parsed.issues,
+        hint: 'The heuristic column detector could not map date/amount/description. Pass csv_data_b64 with a cleaned-up header, or fall back to manual categorization.',
+      })
+    }
+
+    // ── 3. Determine date range for QBO pull ──
+    const dates = parsed.rows.map(r => r.date).sort()
+    const start_date = date_range?.start || dates[0]
+    const end_date = date_range?.end || dates[dates.length - 1]
+
+    // ── 4. Pull QBO transactions for this account ──
+    // Use TransactionList report which returns all txn types filtered by account.
+    const reportResp = await qboFetch(req.params.entity_id, '/reports/TransactionList', {
+      start_date, end_date, account: qbo_account_id, minorversion: '65',
+    })
+    // Flatten the report rows into QboTxn shape
+    const qboRows: Array<{ id: string; date: string; amount: number; description: string; txn_type: string }> = []
+    const walk = (rows: any[]) => {
+      for (const r of rows) {
+        if (r.type === 'Section' && r.Rows?.Row) walk(r.Rows.Row)
+        else if (r.ColData) {
+          const cd = r.ColData
+          // TransactionList columns: Date, Type, Num, Name, Memo/Description, Account, Split, Amount (signed), Balance
+          const date = cd[0]?.value
+          const type = cd[1]?.value
+          const name = cd[3]?.value || ''
+          const memo = cd[4]?.value || ''
+          const amountStr = cd[7]?.value
+          const id = cd[1]?.id || cd[0]?.id || ''
+          const amount = parseFloat(String(amountStr || '0').replace(/[,$]/g, ''))
+          if (date && !isNaN(amount) && amount !== 0) {
+            qboRows.push({
+              id, date, amount,
+              description: `${name}${memo ? ' | ' + memo : ''}`.trim(),
+              txn_type: type || 'Unknown',
+            })
+          }
+        }
+      }
+    }
+    walk(reportResp?.Rows?.Row || [])
+
+    // ── 5. Reconcile ──
+    const { reconcile } = await import('../lib/reconciler.js')
+    const recon = reconcile(parsed.rows, qboRows)
+
+    // ── 6. Classify unmatched via Gemini (if key set + there are unmatched rows) ──
+    let gemini_used = false
+    let suggested_postings: Array<{ row: any; suggested_posting: any; confidence: number; reasoning?: string }> = []
+    const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
+    if (GEMINI_KEY && recon.missing_in_qbo.length > 0) {
+      try {
+        // Fetch entity's chart of accounts so Gemini routes to real account IDs
+        const coaResp = await qboFetch(req.params.entity_id, '/query', {
+          query: 'SELECT Id, Name, FullyQualifiedName, AccountType, AccountSubType FROM Account WHERE Active=true ORDERBY Name MAXRESULTS 500',
+        })
+        const accounts = (coaResp?.QueryResponse?.Account || []).map((a: any) => ({
+          id: a.Id,
+          name: a.FullyQualifiedName || a.Name,
+          type: a.AccountType,
+          sub_type: a.AccountSubType,
+        }))
+        const validIds = new Set(accounts.map((a: any) => a.id))
+
+        const { GoogleGenerativeAI } = await import('@google/generative-ai')
+        const genAI = new GoogleGenerativeAI(GEMINI_KEY)
+        const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
+
+        // Shape of the prompt: pass COA once + batch of unmatched rows.
+        // Ask for strict JSON array keyed by row_index.
+        const coaList = accounts.map((a: any) => `  ${a.id}: ${a.name} [${a.type}/${a.sub_type}]`).join('\n')
+        const rowsList = recon.missing_in_qbo.map((r, i) => `  ${i}: date=${r.date} amount=${r.amount} "${r.description.replace(/"/g, '\\"')}"`).join('\n')
+        const prompt = `You are categorizing bank transactions for an S-Corp / C-Corp entity that uses QuickBooks Online. For each bank transaction not yet booked in QBO, suggest how it should be posted.
+
+Chart of accounts (ID: name [type/subtype]):
+${coaList}
+
+Unmatched bank transactions:
+${rowsList}
+
+For each row, return one JSON object with these fields:
+  row_index: integer
+  type: one of "Purchase" | "Deposit" | "Transfer" | "JournalEntry" | "Payment" | "BillPayment" | "CreditCardPayment"
+  account_id: string — MUST be one of the IDs from the chart above; picks the expense/income/equity account to offset against the bank
+  memo: short string describing what this is
+  confidence: number 0..1
+  reasoning: short string (one sentence) explaining the classification
+
+Rules:
+- Bank account is the one paying/receiving (paid via account id ${qbo_account_id}). The suggested account_id is the OFFSETTING account.
+- Negative bank amount = money out (Purchase or Transfer/JE). Positive = money in (Deposit).
+- "STRIPE*" descriptions → type:"Deposit", pair with the Stripe clearing / A/R account if present.
+- "ORIG CO NAME:*PAYROLL*" / "GUSTO" → type:"Purchase", pair with payroll clearing / payroll expense.
+- "CITI AUTOPAY" / "*CARD PAYMENT*" → type:"CreditCardPayment" or "Transfer" to the credit card liability account.
+- Loan payments → type:"JournalEntry" (split principal vs interest).
+- "ZELLE TO:<name>" or check → type:"Purchase", pick a plausible expense account.
+- If you genuinely don't know, use an "Uncategorized Expense" / "Ask My Accountant" / "Uncategorized Asset" account if present in the chart; set confidence ≤ 0.5.
+
+Return ONLY a JSON array of objects, no prose, no markdown fences.`
+
+        const result = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+        })
+        const text = result.response.text()
+        let parsedJson: any[] = []
+        try { parsedJson = JSON.parse(text) } catch { parsedJson = [] }
+
+        for (const entry of parsedJson) {
+          const idx = Number(entry?.row_index)
+          if (!Number.isInteger(idx) || idx < 0 || idx >= recon.missing_in_qbo.length) continue
+          const row = recon.missing_in_qbo[idx]
+          const suggestedAcctId = String(entry?.account_id || '')
+          const accountValid = validIds.has(suggestedAcctId)
+          const amt = row.amount
+          // Build a minimal QBO posting payload matching the suggested type.
+          const type = String(entry?.type || 'Purchase')
+          let data: any = null
+          if (type === 'Deposit') {
+            data = {
+              TxnDate: row.date,
+              DepositToAccountRef: { value: qbo_account_id },
+              Line: [{
+                Amount: Math.abs(amt),
+                DetailType: 'DepositLineDetail',
+                Description: entry.memo || row.description,
+                DepositLineDetail: {
+                  AccountRef: accountValid ? { value: suggestedAcctId } : undefined,
+                },
+              }],
+              PrivateNote: `Auto-suggested from bank reconciliation | ${entry.reasoning || ''}`.slice(0, 240),
+            }
+          } else if (type === 'Purchase') {
+            data = {
+              TxnDate: row.date,
+              PaymentType: 'Check',
+              AccountRef: { value: qbo_account_id },
+              Line: [{
+                Amount: Math.abs(amt),
+                DetailType: 'AccountBasedExpenseLineDetail',
+                Description: entry.memo || row.description,
+                AccountBasedExpenseLineDetail: {
+                  AccountRef: accountValid ? { value: suggestedAcctId } : undefined,
+                },
+              }],
+              PrivateNote: `Auto-suggested from bank reconciliation | ${entry.reasoning || ''}`.slice(0, 240),
+            }
+          } else if (type === 'Transfer') {
+            data = {
+              TxnDate: row.date,
+              Amount: Math.abs(amt),
+              FromAccountRef: { value: amt < 0 ? qbo_account_id : (accountValid ? suggestedAcctId : qbo_account_id) },
+              ToAccountRef:   { value: amt < 0 ? (accountValid ? suggestedAcctId : qbo_account_id) : qbo_account_id },
+              PrivateNote: `Auto-suggested from bank reconciliation | ${entry.reasoning || ''}`.slice(0, 240),
+            }
+          } else if (type === 'JournalEntry') {
+            // Basic single-split JE — caller can add more lines manually
+            data = {
+              TxnDate: row.date,
+              Line: [
+                {
+                  Amount: Math.abs(amt),
+                  DetailType: 'JournalEntryLineDetail',
+                  Description: entry.memo || row.description,
+                  JournalEntryLineDetail: {
+                    PostingType: amt < 0 ? 'Debit' : 'Credit',
+                    AccountRef: accountValid ? { value: suggestedAcctId } : undefined,
+                  },
+                },
+                {
+                  Amount: Math.abs(amt),
+                  DetailType: 'JournalEntryLineDetail',
+                  Description: entry.memo || row.description,
+                  JournalEntryLineDetail: {
+                    PostingType: amt < 0 ? 'Credit' : 'Debit',
+                    AccountRef: { value: qbo_account_id },
+                  },
+                },
+              ],
+              PrivateNote: `Auto-suggested from bank reconciliation | ${entry.reasoning || ''}`.slice(0, 240),
+            }
+          }
+          suggested_postings.push({
+            row,
+            suggested_posting: { type, data, account_valid: accountValid, suggested_account_id: suggestedAcctId, suggested_account_name: accountValid ? accounts.find((a: any) => a.id === suggestedAcctId)?.name : null },
+            confidence: Number(entry.confidence) || 0,
+            reasoning: entry.reasoning,
+          })
+        }
+        gemini_used = true
+      } catch (e: any) {
+        // Non-fatal — fall back to returning missing_in_qbo without suggestions
+        parsed.issues.push(`Gemini classification failed: ${e.message}`)
+      }
+    }
+
+    const totalMatchedAmount = recon.matched.reduce((s, m) => s + Math.abs(m.bank_row.amount), 0)
+    const totalMissingQboAmount = recon.missing_in_qbo.reduce((s, r) => s + Math.abs(r.amount), 0)
+    const totalMissingBankAmount = recon.missing_in_bank.reduce((s, q) => s + Math.abs(q.amount), 0)
+
+    res.json({
+      summary: {
+        csv_rows: parsed.rows.length,
+        qbo_rows: qboRows.length,
+        matched: recon.matched.length,
+        missing_in_qbo: recon.missing_in_qbo.length,
+        missing_in_bank: recon.missing_in_bank.length,
+        matched_dollars: Math.round(totalMatchedAmount * 100) / 100,
+        missing_qbo_dollars: Math.round(totalMissingQboAmount * 100) / 100,
+        missing_bank_dollars: Math.round(totalMissingBankAmount * 100) / 100,
+        match_rate_pct: parsed.rows.length ? Math.round((recon.matched.length / parsed.rows.length) * 100) : 0,
+        format_detected: parsed.format_detected,
+        date_range: { start: start_date, end: end_date },
+      },
+      matched: recon.matched,
+      missing_in_qbo: suggested_postings.length > 0 ? suggested_postings : recon.missing_in_qbo.map(r => ({ row: r, suggested_posting: null, confidence: 0 })),
+      missing_in_bank: recon.missing_in_bank,
+      parser_issues: parsed.issues,
+      gemini_used,
+      note: gemini_used
+        ? 'Suggested postings come from Gemini Flash Lite with the entity chart of accounts as context. Each carries a confidence score and an account_valid flag — verify before piping into post_transactions_batch.'
+        : 'Gemini classifier not used (no GEMINI_API_KEY or no unmatched rows). Unmatched rows returned without suggestions.',
+    })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── Loan amortization → JournalEntry schedule ───
 // Pure-math helper that takes loan terms and returns a full amortization
 // schedule plus balanced JournalEntry payloads ready to feed into

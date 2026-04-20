@@ -434,6 +434,16 @@ function createServer(apiKey: string): McpServer {
     return text(await call('POST', '/api/returns/compute_from_qbo', params))
   })
 
+  // ─── Tool: reconcile_bank_import ───
+  server.tool('reconcile_bank_import', 'Reconcile a bank CSV against QBO transactions for an account. Server-side pipeline: (1) heuristic CSV column detection, (2) QBO TransactionList pull for the account+date range, (3) 3-tier deterministic match (exact date+amount → ±3d → fuzzy description overlap), (4) Gemini Flash Lite classifies unmatched rows against the entity chart of accounts, returning suggested_posting payloads with confidence scores. Each account_id is validated against the live COA server-side (no hallucinated IDs). Pipe the confirmed suggestions into post_transactions_batch. Eliminates the previous "parse CSV in Python → QBO query → manual date/amount match → build 77 posting payloads" workflow into one MCP turn.', {
+    entity_id: z.string().describe('Entity UUID'),
+    qbo_account_id: z.string().describe('QBO Account ID for the bank the CSV is for (e.g. "323" for BUS CHK)'),
+    csv_data_b64: z.string().describe('Base64-encoded CSV text. Read the CSV file, base64-encode it, and pass the string here.'),
+    date_range: z.object({ start: z.string(), end: z.string() }).optional().describe('Override date range for QBO pull; defaults to min/max dates in the CSV'),
+  }, async (params) => {
+    return text(await call('POST', `/api/qbo/${params.entity_id}/reconcile_bank`, params))
+  })
+
   // ─── Tool: post_transactions_batch ───
   server.tool('post_transactions_batch', 'Post an array of QBO transactions in one call. Serial (QBO v3 has no native batch for arbitrary entities) with per-item success/error reported. `rollback_on_error: true` reverses any successful posts on first failure via delete/void. Use this after loan_amortization_schedule or reconcile_bank_import to land 10-120 journal entries / purchases / deposits in a single MCP turn instead of 10-120 sequential qbo_resource calls.', {
     entity_id: z.string().describe('Entity UUID'),
