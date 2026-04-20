@@ -991,6 +991,221 @@ router.delete('/:entity_id/resource/:resource', async (req, res) => {
   }
 })
 
+// ─── Recategorize transactions out of Uncategorized / Ask-My-Accountant ───
+// QBO's API doesn't expose the bank-feed "match" workflow, so the common
+// pattern is: bulk-post bank txns to Uncategorized (fast, no decisions),
+// then run this endpoint to move each into its proper account based on
+// the chart of accounts + Gemini classification.
+//
+// POST /api/qbo/:entity_id/recategorize
+// Body:
+//   source_account_ids?: string[]   // defaults to Active accounts whose
+//                                    // name/full_name starts with "Uncategorized"
+//                                    // or "Ask My Accountant"
+//   start_date?, end_date?           // date window (defaults: all time)
+//   min_confidence?: number          // default 0.80 (for apply path only)
+//   dry_run?: boolean                // default true — classify but don't update
+//
+// Response:
+//   { queried_from_accounts, total, classified, auto_applied, review_queue,
+//     suggestions: [{txn_id, txn_type, date, amount, description, from,
+//                    suggested_to, confidence, reasoning}] }
+router.post('/:entity_id/recategorize', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const {
+    source_account_ids: srcIds,
+    start_date,
+    end_date,
+    min_confidence = 0.80,
+    dry_run = true,
+  } = req.body || {}
+
+  const entityId = req.params.entity_id
+
+  try {
+    // ── 1. Fetch COA ──
+    const coaResp = await qboFetch(entityId, '/query', {
+      query: 'SELECT Id, Name, FullyQualifiedName, AccountType, AccountSubType FROM Account WHERE Active=true ORDERBY Name MAXRESULTS 500',
+    })
+    const accounts = (coaResp?.QueryResponse?.Account || []).map((a: any) => ({
+      id: a.Id,
+      name: a.FullyQualifiedName || a.Name,
+      type: a.AccountType,
+      sub_type: a.AccountSubType,
+    }))
+    const validIds = new Set(accounts.map((a: any) => a.id))
+
+    // ── 2. Resolve source accounts ──
+    let sourceAccounts: string[] = Array.isArray(srcIds) && srcIds.length > 0 ? srcIds : []
+    if (sourceAccounts.length === 0) {
+      for (const a of accounts) {
+        const n = (a.name || '').toLowerCase()
+        if (n.startsWith('uncategorized') || n.startsWith('ask my account')) {
+          sourceAccounts.push(a.id)
+        }
+      }
+    }
+    if (sourceAccounts.length === 0) {
+      return res.status(404).json({ error: 'no Uncategorized / Ask-My-Accountant accounts found for this entity' })
+    }
+
+    // ── 3. Pull TransactionList report for each source account ──
+    // QBO's TransactionList report accepts a single `account` filter. Loop.
+    type Row = { txn_id: string; txn_type: string; date: string; name: string; memo: string; amount: number; account_from: string }
+    const rows: Row[] = []
+    const startQ = start_date || '2020-01-01'
+    const endQ = end_date || new Date().toISOString().slice(0, 10)
+    for (const acctId of sourceAccounts) {
+      const report = await qboFetch(entityId, '/reports/TransactionList', {
+        start_date: startQ, end_date: endQ, account: acctId, minorversion: '65',
+      })
+      const walk = (sections: any[]) => {
+        for (const r of sections) {
+          if (r.type === 'Section' && r.Rows?.Row) walk(r.Rows.Row)
+          else if (r.ColData) {
+            const cd = r.ColData
+            const date = cd[0]?.value
+            const type = cd[1]?.value
+            const id = cd[1]?.id || cd[0]?.id || ''
+            const name = cd[3]?.value || ''
+            const memo = cd[4]?.value || ''
+            const amountStr = cd[7]?.value
+            const amount = parseFloat(String(amountStr || '0').replace(/[,$]/g, ''))
+            if (id && date && !isNaN(amount)) {
+              const acctName = accounts.find((a: any) => a.id === acctId)?.name || acctId
+              rows.push({ txn_id: id, txn_type: type || 'Unknown', date, name, memo, amount, account_from: acctName })
+            }
+          }
+        }
+      }
+      walk(report?.Rows?.Row || [])
+    }
+
+    if (rows.length === 0) {
+      return res.json({
+        queried_from_accounts: sourceAccounts.map(id => ({ id, name: accounts.find((a: any) => a.id === id)?.name })),
+        total: 0,
+        classified: 0,
+        dry_run,
+        note: 'No transactions found in the specified source accounts for the given date range.',
+      })
+    }
+
+    // ── 4. Classify via Gemini ──
+    const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
+    if (!GEMINI_KEY) {
+      return res.status(500).json({
+        error: 'GEMINI_API_KEY not configured on the server',
+        rows_found: rows.length,
+      })
+    }
+
+    // Batch rows for the prompt. Gemini Flash Lite handles ~200 rows comfortably in one call.
+    // For bigger batches, chunk into passes of 150.
+    const { GoogleGenerativeAI } = await import('@google/generative-ai')
+    const genAI = new GoogleGenerativeAI(GEMINI_KEY)
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
+
+    // Build COA prompt once
+    const coaList = accounts.map((a: any) =>
+      `  ${a.id}: ${a.name} [${a.type}/${a.sub_type}]`
+    ).join('\n')
+
+    const CHUNK = 150
+    const allSuggestions: Array<any> = []
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const batch = rows.slice(i, i + CHUNK)
+      const rowsList = batch.map((r, idx) => {
+        const desc = `${r.name}${r.memo ? ' | ' + r.memo : ''}`.replace(/"/g, '\\"').slice(0, 180)
+        return `  ${idx}: date=${r.date} amount=${r.amount} txn_type=${r.txn_type} "${desc}"`
+      }).join('\n')
+
+      const prompt = `You are recategorizing QBO transactions that are currently sitting in an Uncategorized account. For each row, pick the best destination account from the chart of accounts below. These are real posted transactions that need to move into their proper category.
+
+Chart of accounts (ID: name [type/subtype]):
+${coaList}
+
+Transactions to recategorize:
+${rowsList}
+
+For each row, return a JSON object with:
+  row_index: integer (0-indexed within this batch)
+  account_id: string (MUST be one of the IDs above — picks the destination account)
+  confidence: number 0..1
+  reasoning: short string (one sentence)
+
+Rules:
+- Pick the MOST SPECIFIC matching account in the chart (e.g. "Software & apps" over generic "Other Expense" when the description is "Dropbox").
+- Avoid picking the source account back (don't suggest "Uncategorized" as the destination).
+- Confidence: 0.9+ for clear merchant patterns (Dropbox, Facebook Ads, Gusto); 0.7-0.9 for probable; 0.5-0.7 for guesses; <0.5 for "no idea" (in that case pick an "Ask My Accountant" / unresolved account if available, else a generic bucket).
+- Negative amount = credit/refund. Treat accordingly (e.g. "Adobe refund" at -89.99 → same account as the original Adobe charge).
+- Loan payments (PETERLoan, etc.) → loan liability + interest split; suggest the PRIMARY loan balance account here, flag reasoning so caller can make it a JE later.
+- Personal-looking charges (zoo, golf, pharmacy) → "Personal Expense" / "Owner's Draw" / "Partner distributions" if present, with confidence ≤ 0.7.
+
+Return ONLY a JSON array, no prose, no markdown fences.`
+
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+      })
+      const text = result.response.text()
+      let parsed: any[] = []
+      try { parsed = JSON.parse(text) } catch { parsed = [] }
+
+      for (const entry of parsed) {
+        const idx = Number(entry?.row_index)
+        if (!Number.isInteger(idx) || idx < 0 || idx >= batch.length) continue
+        const row = batch[idx]
+        const suggestedId = String(entry?.account_id || '')
+        const valid = validIds.has(suggestedId)
+        const destName = valid ? accounts.find((a: any) => a.id === suggestedId)?.name : null
+        const conf = Number(entry?.confidence) || 0
+        allSuggestions.push({
+          txn_id: row.txn_id,
+          txn_type: row.txn_type,
+          date: row.date,
+          amount: row.amount,
+          description: `${row.name}${row.memo ? ' | ' + row.memo : ''}`.slice(0, 160),
+          from: row.account_from,
+          suggested_to: destName,
+          suggested_to_id: suggestedId,
+          suggested_to_valid: valid,
+          confidence: conf,
+          reasoning: String(entry?.reasoning || ''),
+          would_apply: valid && conf >= min_confidence,
+        })
+      }
+    }
+
+    // ── 5. Apply path (non-dry-run) ──
+    // Not implemented yet — return dry-run result only. Future: fetch each
+    // transaction via /<resource>/<id>, modify Line[0].*LineDetail.AccountRef,
+    // PUT back via /<resource>?operation=update with SyncToken.
+    const auto_applied = dry_run ? 0 : 0  // placeholder
+    const review_queue = allSuggestions.filter(s => !s.would_apply).length
+
+    res.json({
+      entity_id: entityId,
+      dry_run,
+      queried_from_accounts: sourceAccounts.map(id => ({ id, name: accounts.find((a: any) => a.id === id)?.name })),
+      date_range: { start: startQ, end: endQ },
+      min_confidence,
+      total: rows.length,
+      classified: allSuggestions.length,
+      auto_applied,
+      review_queue,
+      suggestions: allSuggestions,
+      note: dry_run
+        ? 'Dry-run — no QBO updates applied. Review `suggestions[]` and re-call with dry_run:false to apply (apply path pending implementation).'
+        : 'Apply path not yet implemented — this dry-run result is returned as-is.',
+    })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── Bank CSV reconciliation ───
 // Inputs (body):
 //   { document_id, qbo_account_id, date_range? }            // CSV already uploaded
