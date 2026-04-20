@@ -434,6 +434,22 @@ function createServer(apiKey: string): McpServer {
     return text(await call('POST', '/api/returns/compute_from_qbo', params))
   })
 
+  // ─── Tool: loan_amortization_schedule ───
+  server.tool('loan_amortization_schedule', 'Compute a full loan amortization schedule given terms, and emit balanced QBO JournalEntry payloads ready for batch posting. Does NOT post — returns { summary, schedule[], journal_entries[] } for review. Pipe journal_entries into post_transactions_batch when ready. Useful for booking a multi-year loan (e.g. 120-month PETERLoan at 7% on $210k principal = 120 JEs), which previously required 12+ sequential qbo_resource calls.', {
+    entity_id: z.string().describe('Entity UUID (used for routing; schedule is pure math)'),
+    principal: z.number().describe('Principal loan amount (e.g. 210000)'),
+    annual_rate: z.number().describe('Annual interest rate as decimal (0.07 = 7%)'),
+    term_months: z.number().int().describe('Loan term in months (e.g. 120 for 10 years)'),
+    first_payment_date: z.string().describe('First payment date YYYY-MM-DD (subsequent dates increment monthly)'),
+    interest_account_id: z.string().describe('QBO account ID for interest expense (e.g. "35" Interest Paid)'),
+    principal_account_id: z.string().describe('QBO account ID for the loan balance liability (reduced each month)'),
+    from_account_id: z.string().describe('QBO account ID for the bank paying each monthly P&I (e.g. "323" BUS CHK)'),
+    doc_number_prefix: z.string().optional().describe('Prefix for JE DocNumbers (default "LN" → "LN-001", "LN-002", ...)'),
+    memo_prefix: z.string().optional().describe('Prefix for JE line descriptions (default "Loan payment")'),
+  }, async ({ entity_id, ...body }) => {
+    return text(await call('POST', `/api/qbo/${entity_id}/loan-amortization-schedule`, body))
+  })
+
   // ─── Tool: run_scenario ───
   server.tool('run_scenario', 'Create and compute a what-if tax scenario. Returns computed result, diff vs base return, input changes, PDF coverage, and a preview_pdf_url you can hand directly to the user. Pass base_return_id to get a field-by-field comparison.', {
     entity_id: z.string().describe('Entity UUID'),

@@ -892,6 +892,33 @@ router.delete('/:entity_id/resource/:resource', async (req, res) => {
   }
 })
 
+// ─── Loan amortization → JournalEntry schedule ───
+// Pure-math helper that takes loan terms and returns a full amortization
+// schedule plus balanced JournalEntry payloads ready to feed into
+// /transactions_batch. Does NOT post anything. Typical usage:
+//   1. POST /:entity_id/loan-amortization-schedule {principal, annual_rate, ...}
+//   2. Review summary + schedule
+//   3. Post schedule[i].journal_entries to /:entity_id/transactions_batch
+//      (or to qbo_resource one-at-a-time).
+router.post('/:entity_id/loan-amortization-schedule', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+  try {
+    const { amortizationSchedule } = await import('../lib/amortization.js')
+    const required = ['principal', 'annual_rate', 'term_months', 'first_payment_date',
+      'interest_account_id', 'principal_account_id', 'from_account_id']
+    for (const k of required) {
+      if (req.body?.[k] === undefined || req.body[k] === null) {
+        return res.status(400).json({ error: `${k} is required`, required })
+      }
+    }
+    const result = amortizationSchedule(req.body)
+    res.json(result)
+  } catch (e: any) {
+    res.status(400).json({ error: e.message })
+  }
+})
+
 // ─── Query endpoint — run any QBO query ───
 router.get('/:entity_id/query', async (req, res) => {
   const userId = await getUser(req)
