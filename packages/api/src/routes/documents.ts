@@ -498,11 +498,45 @@ router.post('/fact', async (req, res) => {
   }).select().single()
 
   if (error) return res.status(500).json({ error: error.message })
+
+  // ── Auto-compute on fact write ────────────────────────────────────
+  // Fact drop-ins flow through compute_return's auto-merge block — but
+  // only when compute_return actually runs. To keep the proforma in
+  // sync without requiring a separate call, fire a compute inline here.
+  // We pass inputs:{} so compute preserves existing input_data and only
+  // the newly-added fact (and any other facts) flow through the merge.
+  let auto_computed: { return_id?: string; error?: string } | null = null
+  try {
+    const { data: ent } = await supabase.from('tax_entity')
+      .select('form_type').eq('id', entity_id).eq('user_id', userId).single()
+    const form_type = ent?.form_type
+    if (form_type) {
+      const base = `${req.protocol}://${req.get('host')}`
+      const computeResp = await fetch(`${base}/api/returns/compute`, {
+        method: 'POST',
+        headers: {
+          'Authorization': req.headers.authorization || '',
+          'x-api-key': (req.headers['x-api-key'] as string) || '',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ entity_id, tax_year, form_type, inputs: {} }),
+      }).then(r => r.json())
+      if (computeResp?.return_id) {
+        auto_computed = { return_id: computeResp.return_id }
+      } else if (computeResp?.error) {
+        auto_computed = { error: computeResp.error }
+      }
+    }
+  } catch (e: any) {
+    auto_computed = { error: e.message }
+  }
+
   res.json({
     document_id: data.id,
     category,
     values,
-    note: 'Recorded as a virtual document. Will auto-merge into compute_return for this entity+year.',
+    auto_computed,
+    note: 'Recorded as a virtual document and synced into the matching proforma (if entity has a form_type). Use auto_computed.return_id to reference the updated return.',
   })
 })
 
