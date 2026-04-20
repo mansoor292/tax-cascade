@@ -12,6 +12,7 @@
  */
 import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
+import { buildTokenPayload, readTokensFromRow } from '../lib/qbo_tokens.js'
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://tax-api.catalogshub.com'
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
@@ -37,7 +38,7 @@ async function getUser(req: Request): Promise<string | null> {
 
 // ─── Token management ───
 
-async function refreshTokens(connectionId: string, refreshToken: string): Promise<{
+async function refreshTokens(connectionId: string, userId: string, refreshToken: string): Promise<{
   access_token: string; refresh_token: string; expires_in: number
 } | null> {
   const resp = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
@@ -60,10 +61,13 @@ async function refreshTokens(connectionId: string, refreshToken: string): Promis
   const data = await resp.json() as any
   const expiresAt = new Date(Date.now() + data.expires_in * 1000)
 
-  // Persist new tokens
-  await supabase.from('qbo_connection').update({
+  // Persist new tokens — dual-write plaintext + encrypted during transition
+  const payload = await buildTokenPayload(supabase, userId, {
     access_token: data.access_token,
     refresh_token: data.refresh_token,
+  })
+  await supabase.from('qbo_connection').update({
+    ...payload,
     access_token_expires_at: expiresAt.toISOString(),
   }).eq('id', connectionId)
 
@@ -81,14 +85,18 @@ async function getAccessToken(entityId: string): Promise<{
     .select('*').eq('entity_id', entityId).eq('is_active', true).single()
   if (!conn) return null
 
+  // Decrypt tokens (or fall back to plaintext during transition)
+  const tokens = await readTokensFromRow(supabase, conn)
+  if (!tokens) return null
+
   // Check if access token is still valid (with 5-min buffer)
   const expiresAt = new Date(conn.access_token_expires_at)
   if (expiresAt > new Date(Date.now() + 5 * 60 * 1000)) {
-    return { token: conn.access_token, realmId: conn.realm_id }
+    return { token: tokens.access_token, realmId: conn.realm_id }
   }
 
   // Refresh
-  const refreshed = await refreshTokens(conn.id, conn.refresh_token)
+  const refreshed = await refreshTokens(conn.id, conn.user_id, tokens.refresh_token)
   if (!refreshed) return null
   return { token: refreshed.access_token, realmId: conn.realm_id }
 }
@@ -303,15 +311,18 @@ router.get('/callback', async (req, res) => {
     }
   }
 
-  // Upsert connection
+  // Upsert connection — dual-write plaintext + encrypted tokens
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000)
+  const tokenPayload = await buildTokenPayload(supabase, stateData.user_id, {
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+  })
   const { error } = await supabase.from('qbo_connection').upsert({
     entity_id: entityId,
     user_id: stateData.user_id,
     realm_id: realmId,
     company_name: companyName,
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
+    ...tokenPayload,
     access_token_expires_at: expiresAt.toISOString(),
     connected_at: new Date().toISOString(),
     is_active: true,
