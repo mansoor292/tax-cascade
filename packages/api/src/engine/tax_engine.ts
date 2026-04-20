@@ -1286,14 +1286,21 @@ export function calcCascade(
   s_corp:     Form1120S_Result
   individual: ReturnType<typeof calc1040>
   delta: {
-    s_corp_income:    number
-    k1_to_individual: number
-    individual_tax:   number
-    qbi_saved:        number
+    s_corp_income:       number
+    k1_to_individual:    number
+    individual_tax:      number  // Schedule J line 2 equivalent — income tax only
+    qbi_saved:           number
+    // Separately-stated surtaxes so they're obvious in the delta rather
+    // than silently rolled into individual_tax. Both are independently
+    // deterministic from wages / net_se_income / investment income / filing status.
+    additional_medicare: number  // §3101(b)(2) — 0.9% on wages+SE above $250k MFJ / $200k single
+    niit:                number  // §1411 — 3.8% on net investment income above MAGI threshold
+    total_tax:           number  // Form 1040 line 24 — sum of all federal tax owed
   }
+  warnings: Array<{ code: string; message: string; fix_hint?: string }>
 } {
   const s_corp = calc1120S(s_corp_inputs)
-  
+
   // Find the primary shareholder's K-1
   const primary_k1 = s_corp.computed.k1s[0]  // assumes first = owner
 
@@ -1306,14 +1313,35 @@ export function calcCascade(
     is_sstb:            individual_base.is_sstb ?? s_corp_inputs.is_sstb ?? false,
   })
 
+  // Loud diagnostic: if wages + SE income cross the Additional Medicare
+  // threshold but the computed surtax is zero, something is off. Should
+  // never happen once calc1040 is wired correctly, but surface it so a
+  // regression doesn't silently skip $1k–2k of tax.
+  const warnings: Array<{ code: string; message: string; fix_hint?: string }> = []
+  const addMedThreshold = individual_base.filing_status === 'mfj' || individual_base.filing_status === 'qw' ? 250000
+    : individual_base.filing_status === 'mfs' ? 125000
+    : 200000
+  const addMedBase = (individual_base.wages || 0) + (individual_base.net_se_income || 0)
+  if (addMedBase > addMedThreshold && individual.computed.additional_medicare === 0) {
+    warnings.push({
+      code: 'ADDMED_ZERO_DESPITE_HIGH_WAGES',
+      message: `Wages + SE income ($${addMedBase.toLocaleString()}) exceeds the Additional Medicare Tax threshold ($${addMedThreshold.toLocaleString()} for ${individual_base.filing_status}) but the computed surtax is $0. Expected ~0.9% × excess.`,
+      fix_hint: 'Verify wages and net_se_income are passed as separate scalars; calc1040 sums them. If both are present and non-zero, this is a bug — file it.',
+    })
+  }
+
   return {
     s_corp,
     individual,
     delta: {
-      s_corp_income:    s_corp.computed.ordinary_income_loss,
-      k1_to_individual: primary_k1.ordinary_income,
-      individual_tax:   individual.computed.income_tax,
-      qbi_saved:        individual.computed.qbi_deduction,
-    }
+      s_corp_income:       s_corp.computed.ordinary_income_loss,
+      k1_to_individual:    primary_k1.ordinary_income,
+      individual_tax:      individual.computed.income_tax,
+      qbi_saved:           individual.computed.qbi_deduction,
+      additional_medicare: individual.computed.additional_medicare || 0,
+      niit:                individual.computed.niit || 0,
+      total_tax:           individual.computed.total_tax,
+    },
+    warnings,
   }
 }
