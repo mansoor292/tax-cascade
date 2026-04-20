@@ -598,7 +598,10 @@ router.post('/compute', async (req, res) => {
     let supportingDocs: any[] = []
     // Caller's inputs override existing; unspecified fields fall through to prior state.
     const mergedInputs: any = { ...existingInputData, ...inputs }
-    const autoMergeLog: Array<{ field: string; value: number; sources: string[] }> = []
+    const autoMergeLog: Array<{ field: string; value: number; sources: string[]; confidence?: string }> = []
+    // Warnings from the QBO mapper — non-blocking context for the caller
+    // (SSTB_SUSPECTED, OFFICER_COMP_UNSPLIT, CONTINGENCY_IN_REVENUE, ...)
+    const qboWarnings: Array<{ code: string; message: string; fix_hint?: string }> = []
 
     const sum = (docs: any[], ...keys: string[]): number => {
       let total = 0
@@ -611,43 +614,75 @@ router.post('/compute', async (req, res) => {
       }
       return Math.round(total)
     }
-    const setIfUnset = (field: string, value: number, sourceType: string, count: number) => {
+    const setIfUnset = (field: string, value: number, sourceType: string, count: number, confidence?: string) => {
       if (value && !mergedInputs[field]) {
         mergedInputs[field] = value
-        autoMergeLog.push({ field, value, sources: [`${count} × ${sourceType}`] })
+        autoMergeLog.push({ field, value, sources: [`${count} × ${sourceType}`], confidence })
       }
     }
 
-    // ─── Pre-populate corporate inputs from QBO P&L ───
-    // For 1120S / 1120 computes, if the entity has a QBO connection, pull
-    // the P&L and run it through the qbo_to_inputs mapper. This fills in
-    // the full set of deduction buckets (COGS, salaries, rents, advertising,
-    // etc.) so downstream engine + PDF fill reflects the books, not just
-    // whatever 3 fields the caller happened to pass. setIfUnset semantics
-    // so caller-provided inputs always win.
+    // ─── Pre-populate corporate inputs from QBO P&L + Balance Sheet ───
+    // For 1120/1120S computes, if the entity has a QBO connection, run the
+    // books through the qbo_to_inputs mapper. Fills:
+    //   - P&L → 1120/1120S deduction buckets + other_income
+    //   - Balance Sheet → Schedule L canonical keys (schedL.L1_cash_eoy_d, ...)
+    //   - Emits warnings (SSTB_SUSPECTED, OFFICER_COMP_UNSPLIT, ...)
+    // setIfUnset semantics: caller-provided inputs always win.
     if (entity_id && (form_type === '1120S' || form_type === '1120')) {
       try {
         const { data: conn } = await supabase.from('qbo_connection')
           .select('realm_id').eq('entity_id', entity_id).single()
         if (conn) {
-          const finResp = await fetch(
-            `${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year}`,
-            { headers: {
-              'Authorization': req.headers.authorization || '',
-              'x-api-key': (req.headers['x-api-key'] as string) || '',
-            }},
-          ).then(r => r.json()).catch(() => null)
+          // Pull current + prior year balance sheets for Schedule L BOY/EOY,
+          // plus the entity record to get business_code for SSTB warning.
+          const [finResp, priorFinResp, entityRow] = await Promise.all([
+            fetch(
+              `${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year}`,
+              { headers: {
+                'Authorization': req.headers.authorization || '',
+                'x-api-key': (req.headers['x-api-key'] as string) || '',
+              }},
+            ).then(r => r.json()).catch(() => null),
+            fetch(
+              `${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year - 1}`,
+              { headers: {
+                'Authorization': req.headers.authorization || '',
+                'x-api-key': (req.headers['x-api-key'] as string) || '',
+              }},
+            ).then(r => r.json()).catch(() => null),
+            (async () => {
+              try {
+                const r = await supabase.from('entity').select('meta').eq('id', entity_id).single()
+                return r.data
+              } catch { return null }
+            })(),
+          ])
+
           const pnlItems = finResp?.profit_and_loss?.items
+          const bsItems  = finResp?.balance_sheet?.items
+          const priorBs  = priorFinResp?.balance_sheet?.items
+          const businessCode: string | undefined = entityRow?.meta?.business_code
+
           if (pnlItems) {
-            const { build1120SInputsFromQbo, build1120InputsFromQbo } = await import('../maps/qbo_to_inputs.js')
-            const mapped = form_type === '1120S'
-              ? build1120SInputsFromQbo(pnlItems)
-              : build1120InputsFromQbo(pnlItems)
-            for (const [field, value] of Object.entries(mapped)) {
+            const { buildCorporateInputsFromQbo } = await import('../maps/qbo_to_inputs.js')
+            const packet = buildCorporateInputsFromQbo({
+              pnl: pnlItems,
+              bs: bsItems,
+              priorBs,
+              form_type: form_type as '1120' | '1120S',
+              business_code: businessCode,
+            })
+            // Write mapped inputs with setIfUnset semantics + carry each
+            // audit entry's confidence into the caller-visible log.
+            const auditByField = new Map<string, string>()
+            for (const a of packet.audit) auditByField.set(a.tax_field, a.confidence)
+            for (const [field, value] of Object.entries(packet.inputs)) {
               if (typeof value === 'number') {
-                setIfUnset(field, value, 'QBO P&L', 1)
+                setIfUnset(field, value, 'QBO P&L/BS', 1, auditByField.get(field))
               }
             }
+            // Surface warnings to the caller so the LLM can act on them.
+            qboWarnings.push(...packet.warnings)
           }
         }
       } catch (_) { /* QBO not connected or fetch failed — caller still gets explicit inputs */ }
@@ -1233,12 +1268,15 @@ router.post('/compute', async (req, res) => {
       supporting_documents: supportingDocs.length > 0 ? {
         count: supportingDocs.length,
         types: supportingDocs.map(d => d.doc_type),
-        auto_merged: autoMergeLog,  // [{field, value, sources}]
+        auto_merged: autoMergeLog,  // [{field, value, sources, confidence?}]
         merged_fields: Object.keys(mergedInputs).filter(k => !(k in inputs)),
         note: autoMergeLog.length > 0
           ? 'Values auto-merged from uploaded tax docs. CONFIRM with user before finalizing — a typo or misread value flows straight into the return.'
           : 'Documents found but no numeric fields extracted. Check doc classification.',
       } : undefined,
+      // Warnings from the QBO → inputs mapper (SSTB_SUSPECTED,
+      // OFFICER_COMP_UNSPLIT, CONTINGENCY_IN_REVENUE, etc.). Non-blocking.
+      qbo_warnings: qboWarnings.length > 0 ? qboWarnings : undefined,
       pdf_coverage: {
         filled: filledCount,
         total: totalMapFields,

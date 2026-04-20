@@ -460,6 +460,77 @@ export const TAX_TABLES: Record<number, YearlyTables> = {
 }
 
 // ─────────────────────────────────────────────────────────────
+// §199A(d)(2) SSTB classification by NAICS code
+// ─────────────────────────────────────────────────────────────
+//
+// A Specified Service Trade or Business (SSTB) loses the QBI deduction
+// above the phaseout threshold. IRC §199A(d)(2) lists the categories by
+// activity; we translate to NAICS prefix-matching. This list is not
+// exhaustive — the categories are principles-based, and Treas. Reg.
+// §1.199A-5(b)(2) expands on "any trade or business where the principal
+// asset is the reputation or skill of one or more of its employees."
+// When in doubt, require human confirmation rather than auto-apply.
+//
+// Sources: IRS Pub 535 (prior years), §199A(d)(2), Reg §1.199A-5.
+
+/** Prefix → §199A(d) category (human-readable, used in warnings). */
+export const SSTB_NAICS_PREFIXES: Array<{ prefix: string; category: string }> = [
+  // Health
+  { prefix: '621',    category: 'Health (§199A(d)(2)(A))' },
+  { prefix: '6211',   category: 'Offices of physicians' },
+  { prefix: '6212',   category: 'Offices of dentists' },
+  { prefix: '6213',   category: 'Offices of other health practitioners' },
+  // Law
+  { prefix: '5411',   category: 'Legal services (§199A(d)(2)(A))' },
+  // Accounting
+  { prefix: '54121',  category: 'Accounting, tax prep, bookkeeping, payroll (§199A(d)(2)(A))' },
+  // Actuarial
+  { prefix: '54133',  category: 'Engineering services — actuarial (§199A(d)(2)(A))' },
+  // Performing arts
+  { prefix: '7111',   category: 'Performing arts companies (§199A(d)(2)(A))' },
+  { prefix: '7112',   category: 'Spectator sports (§199A(d)(2)(A))' },
+  { prefix: '7115',   category: 'Independent artists, writers, performers' },
+  // Consulting
+  { prefix: '5416',   category: 'Management / scientific / technical consulting (§199A(d)(2)(A))' },
+  // Athletics (overlap with 7112 + performing arts)
+  // Financial services
+  { prefix: '52393',  category: 'Investment advice (§199A(d)(2)(A))' },
+  { prefix: '5231',   category: 'Securities and commodity contracts intermediation / brokerage' },
+  // Brokerage services
+  { prefix: '52599',  category: 'Other financial vehicles / brokerage (§199A(d)(2)(A))' },
+  // Consulting services (subset of 5416 above, explicit)
+  { prefix: '541611', category: 'Administrative management consulting' },
+  { prefix: '541612', category: 'Human resources consulting' },
+  { prefix: '541613', category: 'Marketing consulting' },
+  { prefix: '541614', category: 'Process / physical distribution consulting' },
+  { prefix: '541618', category: 'Other management consulting services' },
+  { prefix: '541620', category: 'Environmental consulting' },
+  { prefix: '541690', category: 'Other scientific / technical consulting' },
+]
+
+/**
+ * Returns the matching SSTB category (if any) for a given NAICS / business
+ * activity code. Match is longest-prefix-wins so `541213` (Tax prep)
+ * matches `54121` (Accounting) rather than `5412` (if it existed).
+ *
+ * Used as a **flag**, not as an auto-apply: callers must still confirm
+ * `is_sstb` explicitly before the QBI calc runs past the phaseout, since
+ * §199A(d)(2)(B) "reputation or skill" trades aren't cleanly NAICS-coded.
+ */
+export function isSstbByNaics(code: string | undefined | null): { match: boolean; category?: string; prefix?: string } {
+  if (!code) return { match: false }
+  const clean = String(code).replace(/[^0-9]/g, '')
+  if (!clean) return { match: false }
+  let best: { prefix: string; category: string } | null = null
+  for (const entry of SSTB_NAICS_PREFIXES) {
+    if (clean.startsWith(entry.prefix)) {
+      if (!best || entry.prefix.length > best.prefix.length) best = entry
+    }
+  }
+  return best ? { match: true, category: best.category, prefix: best.prefix } : { match: false }
+}
+
+// ─────────────────────────────────────────────────────────────
 // CALCULATION FUNCTIONS
 // ─────────────────────────────────────────────────────────────
 
