@@ -129,9 +129,44 @@ async function main() {
     writeFileSync('packages/api/test_output/schedule_e_test.pdf', bytes)
     check('PDF generated',           built.pdf.getPageCount() > 0 ? 'ok' : 'empty', 'ok')
     check('summary fields filled',   built.filled >= 6 ? 'ok' : `only ${built.filled}`, 'ok')
+    // Per-property grid: 2 props × ~10 numeric cells ≈ 20+ per-prop fields on top of summaries
+    check('per-property grid filled', built.filled >= 25 ? 'ok' : `only ${built.filled}`, 'ok')
     console.log(`  → packages/api/test_output/schedule_e_test.pdf (${built.filled} fields, ${built.pdf.getPageCount()} pages)`)
   } catch (e: any) {
     console.log(`  FAIL: PDF build threw — ${e.message}`)
+    fail++
+  }
+
+  // ═══ Case 8: PDF round-trip — fill then read back via form API ═══
+  console.log('\n=== Schedule E PDF — round-trip property values ===')
+  try {
+    const { PDFDocument } = await import('pdf-lib')
+    const built = await buildScheduleEPdf(
+      {
+        tax_year: 2025, taxpayer_name: 'Round Trip Test', taxpayer_id: '111-22-3333',
+        rental_properties: [
+          { address: '456 Beach Rd', rents: 36000, mortgage_interest: 14000, depreciation: 5000, taxes: 4000 },
+        ],
+      },
+      calcScheduleE({
+        tax_year: 2025,
+        rental_properties: [
+          { address: '456 Beach Rd', rents: 36000, mortgage_interest: 14000, depreciation: 5000, taxes: 4000 },
+        ],
+      }),
+      2025,
+    )
+    const bytes = await built.pdf.save()
+    const rt = await PDFDocument.load(bytes)
+    const rtForm = rt.getForm()
+    const addr = rtForm.getTextField('topmostSubform[0].Page1[0].Table_Line1a[0].RowA[0].f1_3[0]').getText()
+    const rents = rtForm.getTextField('topmostSubform[0].Page1[0].Table_Income[0].Line3[0].f1_16[0]').getText()
+    const mort  = rtForm.getTextField('topmostSubform[0].Page1[0].Table_Expenses[0].Line12[0].f1_43[0]').getText()
+    check('L1a address persisted',   addr, '456 Beach Rd')
+    check('L3 rents persisted',      rents, '36,000')
+    check('L12 mortgage persisted',  mort,  '14,000')
+  } catch (e: any) {
+    console.log(`  FAIL: round-trip threw — ${e.message}`)
     fail++
   }
 

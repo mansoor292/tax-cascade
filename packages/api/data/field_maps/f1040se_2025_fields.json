@@ -6,8 +6,13 @@
   },
   {
     "page": 1,
-    "field_id": "f1_15",
-    "label": "8 Other (describe) Properties:"
+    "field_id": "c1_1",
+    "label": "Unlabelled PDFCheckBox c1_1"
+  },
+  {
+    "page": 1,
+    "field_id": "c1_1",
+    "label": "Unlabelled PDFCheckBox c1_1"
   },
   {
     "page": 1,
@@ -16,157 +21,907 @@
   },
   {
     "page": 1,
+    "field_id": "c1_2",
+    "label": "Unlabelled PDFCheckBox c1_2"
+  },
+  {
+    "page": 1,
+    "field_id": "c1_2",
+    "label": "Unlabelled PDFCheckBox c1_2"
+  },
+  {
+    "page": 1,
     "field_id": "f1_3",
-    "label": "A"
+    "label": "1a Physical address (Property A)"
+  },
+  {
+    "page": 1,
+    "field_id": "c1_3",
+    "label": "2 Fair rental / personal use days (Property A)"
   },
   {
     "page": 1,
     "field_id": "f1_4",
-    "label": "B"
+    "label": "1a Physical address (Property B)"
+  },
+  {
+    "page": 1,
+    "field_id": "c1_4",
+    "label": "2 Fair rental / personal use days (Property B)"
   },
   {
     "page": 1,
     "field_id": "f1_5",
-    "label": "C"
+    "label": "1a Physical address (Property C)"
+  },
+  {
+    "page": 1,
+    "field_id": "c1_5",
+    "label": "2 Fair rental / personal use days (Property C)"
   },
   {
     "page": 1,
     "field_id": "f1_6",
-    "label": "A"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_64",
-    "label": "Other (list)"
+    "label": "1b Type of property (code 1-8, Property A)"
   },
   {
     "page": 1,
     "field_id": "f1_7",
-    "label": "B"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_77",
-    "label": "23a Total of all amounts reported on line 3 for all rental properties 23a"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_78",
-    "label": "b Total of all amounts reported on line 4 for all royalty properties 23b"
-  },
-  {
-    "page": 1,
-    "field_id": "f1_79",
-    "label": "c Total of all amounts reported on line 12 for all properties 23c"
+    "label": "1b Type of property (code 1-8, Property B)"
   },
   {
     "page": 1,
     "field_id": "f1_8",
-    "label": "C"
+    "label": "1b Type of property (code 1-8, Property C)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_9",
+    "label": "2 Fair rental / personal use days (Property A)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_10",
+    "label": "2 Fair rental / personal use days (Property A)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_11",
+    "label": "2 Fair rental / personal use days (Property B)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_12",
+    "label": "2 Fair rental / personal use days (Property B)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_13",
+    "label": "2 Fair rental / personal use days (Property C)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_14",
+    "label": "2 Fair rental / personal use days (Property C)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_15",
+    "label": "Other (describe) Properties — shared description"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "Unlabelled PDFTextField f1_16"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_17",
+    "label": "Unlabelled PDFTextField f1_17"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "Unlabelled PDFTextField f1_18"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_19",
+    "label": "Unlabelled PDFTextField f1_19"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_20",
+    "label": "Unlabelled PDFTextField f1_20"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_21",
+    "label": "Unlabelled PDFTextField f1_21"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_22",
+    "label": "Unlabelled PDFTextField f1_22"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_23",
+    "label": "Unlabelled PDFTextField f1_23"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_24",
+    "label": "Unlabelled PDFTextField f1_24"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_25",
+    "label": "Unlabelled PDFTextField f1_25"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_26",
+    "label": "Unlabelled PDFTextField f1_26"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_27",
+    "label": "Unlabelled PDFTextField f1_27"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_28",
+    "label": "Unlabelled PDFTextField f1_28"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_29",
+    "label": "Unlabelled PDFTextField f1_29"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_30",
+    "label": "Unlabelled PDFTextField f1_30"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_31",
+    "label": "Unlabelled PDFTextField f1_31"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_32",
+    "label": "Unlabelled PDFTextField f1_32"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_33",
+    "label": "Unlabelled PDFTextField f1_33"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_34",
+    "label": "Unlabelled PDFTextField f1_34"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_35",
+    "label": "Unlabelled PDFTextField f1_35"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_36",
+    "label": "Unlabelled PDFTextField f1_36"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_37",
+    "label": "Unlabelled PDFTextField f1_37"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_38",
+    "label": "Unlabelled PDFTextField f1_38"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_39",
+    "label": "Unlabelled PDFTextField f1_39"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_40",
+    "label": "Unlabelled PDFTextField f1_40"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_41",
+    "label": "Unlabelled PDFTextField f1_41"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_42",
+    "label": "Unlabelled PDFTextField f1_42"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_43",
+    "label": "Unlabelled PDFTextField f1_43"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_44",
+    "label": "Unlabelled PDFTextField f1_44"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_45",
+    "label": "Unlabelled PDFTextField f1_45"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_46",
+    "label": "Unlabelled PDFTextField f1_46"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_47",
+    "label": "Unlabelled PDFTextField f1_47"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_48",
+    "label": "Unlabelled PDFTextField f1_48"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_49",
+    "label": "Unlabelled PDFTextField f1_49"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_50",
+    "label": "Unlabelled PDFTextField f1_50"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_51",
+    "label": "Unlabelled PDFTextField f1_51"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_52",
+    "label": "Unlabelled PDFTextField f1_52"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_53",
+    "label": "Unlabelled PDFTextField f1_53"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_54",
+    "label": "Unlabelled PDFTextField f1_54"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_55",
+    "label": "Unlabelled PDFTextField f1_55"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_56",
+    "label": "Unlabelled PDFTextField f1_56"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_57",
+    "label": "Unlabelled PDFTextField f1_57"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_58",
+    "label": "Unlabelled PDFTextField f1_58"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_59",
+    "label": "Unlabelled PDFTextField f1_59"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_60",
+    "label": "Unlabelled PDFTextField f1_60"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_61",
+    "label": "Unlabelled PDFTextField f1_61"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_62",
+    "label": "Unlabelled PDFTextField f1_62"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_63",
+    "label": "Unlabelled PDFTextField f1_63"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_64",
+    "label": "Line 19 Other (list) — shared description"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_65",
+    "label": "Unlabelled PDFTextField f1_65"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_66",
+    "label": "Unlabelled PDFTextField f1_66"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_67",
+    "label": "Unlabelled PDFTextField f1_67"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_68",
+    "label": "Unlabelled PDFTextField f1_68"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_69",
+    "label": "Unlabelled PDFTextField f1_69"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_70",
+    "label": "Unlabelled PDFTextField f1_70"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_71",
+    "label": "Unlabelled PDFTextField f1_71"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_72",
+    "label": "Unlabelled PDFTextField f1_72"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_73",
+    "label": "Unlabelled PDFTextField f1_73"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_74",
+    "label": "Unlabelled PDFTextField f1_74"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_75",
+    "label": "Unlabelled PDFTextField f1_75"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_76",
+    "label": "Unlabelled PDFTextField f1_76"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_77",
+    "label": "23a Total of all amounts reported on line 3 for all rental properties"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_78",
+    "label": "23b Total of all amounts reported on line 4 for all royalty properties"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_79",
+    "label": "23c Total of all amounts reported on line 12 for all properties"
   },
   {
     "page": 1,
     "field_id": "f1_80",
-    "label": "d Total of all amounts reported on line 18 for all properties 23d"
+    "label": "23d Total of all amounts reported on line 18 for all properties"
   },
   {
     "page": 1,
     "field_id": "f1_81",
-    "label": "e Total of all amounts reported on line 20 for all properties 23e"
+    "label": "23e Total of all amounts reported on line 20 for all properties"
   },
   {
     "page": 1,
     "field_id": "f1_82",
-    "label": "24 Income. Add positive amounts shown on line 21. Do not include any losses 24"
+    "label": "24 Income. Add positive amounts from line 21 — do not include losses"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_83",
+    "label": "25 Losses. Add amounts from lines 21 and 22 that are losses"
   },
   {
     "page": 1,
     "field_id": "f1_84",
-    "label": "26 Total rental real estate and royalty income or (loss). Combine lines 24 and 25. Enter the result here. If Parts II, III, and IV, and line 40 on page 2 do not apply to you, also enter this amount on Schedule 1 (Form 1040), line 5. Otherwise, include this amount in the total on line 41 on page 2 26"
+    "label": "26 Total rental real estate and royalty income or loss (L24 - L25)"
   },
   {
     "page": 2,
     "field_id": "f2_1",
-    "label": "Name(s) shown on return. Do not enter name and social security number if shown on other side."
+    "label": "Name(s) shown on return (page 2)"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_1",
+    "label": "Unlabelled PDFCheckBox c2_1"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_1",
+    "label": "Unlabelled PDFCheckBox c2_1"
   },
   {
     "page": 2,
     "field_id": "f2_2",
-    "label": "Your social security number"
+    "label": "Your social security number (page 2)"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_2",
+    "label": "28 Partnership/S-corp entry (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_3",
+    "label": "28 Partnership/S-corp entry (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_3",
+    "label": "28 Partnership/S-corp entry (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_4",
+    "label": "28 Partnership/S-corp entry (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_4",
+    "label": "28 Partnership/S-corp entry (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_5",
+    "label": "28 Partnership/S-corp entry (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_5",
+    "label": "28 Partnership/S-corp entry (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_6",
+    "label": "28 Partnership/S-corp entry (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_6",
+    "label": "28 Partnership/S-corp entry (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_7",
+    "label": "28 Partnership/S-corp entry (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_7",
+    "label": "28 Partnership/S-corp entry (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_8",
+    "label": "28 Partnership/S-corp entry (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_8",
+    "label": "28 Partnership/S-corp entry (Row C)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_9",
+    "label": "28 Partnership/S-corp entry (Row C)"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_9",
+    "label": "28 Partnership/S-corp entry (Row C)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_10",
+    "label": "28 Partnership/S-corp entry (Row C)"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_10",
+    "label": "28 Partnership/S-corp entry (Row C)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_11",
+    "label": "28 Partnership/S-corp entry (Row C)"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_11",
+    "label": "Unlabelled PDFCheckBox c2_11"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_12",
+    "label": "Unlabelled PDFTextField f2_12"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_12",
+    "label": "Unlabelled PDFCheckBox c2_12"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_13",
+    "label": "Unlabelled PDFTextField f2_13"
+  },
+  {
+    "page": 2,
+    "field_id": "c2_13",
+    "label": "Unlabelled PDFCheckBox c2_13"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_14",
+    "label": "Unlabelled PDFTextField f2_14"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_15",
+    "label": "Line28g-k (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_16",
+    "label": "Line28g-k (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_17",
+    "label": "Line28g-k (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_18",
+    "label": "Line28g-k (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_19",
+    "label": "Line28g-k (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_20",
+    "label": "Line28g-k (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_21",
+    "label": "Line28g-k (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_22",
+    "label": "Line28g-k (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_23",
+    "label": "Line28g-k (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_24",
+    "label": "Line28g-k (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_25",
+    "label": "Line28g-k (Row C)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_26",
+    "label": "Line28g-k (Row C)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_27",
+    "label": "Line28g-k (Row C)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_28",
+    "label": "Line28g-k (Row C)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_29",
+    "label": "Line28g-k (Row C)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_30",
+    "label": "Unlabelled PDFTextField f2_30"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_31",
+    "label": "Unlabelled PDFTextField f2_31"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_32",
+    "label": "Unlabelled PDFTextField f2_32"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_33",
+    "label": "Unlabelled PDFTextField f2_33"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_34",
+    "label": "Unlabelled PDFTextField f2_34"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_35",
+    "label": "Unlabelled PDFTextField f2_35"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_36",
+    "label": "Unlabelled PDFTextField f2_36"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_37",
+    "label": "Unlabelled PDFTextField f2_37"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_38",
+    "label": "Unlabelled PDFTextField f2_38"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_39",
+    "label": "Unlabelled PDFTextField f2_39"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_40",
+    "label": "Unlabelled PDFTextField f2_40"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_41",
+    "label": "Unlabelled PDFTextField f2_41"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_42",
+    "label": "Unlabelled PDFTextField f2_42"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_43",
+    "label": "Unlabelled PDFTextField f2_43"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_44",
+    "label": "Unlabelled PDFTextField f2_44"
   },
   {
     "page": 2,
     "field_id": "f2_45",
-    "label": "30 Add columns (h) and (k) of line 29a 30"
+    "label": "30 Add columns (h) and (k) of line 29a"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_46",
+    "label": "Unlabelled PDFTextField f2_46"
   },
   {
     "page": 2,
     "field_id": "f2_47",
-    "label": "32 Total partnership and S corporation income or (loss). Combine lines 30 and 31 32"
+    "label": "32 Total partnership and S corporation income or loss"
   },
   {
     "page": 2,
     "field_id": "f2_48",
-    "label": "A"
+    "label": "Line33a-b (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_49",
+    "label": "Line33a-b (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_50",
+    "label": "Line33a-b (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_51",
+    "label": "Line33a-b (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_52",
+    "label": "Line33c-f (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_53",
+    "label": "Line33c-f (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_54",
+    "label": "Line33c-f (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_55",
+    "label": "Line33c-f (Row A)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_56",
+    "label": "Line33c-f (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_57",
+    "label": "Line33c-f (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_58",
+    "label": "Line33c-f (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_59",
+    "label": "Line33c-f (Row B)"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_60",
+    "label": "Unlabelled PDFTextField f2_60"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_61",
+    "label": "Unlabelled PDFTextField f2_61"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_62",
+    "label": "Unlabelled PDFTextField f2_62"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_63",
+    "label": "Unlabelled PDFTextField f2_63"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_64",
+    "label": "Unlabelled PDFTextField f2_64"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_65",
+    "label": "Unlabelled PDFTextField f2_65"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_66",
+    "label": "Unlabelled PDFTextField f2_66"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_67",
+    "label": "Unlabelled PDFTextField f2_67"
   },
   {
     "page": 2,
     "field_id": "f2_68",
-    "label": "35 Add columns (d) and (f) of line 34a 35"
+    "label": "35 Add columns (d) and (f) of line 34a"
+  },
+  {
+    "page": 2,
+    "field_id": "f2_69",
+    "label": "Unlabelled PDFTextField f2_69"
   },
   {
     "page": 2,
     "field_id": "f2_70",
-    "label": "37 Total estate and trust income or (loss). Combine lines 35 and 36 37"
+    "label": "37 Total estate and trust income or loss"
   },
   {
     "page": 2,
     "field_id": "f2_71",
-    "label": "(a) Name"
+    "label": "Unlabelled PDFTextField f2_71"
   },
   {
     "page": 2,
     "field_id": "f2_72",
-    "label": "(b) Employer identification number"
+    "label": "Unlabelled PDFTextField f2_72"
   },
   {
     "page": 2,
     "field_id": "f2_73",
-    "label": "(c) Excess inclusion from Schedules Q, line 2c (see instructions)"
+    "label": "Unlabelled PDFTextField f2_73"
   },
   {
     "page": 2,
     "field_id": "f2_74",
-    "label": "(d) Taxable income (net loss) from Schedules Q, line 1b"
+    "label": "Unlabelled PDFTextField f2_74"
   },
   {
     "page": 2,
     "field_id": "f2_75",
-    "label": "(e) Income from Schedules Q, line 3b"
+    "label": "Unlabelled PDFTextField f2_75"
   },
   {
     "page": 2,
     "field_id": "f2_76",
-    "label": "39 Combine columns (d) and (e) only. Enter the result here and include in the total on line 41 below 39"
+    "label": "39 Combine columns (d) and (e) only"
   },
   {
     "page": 2,
     "field_id": "f2_77",
-    "label": "40 Net farm rental income or (loss) from Form 4835. Also, complete line 42 below 40"
+    "label": "40 Net farm rental income or loss from Form 4835"
   },
   {
     "page": 2,
     "field_id": "f2_78",
-    "label": "41 Total income or (loss). Combine lines 26, 32, 37, 39, and 40. Enter the result here and on Schedule 1 (Form 1040), line 5 41"
+    "label": "41 Total income or loss (combine 26, 32, 37, 39, 40)"
   },
   {
     "page": 2,
     "field_id": "f2_79",
-    "label": "42 Reconciliation of farming and fishing income. Enter your gross farming and fishing income reported on Form 4835, line 7; Schedule K-1 (Form 1065), box 14, code B; Schedule K-1 (Form 1120-S), box 17, code AN; and Schedule K-1 (Form 1041), box 14, code F. See instructions 42"
+    "label": "42 Reconciliation of farming and fishing income"
   },
   {
     "page": 2,
     "field_id": "f2_80",
-    "label": "43 Reconciliation for real estate professionals. If you were a real estate professional (see instructions), enter the net income or (loss) you reported anywhere on Form 1040, Form 1040-SR, or Form 1040-NR from all rental real estate activities in which you materially participated under the passive activity loss rules 43"
+    "label": "43 Reconciliation for real estate professionals"
   }
 ]
