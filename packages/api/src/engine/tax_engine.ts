@@ -40,6 +40,16 @@ export interface Form1120S_Inputs {
   // Schedule K pass-through items
   charitable_contrib:   number
   section_179:          number
+  // Schedule K portfolio income (separately stated — does NOT flow through ordinary_income_loss)
+  // Each item passes through pro-rata to shareholders on K-1 lines 4/5a/5b/6/7/8a/10/16a.
+  schedule_k_interest?:               number  // K line 4 — portfolio interest income (1099-INT Box 1)
+  schedule_k_dividends_ordinary?:     number  // K line 5a — ordinary dividends (1099-DIV Box 1a)
+  schedule_k_dividends_qualified?:    number  // K line 5b — qualified dividends (1099-DIV Box 1b)
+  schedule_k_royalties?:              number  // K line 6 — royalties
+  schedule_k_st_cap_gain?:            number  // K line 7 — net short-term capital gain (loss)
+  schedule_k_lt_cap_gain?:            number  // K line 8a — net long-term capital gain (loss)
+  schedule_k_other_portfolio_income?: number  // K line 10 — other income (loss)
+  schedule_k_tax_exempt_interest?:    number  // K line 16a — tax-exempt interest
   // §199A — flows to shareholders on K-1
   is_sstb?:             boolean
   // Shareholders
@@ -61,6 +71,15 @@ export interface Form1120S_Result {
       charitable:      number
       section_179:     number
       w2_wages:        number
+      // Schedule K portfolio items (pro-rata allocation)
+      interest_income?:       number
+      dividends_ordinary?:    number
+      dividends_qualified?:   number
+      royalties?:             number
+      st_cap_gain?:           number
+      lt_cap_gain?:           number
+      other_portfolio?:       number
+      tax_exempt_interest?:   number
     }>
   }
   field_values?: Record<string, number>
@@ -185,6 +204,10 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     depreciation: 0, depletion: 0, advertising: 0, pension_plans: 0,
     employee_benefits: 0, other_deductions: 0,
     charitable_contrib: 0, section_179: 0,
+    schedule_k_interest: 0, schedule_k_dividends_ordinary: 0,
+    schedule_k_dividends_qualified: 0, schedule_k_royalties: 0,
+    schedule_k_st_cap_gain: 0, schedule_k_lt_cap_gain: 0,
+    schedule_k_other_portfolio_income: 0, schedule_k_tax_exempt_interest: 0,
     shareholders: [{ name: 'Shareholder', pct: 100 }],
   }, raw)
   const balance_1c = inp.gross_receipts - inp.returns_allowances
@@ -201,6 +224,7 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
   const ordinary_income_loss = total_income - total_deductions  // L21
 
   // K-1 allocation — pro-rata by ownership %
+  const prorata = (v: number | undefined, pct: number) => Math.round((v || 0) * pct / 100)
   const k1s = inp.shareholders.map(s => ({
     name:            s.name,
     pct:             s.pct,
@@ -208,6 +232,15 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     charitable:      Math.round(inp.charitable_contrib * s.pct / 100),
     section_179:     Math.round(inp.section_179 * s.pct / 100),
     w2_wages:        Math.round((inp.salaries_wages + inp.officer_compensation) * s.pct / 100),
+    // Schedule K portfolio items (pro-rata)
+    interest_income:      prorata(inp.schedule_k_interest, s.pct),
+    dividends_ordinary:   prorata(inp.schedule_k_dividends_ordinary, s.pct),
+    dividends_qualified:  prorata(inp.schedule_k_dividends_qualified, s.pct),
+    royalties:            prorata(inp.schedule_k_royalties, s.pct),
+    st_cap_gain:          prorata(inp.schedule_k_st_cap_gain, s.pct),
+    lt_cap_gain:          prorata(inp.schedule_k_lt_cap_gain, s.pct),
+    other_portfolio:      prorata(inp.schedule_k_other_portfolio_income, s.pct),
+    tax_exempt_interest:  prorata(inp.schedule_k_tax_exempt_interest, s.pct),
   }))
 
   // IRS-line canonical field_values for direct PDF fill
@@ -237,10 +270,26 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     'tax.L22_ordinary_income':          ordinary_income_loss,
     // Schedule K — pro-rata share items (flows to shareholders' K-1s)
     'schedK.L1_ordinary':               ordinary_income_loss,
+    'schedK.L4_interest':               inp.schedule_k_interest || 0,
+    'schedK.L5a_ordinary_dividends':    inp.schedule_k_dividends_ordinary || 0,
+    'schedK.L5b_qualified_dividends':   inp.schedule_k_dividends_qualified || 0,
+    'schedK.L6_royalties':              inp.schedule_k_royalties || 0,
+    'schedK.L7_st_capital_gain':        inp.schedule_k_st_cap_gain || 0,
+    'schedK.L8a_lt_capital_gain':       inp.schedule_k_lt_cap_gain || 0,
+    'schedK.L10_other_income':          inp.schedule_k_other_portfolio_income || 0,
     'schedK.L11_section_179':           inp.section_179,
     'schedK.L12a_charitable':           inp.charitable_contrib,
-    // L18: Income/loss reconciliation = ordinary + separately stated items - separately stated expenses
-    'schedK.L18_income_loss':           ordinary_income_loss + inp.charitable_contrib,
+    'schedK.L16a_tax_exempt_interest':  inp.schedule_k_tax_exempt_interest || 0,
+    // L18: Income/loss reconciliation = ordinary + separately stated portfolio items - separately stated expenses
+    'schedK.L18_income_loss':
+      ordinary_income_loss
+      + (inp.schedule_k_interest || 0)
+      + (inp.schedule_k_dividends_ordinary || 0)
+      + (inp.schedule_k_royalties || 0)
+      + (inp.schedule_k_st_cap_gain || 0)
+      + (inp.schedule_k_lt_cap_gain || 0)
+      + (inp.schedule_k_other_portfolio_income || 0)
+      + inp.charitable_contrib,
     // Schedule M-1 — reconciliation of income (loss) per books with return
     // Line 1 = net income per books, often close to ordinary_income_loss after book-tax adjustments
     'schedM1.L1_net_income':            ordinary_income_loss,

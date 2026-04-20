@@ -684,8 +684,34 @@ router.post('/compute', async (req, res) => {
           setIfUnset('k1_w2_wages', k1W2, 'K-1', k1s.length)
         }
 
-        // 1120/1120-S: could merge 1099-MISC rents into deductions.rents if received (rare for corps)
-        // Skipping for now — corps typically don't receive 1099s
+        // 1120/1120-S: corps that hold brokerage accounts or receive 1099s
+        // (e.g. an S-Corp with a treasury/contingency account) get portfolio
+        // income reported on Schedule K lines 4, 5a, 7, 8a, 10, 16a.
+        if (!isIndividual) {
+          const int99  = [...byType('1099_int'), ...byType('1099')]
+          const div99  = [...byType('1099_div'), ...byType('1099')]
+          const oid99  = byType('1099_oid')
+          const b99    = byType('1099_b')
+
+          // Portfolio interest — 1099-INT Box 1 + 1099-OID Box 1 + §1276 recharacterized AMD
+          const intBox1    = sum(int99, 'box1_interest', 'interest', 'box_1')
+          const oidBox1    = sum(oid99, 'box1_oid', 'oid', 'box_1')
+          const amd1276    = sum(b99,   'amd_recharacterized_per_1276')
+          const interestTotal = intBox1 + oidBox1 + amd1276
+
+          if (form_type === '1120S') {
+            setIfUnset('schedule_k_interest',             interestTotal,                                               '1099-INT/OID/B', int99.length + oid99.length + b99.length)
+            setIfUnset('schedule_k_dividends_ordinary',   sum(div99, 'box1a_ordinary_dividends', 'ordinary_dividends'), '1099-DIV',       div99.length)
+            setIfUnset('schedule_k_dividends_qualified',  sum(div99, 'box1b_qualified_dividends', 'qualified_dividends'), '1099-DIV',     div99.length)
+            // Net short/long-term gain — fact provides `net_short_term_gain_loss` (can be negative)
+            setIfUnset('schedule_k_st_cap_gain', sum(b99, 'net_short_term_gain_loss_short', 'net_short_term_gain_loss'), '1099-B', b99.length)
+            setIfUnset('schedule_k_lt_cap_gain', sum(b99, 'net_long_term_gain_loss'),                                    '1099-B', b99.length)
+          } else if (form_type === '1120') {
+            setIfUnset('interest_income', interestTotal,                                                  '1099-INT/OID/B', int99.length + oid99.length + b99.length)
+            setIfUnset('dividends',       sum(div99, 'box1a_ordinary_dividends', 'ordinary_dividends'),   '1099-DIV',       div99.length)
+            setIfUnset('capital_gains',   sum(b99,   'net_short_term_gain_loss_short', 'net_short_term_gain_loss'), '1099-B', b99.length)
+          }
+        }
       }
     }
 
