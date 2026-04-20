@@ -643,8 +643,15 @@ router.post('/compute', async (req, res) => {
     // CRITICAL: seed from whichever row this compute will land on so that an
     // empty or partial `inputs` does not wipe previously-saved values.
     // Priority: explicit return_id > amend_of source > latest proforma.
+    // The seed is populated regardless of `save` — a save:false compute
+    // is still reading existing state, so it should reflect that state,
+    // not zero it out. Only `new_row:true` skips the seed, since that's
+    // the explicit "I want a fresh scenario baseline" flag.
+    //
+    // Contract: `inputs:{}` is a no-op merge (preserve existing). To
+    // explicitly clear a field, pass `{ field: null }`.
     let existingInputData: Record<string, any> = {}
-    if (!new_row && save !== false && entity_id) {
+    if (!new_row && entity_id) {
       let seedId: string | null = null
       if (targetRow) seedId = targetRow.id
       else if (amendOfRow) seedId = amendOfRow.id
@@ -1000,6 +1007,61 @@ router.post('/compute', async (req, res) => {
       if (scheduleE) {
         engineResult.schedule_e = scheduleE
         engineResult.field_values = { ...(engineResult.field_values || {}), ...scheduleE.field_values }
+      }
+
+      // ── SSTB guardrail ─────────────────────────────────────────────
+      // If the return picked up QBI on K-1 pass-through income AND the
+      // caller didn't explicitly set is_sstb AND taxable income crosses
+      // the §199A phaseout threshold, refuse to finalize. Silently
+      // applying QBI to an SSTB (tax prep, law, consulting, etc.) above
+      // the phaseout understates tax by up to ~$40k on a $1.7M AGI. The
+      // guardrail forces the caller to confirm is_sstb:true or is_sstb:false
+      // before the response returns. Flag-only — never auto-apply — per
+      // §199A(d)(2)(B)'s "reputation or skill" catch-all, which NAICS
+      // prefix matching can't cleanly identify.
+      const callerPassedIsSstb = inputs && Object.prototype.hasOwnProperty.call(inputs, 'is_sstb')
+      const qbiDeducted = engineResult?.computed?.qbi_deduction > 0
+      if (qbiDeducted && !callerPassedIsSstb) {
+        const ti = engineResult.computed.taxable_income || 0
+        const filing = mergedInputs.filing_status as keyof typeof TAX_TABLES[number]['qbi_threshold']
+        const yearTable = TAX_TABLES[tax_year]
+        const phaseoutStart = yearTable?.qbi_threshold?.[filing] ?? Infinity
+        const k1SrcAmount = (Number(mergedInputs.qbi_from_k1) || 0) + (Number(mergedInputs.k1_ordinary_income) || 0)
+        if (ti > phaseoutStart && k1SrcAmount > 0) {
+          // Try to surface a specific SSTB suspicion from any known S-Corp
+          // entity in the user's account (best-effort — not a hard check).
+          let sstbSuspect: { business_code?: string; category?: string; entity_name?: string } | null = null
+          if (entity_id) {
+            try {
+              const { data: ents } = await supabase.from('tax_entity')
+                .select('id, name, meta, form_type').eq('user_id', userId)
+              const { isSstbByNaics } = await import('../engine/tax_tables.js')
+              for (const e of ents || []) {
+                if (e.form_type !== '1120S') continue
+                const bc = e.meta?.business_code
+                const hit = isSstbByNaics(bc)
+                if (hit.match) {
+                  sstbSuspect = { business_code: bc, category: hit.category, entity_name: e.name }
+                  break
+                }
+              }
+            } catch {/* best-effort */}
+          }
+          return res.status(409).json({
+            error: 'SSTB_CONFIRMATION_REQUIRED',
+            message: `Taxable income $${ti.toLocaleString()} exceeds the §199A QBI phaseout threshold $${phaseoutStart.toLocaleString()} (${filing}, TY${tax_year}) and K-1 pass-through income is present ($${k1SrcAmount.toLocaleString()}). The QBI deduction depends on whether the source trade or business is a Specified Service Trade or Business (SSTB — §199A(d)(2)). Pass is_sstb:true or is_sstb:false in inputs to confirm before compute finalizes.`,
+            filing_status: filing,
+            tax_year,
+            taxable_income: ti,
+            qbi_phaseout_start: phaseoutStart,
+            computed_qbi_if_not_sstb: engineResult.computed.qbi_deduction,
+            k1_pass_through_amount: k1SrcAmount,
+            suspected_sstb_entity: sstbSuspect,
+            hint: sstbSuspect
+              ? `The S-Corp "${sstbSuspect.entity_name}" has business_code ${sstbSuspect.business_code} which matches "${sstbSuspect.category}" — likely SSTB. Confirm with is_sstb:true to zero out QBI, or is_sstb:false if you disagree.`
+              : 'Check the business code of the source S-Corp. §199A(d)(2) categories: health, law, accounting/tax prep (541213), consulting, investment mgmt, performing arts, athletics, brokerage, and "reputation or skill"-based trades.',
+          })
+        }
       }
     } else if (['4868', '7004', '8868'].includes(form_type)) {
       engineResult = calcExtension({ ...inputs, extension_type: form_type as ExtensionType, tax_year })
