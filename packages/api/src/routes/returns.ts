@@ -652,7 +652,7 @@ router.post('/compute', async (req, res) => {
             ).then(r => r.json()).catch(() => null),
             (async () => {
               try {
-                const r = await supabase.from('entity').select('meta').eq('id', entity_id).single()
+                const r = await supabase.from('tax_entity').select('meta').eq('id', entity_id).single()
                 return r.data
               } catch { return null }
             })(),

@@ -653,7 +653,7 @@ router.get('/:entity_id/qbo-to-tax-inputs', async (req, res) => {
         .then(r => r.json()).catch(() => null),
       (async () => {
         try {
-          const r = await supabase.from('entity').select('meta').eq('id', entityId).single()
+          const r = await supabase.from('tax_entity').select('meta').eq('id', entityId).single()
           return r.data
         } catch { return null }
       })(),
