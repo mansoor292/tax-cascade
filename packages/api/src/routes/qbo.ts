@@ -618,6 +618,84 @@ router.get('/:entity_id/financials', async (req, res) => {
   }
 })
 
+// ─── QBO → tax inputs packet (inspection + override) ───
+// Exposes the buildCorporateInputsFromQbo mapping as a standalone endpoint
+// so the caller can inspect per-field classifications and confidence
+// before invoking compute_return. Intended usage:
+//   GET  /api/qbo-to-tax-inputs/:entity_id?tax_year=YYYY&form_type=1120S
+//   → { inputs, audit, warnings, sources: {pnl_as_of, bs_as_of, business_code} }
+// Caller edits inputs in place, passes back via /api/returns/compute.
+router.get('/:entity_id/qbo-to-tax-inputs', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const entityId = req.params.entity_id
+  const taxYear = parseInt(req.query.tax_year as string, 10)
+  const formType = (req.query.form_type as string) || '1120S'
+  if (!taxYear || isNaN(taxYear)) {
+    return res.status(400).json({ error: 'tax_year (numeric) required' })
+  }
+  if (formType !== '1120' && formType !== '1120S') {
+    return res.status(400).json({ error: 'form_type must be 1120 or 1120S' })
+  }
+
+  try {
+    // Pull current + prior year financials in parallel, plus entity meta.
+    const base = `${req.protocol}://${req.get('host')}`
+    const hdrs = {
+      'Authorization': req.headers.authorization || '',
+      'x-api-key': (req.headers['x-api-key'] as string) || '',
+    }
+    const [finResp, priorFinResp, entityRow] = await Promise.all([
+      fetch(`${base}/api/qbo/${entityId}/financials?year=${taxYear}`, { headers: hdrs })
+        .then(r => r.json()).catch(() => null),
+      fetch(`${base}/api/qbo/${entityId}/financials?year=${taxYear - 1}`, { headers: hdrs })
+        .then(r => r.json()).catch(() => null),
+      (async () => {
+        try {
+          const r = await supabase.from('entity').select('meta').eq('id', entityId).single()
+          return r.data
+        } catch { return null }
+      })(),
+    ])
+
+    const pnl = finResp?.profit_and_loss?.items
+    const bs = finResp?.balance_sheet?.items
+    const priorBs = priorFinResp?.balance_sheet?.items
+    if (!pnl) {
+      return res.status(404).json({
+        error: 'QBO P&L not available — entity may not be connected or no data for this year',
+        hint: 'Run /api/qbo/:entity_id/status to check connection.',
+      })
+    }
+
+    const { buildCorporateInputsFromQbo } = await import('../maps/qbo_to_inputs.js')
+    const packet = buildCorporateInputsFromQbo({
+      pnl, bs, priorBs,
+      form_type: formType as '1120' | '1120S',
+      business_code: entityRow?.meta?.business_code,
+    })
+
+    res.json({
+      entity_id: entityId,
+      tax_year: taxYear,
+      form_type: formType,
+      inputs: packet.inputs,
+      audit: packet.audit,
+      warnings: packet.warnings,
+      sources: {
+        pnl_as_of: finResp?.profit_and_loss?.fetched_at || null,
+        bs_as_of: finResp?.balance_sheet?.fetched_at || null,
+        prior_bs_as_of: priorFinResp?.balance_sheet?.fetched_at || null,
+        business_code: entityRow?.meta?.business_code || null,
+      },
+      note: 'Inspect audit entries to see per-field provenance + confidence. Edit inputs in place and pass the entire packet to POST /api/returns/compute as `inputs` (the extra audit/warnings/sources keys are ignored by compute).',
+    })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── Chart of Accounts ───
 router.get('/:entity_id/accounts', async (req, res) => {
   const userId = await getUser(req)

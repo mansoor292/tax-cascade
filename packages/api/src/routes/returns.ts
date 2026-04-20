@@ -1300,6 +1300,105 @@ router.post('/compute', async (req, res) => {
   }
 })
 
+// ─── One-shot: pull QBO → map → apply overrides → compute ───
+// Collapses the two-step pattern (GET /api/qbo/:entity_id/qbo-to-tax-inputs
+// → edit → POST /api/returns/compute) into a single call. Use when the
+// caller trusts the default mapping or has a small set of field-level
+// overrides. Response includes the full compute payload PLUS the mapper
+// audit and warnings so the caller can iterate without a second round-trip.
+//
+// Body: { entity_id, tax_year, form_type, overrides?, return_id?,
+//         amend_of?, new_row?, save? }
+// overrides: Record<string, number|string|boolean> — shallow-merged onto
+//            the mapper-derived inputs before compute. Caller can also
+//            pass inputs:{} in the body and achieve the same thing; the
+//            overrides alias is provided for clarity.
+router.post('/compute_from_qbo', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { entity_id, tax_year, form_type, overrides, return_id, amend_of, new_row, save } = req.body
+  if (!entity_id || !tax_year || !form_type) {
+    return res.status(400).json({ error: 'entity_id, tax_year, form_type required' })
+  }
+  if (form_type !== '1120' && form_type !== '1120S') {
+    return res.status(400).json({
+      error: 'compute_from_qbo currently supports 1120 and 1120S only',
+      hint: 'For 1040 pass-through from K-1s, use compute with manual inputs or rely on the existing auto-merge of K-1 facts.',
+    })
+  }
+
+  // Pull the mapper packet (same code path as GET /qbo-to-tax-inputs).
+  try {
+    const base = `${req.protocol}://${req.get('host')}`
+    const hdrs = {
+      'Authorization': req.headers.authorization || '',
+      'x-api-key': (req.headers['x-api-key'] as string) || '',
+    }
+    const [finResp, priorFinResp, entityRow] = await Promise.all([
+      fetch(`${base}/api/qbo/${entity_id}/financials?year=${tax_year}`, { headers: hdrs })
+        .then(r => r.json()).catch(() => null),
+      fetch(`${base}/api/qbo/${entity_id}/financials?year=${tax_year - 1}`, { headers: hdrs })
+        .then(r => r.json()).catch(() => null),
+      (async () => {
+        try {
+          const r = await supabase.from('entity').select('meta').eq('id', entity_id).single()
+          return r.data
+        } catch { return null }
+      })(),
+    ])
+    const pnl = finResp?.profit_and_loss?.items
+    if (!pnl) {
+      return res.status(404).json({
+        error: 'QBO P&L not available — entity may not be connected or no data for this year',
+      })
+    }
+
+    const { buildCorporateInputsFromQbo } = await import('../maps/qbo_to_inputs.js')
+    const packet = buildCorporateInputsFromQbo({
+      pnl,
+      bs: finResp?.balance_sheet?.items,
+      priorBs: priorFinResp?.balance_sheet?.items,
+      form_type: form_type as '1120' | '1120S',
+      business_code: entityRow?.meta?.business_code,
+    })
+
+    // Shallow-merge caller overrides onto mapper inputs.
+    const mergedInputs = { ...packet.inputs, ...(overrides || {}) }
+
+    // Forward to /compute internally (loopback call).
+    const computeBody = {
+      entity_id, tax_year, form_type,
+      inputs: mergedInputs,
+      return_id, amend_of, new_row, save,
+    }
+    const computeResp = await fetch(`${base}/api/returns/compute`, {
+      method: 'POST',
+      headers: { ...hdrs, 'Content-Type': 'application/json' },
+      body: JSON.stringify(computeBody),
+    }).then(r => r.json())
+
+    // Surface the mapper packet alongside the compute result so the
+    // caller sees audit + warnings without another round-trip.
+    res.json({
+      ...computeResp,
+      qbo_mapper: {
+        audit: packet.audit,
+        warnings: packet.warnings,
+        overrides_applied: Object.keys(overrides || {}),
+        sources: {
+          pnl_as_of: finResp?.profit_and_loss?.fetched_at || null,
+          bs_as_of: finResp?.balance_sheet?.fetched_at || null,
+          prior_bs_as_of: priorFinResp?.balance_sheet?.fetched_at || null,
+          business_code: entityRow?.meta?.business_code || null,
+        },
+      },
+    })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ─── Copy fields from prior-year return into current-year inputs ───
 router.post('/use-prior-year', async (req, res) => {
   const userId = await getUser(req)

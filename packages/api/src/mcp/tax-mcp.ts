@@ -402,6 +402,38 @@ function createServer(apiKey: string): McpServer {
     return text(await call('POST', '/api/returns/compute', params))
   })
 
+  // ─── Tool: qbo_to_tax_inputs ───
+  // Returns the mapper packet WITHOUT computing so the caller can inspect
+  // per-field classifications and override anything it disagrees with
+  // before invoking compute_return.
+  server.tool('qbo_to_tax_inputs', 'Map QBO P&L + Balance Sheet into 1120/1120S input fields. Returns {inputs, audit, warnings} packet — each input has a per-line audit entry citing its QBO source + confidence rule, and the warnings flag preparer-judgment items (SSTB_SUSPECTED, OFFICER_COMP_UNSPLIT, CONTINGENCY_IN_REVENUE). Use this to inspect classifications BEFORE computing; edit inputs in place and pass to compute_return. Or skip inspection and call compute_return_from_qbo for a one-shot pipeline. Schedule K portfolio items (interest/dividends/cap gains) are intentionally skipped — those come from 1099 facts during compute to avoid double-counting QBO book entries.', {
+    entity_id: z.string().describe('Entity UUID'),
+    tax_year: z.number().describe('Tax year to pull QBO data for'),
+    form_type: z.string().describe('1120 or 1120S'),
+  }, async ({ entity_id, tax_year, form_type }) => {
+    return text(await call('GET', `/api/qbo/${entity_id}/qbo-to-tax-inputs?tax_year=${tax_year}&form_type=${form_type}`))
+  })
+
+  // ─── Tool: compute_return_from_qbo ───
+  // One-shot wrapper: pulls the mapper packet, applies optional overrides,
+  // calls compute_return. Response includes the full compute payload PLUS
+  // the mapper audit + warnings so the caller can iterate without a second
+  // round-trip. Typical flow: call this first with no overrides; if the
+  // result + audit surfaces a classification you disagree with, call again
+  // with `overrides: { field: corrected_value }`.
+  server.tool('compute_return_from_qbo', 'Pull QBO data → map to 1120/1120S inputs → apply overrides → compute in one call. Response includes the compute result plus qbo_mapper.{audit, warnings, sources, overrides_applied}. Intended to replace the multi-turn "pull P&L, hand-classify each line, total deductions, call compute" workflow with 1–3 round trips to converge. Pass overrides to correct specific classifications; all other fields keep their mapper-derived values.', {
+    entity_id: z.string().describe('Entity UUID'),
+    tax_year: z.number().describe('Tax year'),
+    form_type: z.string().describe('1120 or 1120S'),
+    overrides: z.record(z.any()).optional().describe('Field-level overrides applied AFTER the mapper runs. E.g. {officer_compensation: 60000, salaries_wages: 177802, is_sstb: true}. Use this to correct any audit entry you disagree with.'),
+    return_id: z.string().optional().describe('Update this specific row. Rejected if filed_import.'),
+    amend_of: z.string().optional().describe('Start an amendment off this return_id.'),
+    new_row: z.boolean().optional().describe('Force INSERT a fresh proforma row.'),
+    save: z.boolean().optional().describe('Save as tax_return record (default true).'),
+  }, async (params) => {
+    return text(await call('POST', '/api/returns/compute_from_qbo', params))
+  })
+
   // ─── Tool: run_scenario ───
   server.tool('run_scenario', 'Create and compute a what-if tax scenario. Returns computed result, diff vs base return, input changes, PDF coverage, and a preview_pdf_url you can hand directly to the user. Pass base_return_id to get a field-by-field comparison.', {
     entity_id: z.string().describe('Entity UUID'),
