@@ -699,11 +699,22 @@ router.post('/compute', async (req, res) => {
           const nec99 = byType('1099_nec')
           setIfUnset('net_se_income', sum(nec99, 'nonemployee_comp', 'box_1'), '1099-NEC', nec99.length)
 
-          // 1099-MISC → rents, royalties, other → schedule1_income aggregate
+          // 1099-MISC → rents, royalties, other → schedule1_income aggregate.
+          // Suppressed if caller supplied structured schedule_e: Schedule E's
+          // L41 total is injected into schedule1_income downstream, so the
+          // 1099-MISC rental amounts already round-trip through that path.
           const misc99 = byType('1099_misc')
-          const miscIncome = sum(misc99, 'rents', 'box_1') + sum(misc99, 'royalties', 'box_2')
-                           + sum(misc99, 'other_income', 'box_3')
-          setIfUnset('schedule1_income', miscIncome, '1099-MISC', misc99.length)
+          if (!mergedInputs.schedule_e) {
+            const miscIncome = sum(misc99, 'rents', 'box_1') + sum(misc99, 'royalties', 'box_2')
+                             + sum(misc99, 'other_income', 'box_3')
+            setIfUnset('schedule1_income', miscIncome, '1099-MISC', misc99.length)
+          } else if (misc99.length) {
+            autoMergeLog.push({
+              field: 'schedule1_income',
+              value: 0,
+              sources: [`${misc99.length} × 1099-MISC skipped — schedule_e provided; fold rental/royalty totals into schedule_e.rental_properties to avoid double count`],
+            })
+          }
 
           // K-1 → ordinary_income, w2_wages
           const k1s = byType('k1')

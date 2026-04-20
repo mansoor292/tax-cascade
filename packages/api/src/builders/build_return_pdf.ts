@@ -824,7 +824,22 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
   await append(main.pdf)
   let totalFilled = main.filled
 
-  // 4. Supporting forms (1120 and 1120S)
+  // 4. 1040 supporting schedules
+  if (formType === '1040') {
+    const scheduleE = (input.computedData as any)?.schedule_e
+    if (scheduleE?.computed && scheduleE?.inputs) {
+      try {
+        const { buildScheduleEPdf } = await import('./build_schedule_e.js')
+        const sched = await buildScheduleEPdf(scheduleE.inputs, scheduleE, taxYear)
+        if (sched?.pdf) await append(sched.pdf, 'Schedule E')
+        totalFilled += sched?.filled || 0
+      } catch (e: any) {
+        console.error('Schedule E build failed:', e.message)
+      }
+    }
+  }
+
+  // 5. Supporting forms (1120 and 1120S)
   if (formType === '1120' || formType === '1120S') {
     // 1125-A (COGS)
     if (model['cogs.L8_cogs'] || model['income.L2_cogs'] || model['cogs.L5_other']) {

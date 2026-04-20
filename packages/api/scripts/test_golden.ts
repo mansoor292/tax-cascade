@@ -8,7 +8,7 @@
  *
  * Run: npx tsx packages/api/scripts/test_golden.ts
  */
-import { calc1040, calc1120, calc1120S } from '../src/engine/tax_engine.js'
+import { calc1040, calc1120, calc1120S, calcScheduleE } from '../src/engine/tax_engine.js'
 
 type Golden = {
   name: string
@@ -131,6 +131,25 @@ const cases: Golden[] = [
       total_income: 1500000,
       total_deductions: 500000,
       ordinary_income_loss: 1000000,
+    },
+  },
+  {
+    name: 'Schedule E — two rentals (gain + loss) + partnership K-1',
+    run: () => calcScheduleE({
+      tax_year: 2025,
+      rental_properties: [
+        { address: 'A', rents: 30000, mortgage_interest: 10000, depreciation: 4000, repairs: 1000, taxes: 3000 },
+        { address: 'B', rents: 18000, mortgage_interest: 15000, depreciation: 5000, repairs: 2000, taxes: 2500, insurance: 1500 },
+      ],
+      partnerships: [{ name: 'LP', type: 'P', ordinary_income: 25000 }],
+    }).computed,
+    expected: {
+      L23a_total_rents: 48000,
+      L24_income: 12000,
+      L25_losses: 8000,
+      L26_rental_royalty_net: 4000,
+      L32_partnership_total: 25000,
+      L41_total_income_loss: 29000,
     },
   },
 ]
