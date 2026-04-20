@@ -25,7 +25,7 @@
  */
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { runPython } from './run_python.js'
+import { KMSClient, GenerateDataKeyCommand, DecryptCommand } from '@aws-sdk/client-kms'
 
 // Read env lazily so tests (and deploy-time env injection) work without module reload.
 const kmsKeyId    = () => process.env.TAX_API_KMS_KEY || ''
@@ -37,6 +37,18 @@ const CURRENT_VERSION = 1
 
 interface CacheEntry { dek: Buffer; expiresAt: number }
 const DEK_CACHE = new Map<string, CacheEntry>()
+
+// Single client per process; it keeps HTTP connections warm. Lazy-init so
+// tests and non-encrypted code paths don't pay the cost.
+let _kms: KMSClient | null = null
+function kms(): KMSClient {
+  if (!_kms) _kms = new KMSClient({ region: awsRegion() })
+  return _kms
+}
+
+function encryptionContext(userId: string): Record<string, string> {
+  return { user_id: userId, purpose: 'tax-api-user-dek' }
+}
 
 function requireConfig(): void {
   if (!kmsKeyId()) throw new Error('TAX_API_KMS_KEY env var not set — cannot envelope-encrypt DEKs')
@@ -55,48 +67,33 @@ function touchCache(userId: string, dek: Buffer): void {
 
 /**
  * Call KMS GenerateDataKey for a new DEK.
- * Returns { plaintext, ciphertext, keyId } — plaintext is the raw 32 bytes,
- * ciphertext is what we persist in user_key.dek_encrypted.
+ * Returns { plaintext, ciphertext, keyId }. The ciphertext is what we persist
+ * in user_key.dek_encrypted; the plaintext is held only in memory (cache).
  */
 async function kmsGenerateDataKey(userId: string): Promise<{ plaintext: Buffer; ciphertext: Buffer; keyId: string }> {
-  const script = `
-import boto3, base64, json
-kms = boto3.client('kms', region_name='${awsRegion()}')
-resp = kms.generate_data_key(
-    KeyId='${kmsKeyId()}',
-    KeySpec='AES_256',
-    EncryptionContext={'user_id': '${userId}', 'purpose': 'tax-api-user-dek'},
-)
-print(json.dumps({
-    'plaintext':  base64.b64encode(resp['Plaintext']).decode(),
-    'ciphertext': base64.b64encode(resp['CiphertextBlob']).decode(),
-    'key_id':     resp['KeyId'],
-}))
-`
-  const out = runPython(script, { timeout: 10000 })
-  const { plaintext, ciphertext, key_id } = JSON.parse(out.trim())
+  const resp = await kms().send(new GenerateDataKeyCommand({
+    KeyId: kmsKeyId(),
+    KeySpec: 'AES_256',
+    EncryptionContext: encryptionContext(userId),
+  }))
+  if (!resp.Plaintext || !resp.CiphertextBlob || !resp.KeyId) {
+    throw new Error('KMS GenerateDataKey returned incomplete response')
+  }
   return {
-    plaintext:  Buffer.from(plaintext, 'base64'),
-    ciphertext: Buffer.from(ciphertext, 'base64'),
-    keyId:      key_id,
+    plaintext:  Buffer.from(resp.Plaintext),
+    ciphertext: Buffer.from(resp.CiphertextBlob),
+    keyId:      resp.KeyId,
   }
 }
 
 async function kmsDecryptDataKey(userId: string, ciphertext: Buffer, keyId: string): Promise<Buffer> {
-  const ctB64 = ciphertext.toString('base64')
-  const script = `
-import boto3, base64, json
-kms = boto3.client('kms', region_name='${awsRegion()}')
-resp = kms.decrypt(
-    CiphertextBlob=base64.b64decode('${ctB64}'),
-    EncryptionContext={'user_id': '${userId}', 'purpose': 'tax-api-user-dek'},
-    KeyId='${keyId}',
-)
-print(json.dumps({'plaintext': base64.b64encode(resp['Plaintext']).decode()}))
-`
-  const out = runPython(script, { timeout: 10000 })
-  const { plaintext } = JSON.parse(out.trim())
-  return Buffer.from(plaintext, 'base64')
+  const resp = await kms().send(new DecryptCommand({
+    CiphertextBlob: ciphertext,
+    EncryptionContext: encryptionContext(userId),
+    KeyId: keyId,
+  }))
+  if (!resp.Plaintext) throw new Error('KMS Decrypt returned no plaintext')
+  return Buffer.from(resp.Plaintext)
 }
 
 /**
