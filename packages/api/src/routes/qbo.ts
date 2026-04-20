@@ -486,7 +486,14 @@ router.get('/:entity_id/reports/:report', async (req, res) => {
   // Fetch from QBO
   try {
     const extraQuery: Record<string, string> = {}
-    if (req.query.summarize_column_by) extraQuery.summarize_column_by = req.query.summarize_column_by as string
+    // Passthrough to QBO Reports API — only the ones we actively support.
+    // TransactionList supports: cleared_status (All/Cleared/Uncleared/Deposited/Reconciled),
+    // accounts (plural, comma-separated IDs), columns, name, transaction_type.
+    const PASSTHROUGH = ['summarize_column_by', 'cleared_status', 'accounts', 'columns', 'name', 'transaction_type', 'account']
+    for (const key of PASSTHROUGH) {
+      const v = req.query[key]
+      if (typeof v === 'string' && v) extraQuery[key] = v
+    }
 
     const result = await fetchAndStoreReport(
       req.params.entity_id, reportType, qboReportName,

@@ -484,7 +484,7 @@ router.post('/fact', async (req, res) => {
     entity_id,
     filename: `manual: ${category}${source_note ? ` — ${source_note.slice(0, 50)}` : ''}`,
     file_type: 'fact',
-    s3_path: null,
+    s3_path: `fact://${entity_id}/${tax_year}/${category}/${Date.now()}`,
     doc_type: category,
     tax_year,
     textract_data: null,
