@@ -138,6 +138,10 @@ export interface Form1120_Result {
     total_deductions: number
     taxable_income_before_nol: number
     special_deductions: number  // computed DRD
+    // NOL tracking — see calc1120 for derivation:
+    nol_applied:                  number  // capped at 80% of TI before NOL per IRC §172(a)(2)
+    nol_carryforward_remaining:   number  // requested nol_deduction above the cap — carries forward
+    nol_generated:                number  // abs(TI before NOL) when negative — feed into next year's deduction
     taxable_income:   number
     income_tax:       number  // Schedule J line 2
     total_credits:    number  // FTC + GBC + PYMTC + other
@@ -367,7 +371,22 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
   )
   const special_deductions = inp.special_deductions || computed_drd
 
-  const taxable_income = Math.max(0, taxable_income_before_nol - inp.nol_deduction - special_deductions)  // L30
+  // NOL deduction — cap at 80% of taxable income per IRC §172(a)(2)
+  // (TCJA, applies to NOLs arising in tax years after 2017). The caller
+  // may pass any nol_deduction amount; we cap server-side so wrong user
+  // input can't under-tax a profitable year. nol_applied is what actually
+  // reduced income; nol_carryforward_remaining is what's left for future
+  // years (= requested nol_deduction − nol_applied).
+  const nol_cap = Math.max(0, taxable_income_before_nol * 0.80)
+  const nol_applied = Math.min(inp.nol_deduction || 0, nol_cap)
+  const nol_carryforward_remaining = Math.max(0, (inp.nol_deduction || 0) - nol_applied)
+
+  const taxable_income = Math.max(0, taxable_income_before_nol - nol_applied - special_deductions)  // L30
+
+  // NOL generated THIS year (loss year) — caller can use this to auto-
+  // carry forward into next year's nol_deduction. Rolled up and surfaced
+  // in computed.nol_generated.
+  const nol_generated = taxable_income_before_nol < 0 ? Math.abs(taxable_income_before_nol) : 0
 
   // Schedule J: 21% flat rate (TCJA 2017, permanent for C-corps)
   const income_tax = Math.round(taxable_income * 0.21)  // Sch J L2
@@ -415,9 +434,9 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
     'deductions.L26_other_deductions': inp.other_deductions,
     'deductions.L27_total_deductions': total_deductions,
     'tax.L28_ti_before_nol':           taxable_income_before_nol,
-    'tax.L29a_nol':                    inp.nol_deduction,
+    'tax.L29a_nol':                    nol_applied,  // capped — what actually flows to L29a
     'tax.L29b_special_ded':            special_deductions,
-    'tax.L29c_total_29':               inp.nol_deduction + special_deductions,
+    'tax.L29c_total_29':               nol_applied + special_deductions,
     'tax.L30_taxable_income':          taxable_income,
     'schedJ.J1a_income_tax':           income_tax,
     'tax.L31_total_tax':               total_tax,
@@ -436,7 +455,9 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
     inputs: inp,
     computed: {
       balance_1c, gross_profit, total_income, total_deductions,
-      taxable_income_before_nol, special_deductions, taxable_income,
+      taxable_income_before_nol, special_deductions,
+      nol_applied, nol_carryforward_remaining, nol_generated,
+      taxable_income,
       income_tax, total_credits, total_tax, total_payments, balance_due, overpayment
     },
     field_values,
@@ -445,6 +466,7 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
       '1120 Instructions: Line 27 = Lines 12-26',
       '1120 Instructions: Line 30 = Line 28 - Line 29c',
       'IRC §11(b): Corporate tax rate 21%',
+      'IRC §172(a)(2): NOL deduction capped at 80% of taxable income (TCJA 2017)',
       'IRC §243: Dividends Received Deduction (50%/65%/100% by ownership tier)',
       'IRC §38-39: General Business Credit',
       'IRC §901: Foreign Tax Credit',

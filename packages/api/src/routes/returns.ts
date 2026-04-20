@@ -870,6 +870,64 @@ router.post('/compute', async (req, res) => {
       }
     }
 
+    // ─── NOL auto-carryforward (1120 only) ─────────────────────────────
+    // If the prior year for this entity computed an NOL (taxable income
+    // negative), auto-populate this year's nol_deduction with the prior
+    // year's nol_generated via setIfUnset. Caller can override by
+    // passing nol_deduction explicitly. The engine still caps at 80% of
+    // TI per §172(a)(2), so even a too-high auto-pull can't under-tax.
+    if (entity_id && form_type === '1120') {
+      try {
+        const { data: priorRet } = await supabase.from('tax_return')
+          .select('id, computed_data')
+          .eq('entity_id', entity_id).eq('tax_year', tax_year - 1)
+          .eq('form_type', '1120')
+          .order('computed_at', { ascending: false }).limit(1).maybeSingle()
+        const priorNolGenerated = priorRet?.computed_data?.computed?.nol_generated || 0
+        if (priorNolGenerated > 0) {
+          setIfUnset('nol_deduction', Math.round(priorNolGenerated), `prior-year NOL (${tax_year - 1})`, 1, `cross_year:nol_carryforward`)
+        }
+      } catch {/* best-effort, skip silently */}
+    }
+
+    // ─── Prior-year Schedule L EOY (for BOY rollover) ──────────────────
+    // Current BOY comes from prior year's QBO BS (line 912/970 below).
+    // That can drift if QBO is edited after a year closes. The prior
+    // year's tax_return.field_values carries the AS-FILED BOY equivalents
+    // — those are the authoritative numbers. Use them to overlay BOY
+    // columns on top of the QBO-derived ones. Maps prior._eoy_d → ._boy_b
+    // and prior._eoy_c → ._boy_a (IRS Schedule L column convention).
+    let priorSchedLEoy: Record<string, number> | null = null
+    if (entity_id && (form_type === '1120' || form_type === '1120S')) {
+      try {
+        const { data: priorRet } = await supabase.from('tax_return')
+          .select('id, field_values')
+          .eq('entity_id', entity_id).eq('tax_year', tax_year - 1)
+          .eq('form_type', form_type)
+          .order('computed_at', { ascending: false }).limit(1).maybeSingle()
+        const fv = priorRet?.field_values
+        if (fv && typeof fv === 'object') {
+          priorSchedLEoy = fv as Record<string, number>
+        }
+      } catch {/* best-effort */}
+    }
+    const applyPriorEoyToBoy = (target: Record<string, number>) => {
+      if (!priorSchedLEoy) return
+      for (const [priorKey, priorVal] of Object.entries(priorSchedLEoy)) {
+        if (typeof priorVal !== 'number' || priorVal === 0) continue
+        // schedL.Lxxx_name_eoy_d → schedL.Lxxx_name_boy_b
+        // schedL.Lxxx_name_eoy_c → schedL.Lxxx_name_boy_a
+        let curKey: string | null = null
+        if (priorKey.endsWith('_eoy_d')) curKey = priorKey.slice(0, -'_eoy_d'.length) + '_boy_b'
+        else if (priorKey.endsWith('_eoy_c')) curKey = priorKey.slice(0, -'_eoy_c'.length) + '_boy_a'
+        if (!curKey || !curKey.startsWith('schedL.')) continue
+        // Only overwrite if caller didn't explicitly provide this BOY value
+        if ((mergedInputs as any)[curKey] === undefined) {
+          target[curKey] = priorVal
+        }
+      }
+    }
+
     let engineResult: any = null
 
     if (form_type === '1120') {
@@ -906,6 +964,9 @@ router.post('/compute', async (req, res) => {
               for (const [k, v] of Object.entries(schedL)) {
                 if (v !== 0) engineResult.field_values[k] = v
               }
+              // Overlay BOY from prior year's AS-FILED tax_return — more
+              // authoritative than refetching prior-year QBO which can drift.
+              applyPriorEoyToBoy(engineResult.field_values)
 
               // Schedule M-1: line 1 = net income per books, line 10 = taxable income
               const computed = engineResult.computed || {}
@@ -914,7 +975,9 @@ router.post('/compute', async (req, res) => {
               engineResult.field_values['schedM1.L10_income_line28'] = computed.taxable_income_before_nol ?? computed.taxable_income ?? 0
 
               // Schedule M-2: line 1 = BOY retained, line 8 = EOY retained
-              engineResult.field_values['schedM2.L1_beg_balance'] = schedL['schedL.L25_retained_boy_b'] || 0
+              engineResult.field_values['schedM2.L1_beg_balance'] =
+                engineResult.field_values['schedL.L25_retained_boy_b']
+                ?? schedL['schedL.L25_retained_boy_b'] ?? 0
               engineResult.field_values['schedM2.L8_end_balance'] = schedL['schedL.L25_retained_eoy_d'] || 0
             }
           }
@@ -960,6 +1023,8 @@ router.post('/compute', async (req, res) => {
               for (const [k, v] of Object.entries(schedL)) {
                 if (v !== 0) engineResult.field_values[k] = v
               }
+              // Overlay BOY from prior year's AS-FILED tax_return.
+              applyPriorEoyToBoy(engineResult.field_values)
               // Reconciliation: L1 = ordinary income per books
               const computed = engineResult.computed || {}
               engineResult.field_values['schedM1.L1_net_income_books'] = computed.ordinary_income_loss ?? 0
