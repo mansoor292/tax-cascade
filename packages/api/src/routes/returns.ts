@@ -618,6 +618,41 @@ router.post('/compute', async (req, res) => {
       }
     }
 
+    // ─── Pre-populate corporate inputs from QBO P&L ───
+    // For 1120S / 1120 computes, if the entity has a QBO connection, pull
+    // the P&L and run it through the qbo_to_inputs mapper. This fills in
+    // the full set of deduction buckets (COGS, salaries, rents, advertising,
+    // etc.) so downstream engine + PDF fill reflects the books, not just
+    // whatever 3 fields the caller happened to pass. setIfUnset semantics
+    // so caller-provided inputs always win.
+    if (entity_id && (form_type === '1120S' || form_type === '1120')) {
+      try {
+        const { data: conn } = await supabase.from('qbo_connection')
+          .select('realm_id').eq('entity_id', entity_id).single()
+        if (conn) {
+          const finResp = await fetch(
+            `${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year}`,
+            { headers: {
+              'Authorization': req.headers.authorization || '',
+              'x-api-key': (req.headers['x-api-key'] as string) || '',
+            }},
+          ).then(r => r.json()).catch(() => null)
+          const pnlItems = finResp?.profit_and_loss?.items
+          if (pnlItems) {
+            const { build1120SInputsFromQbo, build1120InputsFromQbo } = await import('../maps/qbo_to_inputs.js')
+            const mapped = form_type === '1120S'
+              ? build1120SInputsFromQbo(pnlItems)
+              : build1120InputsFromQbo(pnlItems)
+            for (const [field, value] of Object.entries(mapped)) {
+              if (typeof value === 'number') {
+                setIfUnset(field, value, 'QBO P&L', 1)
+              }
+            }
+          }
+        }
+      } catch (_) { /* QBO not connected or fetch failed — caller still gets explicit inputs */ }
+    }
+
     if (entity_id) {
       const supportedTypes = [
         'w2', 'k1',
