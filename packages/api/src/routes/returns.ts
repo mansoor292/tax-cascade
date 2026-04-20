@@ -544,6 +544,73 @@ router.post('/compute', async (req, res) => {
     return res.status(400).json({ error: `No tax tables for year ${tax_year}` })
   }
 
+  // ── Arithmetic validation: *_detail arrays vs scalar totals ───────
+  // When a caller passes both `<bucket>_detail: [{label, amount}]` and
+  // the scalar `<bucket>` (e.g. other_deductions_detail + other_deductions),
+  // reject with a loud diagnostic if the sum of detail items doesn't
+  // match the scalar. Prevents the class of silent failures where the
+  // LLM manually totaled a line-item list and got it wrong (e.g.
+  // $38,994 claimed vs $69,008 actual, producing phantom profit).
+  //
+  // Also validates Schedule L balance: assets_total vs liabilities_equity_total.
+  {
+    const validationErrors: Array<{ field: string; claimed: number; actual: number; delta: number; items?: number }> = []
+    const TOLERANCE = 1  // $1 rounding allowance
+
+    for (const [key, value] of Object.entries(inputs as Record<string, any>)) {
+      if (!key.endsWith('_detail')) continue
+      if (!Array.isArray(value)) continue
+      const scalarKey = key.slice(0, -'_detail'.length)
+      const scalar = (inputs as any)[scalarKey]
+      if (typeof scalar !== 'number') continue  // no scalar to validate against
+      let sum = 0
+      for (const item of value) {
+        const amt = parseFloat(String(item?.amount ?? item?.value ?? '0'))
+        if (!isNaN(amt)) sum += amt
+      }
+      const delta = sum - scalar
+      if (Math.abs(delta) > TOLERANCE) {
+        validationErrors.push({
+          field: scalarKey,
+          claimed: scalar,
+          actual: Math.round(sum * 100) / 100,
+          delta: Math.round(delta * 100) / 100,
+          items: value.length,
+        })
+      }
+    }
+
+    // Schedule L balance check: assets side vs L&E side.
+    // The two totals are rolled up on lines 15 and 28 on 1120/1120S
+    // Schedule L. Canonical keys: schedL.L15_total_eoy_d (assets) and
+    // schedL.L28_total_eoy_d (L&E). Same for BOY (_boy_b).
+    const schedLPairs: Array<['boy' | 'eoy', string, string]> = [
+      ['eoy', 'schedL.L15_total_eoy_d', 'schedL.L28_total_eoy_d'],
+      ['boy', 'schedL.L15_total_boy_b', 'schedL.L28_total_boy_b'],
+    ]
+    for (const [period, assetsKey, liabEquityKey] of schedLPairs) {
+      const a = (inputs as any)[assetsKey]
+      const l = (inputs as any)[liabEquityKey]
+      if (typeof a === 'number' && typeof l === 'number' && Math.abs(a - l) > TOLERANCE) {
+        validationErrors.push({
+          field: `Schedule L ${period.toUpperCase()}`,
+          claimed: a,
+          actual: l,
+          delta: a - l,
+        })
+      }
+    }
+
+    if (validationErrors.length) {
+      return res.status(422).json({
+        error: 'ARITHMETIC_MISMATCH',
+        message: 'One or more *_detail arrays or Schedule L totals do not sum to the claimed scalar. Fix the mismatch before compute.',
+        mismatches: validationErrors,
+        hint: 'Either (a) correct the _detail array to sum to the scalar, (b) correct the scalar to match the detail sum, or (c) omit one side and let the other stand.',
+      })
+    }
+  }
+
   // ── Target-row resolution ──────────────────────────────────────────
   // compute_return never mutates filed_import rows. Caller steers the write via:
   //   return_id   — update this specific row (must be proforma or amendment)
@@ -652,7 +719,7 @@ router.post('/compute', async (req, res) => {
             ).then(r => r.json()).catch(() => null),
             (async () => {
               try {
-                const r = await supabase.from('tax_entity').select('meta').eq('id', entity_id).single()
+                const r = await supabase.from('tax_entity').select('meta').eq('id', entity_id).eq('user_id', userId).single()
                 return r.data
               } catch { return null }
             })(),
