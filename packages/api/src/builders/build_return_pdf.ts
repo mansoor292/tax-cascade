@@ -836,6 +836,20 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
       } catch (e: any) {
         console.error('Schedule E build failed:', e.message)
       }
+      // Form 8582 — bundled whenever Schedule E ran with pal_limitation
+      const f8582 = scheduleE.computed?.pal?.form_8582
+      if (f8582?.computed && f8582?.inputs) {
+        try {
+          const { buildForm8582Pdf } = await import('./build_form_8582.js')
+          const ssn = (entity as any)?.ein || ''
+          const name = (entity as any)?.name || ''
+          const built = await buildForm8582Pdf({ ...f8582.inputs, taxpayer_name: name, taxpayer_id: ssn }, f8582, taxYear)
+          if (built?.pdf) await append(built.pdf, 'Form 8582')
+          totalFilled += built?.filled || 0
+        } catch (e: any) {
+          console.error('Form 8582 build failed:', e.message)
+        }
+      }
     }
   }
 

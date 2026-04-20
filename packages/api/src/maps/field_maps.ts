@@ -242,6 +242,9 @@ export const FORM_INVENTORY: Record<string, { name: string; years: number[]; map
   // Asset acquisition
   f8594:    { name: 'Form 8594',    years: [2025], maps: [2025] },
 
+  // Passive activity loss limitation
+  f8582:    { name: 'Form 8582',    years: [2025], maps: [2025] },
+
   // Extension forms
   f4868:    { name: 'Form 4868',    years: [2025], maps: [2025] },
   f7004:    { name: 'Form 7004',    years: [2025], maps: [2025] },

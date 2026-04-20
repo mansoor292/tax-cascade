@@ -5,6 +5,7 @@
  */
 import { calcScheduleE, calc1040, calcForm8582 } from '../src/engine/tax_engine.js'
 import { buildScheduleEPdf } from '../src/builders/build_schedule_e.js'
+import { buildForm8582Pdf } from '../src/builders/build_form_8582.js'
 import { writeFileSync, mkdirSync } from 'fs'
 
 let pass = 0, fail = 0
@@ -239,6 +240,41 @@ async function main() {
   check('propB deductible pro-rated',   propB.deductible_loss, -2500)
   check('suspended = gross - allowed',  schPal2.computed.pal?.suspended_rental, 15000)
   check('L26 reflects allowed only',    schPal2.computed.L26_rental_royalty_net, -5000)
+
+  // ═══ Form 8582 PDF fill + round-trip ═══
+  console.log('\n=== Form 8582 PDF — fill + read-back ===')
+  try {
+    const { PDFDocument } = await import('pdf-lib')
+    const f8582 = calcForm8582({
+      tax_year: 2025, filing_status: 'mfj', magi: 130000, active_participation: true,
+      rental_re_current_income: 0, rental_re_current_loss: 20000, rental_re_prior_unallowed: 0,
+      other_current_income: 0, other_current_loss: 0, other_prior_unallowed: 0,
+    })
+    const built = await buildForm8582Pdf(
+      { ...f8582.inputs, taxpayer_name: 'PAL Test', taxpayer_id: '999-88-7777' },
+      f8582, 2025,
+    )
+    const bytes = await built.pdf.save()
+    mkdirSync('test_output', { recursive: true })
+    writeFileSync('test_output/form_8582_test.pdf', bytes)
+    check('f8582 PDF generated',    built.pdf.getPageCount() > 0 ? 'ok' : 'empty', 'ok')
+    check('f8582 fields filled',    built.filled >= 10 ? 'ok' : `only ${built.filled}`, 'ok')
+
+    const rt = await PDFDocument.load(bytes)
+    const rtForm = rt.getForm()
+    const l1b = rtForm.getTextField('topmostSubform[0].Page1[0].f1_04[0]').getText()
+    const l5  = rtForm.getTextField('topmostSubform[0].Page1[0].f1_13[0]').getText()
+    const l6  = rtForm.getTextField('topmostSubform[0].Page1[0].f1_14[0]').getText()
+    const l9  = rtForm.getTextField('topmostSubform[0].Page1[0].f1_17[0]').getText()
+    check('L1b rental loss persisted', l1b, '-20,000')
+    check('L5 threshold (150K)',       l5,  '150,000')
+    check('L6 MAGI',                   l6,  '130,000')
+    check('L9 special allowance',      l9,  '10,000')
+    console.log(`  → test_output/form_8582_test.pdf (${built.filled} fields, ${built.pdf.getPageCount()} pages)`)
+  } catch (e: any) {
+    console.log(`  FAIL: 8582 build threw — ${e.message}`)
+    fail++
+  }
 
   // ═══ Case 8: PDF round-trip — fill then read back via form API ═══
   console.log('\n=== Schedule E PDF — round-trip property values ===')
