@@ -114,7 +114,17 @@ router.put('/:id', async (req, res) => {
   const { name, form_type, ein, address, city, state, zip, date_incorporated, meta, meta_merge } = req.body
   const updates: any = {}
   if (name !== undefined) updates.name = name
-  if (form_type !== undefined) updates.form_type = form_type
+  if (form_type !== undefined) {
+    updates.form_type = form_type
+    // Keep entity_type in sync with form_type on update. Mirrors create_entity
+    // and avoids stale c_corp on a 1120S-switched entity (which confuses both
+    // the compute engine and any downstream filtering).
+    const FORM_TO_ENTITY: Record<string, string> = {
+      '1040': 'individual', '1120': 'c_corp', '1120S': 's_corp', '1065': 'partnership',
+      '990': 'nonprofit', '4868': 'individual', '7004': 'c_corp', '8868': 'nonprofit',
+    }
+    if (FORM_TO_ENTITY[form_type]) updates.entity_type = FORM_TO_ENTITY[form_type]
+  }
   if (ein !== undefined) {
     updates.ein = ein
     updates.ein_hash = safeBlindIndex(ein)

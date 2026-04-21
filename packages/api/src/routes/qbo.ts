@@ -284,14 +284,23 @@ router.get('/callback', async (req, res) => {
     if (existing) {
       entityId = existing.id
     } else {
-      // Create new entity from QBO data
+      // Derive entity_type + form_type from QBO CompanyType. Note: QBO does
+      // NOT distinguish S-corp from C-corp (that's a tax election, not a QBO
+      // record). For Corporation / LLC we default to 1120; if the user has
+      // S-elected they must switch to 1120S in the entity settings.
+      const qboType: string = companyInfo.CompanyType || ''
+      let derivedEntityType = 'c_corp', derivedFormType = '1120'
+      if (qboType === 'SoleProprietor') { derivedEntityType = 'individual'; derivedFormType = '1040' }
+      else if (qboType === 'Partnership') { derivedEntityType = 'partnership'; derivedFormType = '1065' }
+      else if (qboType === 'NonProfit' || qboType === 'NonProfitOrganization') { derivedEntityType = 'nonprofit'; derivedFormType = '990' }
+      else if (qboType === 'LLC' || companyInfo.LegalName?.includes('LLC')) { derivedEntityType = 'llc'; derivedFormType = '1120' }
+
       const { data: newEntity, error: createErr } = await supabase.from('tax_entity').insert({
         user_id: stateData.user_id,
         name: companyName,
         ein: companyEin || null,
-        entity_type: companyInfo.CompanyType === 'SoleProprietor' ? 'individual'
-          : companyInfo.LegalName?.includes('LLC') ? 'llc' : 'c_corp',
-        form_type: companyInfo.CompanyType === 'SoleProprietor' ? '1040' : '1120',
+        entity_type: derivedEntityType,
+        form_type: derivedFormType,
         address: [companyAddr.Line1, companyAddr.Line2].filter(Boolean).join(' ') || null,
         city: companyAddr.City || null,
         state: companyAddr.CountrySubDivisionCode || null,
@@ -299,7 +308,11 @@ router.get('/callback', async (req, res) => {
         fiscal_year_end: '12/31',
         meta: {
           qbo_realm_id: realmId,
-          qbo_company_type: companyInfo.CompanyType,
+          qbo_company_type: qboType,
+          form_type_inferred: true,
+          form_type_note: derivedFormType === '1120'
+            ? 'Defaulted to 1120. If this entity has elected S-corp status, update form_type to 1120S — QBO does not record S/C elections.'
+            : derivedFormType === '1120' ? 'LLCs may file 1065, 1120, 1120S, or Schedule C depending on election — confirm.' : undefined,
         },
       }).select().single()
 

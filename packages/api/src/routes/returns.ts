@@ -710,8 +710,12 @@ router.post('/compute', async (req, res) => {
       }
       return Math.round(total)
     }
+    // Caller-provided values (even 0) always win over auto-merge. Only fill
+    // when the caller left the field undefined/null. Previously used `!x`
+    // which incorrectly treated explicit 0 as unset — e.g. passing
+    // salaries_wages:0 would get overridden by QBO's wages total.
     const setIfUnset = (field: string, value: number, sourceType: string, count: number, confidence?: string) => {
-      if (value && !mergedInputs[field]) {
+      if (value && (mergedInputs[field] === undefined || mergedInputs[field] === null)) {
         mergedInputs[field] = value
         autoMergeLog.push({ field, value, sources: [`${count} × ${sourceType}`], confidence })
       }
