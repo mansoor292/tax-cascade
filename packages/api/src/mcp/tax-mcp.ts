@@ -228,11 +228,66 @@ Reports are cached. Pass refresh=true only when the user explicitly asks for fre
 - \`stripe_data(entity_id, data_type='invoices' | 'payments' | 'payouts' | 'customers', ...filters)\` — lists
 
 ## Computing returns
-validate_return → compute_return → get_pdf.
-get_pdf serves cached PDFs by default. Pass refresh=true after recomputing to regenerate.
-run_scenario auto-generates a preview_pdf_url in its response — no separate PDF call needed.
-get_schema returns the input spec AND the tax tables (brackets, standard deduction) in one call.
-Ask for data conversationally — group by topic (income, deductions, payments).
+
+**Two paths — pick the right one first or you'll waste turns.**
+
+1. **Corporate (1120 / 1120S) with QBO connected → use the QBO-driven path.**
+   \`compute_return_from_qbo(entity_id, tax_year, form_type)\` pulls the P&L + balance sheet, maps every line to 1120/1120S inputs via the canonical mapper, and computes in one call. Response includes \`qbo_mapper.{audit, warnings, sources}\` — each line's source + confidence. Pass \`overrides\` to correct specific classifications; everything else keeps the mapper-derived value. If you want to inspect before committing, call \`qbo_to_tax_inputs\` first and hand-edit.
+
+2. **Everything else (1040, no QBO) → classic path.** validate_return → compute_return → get_pdf.
+
+\`compute_return\` itself also auto-pulls QBO when an 1120/1120S entity has a connection — you don't need to restate QBO numbers in \`inputs\`. Pass **only the fields you want to override or add** (1099 interest, officer_comp split, NOL carryforward, etc.). Caller-provided values ALWAYS win, including an explicit \`0\` — use that to force-zero a QBO-defaulted field.
+
+\`qbo_warnings\` array in the response flags preparer-judgment items:
+  - \`OFFICER_COMP_UNSPLIT\` — QBO lumps officer comp into salaries; split manually.
+  - \`SSTB_SUSPECTED\` — business_code suggests specified service trade; affects QBI.
+  - \`CONTINGENCY_IN_REVENUE\` — accrued liabilities reported as income; may need reclassification.
+Always surface these to the user before finalizing.
+
+get_pdf serves cached PDFs by default. Pass refresh=true after recomputing.
+run_scenario auto-generates a preview_pdf_url in its response.
+get_schema returns the input spec AND the tax tables in one call.
+
+## 1040 Schedule E — rentals, royalties, K-1 pass-through
+
+If the taxpayer has rental properties, partnership interests, or S-corp K-1s, pass structured \`schedule_e\` inside \`inputs\` — the engine computes per-property net, Part I totals (L23a-e, L24-26), Part II partnership total (L32), and flows L41 into Schedule 1 line 5 → 1040 line 8 automatically.
+
+\`\`\`
+inputs: {
+  filing_status, wages, ...,
+  schedule_e: {
+    rental_properties: [
+      { address, property_type, fair_rental_days, personal_use_days,
+        rents, royalties, advertising, auto_travel, cleaning_maintenance,
+        commissions, insurance, legal_professional, management_fees,
+        mortgage_interest, other_interest, repairs, supplies, taxes,
+        utilities, depreciation, other_expenses }
+    ],
+    partnerships: [{ name, ein, type: 'P'|'S', passive, ordinary_income }],
+    estate_trust_income, remic_income, farm_rental,
+    // §469 Passive Activity Loss limitation (Form 8582) — opt-in
+    pal_limitation: {
+      filing_status: 'mfj'|'single'|'mfs'|'hoh'|'qw',
+      magi:                 <number>,  // modified AGI
+      active_participation: <bool>,    // §469(i) $25K allowance gate
+      prior_year_suspended_re: <number>,  // carried-forward rental loss
+    }
+  }
+}
+\`\`\`
+
+Without pal_limitation, rental losses flow through without §469 limiting (optimistic for high-MAGI filers — always ask if they're active participants). With pal_limitation, Form 8582 is computed, the allowed loss is pro-rated across loss-making properties, and Form 8582 PDF is bundled into the 1040 package alongside Schedule E. Check \`response.schedule_e.computed.pal.suspended_rental\` for carryforward to next year.
+
+When a \`prior_return_1040\` has Schedule E, the archive captures \`sched_e_rental_net\`, \`sched_e_partnership\`, \`sched_e_total\` in computed_data for year-over-year comparison.
+
+## Onboarding a new QBO-connected entity
+
+When \`connect_qbo(entity_id:'new')\` auto-creates an entity from CompanyInfo, the entity lands with \`meta.form_type_inferred: true\` and a note. QBO CANNOT distinguish S-corp from C-corp — it's a tax election QBO doesn't track. After connection:
+  1. Surface \`entity.meta.qbo_company_type\` + \`form_type_inferred: true\` to the user.
+  2. Ask: "QBO reports this as Corporation. Has the company elected S-corp status (Form 2553)?"
+  3. If yes, \`update_entity(entity_id, form_type:'1120S')\` — entity_type auto-syncs.
+  4. If no, leave as 1120.
+Same ambiguity for LLCs: 1065 (multi-member), 1120 (corp-elected), 1120S (S-elected), or 1040 Schedule C (single-member disregarded).
 
 ## Missing-field review — HARD GATE
 
@@ -292,11 +347,14 @@ For 8868: add return_code ("01"=990, "04"=990-PF).
 \`request_form(form_name, year)\` downloads from IRS and runs field detection. The response inlines current discovery status — call again to poll until status=active.
 
 ## Rules
-- Never fabricate financial data
-- Confirm tax year before computing
-- validate_return before compute_return
-- S-Corp shareholders must sum to 100%
-- Use get_schema to discover fields — don't guess`
+- Never fabricate financial data.
+- Confirm tax year before computing.
+- validate_return before compute_return on the classic 1040 path.
+- S-Corp shareholders must sum to 100% (pass \`shareholders: [{name, pct}]\` in 1120S inputs).
+- Caller-provided inputs (even explicit \`0\`) always win over QBO / document auto-merge.
+- Use get_schema to discover fields — don't guess canonical keys.
+- Confirm QBO-inferred form_type for new corp/LLC connections (S vs C, 1065 vs 1120S).
+- Surface \`qbo_warnings\` and \`missing_fields\` to the user before get_pdf.`
 
 function extractApiKey(req: Request): string | null {
   const auth = req.headers.authorization
