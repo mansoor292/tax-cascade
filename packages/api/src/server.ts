@@ -17,10 +17,15 @@
  */
 
 // Load env before anything else imports process.env (crypto module, routes).
-// Dev: .env. Prod: .env.production. Override with DOTENV_CONFIG_PATH.
+// Layered: .env is the baseline (third-party creds etc.), .env.production
+// overrides with deploy-specific values. Either can be absent. First-loaded
+// wins by default in dotenv, so we load the override FIRST, then the base.
 import { config as loadEnv } from 'dotenv'
-loadEnv({ path: process.env.DOTENV_CONFIG_PATH
-  || (process.env.NODE_ENV === 'production' ? '.env.production' : '.env') })
+if (process.env.NODE_ENV === 'production') {
+  loadEnv({ path: '.env.production' })  // override layer
+}
+loadEnv({ path: '.env' })                // baseline (skipped if vars already set)
+if (process.env.DOTENV_CONFIG_PATH) loadEnv({ path: process.env.DOTENV_CONFIG_PATH })
 
 import express from 'express'
 import cors from 'cors'
