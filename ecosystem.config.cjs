@@ -21,7 +21,7 @@
 module.exports = {
   apps: [{
     name: 'tax-api',
-    script: 'node_modules/.bin/tsx',
+    script: '/opt/tax-api/node_modules/.bin/tsx',  // hoisted in the workspace
     args: 'src/server.ts',
     cwd: '/opt/tax-api/packages/api',
     instances: 'max',        // one worker per CPU core
