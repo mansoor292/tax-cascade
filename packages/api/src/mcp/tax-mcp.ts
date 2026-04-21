@@ -92,269 +92,76 @@ async function maybeSpill(
   }
 }
 
-const INSTRUCTIONS = `You help users prepare and file tax returns.
+const INSTRUCTIONS = `You help users prepare and file tax returns. Each tool's description carries its detailed contract — these INSTRUCTIONS cover cross-cutting workflow and the mental models that span multiple tools.
 
-## Financial data — reports first, ALWAYS
+## Reports first, transactions only with a filter
 
-This is the biggest source of context blowouts. Read carefully.
+Biggest source of context blowouts. Never open a QBO task by pulling transactions. Start with a summary report, drill into detail only with a filter.
 
-**The rule: never open a QBO task by pulling transactions.** Start with a report, then drill down.
+Summary reports fit in a few KB: qbo_report(profit-and-loss | balance-sheet | trial-balance | cash-flow | financials). Use these to understand the shape before drilling.
 
-Bad (context will die):
-- "Show me all sales GL entries" → qbo_report(general-ledger) or qbo_resource(Transaction) with no filter
-- "Get invoices for 2024" → qbo_resource(Invoice) with no where clause
+Transactional resources (Invoice, Bill, JournalEntry, Transaction, Payment, SalesReceipt, CreditMemo, Deposit, Transfer, Estimate, TimeActivity, Purchase, RefundReceipt, BillPayment, VendorCredit) REQUIRE a WHERE clause — qbo_resource search and qbo_query both reject unfiltered pulls. Default cap 50 rows, hard max 200.
 
-Good (reports-first):
-1. Call \`qbo_report(entity_id, report_type:'profit-and-loss', year:2024)\` or \`'balance-sheet'\`
-   — a summary fits in a few KB. Read it, understand the shape, identify the specific line/account
-   that needs deeper inspection.
-2. Only then pull transaction-level data, and ALWAYS with a filter:
-   \`qbo_resource(operation:'search', resource:'Invoice', where:"TxnDate >= '2024-01-01' AND TxnDate <= '2024-01-31'", limit:50)\`
-3. Transactional resources (Invoice, Bill, JournalEntry, Transaction, Payment, SalesReceipt, CreditMemo,
-   Deposit, Transfer, Estimate, TimeActivity, Purchase, RefundReceipt, BillPayment, VendorCredit)
-   REQUIRE a \`where\` clause — the tool will reject unfiltered searches with a guidance message.
-4. qbo_query auto-injects \`MAXRESULTS 50\` when you leave it off. Hard cap: 200 rows.
-   Unfiltered \`SELECT FROM <transactional>\` is rejected.
-5. stripe_data list modes (invoices/payments/payouts/customers) default to 50 rows, hard cap 200.
+For multi-step workflows on genuinely big datasets (full general ledger reconciliation, multi-year transaction pull): pass spill_to to park the payload in scratch storage and get shape+preview+ref back. Supported on qbo_report, qbo_query, qbo_resource, and stripe_data.
 
-## Parking large payloads when you really need them
+## Entry point
 
-When you do need a bigger dataset for multi-step analysis (e.g. a full general ledger for
-reconciliation), use the spill pattern:
+Call list_entities first. Figure out what the user needs from context — don't present a menu. Entities carry a \`source\` field on each return (filed_import / proforma / amendment / extension); filed PDFs live in list_documents (doc_type: prior_return_*), parsed line values live in tax_return. One filed return becomes one filed_import row when ingested — you'll see both.
 
-1. \`qbo_report(entity_id, report_type:'general-ledger', year:2024, spill_to:'edgewater-2024-gl')\`
-   → the full payload is written to scratch storage; you get shape + preview + a ref instead of rows.
-2. \`scratch(op:'load', key:'edgewater-2024-gl')\` — fetch the bytes only when you actually need them.
-3. \`scratch(op:'delete', key:'edgewater-2024-gl')\` at task end.
-4. \`scratch(op:'list')\` shows what's parked (per-user, 10 MB per blob).
-
-\`spill_to\` is supported on qbo_report, qbo_query, qbo_resource, and stripe_data.
-
-## Starting out
-Call list_entities first. Figure out what the user needs from context — don't present a menu.
-To create an entity: create_entity(name, form_type). form_type drives entity_type automatically (1040→individual, 1120→c_corp, 1120S→s_corp).
-delete_entity wipes an entity + all its returns/scenarios/documents/connections — confirm first.
-
-## Uploading documents
-
-**ingest_document is the single entry point.** Two modes:
-- Inline (chat images, pasted files): \`ingest_document(filename, base64, entity_id)\`
-- Pre-uploaded (user has an S3 key): \`ingest_document(filename, s3_key, entity_id)\`
-
-Always pass entity_id or the doc won't flow into compute_return.
-
-**Stated in conversation (no document)**: Use \`record_tax_fact(entity_id, tax_year, category, values, source_note)\`.
-When the user tells you values directly ("my W-2 wages were $150K"), persist them as a virtual document
-so they flow into compute_return and survive to the next session. category matches the doc_type vocabulary
-(w2, 1099_int, etc.). Always include source_note so the fact is audit-traceable.
-
-**After ingestion**: Gemini classifies (w2, 1099_int, 1099_div, 1099_r, 1099_nec, k1, prior_return_*, etc.),
-Textract extracts KVs and tables, meta.key_values stores the specific boxes.
-list_documents returns presigned download_url for each doc.
+Use record_tax_fact for values stated in conversation ("my W-2 wages were $150K"). Use ingest_document for uploaded PDFs. Both flow into compute_return's auto-merge.
 
 ## Filed returns vs. computed returns — STRICT SEPARATION
 
 Returns live in two worlds. Don't cross them.
 
-**Filed world — IMMUTABLE.** A \`prior_return_1040/1120/1120s\` document uploaded via
-\`ingest_document\` gets fully extracted into a \`tax_return\` row with \`source='filed_import'\`.
-Every canonical field the mapper recognizes lands in \`field_values\` verbatim; comparison totals
-(taxable_income, total_tax, total_payments, etc.) land in \`computed_data.computed\`. These rows
-are ARCHIVES — \`compute_return\` will refuse to touch them. You cannot recompute a filed return.
+**Filed world — IMMUTABLE.** prior_return_* uploads become \`source='filed_import'\` tax_return rows. Every canonical field lands in field_values; totals (taxable_income, total_tax, total_payments, sched_e_*) in computed_data.computed. These rows are ARCHIVES — compute_return REFUSES to touch them.
 
 **Working world — MUTABLE.**
-- \`source='proforma'\` — current-year work. compute_return writes here by default.
-- \`source='extension'\` — 4868/7004/8868 returns.
-- \`source='amendment'\` — amendments are first-class peers of filed returns (not flags on them).
-  Created by calling \`compute_return(amend_of: <filed_return_id>)\` which inserts a NEW row
-  with \`supersedes_id\` pointing at what it amends.
+- \`proforma\` — current-year work. compute_return writes here by default (updates latest, or inserts new if none).
+- \`extension\` — 4868/7004/8868.
+- \`amendment\` — first-class peer of filed returns (not a flag on them). Create with compute_return(amend_of:<filed_return_id>).
 
-Multiple rows per (entity, year, form) are allowed. compute_return routes the write:
-- \`return_id: <id>\`      → UPDATE that specific row (rejected if filed_import).
-- \`amend_of: <id>\`       → INSERT a new amendment row superseding that one.
-- \`new_row: true\`        → force INSERT a fresh proforma (for scenario snapshots).
-- (none)                 → UPDATE the latest proforma, or INSERT if none exists.
+compute_return's routing params:
+- \`return_id\`  → UPDATE that specific row (rejected if filed_import)
+- \`amend_of\`   → INSERT a new amendment superseding that row
+- \`new_row\`    → force INSERT a fresh proforma (scenario snapshot)
+- (none)       → UPDATE latest proforma, or INSERT if none
 
-**User says "my 2024 return":**
-  - For the signed PDF → \`list_documents\` (doc_type starts with \`prior_return_\`)
-  - For line values   → \`tax_return\` row for 2024 (check \`source\` — filed_import is canonical)
-  - Both exist once a filed PDF has been ingested.
+compare_returns picks one row per year (filed_import > amendment > proforma > extension) and returns all_rows for drill-down. use_prior_year follows the same preference and bridges canonical PDF keys (income.L1a_gross_receipts) back to engine input names.
 
-\`compare_returns\` picks one row per year using preference filed_import > amendment > proforma
-and returns the full list in \`all_rows\` so you can drill into any specific version.
+## Computing returns — pick the right path first
 
-\`use_prior_year\` follows the same preference and bridges filed_import canonical keys
-(\`income.L1a_gross_receipts\`) → engine input names (\`gross_receipts\`) automatically.
+**1120/1120S with QBO connected:** call compute_return_from_qbo for a one-shot pipeline. QBO P&L + BS auto-map to every line; pass \`overrides\` only for classifications you want to correct.
 
-Auto-merge into compute_return for matching entity+year:
-- W-2s → wages, withholding
-- 1099-INT → taxable_interest
-- 1099-DIV → ordinary_dividends, qualified_dividends
-- 1099-B → capital_gains
-- 1099-R → ira_distributions or pensions_annuities (based on box 7 distribution code)
-- 1099-NEC → net_se_income
-- 1099-MISC → schedule1_income (rents + royalties + other)
-- K-1 → k1_ordinary_income, schedule1_income, k1_w2_wages
+**1040, or no QBO:** validate_return → compute_return → get_pdf.
 
-IMPORTANT: the compute response includes supporting_documents.auto_merged — a list of
-{field, value, sources} showing what got auto-filled. Echo these to the user for
-confirmation before finalizing. A misread OCR value silently becomes the filed number otherwise.
+compute_return itself auto-pulls QBO for connected 1120/1120S entities — pass only the fields you want to override or add (1099 interest, officer_comp split, NOL carryforward, Schedule E, etc.). **Caller inputs always win over auto-merge, including an explicit \`0\`** — that's how you force-zero a QBO-defaulted field.
 
-## QuickBooks
+Response fields to surface to the user before finalizing:
+- \`qbo_warnings\` — preparer-judgment items (e.g. OFFICER_COMP_UNSPLIT, SSTB_SUSPECTED, CONTINGENCY_IN_REVENUE).
+- \`supporting_documents.auto_merged\` — values pulled from W-2s / 1099s / K-1s. A misread OCR becomes the filed number otherwise.
+- \`missing_fields\` (severity: critical) — get_pdf won't generate until you walk the user through these. See review_return for the flow.
 
-Start with reports, drill down only with filters (see "Financial data — reports first" above).
+compute_cascade runs the S-Corp → K-1 → 1040 chain in one call.
 
-**qbo_report** — primary tool for financial questions. Summaries are small, cache-friendly:
-- \`qbo_report(entity_id, report_type:'financials', year)\` — P&L + Balance Sheet bundle (default for tax prep)
-- \`qbo_report(entity_id, report_type:'profit-and-loss' | 'balance-sheet' | 'trial-balance' | 'cash-flow')\` — individual summary reports, all small
-- \`qbo_report(entity_id, report_type:'general-ledger' | 'transaction-list' | 'profit-and-loss-detail' | 'balance-sheet-detail')\` — detail reports, can be huge; pass spill_to
-- \`qbo_report(form_type:'1120', report_type:'mapping')\` — QBO P&L categories → tax form line mapping
+## Onboarding a QBO-connected entity
 
-Reports are cached. Pass refresh=true only when the user explicitly asks for fresh data.
+When connect_qbo auto-creates an entity, it lands with \`meta.form_type_inferred: true\` and \`meta.qbo_company_type\` set. QBO CANNOT distinguish S-corp from C-corp — that's a tax election QBO doesn't track. For Corporation or LLC, confirm with the user:
+  "QBO reports this as Corporation. Has the company elected S-corp status (Form 2553)?"
+If yes, update_entity(form_type: '1120S') — entity_type auto-syncs. LLCs have even more ambiguity (1065 / 1120 / 1120S / Schedule C depending on election).
 
-**Drill-down tools** — capped at 50 rows by default to protect context:
-- \`qbo_resource\` — CRUD any resource. Search on transactional resources (Invoice, Bill, JournalEntry,
-  Transaction, Payment, …) REQUIRES a where clause. Master data (Account, Customer, Vendor, Employee, Item,
-  Class, Department) is fine without a where.
-- \`qbo_query\` — raw QBO SQL. MAXRESULTS 50 auto-injected if you leave it off, hard cap 200. Unfiltered
-  SELECTs from transactional tables are rejected.
-- \`get_accounts\` — chart of accounts with balances (master data, no cap).
+## Style and rules
 
-**Connection**: \`connect_qbo(entity_id)\` both starts OAuth and reports current status — no separate status check needed. Pass entity_id='new' to auto-create an entity from QBO company info.
-
-## Stripe
-\`connect_stripe\` links an account. \`stripe_data\` is the single query dispatcher:
-- \`stripe_data(entity_id, data_type='revenue', year)\` — gross/fees/net summary for tax reporting
-- \`stripe_data(entity_id, data_type='invoices' | 'payments' | 'payouts' | 'customers', ...filters)\` — lists
-
-## Computing returns
-
-**Two paths — pick the right one first or you'll waste turns.**
-
-1. **Corporate (1120 / 1120S) with QBO connected → use the QBO-driven path.**
-   \`compute_return_from_qbo(entity_id, tax_year, form_type)\` pulls the P&L + balance sheet, maps every line to 1120/1120S inputs via the canonical mapper, and computes in one call. Response includes \`qbo_mapper.{audit, warnings, sources}\` — each line's source + confidence. Pass \`overrides\` to correct specific classifications; everything else keeps the mapper-derived value. If you want to inspect before committing, call \`qbo_to_tax_inputs\` first and hand-edit.
-
-2. **Everything else (1040, no QBO) → classic path.** validate_return → compute_return → get_pdf.
-
-\`compute_return\` itself also auto-pulls QBO when an 1120/1120S entity has a connection — you don't need to restate QBO numbers in \`inputs\`. Pass **only the fields you want to override or add** (1099 interest, officer_comp split, NOL carryforward, etc.). Caller-provided values ALWAYS win, including an explicit \`0\` — use that to force-zero a QBO-defaulted field.
-
-\`qbo_warnings\` array in the response flags preparer-judgment items:
-  - \`OFFICER_COMP_UNSPLIT\` — QBO lumps officer comp into salaries; split manually.
-  - \`SSTB_SUSPECTED\` — business_code suggests specified service trade; affects QBI.
-  - \`CONTINGENCY_IN_REVENUE\` — accrued liabilities reported as income; may need reclassification.
-Always surface these to the user before finalizing.
-
-get_pdf serves cached PDFs by default. Pass refresh=true after recomputing.
-run_scenario auto-generates a preview_pdf_url in its response.
-get_schema returns the input spec AND the tax tables in one call.
-
-## 1040 Schedule E — rentals, royalties, K-1 pass-through
-
-If the taxpayer has rental properties, partnership interests, or S-corp K-1s, pass structured \`schedule_e\` inside \`inputs\` — the engine computes per-property net, Part I totals (L23a-e, L24-26), Part II partnership total (L32), and flows L41 into Schedule 1 line 5 → 1040 line 8 automatically.
-
-\`\`\`
-inputs: {
-  filing_status, wages, ...,
-  schedule_e: {
-    rental_properties: [
-      { address, property_type, fair_rental_days, personal_use_days,
-        rents, royalties, advertising, auto_travel, cleaning_maintenance,
-        commissions, insurance, legal_professional, management_fees,
-        mortgage_interest, other_interest, repairs, supplies, taxes,
-        utilities, depreciation, other_expenses }
-    ],
-    partnerships: [{ name, ein, type: 'P'|'S', passive, ordinary_income }],
-    estate_trust_income, remic_income, farm_rental,
-    // §469 Passive Activity Loss limitation (Form 8582) — opt-in
-    pal_limitation: {
-      filing_status: 'mfj'|'single'|'mfs'|'hoh'|'qw',
-      magi:                 <number>,  // modified AGI
-      active_participation: <bool>,    // §469(i) $25K allowance gate
-      prior_year_suspended_re: <number>,  // carried-forward rental loss
-    }
-  }
-}
-\`\`\`
-
-Without pal_limitation, rental losses flow through without §469 limiting (optimistic for high-MAGI filers — always ask if they're active participants). With pal_limitation, Form 8582 is computed, the allowed loss is pro-rated across loss-making properties, and Form 8582 PDF is bundled into the 1040 package alongside Schedule E. Check \`response.schedule_e.computed.pal.suspended_rental\` for carryforward to next year.
-
-When a \`prior_return_1040\` has Schedule E, the archive captures \`sched_e_rental_net\`, \`sched_e_partnership\`, \`sched_e_total\` in computed_data for year-over-year comparison.
-
-## Onboarding a new QBO-connected entity
-
-When \`connect_qbo(entity_id:'new')\` auto-creates an entity from CompanyInfo, the entity lands with \`meta.form_type_inferred: true\` and a note. QBO CANNOT distinguish S-corp from C-corp — it's a tax election QBO doesn't track. After connection:
-  1. Surface \`entity.meta.qbo_company_type\` + \`form_type_inferred: true\` to the user.
-  2. Ask: "QBO reports this as Corporation. Has the company elected S-corp status (Form 2553)?"
-  3. If yes, \`update_entity(entity_id, form_type:'1120S')\` — entity_type auto-syncs.
-  4. If no, leave as 1120.
-Same ambiguity for LLCs: 1065 (multi-member), 1120 (corp-elected), 1120S (S-elected), or 1040 Schedule C (single-member disregarded).
-
-## Missing-field review — HARD GATE
-
-get_pdf REFUSES to generate when the return has critical fields still at zero
-(NOL, IRA distributions, prior-year line items ≥ $1,000). You'll get a 400
-error with \`missing_fields\` and next-steps guidance.
-
-Flow:
-  1. compute_return → check missing_fields in response
-  2. If missing_fields.count > 0 with any severity="critical" items:
-     - Walk the user through each one conversationally
-     - Offer three options per field:
-       a. "Leave blank (zero)" — confirm no activity
-       b. "Use prior year" — pull last year's value (shown in prior_year_value)
-       c. Provide a value now
-     - Recompute with updated inputs as needed
-  3. When done: either
-     - Call mark_reviewed(return_id) to permanently unblock (recompute clears it)
-     - Or call get_pdf(skip_review=true) for a one-off bypass
-  4. get_pdf now succeeds
-
-Examples where this matters:
-  - 1040 line 4 IRA distributions: silently defaulting to 0 is wrong if they
-    had IRA income they forgot to mention
-  - 1120 line 29a NOL carryforward: critical; a stale $0 default loses real tax benefit
-  - Schedule L balance sheet rows: 0 is appropriate for an account type the
-    business doesn't use, but confirm for material lines like inventory, loans
-
-Present missing fields in plain English (use the \`description\` from get_schema),
-not canonical keys. Group by section so the user can answer in batches:
-  "A few 1040 items I want to confirm before filing — any of these apply?"
-    - IRA distributions (line 4a)?
-    - Pensions/annuities (line 5a)?
-    - Social Security benefits (line 6a)?
-    - Additional child tax credit (line 28)?
-
-If the user says "use prior year," pull last year's computed return via
-compare_returns or list their returns and use those values. If they say
-"leave blank," explicitly confirm by echoing the line back so they know what
-they're signing off on.
-
-## Extensions (4868/7004/8868)
-Extensions are time-sensitive. Collect the minimum: name, SSN/EIN, address, estimated tax liability, payments already made.
-validate_extension → file_extension(generate_pdf: true) → give them the PDF.
-
-Key inputs for 4868: taxpayer_name, taxpayer_id, address, city, state, zip, estimated_tax_liability, total_payments, amount_paying.
-For 7004: add form_code ("12"=1120, "25"=1120-S, "09"=1065).
-For 8868: add return_code ("01"=990, "04"=990-PF).
-
-## Scenarios
-- \`run_scenario\` (pass base_return_id for diff) — returns computed result + diff + pdf_coverage + preview_pdf_url in one call.
-- \`compare_scenarios(scenario_ids, include_analysis)\` — works with 1+ scenarios. One scenario = focused analysis mode; two or more = side-by-side. Structured diff is always returned; include_analysis=true adds Gemini recommendation text.
-- \`promote_scenario\` — finalize into an official return (only after user approval).
-- \`compute_cascade\` — S-Corp → K-1 → 1040 in one call.
-
-## New forms
-\`request_form(form_name, year)\` downloads from IRS and runs field detection. The response inlines current discovery status — call again to poll until status=active.
-
-## Rules
 - Never fabricate financial data.
 - Confirm tax year before computing.
 - validate_return before compute_return on the classic 1040 path.
-- S-Corp shareholders must sum to 100% (pass \`shareholders: [{name, pct}]\` in 1120S inputs).
-- Caller-provided inputs (even explicit \`0\`) always win over QBO / document auto-merge.
+- S-Corp shareholders must sum to 100%.
+- Caller-provided inputs (incl. explicit \`0\`) always win over auto-merge.
 - Use get_schema to discover fields — don't guess canonical keys.
-- Confirm QBO-inferred form_type for new corp/LLC connections (S vs C, 1065 vs 1120S).
-- Surface \`qbo_warnings\` and \`missing_fields\` to the user before get_pdf.`
+- Surface qbo_warnings, auto_merged, and missing_fields before get_pdf.
+- Present missing fields in plain English (descriptions, not canonical keys) and group by category.
+- For "use prior year" requests, pull via use_prior_year or compare_returns.
+- For "leave blank" on a critical line, echo back the line in confirmation before moving on.`
 
 function extractApiKey(req: Request): string | null {
   const auth = req.headers.authorization
@@ -407,7 +214,19 @@ function createServer(apiKey: string): McpServer {
 
   // ─── Tool: qbo_report ───
   // Dispatcher — replaces get_financials + get_qbo_report + get_qbo_mapping.
-  server.tool('qbo_report', 'Pull a QuickBooks report or the P&L→tax-form mapping. All reports are cached — pass refresh=true to re-fetch. Use report_type=financials for the combined P&L + balance sheet used in tax prep. Use report_type=mapping to get the QBO category → tax line mapping (requires form_type). Full reports (general-ledger, transaction-list) can be huge — pass spill_to to park the payload in scratch storage and receive only a summary.', {
+  server.tool('qbo_report', `Pull a QuickBooks report or the P&L→tax-form mapping.
+
+Summary reports (small, start here):
+- report_type='financials' → P&L + Balance Sheet bundle. Default for tax prep.
+- report_type='profit-and-loss' | 'balance-sheet' | 'trial-balance' | 'cash-flow' → individual summary.
+
+Detail reports (can be huge — use spill_to):
+- 'general-ledger' | 'transaction-list' | 'profit-and-loss-detail' | 'balance-sheet-detail'.
+
+Mapping:
+- form_type='1120'|'1120S', report_type='mapping' → QBO P&L category → tax form line mapping.
+
+All reports are cached; pass refresh=true only when the user explicitly wants fresh data.`, {
     entity_id: z.string().describe('Entity UUID (not required for mapping)').optional(),
     report_type: z.enum([
       'financials', 'mapping',
@@ -447,7 +266,27 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: compute_return ───
-  server.tool('compute_return', 'Compute a tax return from structured inputs and save it. By default, updates the latest proforma row for (entity, year, form) or creates one if none exists. Never touches filed_import rows. For amendments, pass amend_of=<filed_return_id>. For scenario snapshots, pass new_row=true. To update a specific row, pass return_id.', {
+  server.tool('compute_return', `Compute a tax return from structured inputs and save it.
+
+Routing: by default, updates the latest proforma for (entity, year, form) — or inserts if none. Never touches filed_import rows. Pass amend_of=<filed_return_id> to create an amendment. Pass new_row=true to force a fresh proforma (scenario snapshot). Pass return_id to update a specific row (rejected if it's filed_import).
+
+1040 Schedule E (rentals / partnerships / K-1 pass-through): pass nested \`schedule_e\` inside \`inputs\`. Engine computes per-property net, Part I totals (L23a-e, L24-26), Part II partnership total (L32), and flows L41 into Schedule 1 line 5. Shape:
+  schedule_e: {
+    rental_properties: [{ address, property_type, fair_rental_days, personal_use_days,
+      rents, royalties, advertising, auto_travel, cleaning_maintenance, commissions,
+      insurance, legal_professional, management_fees, mortgage_interest, other_interest,
+      repairs, supplies, taxes, utilities, depreciation, other_expenses }],
+    partnerships: [{ name, ein, type: 'P'|'S', passive, ordinary_income }],
+    estate_trust_income, remic_income, farm_rental,
+    pal_limitation: { filing_status, magi, active_participation, prior_year_suspended_re }
+  }
+Without pal_limitation, rental losses flow through without §469 limiting (optimistic for high-MAGI filers — always ask if they're active participants). With it, Form 8582 runs, loss is pro-rated across loss-making properties, and Form 8582 PDF is bundled alongside Schedule E. Read response.schedule_e.computed.pal.suspended_rental for next-year carryforward.
+
+QBO auto-pull: for 1120/1120S with a QBO connection, compute_return maps the P&L + BS automatically. Pass only overrides — 1099 interest, officer_comp split, NOL carryforward, etc. Caller-provided values always win, INCLUDING explicit \`0\` (that's how you force-zero a QBO-defaulted field). For a one-shot convenience wrapper see compute_return_from_qbo.
+
+Response: \`qbo_warnings\` (preparer-judgment items — surface to user), \`supporting_documents.auto_merged\` (values from W-2/1099/K-1 docs — echo for confirmation), \`missing_fields\` (critical lines at 0 that need user confirmation before get_pdf).
+
+S-Corp inputs require \`shareholders: [{ name, pct }]\` summing to 100.`, {
     entity_id: z.string().describe('Entity UUID'),
     tax_year: z.number().describe('Tax year'),
     form_type: z.string().describe('1040, 1120, or 1120S'),
@@ -590,7 +429,11 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: get_pdf ───
-  server.tool('get_pdf', 'Generate a filled IRS PDF for a computed return. The API REFUSES to generate if critical fields are still missing — walk the user through review_return first, then call this with skip_review=true (or mark_reviewed) to confirm. Uses cached PDF if available — pass refresh=true to regenerate.', {
+  server.tool('get_pdf', `Generate a filled IRS PDF for a computed return.
+
+HARD GATE: API returns 400 if the return has critical fields at 0 (NOL, IRA distributions, prior-year line items ≥ $1,000). The 400 response includes missing_fields and next-steps guidance — walk the user through review_return, then either mark_reviewed(return_id) to permanently unblock or pass skip_review=true for a one-off bypass.
+
+Serves cached PDFs by default (pdf_s3_path on the return row). Pass refresh=true after a recompute to regenerate. For 1040 with schedule_e / pal_limitation, Schedule E and Form 8582 are auto-bundled into the package.`, {
     return_id: z.string().describe('Tax return UUID'),
     refresh: z.boolean().optional().describe('Force regeneration from latest data (default: false)'),
     skip_review: z.boolean().optional().describe('Bypass the critical-fields-missing gate. ONLY use after confirming with the user that missing fields should stay blank.'),
@@ -617,7 +460,20 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: review_return ───
-  server.tool('review_return', 'QC review of a saved return: lists fields still at 0/blank so you can walk the user through them before finalizing the PDF. For each missing field, ask the user (a) leave blank, (b) use prior year, or (c) provide a value.', {
+  server.tool('review_return', `QC review of a saved return: lists fields still at 0/blank so you can walk the user through them before finalizing the PDF.
+
+Flow:
+  1. Check missing_fields in the response. For each critical one, offer three options to the user:
+     (a) "Leave blank (zero)" — confirm no activity; echo the line back for acknowledgment.
+     (b) "Use prior year" — pull via use_prior_year or compare_returns; shown as prior_year_value.
+     (c) Provide a value now → recompute.
+  2. When resolved: either mark_reviewed(return_id) to permanently unblock, or get_pdf(skip_review=true) for a one-off bypass.
+  3. get_pdf will then succeed.
+
+Present in plain English using the \`description\` field, grouped by category. Examples worth asking:
+  - 1040 L4 IRA distributions (silent 0 is wrong if IRA income was forgotten)
+  - 1120 L29a NOL carryforward (stale $0 loses real tax benefit)
+  - Schedule L balance sheet (0 can be valid for unused account types — confirm material lines)`, {
     return_id: z.string().describe('Tax return UUID'),
   }, async ({ return_id }) => {
     // Fetch the return and run the same missing-fields analysis as compute_return
@@ -765,7 +621,9 @@ function createServer(apiKey: string): McpServer {
 
   // ─── Tool: connect_qbo ───
   // Also reports current connection status (folds in the old qbo_status tool).
-  server.tool('connect_qbo', 'Start or check a QuickBooks OAuth connection. Pass entity_id to link to existing entity, or pass "new" to auto-create from QBO company info. Response includes the current connection status — if already connected, an auth_url is not needed.', {
+  server.tool('connect_qbo', `Start or check a QuickBooks OAuth connection. Pass entity_id to link to existing entity, or "new" to auto-create from QBO CompanyInfo. Response includes current connection status — if already connected, no auth_url is needed.
+
+Auto-created entities land with meta.form_type_inferred:true and meta.qbo_company_type. QBO CANNOT distinguish S-corp from C-corp (tax election, not a QBO record), so after connection confirm with the user: "QBO reports this as Corporation — has the company elected S-corp status (Form 2553)?" If yes, update_entity(form_type:'1120S'); entity_type auto-syncs. LLC inference is similarly ambiguous (1065 / 1120 / 1120S / Schedule C).`, {
     entity_id: z.string().describe('Entity UUID, or "new" to auto-create from QBO company info'),
   }, async ({ entity_id }) => {
     const connect = await call('GET', `/api/qbo/connect/${entity_id}`)
@@ -889,7 +747,12 @@ function createServer(apiKey: string): McpServer {
 
   // ─── Tool: stripe_data ───
   // Dispatcher — replaces stripe_invoices, stripe_payments, stripe_payouts, stripe_customers, stripe_revenue.
-  server.tool('stripe_data', 'Query Stripe data for an entity. Use data_type=revenue for the annual gross/fees/net summary used in tax reporting. Other types return lists — support common filters. Year-long invoice/payment pulls can be huge — pass spill_to to park them in scratch storage.', {
+  server.tool('stripe_data', `Query Stripe data for an entity. Single dispatcher for all Stripe pulls.
+
+- data_type='revenue', year → annual gross/fees/net summary for tax reporting (small, cache-friendly).
+- data_type='invoices'|'payments'|'payouts'|'customers' (+ filters) → lists. Default 50 rows, hard cap 200.
+
+Year-long invoice/payment pulls can be huge — pass spill_to to park the payload in scratch storage and get shape+preview back.`, {
     entity_id: z.string().describe('Entity UUID'),
     data_type: z.enum(['invoices', 'payments', 'payouts', 'customers', 'revenue']).describe('What to pull'),
     year: z.number().optional().describe('Tax year (revenue only)'),
@@ -921,7 +784,14 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: file_extension ───
-  server.tool('file_extension', 'File a tax extension (Form 4868 for individuals, 7004 for businesses, 8868 for exempt orgs). Can generate a filled PDF.', {
+  server.tool('file_extension', `File a tax extension (4868 individual, 7004 business, 8868 exempt org). Generates a filled PDF on generate_pdf:true.
+
+Extensions are time-sensitive. Collect the minimum: taxpayer_name, taxpayer_id (SSN/EIN), address/city/state/zip, estimated_tax_liability, total_payments, amount_paying. Flow: validate_extension → file_extension(generate_pdf:true).
+
+Form-specific extras:
+  4868 — nothing extra beyond the minimums.
+  7004 — form_code: "12"=1120, "25"=1120-S, "09"=1065, "13"=1041 (trust), etc.
+  8868 — return_code: "01"=990, "02"=990-EZ, "03"=990-PF, "04"=990-T.`, {
     extension_type: z.enum(['4868', '7004', '8868']).describe('4868=individual, 7004=business (1120/1120S/1065), 8868=exempt org'),
     tax_year: z.number().optional().describe('Tax year (default 2025)'),
     inputs: z.record(z.any()).describe('Extension form fields — call get_schema with the form type to see required fields'),
