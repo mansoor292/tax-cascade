@@ -16,6 +16,12 @@
  *   fill_pdf, list_forms, get_field_map
  */
 
+// Load env before anything else imports process.env (crypto module, routes).
+// Dev: .env. Prod: .env.production. Override with DOTENV_CONFIG_PATH.
+import { config as loadEnv } from 'dotenv'
+loadEnv({ path: process.env.DOTENV_CONFIG_PATH
+  || (process.env.NODE_ENV === 'production' ? '.env.production' : '.env') })
+
 import express from 'express'
 import cors from 'cors'
 import crypto from 'crypto'
