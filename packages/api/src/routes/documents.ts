@@ -76,6 +76,35 @@ async function archiveDocumentAsReturn(
 
     const archive = archiveFiledReturn(mapped, formType, classification.entity_name || null)
 
+    // Gemini gap-fill: whatever canonical keys the regex/table mapper didn't
+    // produce, send the raw KVs to Gemini and ask it to fill the remaining
+    // expected lines. Cheap text-only call; does not re-parse the PDF.
+    let gapFillReport: any = null
+    try {
+      const { gapFillWithGemini } = await import('../intake/gemini_gap_fill.js')
+      const result = await gapFillWithGemini({
+        textractKvs: textractData.kvs || [],
+        formType,
+        taxYear: txYear,
+        currentFieldValues: archive.field_values,
+      })
+      for (const [k, v] of Object.entries(result.filled)) {
+        // Don't overwrite anything the mapper already produced — gap-fill only.
+        const existing = archive.field_values[k]
+        if (existing === undefined || existing === null || existing === '') {
+          archive.field_values[k] = v
+        }
+      }
+      gapFillReport = {
+        gaps_total:  result.gaps_total,
+        gaps_filled: result.gaps_filled,
+        model:       result.model,
+        error:       result.error,
+      }
+    } catch (e: any) {
+      gapFillReport = { error: e.message }
+    }
+
     const archiveRaw = {
       input_data: {
         source_document_id: doc.id,
@@ -88,6 +117,7 @@ async function archiveDocumentAsReturn(
         mapper_stats: mapped.stats,
         extracted_count: mapped.fields.length,
         unmapped_count: mapped.unmapped.length,
+        gemini_gap_fill: gapFillReport,
         source: 'filed_import',
       },
     }
