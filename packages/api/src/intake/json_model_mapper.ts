@@ -650,23 +650,44 @@ function mapFromTextract(input: TextractOutput): MappingResult {
 function mapTables(tables: TextractTable[], formType: string): Record<string, number> {
   const result: Record<string, number> = {}
 
+  // Strict Schedule L detection: real Schedule L has ALL of:
+  //   1. Header mentioning "Balance Sheet" (usually "Schedule L Balance Sheets per Books")
+  //   2. Column headers "(a)", "(b)", "(c)", "(d)" — the 4-column gross/net BOY/EOY layout
+  //   3. Enough rows to cover lines 1-28 (at least 20)
+  // Earlier version matched on "Balance Sheet" alone or "Beginning of tax year" substring,
+  // which captured supporting statements (e.g. "Schedule L Other Current Assets Statement"),
+  // the 1125-A COGS table (has "5 Other costs" labels), Schedule M-2 ("5 Distributions"),
+  // and Florida apportionment tables. Each overwrote the real Schedule L's values.
+  let realSchedLFound = false
   for (const table of tables) {
-    if (table.rows.length < 2) continue
-
-    // Detect Schedule L: header row contains "Balance Sheets" or cells like
-    // "Beginning of tax year" / "End of tax year"
-    const flatHeader = table.rows[0].join(' | ').toLowerCase()
-    const isSchedL = /balance\s+sheet|beginning\s+of\s+tax\s+year|end\s+of\s+tax\s+year/.test(flatHeader)
-      || table.rows.slice(0, 3).some(r => /beginning\s+of\s+(?:tax\s+)?year/i.test(r.join(' ')))
-
-    if (isSchedL) {
+    if (table.rows.length < 20) continue
+    const head3 = table.rows.slice(0, 3).map(r => r.join(' | ')).join(' || ').toLowerCase()
+    const hasBalanceSheet = /balance\s+sheets?\b/.test(head3)
+    const hasFourCols = /\(a\)/.test(head3) && /\(b\)/.test(head3)
+                        && /\(c\)/.test(head3) && /\(d\)/.test(head3)
+    const notAStatement = !/\bother\s+(current\s+)?(assets|liabilities)\b.*\bstatement\b/i.test(head3)
+                           && !/\bapportion/i.test(head3)
+    if (hasBalanceSheet && hasFourCols && notAStatement) {
       mapScheduleLTable(table, result)
-      continue
+      realSchedLFound = true
+      break   // only one real Schedule L per return
     }
-
-    // Other tables: look at first column for line-numbered labels
-    // and extract if any row matches a known canonical key pattern
-    // (future: Schedule M-2, COGS, 4562 depreciation tables)
+  }
+  if (!realSchedLFound) {
+    // Fallback for older extractions where Textract merged header columns differently:
+    // accept a table that has "Balance Sheet" + 20+ rows + col0 line-number-ish entries.
+    for (const table of tables) {
+      if (table.rows.length < 20) continue
+      const head3 = table.rows.slice(0, 3).map(r => r.join(' | ')).join(' || ').toLowerCase()
+      if (!/balance\s+sheets?\b/.test(head3)) continue
+      if (/\bother\s+(current\s+)?(assets|liabilities)\b.*\bstatement\b/i.test(head3)) continue
+      const lineNumRows = table.rows.slice(0, 15).filter(r =>
+        /^[0-9]{1,2}[a-c]?\s*($|\s+[A-Za-z])/.test((r[0] || '').trim())).length
+      if (lineNumRows >= 5) {
+        mapScheduleLTable(table, result)
+        break
+      }
+    }
   }
 
   return result
