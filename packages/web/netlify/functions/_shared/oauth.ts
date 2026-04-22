@@ -22,6 +22,21 @@ export function supabaseAnon() {
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 }
 
+/**
+ * Supabase client scoped to a signed-in user. Sets the user's JWT in the
+ * Authorization header so PostgREST queries run as that user — RLS policies
+ * that check `user_id = auth.uid()` will pass.
+ */
+export function supabaseAsUser(userJwt: string) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('SUPABASE_URL / SUPABASE_ANON_KEY not configured')
+  }
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${userJwt}` } },
+    auth:   { persistSession: false, autoRefreshToken: false },
+  })
+}
+
 function requireSecret(): Uint8Array {
   if (!OAUTH_CODE_SECRET) throw new Error('OAUTH_CODE_SECRET not configured')
   return new TextEncoder().encode(OAUTH_CODE_SECRET)
@@ -65,21 +80,27 @@ export function verifyPkceS256(code_verifier: string, code_challenge: string): b
   return hash === code_challenge
 }
 
-/** Find-or-create the user's persistent MCP API key. */
-export async function findOrCreateApiKey(userId: string): Promise<string> {
-  const supabase = supabaseAnon()
-  const { data: existing } = await supabase.from('api_key')
+/**
+ * Find-or-create the user's persistent MCP API key.
+ * Must run on a user-scoped Supabase client (supabaseAsUser) — the api_key
+ * table has RLS policies that match auth.uid(), so an anon client would fail
+ * the INSERT path for brand-new users.
+ */
+export async function findOrCreateApiKey(userId: string, userJwt: string): Promise<string> {
+  const supabase = supabaseAsUser(userJwt)
+  const { data: existing, error: selErr } = await supabase.from('api_key')
     .select('key_value').eq('user_id', userId).eq('is_active', true).limit(1).maybeSingle()
+  if (selErr) throw new Error(`api_key select failed: ${selErr.message}`)
   if (existing?.key_value) return existing.key_value
 
   const key = `txk_${crypto.randomBytes(12).toString('hex')}`
-  const { error } = await supabase.from('api_key').insert({
+  const { error: insErr } = await supabase.from('api_key').insert({
     user_id:   userId,
     key_value: key,
     name:      'Claude MCP (auto-created)',
     is_active: true,
   })
-  if (error) throw new Error(`api_key insert failed: ${error.message}`)
+  if (insErr) throw new Error(`api_key insert failed: ${insErr.message}`)
   return key
 }
 

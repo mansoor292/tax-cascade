@@ -57,7 +57,7 @@ export default async (req: Request, _ctx: Context): Promise<Response> => {
   }
 
   const userId = userResp.user.id
-  const api_key = await findOrCreateApiKey(userId)
+  const api_key = await findOrCreateApiKey(userId, supabase_jwt)
 
   const code = await signAuthCode({
     api_key,
