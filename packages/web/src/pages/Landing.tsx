@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
-  ArrowRight, Bot, FileText, Calculator, Link2, Shield, Zap, Building2, Receipt,
-  TrendingUp, ChevronRight, Lock, Key, Database, FileCheck, GitBranch, Layers,
+  ArrowRight, Bot, FileText, Calculator, Link2, Shield, Zap, Receipt,
+  ChevronRight, Lock, Key, FileCheck, GitBranch, Layers,
   CheckCircle2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'

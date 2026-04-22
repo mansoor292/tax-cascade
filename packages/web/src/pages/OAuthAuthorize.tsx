@@ -14,7 +14,7 @@
  *      Top-level navigate back to redirect_uri with ?code=&state=.
  *   5. Cancel → redirect with ?error=access_denied&state=.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bot, Shield, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/auth'
