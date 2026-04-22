@@ -9,6 +9,7 @@
  * returns up year-over-year regardless of source.
  */
 import type { MappingResult } from './json_model_mapper.js'
+import { getCanonicalAliases } from '../maps/engine_to_pdf.js'
 
 export interface FiledReturnArchive {
   /** All canonical fields extracted from the PDF, trusted verbatim. */
@@ -30,9 +31,17 @@ export function archiveFiledReturn(
   formType: string,
   _entityName: string | null,
 ): FiledReturnArchive {
+  // Dual-write: mapper emits descriptive keys (e.g. deductions.advertising),
+  // engine emits IRS-line keys (e.g. deductions.L22_advertising). Write both
+  // so comparison tools line up regardless of which convention they expect.
   const field_values: Record<string, number | string | null> = {}
+  const aliases = getCanonicalAliases(formType)
   for (const f of mapped.fields) {
     field_values[f.canonical_key] = f.value
+    const aliased = aliases[f.canonical_key]
+    if (aliased && field_values[aliased] === undefined) {
+      field_values[aliased] = f.value
+    }
   }
 
   const m = mapped.model as Record<string, any>
