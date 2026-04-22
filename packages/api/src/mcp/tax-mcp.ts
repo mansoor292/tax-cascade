@@ -837,6 +837,17 @@ export function mountMCP(app: Express) {
   app.post('/mcp', async (req: Request, res: Response) => {
     const apiKey = extractApiKey(req)
     if (!apiKey) {
+      // RFC 9728: point the client at our protected-resource metadata so it
+      // can discover the authorization server. Most MCP clients (e.g.
+      // claude.ai) probe /.well-known/oauth-protected-resource at the
+      // resource host as a fallback even without this header, but setting
+      // it future-proofs against clients that require it.
+      const resourceMetadataUrl = (process.env.API_BASE_URL || 'https://tax-api.catalogshub.com') +
+        '/.well-known/oauth-protected-resource'
+      res.setHeader(
+        'WWW-Authenticate',
+        `Bearer resource_metadata="${resourceMetadataUrl}"`,
+      )
       res.status(401).json({
         jsonrpc: '2.0',
         error: { code: -32001, message: 'Authorization required.' },

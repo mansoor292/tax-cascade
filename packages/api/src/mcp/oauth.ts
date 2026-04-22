@@ -42,10 +42,14 @@ export function mountOAuth(app: Express) {
   const baseUrl = process.env.API_BASE_URL || 'https://tax-api.catalogshub.com'
 
   // ─── Protected Resource Metadata (RFC 9728) ───
+  // `resource` remains the EC2 origin (that's the protected API that holds the
+  // MCP endpoint). `authorization_servers` now points at the Netlify site,
+  // which hosts the consent screen + token endpoint.
+  const authServerUrl = process.env.OAUTH_AUTH_SERVER_URL || 'https://fin.catipult.ai'
   app.get('/.well-known/oauth-protected-resource', (_req, res) => {
     res.json({
       resource: baseUrl,
-      authorization_servers: [baseUrl],
+      authorization_servers: [authServerUrl],
       bearer_methods_supported: ['header'],
       scopes_supported: ['tax-api'],
     })
