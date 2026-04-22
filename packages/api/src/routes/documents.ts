@@ -60,7 +60,9 @@ async function archiveDocumentAsReturn(
 
     const mapped = mapToCanonical({
       source: 'textract', form_type: formType === '1120S' ? '1120S' : formType,
-      tax_year: txYear, key_value_pairs: textractData.kvs,
+      tax_year: txYear,
+      key_value_pairs: textractData.kvs,
+      tables: textractData.tables,  // enables Schedule L table-based extraction
     })
 
     let entityId = entityIdHint || doc.entity_id || null
