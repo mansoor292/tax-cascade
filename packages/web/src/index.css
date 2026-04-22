@@ -5,6 +5,11 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    /* Transitions — Tailwind's 150ms default feels jerky on a CDN deploy
+       where assets paint cleanly. 300ms reads as calm without being slow. */
+    --default-transition-duration: 300ms;
+    --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+
     --font-heading: var(--font-sans);
     --font-sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
