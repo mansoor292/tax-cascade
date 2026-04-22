@@ -10,7 +10,7 @@ export default function Landing() {
   const navigate = useNavigate()
   const [copied, setCopied] = useState(false)
   const copyMcp = () => {
-    navigator.clipboard.writeText('https://tax-api.catalogshub.com/mcp')
+    navigator.clipboard.writeText('https://fin.catipult.ai/mcp')
     setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
 
@@ -28,7 +28,7 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-5">
             <button onClick={() => navigate('/security')} className="text-sm text-zinc-400 hover:text-zinc-200 transition">Security</button>
-            <a href="https://tax-api.catalogshub.com/api/schema" target="_blank" rel="noopener" className="text-sm text-zinc-400 hover:text-zinc-200 transition">API</a>
+            <a href="https://fin.catipult.ai/api/schema" target="_blank" rel="noopener" className="text-sm text-zinc-400 hover:text-zinc-200 transition">API</a>
             <button onClick={() => navigate('/login')} className="text-sm bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg transition">Sign In</button>
           </div>
         </div>
@@ -82,7 +82,7 @@ export default function Landing() {
                   <p className="text-sm text-zinc-300">Copy the server URL</p>
                   <div className="mt-2 flex items-center gap-2">
                     <code className="bg-zinc-800 px-3 py-1.5 rounded text-blue-300 text-xs font-mono flex-1 truncate">
-                      tax-api.catalogshub.com/mcp
+                      fin.catipult.ai/mcp
                     </code>
                     <button
                       onClick={copyMcp}
@@ -96,8 +96,8 @@ export default function Landing() {
               <li className="flex gap-3">
                 <span className="flex-shrink-0 w-6 h-6 bg-blue-600/20 border border-blue-500/30 rounded-full flex items-center justify-center text-xs text-blue-300 font-mono">2</span>
                 <div>
-                  <p className="text-sm text-zinc-300">Add the connector in Claude</p>
-                  <p className="text-xs text-zinc-500 mt-1">Settings → Customize → Connectors → Add</p>
+                  <p className="text-sm text-zinc-300">Paste into the Add Custom Connector dialog</p>
+                  <p className="text-xs text-zinc-500 mt-1">Opens directly when you click below</p>
                 </div>
               </li>
               <li className="flex gap-3">
@@ -116,12 +116,12 @@ export default function Landing() {
               </li>
             </ol>
             <a
-              href="https://claude.ai/settings"
+              href="https://claude.ai/settings/connectors?modal=add-custom-connector"
               target="_blank" rel="noopener"
               onClick={copyMcp}
               className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-4 py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
             >
-              Open Claude Settings <ArrowRight className="w-3.5 h-3.5" />
+              Add Custom Connector <ArrowRight className="w-3.5 h-3.5" />
             </a>
           </div>
         </div>
@@ -424,7 +424,7 @@ export default function Landing() {
               <p className="text-sm text-zinc-500 mb-3">MCP Server URL</p>
               <div className="flex items-center gap-3">
                 <code className="bg-zinc-800 px-4 py-2 rounded-lg text-blue-300 text-sm flex-1 font-mono">
-                  https://tax-api.catalogshub.com/mcp
+                  https://fin.catipult.ai/mcp
                 </code>
                 <button onClick={copyMcp} className="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg text-sm transition">
                   {copied ? 'Copied' : 'Copy'}
@@ -432,8 +432,8 @@ export default function Landing() {
               </div>
             </div>
             <ol className="space-y-3 text-sm text-zinc-400">
-              <li className="flex gap-3"><span className="text-blue-400 font-mono">1.</span> Open Claude → Settings → Customize → Connectors</li>
-              <li className="flex gap-3"><span className="text-blue-400 font-mono">2.</span> Add remote MCP server with the URL above</li>
+              <li className="flex gap-3"><span className="text-blue-400 font-mono">1.</span> Copy the URL above</li>
+              <li className="flex gap-3"><span className="text-blue-400 font-mono">2.</span> <a href="https://claude.ai/settings/connectors?modal=add-custom-connector" target="_blank" rel="noopener" className="text-blue-400 hover:underline">Open Claude's Add Custom Connector dialog</a> and paste it</li>
               <li className="flex gap-3"><span className="text-blue-400 font-mono">3.</span> Sign in with OAuth</li>
               <li className="flex gap-3"><span className="text-blue-400 font-mono">4.</span> Ask Claude: "Show me my tax entities"</li>
             </ol>
@@ -460,8 +460,8 @@ export default function Landing() {
           <span>Catipult Tax API</span>
           <div className="flex gap-6">
             <button onClick={() => navigate('/security')} className="hover:text-zinc-400 transition">Security</button>
-            <a href="https://tax-api.catalogshub.com/api/schema" target="_blank" rel="noopener" className="hover:text-zinc-400 transition">API</a>
-            <a href="https://tax-api.catalogshub.com/api/health" target="_blank" rel="noopener" className="hover:text-zinc-400 transition">Status</a>
+            <a href="https://fin.catipult.ai/api/schema" target="_blank" rel="noopener" className="hover:text-zinc-400 transition">API</a>
+            <a href="https://fin.catipult.ai/api/health" target="_blank" rel="noopener" className="hover:text-zinc-400 transition">Status</a>
           </div>
         </div>
       </footer>
