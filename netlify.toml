@@ -1,14 +1,49 @@
 [build]
-  base = "packages/web"
+  base    = "packages/web"
   command = "npm install && npm run build"
   publish = "dist"
+  functions = "netlify/functions"
 
 [build.environment]
-  VITE_API_URL = "https://tax-api.catalogshub.com"
-  VITE_SUPABASE_URL = "https://ophnjqjmxeohbyydxnlg.supabase.co"
+  VITE_API_URL           = "https://fin.catipult.ai"
+  VITE_SUPABASE_URL      = "https://ophnjqjmxeohbyydxnlg.supabase.co"
   VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c"
 
+# ─── OAuth endpoints map to Netlify Functions ───
+# Keep the user-visible URLs clean (/oauth/token instead of /.netlify/functions/oauth-token).
 [[redirects]]
-  from = "/*"
-  to = "/index.html"
+  from   = "/oauth/token"
+  to     = "/.netlify/functions/oauth-token"
+  status = 200
+  force  = true
+
+[[redirects]]
+  from   = "/oauth/register"
+  to     = "/.netlify/functions/oauth-register"
+  status = 200
+  force  = true
+
+# /oauth/authorize is served by the React SPA (OAuthAuthorize.tsx). The SPA
+# fallback below catches it.
+
+# ─── Proxy the MCP + REST API to EC2 ───
+# Users add https://fin.catipult.ai/mcp as the MCP server URL; Netlify transparently
+# forwards the request to the Express API. Status 200 = rewrite, not redirect.
+[[redirects]]
+  from   = "/mcp"
+  to     = "https://tax-api.catalogshub.com/mcp"
+  status = 200
+  force  = true
+
+[[redirects]]
+  from   = "/api/*"
+  to     = "https://tax-api.catalogshub.com/api/:splat"
+  status = 200
+  force  = true
+
+# ─── SPA fallback ───
+# MUST come after the specific redirects above.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
   status = 200

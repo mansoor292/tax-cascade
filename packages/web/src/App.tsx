@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import Landing from '@/pages/Landing'
 import Security from '@/pages/Security'
+import OAuthAuthorize from '@/pages/OAuthAuthorize'
 import Login from '@/pages/Login'
 import Layout from '@/pages/Layout'
 import Dashboard from '@/pages/Dashboard'
@@ -35,6 +36,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/security" element={<Security />} />
+          <Route path="/oauth/authorize" element={<OAuthAuthorize />} />
           <Route path="/login" element={<Login />} />
           <Route path="/app" element={<Guard><Layout /></Guard>}>
             <Route index element={<Dashboard />} />
