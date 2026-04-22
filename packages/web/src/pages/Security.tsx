@@ -1,4 +1,4 @@
-import { Shield, Lock, Key, Server, FileCheck, Eye, Database, Bot, ArrowLeft } from 'lucide-react'
+import { Shield, Lock, Key, Server, FileCheck, Database, Bot, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 export default function Security() {
@@ -12,7 +12,7 @@ export default function Security() {
           <button onClick={() => navigate('/')} className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-200 transition">
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
-          <a href="mailto:security@catalogshub.com" className="text-sm text-zinc-400 hover:text-zinc-200 transition">security@catalogshub.com</a>
+          <a href="mailto:security@catipult.ai" className="text-sm text-zinc-400 hover:text-zinc-200 transition">security@catipult.ai</a>
         </div>
       </nav>
 
@@ -20,7 +20,7 @@ export default function Security() {
       <section className="max-w-5xl mx-auto px-6 pt-16 pb-12">
         <div className="inline-flex items-center gap-2 bg-emerald-600/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-6">
           <Shield className="w-4 h-4 text-emerald-400" />
-          <span className="text-sm text-emerald-300">SOC 2 Type I · Type II in progress</span>
+          <span className="text-sm text-emerald-300">SOC 2 self-attested · Controls mapped to TSC 2017</span>
         </div>
         <h1 className="text-4xl font-bold mb-4">Security & Compliance</h1>
         <p className="text-xl text-zinc-400 max-w-3xl leading-relaxed">
@@ -29,33 +29,31 @@ export default function Security() {
         </p>
       </section>
 
-      {/* Certifications */}
+      {/* SOC 2 self-attestation */}
       <section className="max-w-5xl mx-auto px-6 pb-12">
-        <h2 className="text-2xl font-bold mb-6">Certifications & audits</h2>
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-emerald-600/10 border border-emerald-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <FileCheck className="w-6 h-6 text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="font-semibold mb-1">SOC 2 Type I</h3>
-                <p className="text-sm text-zinc-500 mb-2">Audited security, availability, and confidentiality controls.</p>
-                <p className="text-xs text-zinc-600">Report available to customers under NDA.</p>
-              </div>
+        <h2 className="text-2xl font-bold mb-6">SOC 2 alignment</h2>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <div className="flex items-start gap-4 mb-4">
+            <div className="w-12 h-12 bg-emerald-600/10 border border-emerald-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <FileCheck className="w-6 h-6 text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="font-semibold mb-1">Self-attested to SOC 2 Trust Services Criteria</h3>
+              <p className="text-sm text-zinc-500 leading-relaxed">
+                We have mapped our controls against the AICPA SOC 2 Trust Services Criteria (2017,
+                with 2022 revisions) covering <span className="text-zinc-300">Security</span>,
+                <span className="text-zinc-300"> Confidentiality</span>, and
+                <span className="text-zinc-300"> Availability</span>. This page documents what
+                those controls are and how we operate them. We have not yet engaged a third-party
+                auditor for a formal Type I or Type II attestation.
+              </p>
             </div>
           </div>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-blue-600/10 border border-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Eye className="w-6 h-6 text-blue-400" />
-              </div>
-              <div>
-                <h3 className="font-semibold mb-1">SOC 2 Type II</h3>
-                <p className="text-sm text-zinc-500 mb-2">Continuous observation period underway.</p>
-                <p className="text-xs text-zinc-600">Target completion: Q3 2026.</p>
-              </div>
-            </div>
+          <div className="bg-zinc-950/60 border border-zinc-800 rounded-lg p-4 text-sm text-zinc-500 leading-relaxed">
+            <p className="mb-2"><span className="text-zinc-300 font-medium">Honest about what this is:</span> self-attestation is not a formal audit. It means we have implemented
+            SOC 2 controls and are publicly committing to operating them. If you need an auditor-signed
+            report for procurement or compliance purposes, let us know at <a href="mailto:security@catipult.ai" className="text-blue-400 hover:underline">security@catipult.ai</a> — we're
+            happy to discuss a timeline.</p>
           </div>
         </div>
       </section>
@@ -140,7 +138,7 @@ export default function Security() {
         <h2 className="text-2xl font-bold mb-6">Responsible disclosure</h2>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
           <p className="text-zinc-400 leading-relaxed mb-4">
-            Found a security issue? We'd like to know. Email <a href="mailto:security@catalogshub.com" className="text-blue-400 hover:underline">security@catalogshub.com</a> with details.
+            Found a security issue? We'd like to know. Email <a href="mailto:security@catipult.ai" className="text-blue-400 hover:underline">security@catipult.ai</a> with details.
             We acknowledge within 24 hours and aim to triage within 3 business days.
           </p>
           <p className="text-sm text-zinc-500">
@@ -157,7 +155,7 @@ export default function Security() {
           <div className="flex gap-6">
             <button onClick={() => navigate('/')} className="hover:text-zinc-400 transition">Home</button>
             <a href="https://tax-api.catalogshub.com/api/health" target="_blank" rel="noopener" className="hover:text-zinc-400 transition">Status</a>
-            <a href="mailto:security@catalogshub.com" className="hover:text-zinc-400 transition">Contact</a>
+            <a href="mailto:security@catipult.ai" className="hover:text-zinc-400 transition">Contact</a>
           </div>
         </div>
       </footer>

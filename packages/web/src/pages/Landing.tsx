@@ -40,7 +40,7 @@ export default function Landing() {
           <div className="max-w-xl flex-1">
             <div className="inline-flex items-center gap-2 bg-blue-600/10 border border-blue-500/20 rounded-full px-4 py-1.5 mb-6">
               <Bot className="w-4 h-4 text-blue-400" />
-              <span className="text-sm text-blue-300">Claude MCP Server · SOC 2 Type I · Production-ready</span>
+              <span className="text-sm text-blue-300">Claude MCP Server · SOC 2 self-attested · Production-ready</span>
             </div>
             <h1 className="text-5xl font-bold leading-tight mb-6">
               Your entire accounting
@@ -132,7 +132,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-6 py-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {[
-              { icon: <Shield className="w-5 h-5" />, label: 'SOC 2 Type I', sub: 'Audited controls', accent: 'emerald' },
+              { icon: <Shield className="w-5 h-5" />, label: 'SOC 2 aligned', sub: 'Self-attested controls', accent: 'emerald' },
               { icon: <Lock className="w-5 h-5" />, label: 'AWS KMS', sub: 'Per-user data keys', accent: 'blue' },
               { icon: <Key className="w-5 h-5" />, label: 'OAuth 2.0', sub: 'No API keys to share', accent: 'blue' },
               { icon: <Bot className="w-5 h-5" />, label: '40+ MCP tools', sub: 'Claude-ready', accent: 'blue' },
@@ -357,7 +357,7 @@ export default function Landing() {
                 icon: <Shield />,
                 title: 'Security & compliance',
                 items: [
-                  'SOC 2 Type I audited · Type II in progress',
+                  'SOC 2 self-attested controls',
                   'AWS KMS envelope encryption, per-user data keys',
                   'Argon2id API key hashing, blind HMAC for encrypted-field search',
                   'OAuth 2.0 for MCP · no shared tokens',
