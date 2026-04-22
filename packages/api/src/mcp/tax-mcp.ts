@@ -838,12 +838,13 @@ export function mountMCP(app: Express) {
     const apiKey = extractApiKey(req)
     if (!apiKey) {
       // RFC 9728: point the client at our protected-resource metadata so it
-      // can discover the authorization server. Most MCP clients (e.g.
-      // claude.ai) probe /.well-known/oauth-protected-resource at the
-      // resource host as a fallback even without this header, but setting
-      // it future-proofs against clients that require it.
-      const resourceMetadataUrl = (process.env.API_BASE_URL || 'https://tax-api.catalogshub.com') +
-        '/.well-known/oauth-protected-resource'
+      // can discover the authorization server AND verify the resource URL
+      // matches the MCP endpoint it's connecting to. The metadata must live
+      // under the same origin as the MCP endpoint (fin.catipult.ai), not
+      // under tax-api.catalogshub.com, or the MCP SDK will reject auth with
+      // "Protected resource X does not match expected Y".
+      const resourceOrigin = process.env.OAUTH_RESOURCE_ORIGIN || 'https://fin.catipult.ai'
+      const resourceMetadataUrl = `${resourceOrigin}/.well-known/oauth-protected-resource`
       res.setHeader(
         'WWW-Authenticate',
         `Bearer resource_metadata="${resourceMetadataUrl}"`,

@@ -42,13 +42,18 @@ export function mountOAuth(app: Express) {
   const baseUrl = process.env.API_BASE_URL || 'https://tax-api.catalogshub.com'
 
   // ─── Protected Resource Metadata (RFC 9728) ───
-  // `resource` remains the EC2 origin (that's the protected API that holds the
-  // MCP endpoint). `authorization_servers` now points at the Netlify site,
-  // which hosts the consent screen + token endpoint.
-  const authServerUrl = process.env.OAUTH_AUTH_SERVER_URL || 'https://fin.catipult.ai'
+  // `resource` MUST match the MCP endpoint URL the client is actually
+  // connecting to (the MCP SDK enforces this — mismatch == auth failure).
+  // Users hit https://fin.catipult.ai/mcp, which Netlify proxies here, so
+  // the metadata declares fin.catipult.ai/mcp as the canonical resource.
+  // This endpoint is kept for backward compat but the canonical location
+  // is https://fin.catipult.ai/.well-known/oauth-protected-resource, per
+  // RFC 9728 § the metadata-at-resource convention.
+  const authServerUrl     = process.env.OAUTH_AUTH_SERVER_URL || 'https://fin.catipult.ai'
+  const protectedResource = process.env.OAUTH_PROTECTED_RESOURCE || 'https://fin.catipult.ai/mcp'
   app.get('/.well-known/oauth-protected-resource', (_req, res) => {
     res.json({
-      resource: baseUrl,
+      resource: protectedResource,
       authorization_servers: [authServerUrl],
       bearer_methods_supported: ['header'],
       scopes_supported: ['tax-api'],

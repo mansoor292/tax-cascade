@@ -1,0 +1,6 @@
+{
+  "resource": "https://fin.catipult.ai/mcp",
+  "authorization_servers": ["https://fin.catipult.ai"],
+  "bearer_methods_supported": ["header"],
+  "scopes_supported": ["tax-api"]
+}
