@@ -17,14 +17,21 @@
  */
 
 // Load env before anything else imports process.env (crypto module, routes).
-// Layered: .env is the baseline (third-party creds etc.), .env.production
-// overrides with deploy-specific values. Either can be absent. First-loaded
-// wins by default in dotenv, so we load the override FIRST, then the base.
+// Three-layer precedence (first-loaded wins — dotenv default):
+//   1. .env.production (deploy-specific non-secrets: PORT, region, URLs)
+//   2. AWS SSM Parameter Store /tax-api/* (third-party secrets: QBO, Gemini…)
+//   3. .env (local dev baseline; skipped in prod if SSM won)
+// SSM is synchronous via aws CLI — keeps this block linear and lets route
+// modules capture env at module-load without a bootstrap refactor.
 import { config as loadEnv } from 'dotenv'
 if (process.env.NODE_ENV === 'production') {
-  loadEnv({ path: '.env.production' })  // override layer
+  loadEnv({ path: '.env.production' })
 }
-loadEnv({ path: '.env' })                // baseline (skipped if vars already set)
+import { loadSsmParametersSync } from './lib/ssm.js'
+const __ssm = loadSsmParametersSync()
+if (__ssm.error) console.warn(`[ssm] load skipped: ${__ssm.error}`)
+else console.log(`[ssm] loaded ${__ssm.loaded.length} params (${__ssm.skipped.length} already set)`)
+loadEnv({ path: '.env' })
 if (process.env.DOTENV_CONFIG_PATH) loadEnv({ path: process.env.DOTENV_CONFIG_PATH })
 
 import express from 'express'

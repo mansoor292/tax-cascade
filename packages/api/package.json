@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.1033.0",
+    "@aws-sdk/client-ssm": "^3.1034.0",
     "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.6.0",
     "@supabase/supabase-js": "^2.103.0",
