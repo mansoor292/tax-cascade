@@ -733,12 +733,14 @@ function mapScheduleLTable(table: TextractTable, out: Record<string, number>) {
   for (const row of table.rows) {
     if (row.length < 3) continue
 
-    // Schedule L layout: [line#, label, a, b, c, d] (6 columns)
-    // Column 0: line number like "1", "2a", "b", "10a"
-    // Column 1: label
-    // Columns 2-5: a (gross BOY), b (net BOY), c (gross EOY), d (net EOY)
+    // Schedule L has two observed column layouts from Textract:
+    //   6-col: [line#, label, a, b, c, d]    ← typical 2024 extraction
+    //   5-col: [line# + label combined, a, b, c, d]   ← typical 2022/2023
+    // Detect which by whether col 0 contains a line# followed by text
+    // (meaning col 0 holds both line# AND label, and values start at col 1).
     const col0 = row[0].trim()
     let lineNum = col0
+    let valueStartIdx = 2   // default: values start after line# + label columns
 
     // Handle continuation rows where col0 is just "b" — infer parent line from last
     if (/^[a-c]$/.test(col0) && lastLine) {
@@ -746,10 +748,11 @@ function mapScheduleLTable(table: TextractTable, out: Record<string, number>) {
       lineNum = parentBase + col0
     }
 
-    // Also accept "line# in label" layout as a fallback (e.g. "1 Cash" in col0)
-    if (!lineKeys[lineNum]) {
-      const m = col0.match(/^([0-9]{1,2}[a-c]?)\s+/)
-      if (m) lineNum = m[1]
+    // Detect fused layout: "1 Cash", "2a Trade notes...", etc.
+    const fusedMatch = col0.match(/^([0-9]{1,2}[a-c]?)\s+\S/)
+    if (fusedMatch) {
+      lineNum = fusedMatch[1]
+      valueStartIdx = 1     // no separate label column — values start at col 1
     }
 
     const prefix = lineKeys[lineNum]
@@ -762,7 +765,7 @@ function mapScheduleLTable(table: TextractTable, out: Record<string, number>) {
     // But: some lines have shaded/gray cells that shouldn't be filled.
     // For "gross with allowance below" lines (2a, 10a, 13a), cols b/d are
     // shaded — net is computed on the 2b/10b/13b row.
-    const valueCells = row.slice(2)  // skip line# + label
+    const valueCells = row.slice(valueStartIdx)
     const parsed = valueCells.map(c => parseDollar(c))
     const suffix = ['boy_a', 'boy_b', 'eoy_c', 'eoy_d'] as const
 
