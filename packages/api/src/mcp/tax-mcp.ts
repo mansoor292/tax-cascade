@@ -553,6 +553,24 @@ Present in plain English using the \`description\` field, grouped by category. E
     return text(await call('GET', '/api/documents'))
   })
 
+  // ─── Tool: fill_extraction_gaps ───
+  // Standalone gap-fill for an already-archived filed return. The same step runs
+  // inline during ingest/rearchive; this tool lets the model re-run gap-fill on
+  // existing filed_import rows (e.g. after a mapper improvement) without a full
+  // re-archive, or score an ad-hoc KV set via direct-input mode.
+  server.tool('fill_extraction_gaps',
+    'Run Gemini gap-fill on an already-archived filed return. After Textract + regex mapping, many canonical tax-line keys (Schedule L columns, Schedule K detail, etc.) go unfilled because the mapper rules don\'t match every layout. This tool identifies those gaps against the authoritative PDF field map for the form+year, sends Gemini the raw Textract KVs + the gap list, and fills what it can. Cheap (text-only, no PDF re-parse) and bounded (output scoped to the missing keys only). Two modes: (a) by `return_id` — auto-loads the return + its source document\'s Textract data, optionally persists filled values back to the row with `persist:true`; (b) direct inputs — pass `form_type, tax_year, textract_kvs, current_field_values` for ad-hoc scoring without saving.',
+    {
+      return_id: z.string().optional().describe('tax_return row ID (source=filed_import). Loads field_values and pulls the source document\'s Textract KVs. Use persist:true to merge filled values back into the row.'),
+      persist: z.boolean().optional().describe('When return_id is set, also merge filled values back into the tax_return field_values (non-destructive — never overwrites existing values). Default false.'),
+      form_type: z.enum(['1040', '1120', '1120S']).optional().describe('Direct-input mode: form type for gap computation. Required if return_id is not passed.'),
+      tax_year: z.number().optional().describe('Direct-input mode: tax year. Required if return_id is not passed.'),
+      textract_kvs: z.array(z.object({ key: z.string(), value: z.string() })).optional().describe('Direct-input mode: raw Textract KV pairs to use as grounding.'),
+      current_field_values: z.record(z.any()).optional().describe('Direct-input mode: canonical-keyed values already extracted by the mapper. Gaps are computed as expected_keys − keys(current_field_values). Default {} (fills everything expected for the form).'),
+    },
+    async (params) => text(await call('POST', '/api/intake/gap-fill', params))
+  )
+
   // ─── Tool: scratch ───
   // Per-user JSON blob store for parking large intermediate results outside the chat
   // context. Keyed by names the caller picks. Backed by the `ai-scratch` Supabase bucket.
