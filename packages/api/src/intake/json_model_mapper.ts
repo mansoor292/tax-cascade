@@ -766,21 +766,26 @@ function mapScheduleLTable(table: TextractTable, out: Record<string, number>) {
     const parsed = valueCells.map(c => parseDollar(c))
     const suffix = ['boy_a', 'boy_b', 'eoy_c', 'eoy_d'] as const
 
-    // Lines where col b and d are shaded (don't write)
-    const grayBD = new Set(['L2a_trade', 'L10a_bldg', 'L13a_intang'])
-    const skipBD = grayBD.has(prefix)
+    // Schedule L has two classes of lines:
+    //   "Gross-with-less" lines (2a, 10a, 13a) — gross amount goes in col a/c,
+    //      net figure is on the following 2b/10b/13b row. Cols b/d are shaded.
+    //   "Net" lines (everything else) — value lives in col b (BOY) and col d (EOY).
+    //      Cols a/c are blank on the PDF and should NOT be written — the engine
+    //      doesn't emit them either, so zero-filling them creates ghost keys
+    //      that silently tank filed-vs-amendment parity.
+    const grossLines = new Set(['L2a_trade', 'L10a_bldg', 'L13a_intang'])
+    const writeCols = grossLines.has(prefix)
+      ? [0, 2]           // only a and c for gross lines
+      : [1, 3]           // only b and d for net lines
 
-    const effectiveCols = Math.min(parsed.length, 4)
-    for (let pos = 0; pos < effectiveCols; pos++) {
-      // pos 1 = col b, pos 3 = col d
-      if (skipBD && (pos === 1 || pos === 3)) continue
-
+    for (const pos of writeCols) {
+      if (pos >= parsed.length) continue
       const key = `schedL.${prefix}_${suffix[pos]}`
       const val = parsed[pos]
       if (val !== null && val !== undefined) {
         out[key] = val
       } else if (!(key in out)) {
-        out[key] = 0  // default blank to $0
+        out[key] = 0  // blank on PDF = $0
       }
     }
   }
