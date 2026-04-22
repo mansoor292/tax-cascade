@@ -19,10 +19,13 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.s
 const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
 
-const QBO_CLIENT_ID = process.env.QUICKBOOKS_CLIENT_ID || ''
-const QBO_CLIENT_SECRET = process.env.QUICKBOOKS_CLIENT_SECRET || ''
-const QBO_ENVIRONMENT = process.env.QUICKBOOKS_ENVIRONMENT || 'production'
-const QBO_BASE = QBO_ENVIRONMENT === 'sandbox'
+// Lazy env accessors — bootstrap (dotenv + SSM fetch) runs AFTER ES imports
+// hoist and evaluate this module's top-level code. Reading env at call-time
+// instead of import-time is what makes the SSM loader work.
+const qboClientId     = () => process.env.QUICKBOOKS_CLIENT_ID || ''
+const qboClientSecret = () => process.env.QUICKBOOKS_CLIENT_SECRET || ''
+const qboEnvironment  = () => process.env.QUICKBOOKS_ENVIRONMENT || 'production'
+const qboBase         = () => qboEnvironment() === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
   : 'https://quickbooks.api.intuit.com'
 
@@ -45,7 +48,7 @@ async function refreshTokens(connectionId: string, userId: string, refreshToken:
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': 'Basic ' + Buffer.from(`${QBO_CLIENT_ID}:${QBO_CLIENT_SECRET}`).toString('base64'),
+      'Authorization': 'Basic ' + Buffer.from(`${qboClientId()}:${qboClientSecret()}`).toString('base64'),
     },
     body: new URLSearchParams({
       grant_type: 'refresh_token',
@@ -122,7 +125,7 @@ async function qboFetch(entityId: string, path: string, query?: Record<string, s
   if (!auth) throw new Error('No active QBO connection for this entity')
 
   const qs = query ? '?' + new URLSearchParams(query).toString() : ''
-  const url = `${QBO_BASE}/v3/company/${auth.realmId}${path}${qs}`
+  const url = `${qboBase()}/v3/company/${auth.realmId}${path}${qs}`
 
   const resp = await fetch(url, {
     headers: {
@@ -144,7 +147,7 @@ async function qboPost(entityId: string, path: string, body: any, query?: Record
   if (!auth) throw new Error('No active QBO connection for this entity')
 
   const qs = query ? '?' + new URLSearchParams(query).toString() : ''
-  const url = `${QBO_BASE}/v3/company/${auth.realmId}${path}${qs}`
+  const url = `${qboBase()}/v3/company/${auth.realmId}${path}${qs}`
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -171,7 +174,7 @@ router.get('/connect/:entity_id', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  if (!QBO_CLIENT_ID) return res.status(500).json({ error: 'QUICKBOOKS_CLIENT_ID not configured' })
+  if (!qboClientId()) return res.status(500).json({ error: 'QUICKBOOKS_CLIENT_ID not configured' })
 
   // "new" = auto-create entity from QBO company info during callback
   if (req.params.entity_id !== 'new') {
@@ -190,7 +193,7 @@ router.get('/connect/:entity_id', async (req, res) => {
   })).toString('base64url')
 
   const authUrl = new URL('https://appcenter.intuit.com/connect/oauth2')
-  authUrl.searchParams.set('client_id', QBO_CLIENT_ID)
+  authUrl.searchParams.set('client_id', qboClientId())
   authUrl.searchParams.set('response_type', 'code')
   authUrl.searchParams.set('scope', 'com.intuit.quickbooks.accounting')
   authUrl.searchParams.set('redirect_uri', redirectUri)
@@ -226,7 +229,7 @@ router.get('/callback', async (req, res) => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': 'Basic ' + Buffer.from(`${QBO_CLIENT_ID}:${QBO_CLIENT_SECRET}`).toString('base64'),
+      'Authorization': 'Basic ' + Buffer.from(`${qboClientId()}:${qboClientSecret()}`).toString('base64'),
     },
     body: new URLSearchParams({
       grant_type: 'authorization_code',
@@ -246,9 +249,7 @@ router.get('/callback', async (req, res) => {
   // Get company info from QBO
   let companyInfo: any = {}
   try {
-    const base = QBO_ENVIRONMENT === 'sandbox'
-      ? 'https://sandbox-quickbooks.api.intuit.com'
-      : 'https://quickbooks.api.intuit.com'
+    const base = qboBase()
     const infoResp = await fetch(`${base}/v3/company/${realmId}/companyinfo/${realmId}`, {
       headers: {
         'Authorization': `Bearer ${tokens.access_token}`,
