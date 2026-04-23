@@ -12,3 +12,6 @@ test_output/
 
 # Environment secrets (template is committed, real file is per-deploy)
 packages/api/.env.production
+
+# Supabase CLI session state — never commit, regenerated on `supabase link`
+packages/api/supabase/.temp/

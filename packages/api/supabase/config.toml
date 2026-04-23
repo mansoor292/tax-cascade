@@ -1,3 +1,18 @@
+project_id = "ophnjqjmxeohbyydxnlg"
+
+[db]
+# Matches the remote project's Postgres major version (17.6 at dump time).
+major_version = 17
+
+[api]
+# Schemas exposed via PostgREST. Add "graphql_public" here only if you start
+# using pg_graphql — currently unused.
+schemas = ["public"]
+
+[storage]
+# Default 50 MB is fine; bump here if PDFs grow past that.
+file_size_limit = "50MiB"
+
 [auth]
 site_url = "https://tax-engine-app.netlify.app"
 additional_redirect_urls = ["https://tax-engine-app.netlify.app/**", "https://tax-api.catalogshub.com/**", "http://localhost:5173/**", "http://localhost:3737/**"]
