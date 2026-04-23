@@ -7,6 +7,7 @@ import {
   Download,
   Zap,
   ChevronDown,
+  RefreshCw,
 } from 'lucide-react'
 import { useDocuments, type Document } from '@/hooks/use-documents'
 import { Button } from '@/components/ui/button'
@@ -45,10 +46,11 @@ interface Props {
 }
 
 export default function DocumentsTab({ entityId }: Props) {
-  const { documents, loading, upload, process, download, remove } = useDocuments(entityId)
+  const { documents, loading, upload, process, download, remove, rearchive } = useDocuments(entityId)
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState('')
   const [processing, setProcessing] = useState<string | null>(null)
+  const [rearchiving, setRearchiving] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -84,6 +86,18 @@ export default function DocumentsTab({ entityId }: Props) {
       toast.error(e instanceof Error ? e.message : 'Processing failed')
     }
     setProcessing(null)
+  }
+
+  const handleRearchive = async (docId: string) => {
+    setRearchiving(docId)
+    try {
+      const result = await rearchive(docId)
+      const r = result.rearchived
+      toast.success(`Re-archived — ${r.mapped_fields} canonical fields mapped`)
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Re-archive failed')
+    }
+    setRearchiving(null)
   }
 
   const handleDownload = async (docId: string) => {
@@ -189,21 +203,37 @@ export default function DocumentsTab({ entityId }: Props) {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {doc.textract_data && (
-                      <span className="text-xs text-muted-foreground mr-2">
-                        {doc.textract_data.num_pages || '?'}p · {doc.textract_data.kvs?.length || 0} fields
+                      <span className="text-xs text-muted-foreground mr-2 font-mono whitespace-nowrap">
+                        {doc.textract_data.num_pages || '?'}p
+                        {' · '}{doc.textract_data.kvs?.length || 0}kv
+                        {doc.textract_data.tables?.length ? ` · ${doc.textract_data.tables.length}t` : ''}
                       </span>
                     )}
                     {doc.doc_type?.startsWith('prior_return') && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleProcess(doc.id)}
-                        disabled={processing === doc.id}
-                        className="gap-1 text-xs"
-                      >
-                        {processing === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-                        Process
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRearchive(doc.id)}
+                          disabled={rearchiving === doc.id}
+                          className="gap-1 text-xs"
+                          title="Re-run mapper + Gemini gap-fill on stored Textract data"
+                        >
+                          {rearchiving === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                          Re-archive
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleProcess(doc.id)}
+                          disabled={processing === doc.id}
+                          className="gap-1 text-xs"
+                          title="Legacy engine-compute path"
+                        >
+                          {processing === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                          Process
+                        </Button>
+                      </>
                     )}
                     <Button variant="ghost" size="icon" onClick={() => handleDownload(doc.id)}>
                       <Download className="h-4 w-4" />

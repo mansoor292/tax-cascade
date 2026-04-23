@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   ChevronDown,
   Wrench,
+  Bot,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -41,6 +42,7 @@ const tools = [
   { to: '/app/cascade', label: 'Cascade', icon: GitBranch },
   { to: '/app/extensions', label: 'Extensions', icon: Clock },
   { to: '/app/tax-tables', label: 'Tax Tables', icon: TableProperties },
+  { to: '/app/connect-claude', label: 'Connect Claude', icon: Bot },
 ]
 
 function EntityItem({ entity }: { entity: Entity }) {

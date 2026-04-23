@@ -10,7 +10,11 @@ export interface Document {
   tax_year?: number
   file_size?: number
   uploaded_at?: string
-  textract_data?: { num_pages?: number; kvs?: { key: string; value: string }[] }
+  textract_data?: {
+    num_pages?: number
+    kvs?: { key: string; value: string }[]
+    tables?: Array<{ row_count?: number; col_count?: number }>
+  }
   textract_status?: string
   gemini_classification?: Record<string, unknown>
   meta?: {
@@ -83,5 +87,14 @@ export function useDocuments(entityId?: string) {
     await load()
   }
 
-  return { documents, loading, reload: load, upload, process, download, remove }
+  /** Re-run the intake pipeline (mapper + archiveFiledReturn + Gemini gap-fill)
+   *  on a prior_return_* document using its stored Textract data. */
+  const rearchive = async (documentId: string) => {
+    return api<{ rearchived: { id: string; mapped_fields: number; unmapped_count: number; totals: Record<string, number | null> } }>(
+      `/api/documents/${documentId}/rearchive`,
+      { method: 'POST' },
+    )
+  }
+
+  return { documents, loading, reload: load, upload, process, download, remove, rearchive }
 }

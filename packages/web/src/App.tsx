@@ -10,6 +10,8 @@ import Entities from '@/pages/Entities'
 import EntityDetail from '@/pages/EntityDetail'
 import Scenarios from '@/pages/Scenarios'
 import Compute from '@/pages/Compute'
+import CompareEntity from '@/pages/Compare'
+import ConnectClaude from '@/pages/ConnectClaude'
 import Cascade from '@/pages/Cascade'
 import Extensions from '@/pages/Extensions'
 import TaxTables from '@/pages/TaxTables'
@@ -43,6 +45,8 @@ export default function App() {
             <Route path="scenarios" element={<Scenarios />} />
             <Route path="entities" element={<Entities />} />
             <Route path="entities/:id" element={<EntityDetail />} />
+            <Route path="compare/:entityId" element={<CompareEntity />} />
+            <Route path="connect-claude" element={<ConnectClaude />} />
             <Route path="compute" element={<Compute />} />
             <Route path="cascade" element={<Cascade />} />
             <Route path="extensions" element={<Extensions />} />
