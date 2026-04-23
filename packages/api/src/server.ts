@@ -86,7 +86,21 @@ app.post('/deploy', express.raw({ type: 'application/json' }), (req, res) => {
   // Pull and restart in background
   res.json({ deploying: true, commit: payload.head_commit?.id?.slice(0, 7) })
 
-  const cmd = 'cd /opt/tax-api && git checkout -- package-lock.json && git pull && cd packages/api && npm install --include=dev && export $(cat .env | xargs) && pm2 restart tax-api --update-env'
+  // ESM imports in route files run before server.ts's in-process SSM loader
+  // (import hoisting), so any secret only in SSM (e.g. SUPABASE_SERVICE_ROLE_KEY)
+  // is undefined at module-load time. Shelling SSM → shell env → pm2 --update-env
+  // → node's process.env fixes the ordering. Helper script committed alongside.
+  const cmd = [
+    'cd /opt/tax-api',
+    'git checkout -- package-lock.json',
+    'git pull',
+    'cd packages/api',
+    'npm install --include=dev',
+    'chmod +x scripts/load-ssm-env.sh',
+    'export $(cat .env | xargs)',
+    'eval "$(./scripts/load-ssm-env.sh)"',
+    'pm2 restart tax-api --update-env',
+  ].join(' && ')
   try {
     execSync(cmd, { timeout: 120000 })
     console.log('Deploy succeeded:', payload.head_commit?.message)
