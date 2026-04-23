@@ -510,12 +510,20 @@ function YearDetail({
               </div>
             </div>
             <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              {c && Object.entries(c).slice(0, 8).map(([k, v]) => (
-                <div key={k} className="flex flex-col">
-                  <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                  <span className="font-mono">{fmt(v)}</span>
+              {c && Object.entries(c)
+                .filter(([, v]) => typeof v === 'number' && !isNaN(v) && v !== 0)
+                .slice(0, 8)
+                .map(([k, v]) => (
+                  <div key={k} className="flex flex-col">
+                    <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
+                    <span className="font-mono">{fmt(v)}</span>
+                  </div>
+                ))}
+              {c && Object.entries(c).filter(([, v]) => typeof v === 'number' && !isNaN(v) && v !== 0).length === 0 && (
+                <div className="col-span-full text-center text-muted-foreground py-1 italic">
+                  No computed values — extract values from field_values below or re-archive.
                 </div>
-              ))}
+              )}
             </div>
             {gap && (typeof gap.gaps_total === 'number' || gap.model) && (
               <div className="mt-2 pt-2 border-t text-xs text-muted-foreground">
