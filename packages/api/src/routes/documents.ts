@@ -18,12 +18,12 @@ const ENCRYPTED_DOC_FIELDS = { json: ['meta', 'textract_data'] }
 const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
-const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
 const S3_BUCKET = process.env.S3_BUCKET || 'tax-api-storage-2026'
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
 
 // Anon client for queries — RLS is open, API handles auth
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 // Get user ID from either Bearer token or API key middleware
 async function getUser(req: Request): Promise<string | null> {
