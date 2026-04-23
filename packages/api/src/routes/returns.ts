@@ -1408,15 +1408,71 @@ router.post('/compute', async (req, res) => {
     const isExtensionForm = ['4868', '7004', '8868'].includes(form_type)
     let priorYearInputs: Record<string, any> = {}
     let priorYearComputed: Record<string, any> = {}
+    let priorYearFieldValues: Record<string, any> = {}
     if (entity_id && !isExtensionForm) {
-      const { data: priorRet } = await supabase.from('tax_return')
-        .select('input_data, computed_data')
-        .eq('entity_id', entity_id).eq('tax_year', tax_year - 1).eq('form_type', form_type).eq('is_amended', false)
-        .single()
-      if (priorRet) {
+      // Prefer the filed return as the YOY baseline; if none, fall back to the
+      // most recent computed row for that year. An entity can have multiple
+      // prior-year rows (filed_import + amendment + proforma scenarios), so
+      // .single() was rejecting the lookup — hence every prior_year_value was
+      // null and the baseline cross-check never fired.
+      const { data: priorRows } = await supabase.from('tax_return')
+        .select('input_data, computed_data, field_values, source, updated_at')
+        .eq('entity_id', entity_id).eq('tax_year', tax_year - 1).eq('form_type', form_type)
+      if (priorRows && priorRows.length) {
+        const rank = (r: any) =>
+          r.source === 'filed_import' ? 0 :
+          r.source === 'amendment'    ? 1 :
+          r.source === 'proforma'     ? 2 : 3
+        const priorRet = [...priorRows].sort((a, b) => {
+          const dr = rank(a) - rank(b)
+          if (dr !== 0) return dr
+          return (b.updated_at || '').localeCompare(a.updated_at || '')
+        })[0]
         priorYearInputs = priorRet.input_data || {}
         priorYearComputed = priorRet.computed_data?.computed || {}
+        priorYearFieldValues = priorRet.field_values || priorRet.computed_data?.field_values || {}
       }
+    }
+
+    // Canonical-key bridge for filed_import rows. filed_import stores values
+    // under IRS canonical keys (deductions.L13_salaries) rather than engine
+    // input names (salaries_wages). Without this bridge, the YOY baseline
+    // skips every field that didn't have an explicit input on the filed row.
+    // Note: line numbers differ between 1120 (L7/L12/L13/L17/L22/L24) and
+    // 1120S (L7/L8/L11/L12/L16/L18) so we cover both.
+    const INPUT_TO_CANONICAL: Record<string, string[]> = {
+      gross_receipts:        ['income.L1a_gross_receipts'],
+      returns_allowances:    ['income.L1b_returns'],
+      cost_of_goods_sold:    ['income.L2_cogs', 'cogs.L8_cogs'],
+      officer_compensation:  ['deductions.L12_officer_comp', 'deductions.L7_officer_comp'],
+      salaries_wages:        ['deductions.L13_salaries', 'deductions.L8_salaries'],
+      repairs_maintenance:   ['deductions.L14_repairs', 'deductions.L9_repairs'],
+      bad_debts:             ['deductions.L15_bad_debts', 'deductions.L10_bad_debts'],
+      rents:                 ['deductions.L16_rents', 'deductions.L11_rents'],
+      taxes_licenses:        ['deductions.L17_taxes_licenses', 'deductions.L12_taxes'],
+      interest_expense:      ['deductions.L18_interest'],
+      interest:              ['deductions.L13_interest'],
+      charitable_contrib:    ['deductions.L19_charitable'],
+      depreciation:          ['deductions.L20_depreciation', 'deductions.L14_depreciation'],
+      depletion:             ['deductions.L21_depletion', 'deductions.L15_depletion'],
+      advertising:           ['deductions.L22_advertising', 'deductions.L16_advertising'],
+      pension_plans:         ['deductions.L23_pension', 'deductions.L17_pension'],
+      employee_benefits:     ['deductions.L24_employee_benefits', 'deductions.L18_employee_benefits'],
+      other_deductions:      ['deductions.L26_other_deductions', 'deductions.L20_other'],
+      nol_deduction:         ['tax.L29a_nol'],
+      estimated_tax_paid:    ['payments.L14_estimated', 'schedJ.J14_estimated_payments'],
+    }
+    const priorByInputName = (name: string): number | null => {
+      if (typeof priorYearInputs[name] === 'number') return priorYearInputs[name]
+      if (typeof priorYearComputed[name] === 'number') return priorYearComputed[name]
+      const canonicals = INPUT_TO_CANONICAL[name]
+      if (canonicals) {
+        for (const ck of canonicals) {
+          const v = priorYearFieldValues[ck]
+          if (typeof v === 'number' && !isNaN(v)) return v
+        }
+      }
+      return null
     }
 
     // Fields that materially affect tax and shouldn't silently zero-default.
@@ -1448,12 +1504,14 @@ router.post('/compute', async (req, res) => {
         if (f.type !== 'number') continue
         const v = mergedInputs[f.name]
         if (v === undefined || v === null || v === 0) {
-          const prior = priorYearInputs[f.name] ?? priorYearComputed[f.name] ?? null
-          const severity = critical.has(f.name) || (typeof prior === 'number' && prior >= 1000)
+          const prior = priorByInputName(f.name)
+          const severity = critical.has(f.name) || (typeof prior === 'number' && Math.abs(prior) >= 1000)
             ? 'critical' : 'normal'
           let note: string | undefined
           if (typeof prior === 'number' && prior !== 0) {
-            note = `Prior year had $${prior.toLocaleString()} — confirm this year is truly $0`
+            note = Math.abs(prior) >= 10000
+              ? `YOY_ZEROED: prior year filed $${prior.toLocaleString()} on this line — currently $0. Confirm this is intentional.`
+              : `Prior year had $${prior.toLocaleString()} — confirm this year is truly $0`
           } else if (critical.has(f.name)) {
             note = 'Material line — do not silently default to 0'
           }

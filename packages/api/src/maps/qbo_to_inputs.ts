@@ -71,15 +71,15 @@ export interface MapperOutput {
 const DEDUCTION_RULES: Array<{ bucket: keyof Form1120S_Inputs; patterns: RegExp[]; rule: string }> = [
   { bucket: 'repairs_maintenance', rule: 'repairs',     patterns: [/^repairs? ?&? ?maintenance$/i, /^repairs$/i] },
   { bucket: 'rents',              rule: 'rent',         patterns: [/^rent$/i, /^rent expense$/i, /rent or lease/i] },
-  { bucket: 'taxes_licenses',     rule: 'taxes',        patterns: [/payroll tax/i, /^taxes? & licenses?$/i, /^taxes$/i, /^state tax/i, /^business license/i] },
-  { bucket: 'advertising',        rule: 'advertising',  patterns: [/^advertising/i, /^marketing$/i, /^ppc/i] },
+  { bucket: 'taxes_licenses',     rule: 'taxes',        patterns: [/payroll tax/i, /^other payroll/i, /^taxes? ?&? ?licenses?$/i, /^taxes$/i, /^state tax/i, /^business license/i, /^permits? (&|and) licenses?/i, /^licenses?$/i] },
+  { bucket: 'advertising',        rule: 'advertising',  patterns: [/^advertising/i, /^marketing$/i, /^ppc/i, /lead gen/i, /^promotion/i, /^advertising ?&? ?promotion/i] },
   { bucket: 'interest',           rule: 'interest_exp', patterns: [/^interest paid/i, /interest expense/i, /mortgage interest/i, /loan interest/i] },
   { bucket: 'depreciation',       rule: 'depreciation', patterns: [/^depreciation/i] },
   { bucket: 'depletion',          rule: 'depletion',    patterns: [/^depletion/i] },
   { bucket: 'pension_plans',      rule: 'pension',      patterns: [/pension/i, /401\(?k\)?/i, /retirement plan/i] },
-  { bucket: 'employee_benefits',  rule: 'emp_benefits', patterns: [/employee benefit/i] },
+  { bucket: 'employee_benefits',  rule: 'emp_benefits', patterns: [/employee benefit/i, /health insurance/i] },
   { bucket: 'bad_debts',          rule: 'bad_debts',    patterns: [/^bad debts?/i] },
-  { bucket: 'salaries_wages',     rule: 'salaries',     patterns: [/^salaries ?& ?wages?$/i, /^wages?$/i] },
+  { bucket: 'salaries_wages',     rule: 'salaries',     patterns: [/^salaries ?&? ?wages?$/i, /^wages?$/i, /^payroll( expenses?)?( \(direct\))?$/i, /contract labor/i, /^(sales )?commissions$/i] },
 ]
 
 // OtherIncome leaves → Schedule K (1120S) — tracked here only so we can SKIP
@@ -179,6 +179,7 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
   let grossReceipts = incomeTotal
   let incomeSource = 'Income (Total)'
   let grossReceiptsHasAggregate = incomeTotal > 0
+  const contraRevenue: Array<{ name: string; amount: number }> = []
   for (const leaf of collectLeaves(pnl, 'Income')) {
     const reclass = matchRevenueExclusion(leaf.name)
     if (reclass) {
@@ -192,9 +193,21 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
         'If the deposit is still an unreleased liability, override gross_receipts in inputs and book as a liability on Schedule L instead.',
       )
     }
+    if (leaf.amount < -10000) {
+      contraRevenue.push({ name: leaf.name, amount: leaf.amount })
+    }
   }
   if (grossReceipts) {
     record('gross_receipts', grossReceipts, incomeSource, grossReceiptsHasAggregate ? 'aggregate:Income' : 'rule:gross_receipts')
+  }
+  if (contraRevenue.length) {
+    const total = contraRevenue.reduce((s, r) => s + r.amount, 0)
+    const list = contraRevenue.map(r => `"${r.name}" ($${Math.round(r.amount).toLocaleString()})`).join(', ')
+    warn(
+      'LARGE_CONTRA_REVENUE',
+      `Income section contains ${contraRevenue.length} negative leaf(s) totaling $${Math.round(total).toLocaleString()}: ${list}. These are reducing current-year gross_receipts.`,
+      'If these adjustments relate to a prior period, consider amending the prior-year return instead of recording against current-year revenue.',
+    )
   }
 
   // ── Other income (non-portfolio OtherIncome) ──
@@ -231,8 +244,18 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
   }
 
   // ── Expenses + OtherExpenses (ordinary operating deductions) ──
+  const unmatchedExpenses: Array<{ name: string; amount: number }> = []
+  const mealsLeaves: Array<{ name: string; amount: number }> = []
+  const uncategorizedLeaves: Array<{ name: string; amount: number }> = []
+  let payrollishDetected = false
+  let expensesLeafTotal = 0
   for (const parent of ['Expenses', 'OtherExpenses']) {
     for (const { name, amount } of collectLeaves(pnl, parent)) {
+      expensesLeafTotal += amount
+      if (/meals|entertainment/i.test(name)) mealsLeaves.push({ name, amount })
+      if (/uncategorized/i.test(name)) uncategorizedLeaves.push({ name, amount })
+      if (/payroll|salar|wages|contract labor|commissions/i.test(name)) payrollishDetected = true
+
       const reclass = matchReclass(name)
       if (reclass) {
         record(reclass.target, amount, `${parent} > ${name}`, `rule:${reclass.rule}`)
@@ -243,7 +266,22 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
         record(specific.bucket, amount, `${parent} > ${name}`, `rule:${specific.rule}`)
         continue
       }
+      unmatchedExpenses.push({ name: `${parent} > ${name}`, amount })
       record('other_deductions', amount, `${parent} > ${name}`, 'fallback:other_deductions')
+    }
+  }
+
+  // Sanity check: leaves should roughly equal the parent-section totals.
+  // A large gap means the flattener is dropping parent-level direct postings.
+  const expensesTotal = totalOrZero(pnl, 'Expenses (Total)') + totalOrZero(pnl, 'OtherExpenses (Total)')
+  if (expensesTotal > 0) {
+    const drift = Math.abs(expensesTotal - expensesLeafTotal)
+    if (drift > Math.max(100, expensesTotal * 0.02)) {
+      warn(
+        'EXPENSE_TOTAL_MISMATCH',
+        `Sum of Expense leaves ($${Math.round(expensesLeafTotal).toLocaleString()}) differs from Expense totals ($${Math.round(expensesTotal).toLocaleString()}) by $${Math.round(drift).toLocaleString()}. Some postings may not be reaching the tax return.`,
+        'Check QBO for amounts posted directly to parent accounts instead of leaf accounts.',
+      )
     }
   }
 
@@ -287,11 +325,45 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
     )
   }
 
-  if (inputs.salaries_wages && !inputs.officer_compensation) {
+  if ((inputs.salaries_wages || payrollishDetected) && !inputs.officer_compensation) {
+    const sw = (inputs.salaries_wages as number) || 0
     warn(
       'OFFICER_COMP_UNSPLIT',
-      `Salaries & wages total $${inputs.salaries_wages.toLocaleString()}. QBO does not separate officer compensation from other salaries, but the 1120/1120S form splits them (officer → L7, rest → L8). Current proforma places the entire amount on L8.`,
-      `Override officer_compensation in inputs (reasonable salary standard for a S-corp shareholder-employee; pull from W-2 Box 1).`,
+      `Payroll-type expenses detected${sw ? ` (salaries_wages = $${sw.toLocaleString()})` : ''} but no officer_compensation provided. QBO does not separate officer compensation from other salaries; 1120/1120S splits them (officer → L7 on 1120S / L12 on 1120, rest → L8 / L13). Currently $0 on the officer line.`,
+      `Override officer_compensation in inputs using the officer's W-2 Box 1 (reasonable salary standard for shareholder-employees).`,
+    )
+  }
+
+  if (unmatchedExpenses.length) {
+    const total = unmatchedExpenses.reduce((s, r) => s + r.amount, 0)
+    // Top-ten preview so the warning is actionable but bounded.
+    const preview = [...unmatchedExpenses]
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+      .slice(0, 10)
+      .map(r => `${r.name} ($${Math.round(r.amount).toLocaleString()})`)
+      .join('; ')
+    warn(
+      'UNMATCHED_EXPENSE_LINES',
+      `${unmatchedExpenses.length} QBO expense account(s) totaling $${Math.round(total).toLocaleString()} had no matching IRS-line rule and fell through to other_deductions (L26 on 1120 / L20 on 1120S). Top by amount: ${preview}${unmatchedExpenses.length > 10 ? '; …' : ''}.`,
+      'Review the list and override the right field in inputs (e.g. salaries_wages, taxes_licenses). If these belong in other_deductions, you can leave them — but L26 being a catch-all triggers preparer scrutiny.',
+    )
+  }
+
+  if (mealsLeaves.length) {
+    const total = mealsLeaves.reduce((s, r) => s + r.amount, 0)
+    warn(
+      'MEALS_NEEDS_DISALLOWANCE',
+      `Meals/entertainment totaling $${Math.round(total).toLocaleString()} is in other_deductions at 100%. §274(n) limits the business-meal deduction to 50% (and disallows entertainment entirely). Current return takes the full amount.`,
+      `Reduce other_deductions by 50% of meals and 100% of entertainment, or pass a meals_50pct override if/when the engine adds that bucket.`,
+    )
+  }
+
+  if (uncategorizedLeaves.length) {
+    const total = uncategorizedLeaves.reduce((s, r) => s + r.amount, 0)
+    warn(
+      'UNCATEGORIZED_EXPENSE',
+      `QBO contains Uncategorized Expense(s) totaling $${Math.round(total).toLocaleString()}. These are posted to a placeholder account and should be reclassified before filing.`,
+      'Reclassify the underlying transactions in QBO (or record_tax_fact overrides here) so they land on the correct IRS line.',
     )
   }
 
