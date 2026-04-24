@@ -4,6 +4,7 @@
 import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { encryptedFields, encryptionEnabled, hydrate, hydrateAll } from '../lib/row_crypto.js'
+import { accountingMethodCacheBust } from './qbo.js'
 import { blindIndex } from '../lib/crypto.js'
 
 const ENCRYPTED_ENTITY_FIELDS = { text: ['ein'] }
@@ -149,6 +150,14 @@ router.put('/:id', async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message })
   if (!data) return res.status(404).json({ error: 'Entity not found' })
+
+  // If the accounting method override changed, bust the QBO cache so the
+  // next /financials or /reports fetch requests the new basis from QBO.
+  const touchesMethod =
+    (meta && Object.prototype.hasOwnProperty.call(meta, 'accounting_method')) ||
+    (meta_merge && Object.prototype.hasOwnProperty.call(meta_merge, 'accounting_method'))
+  if (touchesMethod) accountingMethodCacheBust(req.params.id)
+
   res.json({ entity: data })
 })
 

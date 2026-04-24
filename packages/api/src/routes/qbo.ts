@@ -104,11 +104,35 @@ async function getAccessToken(entityId: string): Promise<{
   return { token: refreshed.access_token, realmId: conn.realm_id }
 }
 
-// Cache of entity → accounting method so we don't hit QBO Preferences on every call
+// Cache of entity → accounting method so we don't hit QBO Preferences on every call.
+// Invalidated by accountingMethodCacheBust(entityId) when the user changes
+// entity.meta.accounting_method so the next QBO fetch picks up the override.
 const accountingMethodCache: Record<string, string> = {}
 
+export function accountingMethodCacheBust(entityId: string) {
+  delete accountingMethodCache[entityId]
+}
+
+/** Resolve the basis QBO reports should use for this entity.
+ *  Precedence: entity.meta.accounting_method (user override) > QBO ReportPrefs.
+ *  Normalized to 'Cash' | 'Accrual' (QBO Reports API accepts both). */
 async function getAccountingMethod(entityId: string): Promise<string> {
   if (accountingMethodCache[entityId]) return accountingMethodCache[entityId]
+
+  // 1. User override on the entity row (set via PUT /api/entities/:id with
+  //    meta_merge: { accounting_method: 'cash' | 'accrual' }).
+  try {
+    const { data: ent } = await supabase.from('tax_entity')
+      .select('meta').eq('id', entityId).single()
+    const override = ent?.meta?.accounting_method
+    if (typeof override === 'string' && override.trim()) {
+      const norm = override.toLowerCase().startsWith('cash') ? 'Cash' : 'Accrual'
+      accountingMethodCache[entityId] = norm
+      return norm
+    }
+  } catch { /* fall through to QBO prefs */ }
+
+  // 2. QBO Preferences (company-wide default).
   try {
     const data = await qboFetch(entityId, '/query', { query: 'SELECT * FROM Preferences' })
     const prefs = data?.QueryResponse?.Preferences?.[0]

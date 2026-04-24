@@ -37,6 +37,18 @@ const FORM_TYPE_LABEL: Record<string, string> = {
   '1120-S': 'S-Corp (1120-S)',
 }
 
+type Basis = 'accrual' | 'cash' | ''
+
+function readBasis(entity: { meta?: Record<string, unknown> } | null | undefined): Basis {
+  const m = entity?.meta?.accounting_method
+  if (typeof m === 'string') {
+    const s = m.toLowerCase()
+    if (s.startsWith('cash')) return 'cash'
+    if (s.startsWith('accrual')) return 'accrual'
+  }
+  return ''
+}
+
 export default function EntityDetail() {
   const { id } = useParams<{ id: string }>()
   const nav = useNavigate()
@@ -45,6 +57,7 @@ export default function EntityDetail() {
   const [editName, setEditName] = useState('')
   const [editEin, setEditEin] = useState('')
   const [editFormType, setEditFormType] = useState('')
+  const [editBasis, setEditBasis] = useState<Basis>('')
   const [saving, setSaving] = useState(false)
 
   const openEdit = () => {
@@ -52,6 +65,7 @@ export default function EntityDetail() {
     setEditName(entity.name)
     setEditEin(entity.ein || '')
     setEditFormType(entity.form_type)
+    setEditBasis(readBasis(entity))
     setEditing(true)
   }
 
@@ -65,6 +79,10 @@ export default function EntityDetail() {
           name: editName,
           ein: editEin || undefined,
           form_type: editFormType,
+          // meta_merge preserves any other keys on entity.meta and only
+          // overwrites accounting_method. Empty string clears the override
+          // so the server falls back to QBO ReportPrefs.
+          meta_merge: { accounting_method: editBasis || null },
         }),
       })
       toast.success('Entity updated')
@@ -75,6 +93,8 @@ export default function EntityDetail() {
     }
     setSaving(false)
   }
+
+  const currentBasis = readBasis(entity)
 
   if (loading) {
     return (
@@ -110,10 +130,23 @@ export default function EntityDetail() {
           </div>
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-semibold tracking-tight truncate">{entity.name}</h1>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <Badge variant="outline" className="text-xs">
                 {FORM_TYPE_LABEL[entity.form_type] || entity.form_type}
               </Badge>
+              {currentBasis && (
+                <Badge
+                  variant="outline"
+                  className={`text-xs capitalize ${
+                    currentBasis === 'cash'
+                      ? 'text-blue-400 border-blue-500/20 bg-blue-500/5'
+                      : 'text-amber-400 border-amber-500/20 bg-amber-500/5'
+                  }`}
+                  title={`${currentBasis} basis — used when recomputing from QBO. Click Edit to change.`}
+                >
+                  {currentBasis} basis
+                </Badge>
+              )}
               {entity.ein && (
                 <span className="text-xs text-muted-foreground font-mono">{entity.ein}</span>
               )}
@@ -179,6 +212,21 @@ export default function EntityDetail() {
             <div className="space-y-2">
               <Label>EIN / SSN</Label>
               <Input value={editEin} onChange={e => setEditEin(e.target.value)} placeholder="XX-XXXXXXX" />
+            </div>
+            <div className="space-y-2">
+              <Label>Accounting basis</Label>
+              <Select value={editBasis || '__qbo__'} onValueChange={v => setEditBasis(v === '__qbo__' ? '' : v as Basis)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__qbo__">Follow QBO company preference</SelectItem>
+                  <SelectItem value="accrual">Accrual</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Overrides QBO's company-wide ReportBasis for this entity's financials and Recompute-from-QBO.
+                Use Cash when a return was filed on a cash basis even if QBO is set to accrual.
+              </p>
             </div>
           </div>
           <DialogFooter>
