@@ -96,10 +96,18 @@ function groupByYear(returns: TaxReturn[]): GroupedYear[] {
   return Array.from(byYear.values()).sort((a, b) => b.year - a.year)
 }
 
-function totalTax(r: TaxReturn | undefined): number | undefined {
-  if (!r) return undefined
+// Column metric: what moves most on an amendment for this form.
+//   1120  → corporate total_tax
+//   1120S → ordinary_income_loss (pass-through to K-1s; no corp tax)
+//   1040  → total_tax
+function keyMetric(r: TaxReturn | undefined): { value: number | undefined; label: string } {
+  if (!r) return { value: undefined, label: 'Δ Tax' }
   const c = r.computed_data?.computed as Record<string, number> | undefined
-  return c?.total_tax
+  if (!c) return { value: undefined, label: 'Δ Tax' }
+  if (r.form_type === '1120S') {
+    return { value: c.ordinary_income_loss, label: 'Δ Ord. income' }
+  }
+  return { value: c.total_tax, label: 'Δ Tax' }
 }
 
 export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
@@ -118,6 +126,13 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
   const { schema, loading: schemaLoading } = useSchema(showCompute ? formType : undefined, showCompute ? taxYear : undefined)
 
   const grouped = useMemo(() => groupByYear(returns), [returns])
+
+  // Pick the column label off whichever form-type is dominant for this entity.
+  // Single-entity view almost always has one form_type anyway.
+  const deltaColLabel = useMemo(() => {
+    const anyReturn = returns[0]
+    return anyReturn?.form_type === '1120S' ? 'Δ Ord. income' : 'Δ Tax'
+  }, [returns])
 
   const handleCompute = async () => {
     setComputing(true)
@@ -280,14 +295,16 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
                 <TableHead>Year</TableHead>
                 <TableHead>Filed</TableHead>
                 <TableHead>Amendment</TableHead>
-                <TableHead className="text-right">Δ Tax</TableHead>
+                <TableHead className="text-right">{deltaColLabel}</TableHead>
                 <TableHead>Other</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {grouped.map(g => {
-                const filedTax = totalTax(g.filed)
-                const amendTax = totalTax(g.amendment)
+                const filedMetric = keyMetric(g.filed)
+                const amendMetric = keyMetric(g.amendment)
+                const filedTax = filedMetric.value
+                const amendTax = amendMetric.value
                 const deltaTax = (amendTax !== undefined && filedTax !== undefined) ? amendTax - filedTax : null
                 const gapStats = g.filed?.verification?.gemini_gap_fill
                 const otherCount = g.extensions.length + g.others.length + (g.proforma ? 1 : 0)
@@ -384,7 +401,7 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
                         <div className="flex flex-wrap gap-1">
                           {g.proforma && (
                             <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.proforma}`}>
-                              Proforma {fmt(totalTax(g.proforma))}
+                              Proforma {fmt(keyMetric(g.proforma).value)}
                             </Badge>
                           )}
                           {g.extensions.map(e => (
