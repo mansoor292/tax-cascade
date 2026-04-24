@@ -68,7 +68,10 @@ interface Props {
 interface GroupedYear {
   year: number
   filed?: TaxReturn
-  amendment?: TaxReturn
+  /** All amendments for the year, newest first. Duplicates (same supersedes_id,
+   *  separate compute runs) are intentionally preserved so the UI can surface
+   *  them — they're almost always cruft the user needs to see and delete. */
+  amendments: TaxReturn[]
   proforma?: TaxReturn
   extensions: TaxReturn[]
   others: TaxReturn[]
@@ -78,7 +81,7 @@ function groupByYear(returns: TaxReturn[]): GroupedYear[] {
   const byYear = new Map<number, GroupedYear>()
   for (const r of returns) {
     if (!byYear.has(r.tax_year)) {
-      byYear.set(r.tax_year, { year: r.tax_year, extensions: [], others: [] })
+      byYear.set(r.tax_year, { year: r.tax_year, amendments: [], extensions: [], others: [] })
     }
     const slot = byYear.get(r.tax_year)!
     const pickLatest = (cur: TaxReturn | undefined, next: TaxReturn) => {
@@ -87,11 +90,15 @@ function groupByYear(returns: TaxReturn[]): GroupedYear[] {
     }
     switch (r.source) {
       case 'filed_import': slot.filed     = pickLatest(slot.filed, r); break
-      case 'amendment':    slot.amendment = pickLatest(slot.amendment, r); break
+      case 'amendment':    slot.amendments.push(r); break
       case 'proforma':     slot.proforma  = pickLatest(slot.proforma, r); break
       case 'extension':    slot.extensions.push(r); break
       default:             slot.others.push(r)
     }
+  }
+  // Sort amendments newest-first within each year
+  for (const g of byYear.values()) {
+    g.amendments.sort((a, b) => (b.computed_at || '').localeCompare(a.computed_at || ''))
   }
   return Array.from(byYear.values()).sort((a, b) => b.year - a.year)
 }
@@ -281,8 +288,8 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
     setRecomputing(null)
   }
 
-  const handleCompareYear = (year: number) => {
-    nav(`/app/compare/${entityId}?year=${year}`)
+  const handleCompareAmendment = (amendment: TaxReturn) => {
+    nav(`/app/compare/${entityId}?amendment_id=${amendment.id}`)
   }
 
   const handleDelete = async (r: TaxReturn) => {
@@ -316,7 +323,7 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-lg font-medium">Tax Returns</h3>
         <div className="flex items-center gap-2">
-          {grouped.some(g => g.filed && g.amendment) && (
+          {grouped.some(g => g.filed && g.amendments.length > 0) && (
             <Button variant="outline" size="sm" onClick={() => nav(`/app/compare/${entityId}`)} className="gap-2">
               <BarChart3 className="h-4 w-4" />
               Compare years
@@ -354,14 +361,16 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
             </TableHeader>
             <TableBody>
               {grouped.map(g => {
+                const latestAmendment = g.amendments[0]
                 const filedMetric = keyMetric(g.filed)
-                const amendMetric = keyMetric(g.amendment)
+                const amendMetric = keyMetric(latestAmendment)
                 const filedTax = filedMetric.value
                 const amendTax = amendMetric.value
                 const deltaTax = (amendTax !== undefined && filedTax !== undefined) ? amendTax - filedTax : null
                 const gapStats = g.filed?.verification?.gemini_gap_fill
                 const otherCount = g.extensions.length + g.others.length + (g.proforma ? 1 : 0)
                 const isExpanded = expandedYear === g.year
+                const extraAmendmentCount = Math.max(0, g.amendments.length - 1)
                 return (
                   <Fragment key={g.year}>
                     <TableRow
@@ -392,41 +401,19 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
                         )}
                       </TableCell>
                       <TableCell>
-                        {g.amendment ? (
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.amendment}`}>Amended</Badge>
-                              <span className="text-sm font-mono">{fmt(amendTax)}</span>
-                            </div>
-                            <div className="flex gap-1">
-                              {g.filed && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={e => { e.stopPropagation(); handleCompareYear(g.year) }}
-                                  className="gap-1 text-xs h-6 px-2"
-                                  title="Line-by-line comparison of filed vs amended"
-                                >
-                                  <Scale className="h-3 w-3" />
-                                  Compare
-                                </Button>
-                              )}
-                              <Button
+                        {latestAmendment ? (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.amendment}`}>Amended</Badge>
+                            <span className="text-sm font-mono">{fmt(amendTax)}</span>
+                            {extraAmendmentCount > 0 && (
+                              <Badge
                                 variant="outline"
-                                size="sm"
-                                onClick={e => { e.stopPropagation(); handleRecompute(g.amendment!) }}
-                                disabled={recomputing === g.amendment.id}
-                                className="gap-1 text-xs h-6 px-2"
-                                title={g.amendment.form_type === '1120' || g.amendment.form_type === '1120S'
-                                  ? 'Pull latest QBO data and recompute this amendment'
-                                  : 'Recompute this amendment with its current inputs'}
+                                className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                title={`${g.amendments.length} amendments on file for ${g.year}. Expand the row to review and delete duplicates.`}
                               >
-                                {recomputing === g.amendment.id
-                                  ? <Loader2 className="h-3 w-3 animate-spin" />
-                                  : <RefreshCw className="h-3 w-3" />}
-                                Recompute
-                              </Button>
-                            </div>
+                                +{extraAmendmentCount} more
+                              </Badge>
+                            )}
                           </div>
                         ) : g.filed ? (
                           <Button
@@ -475,7 +462,7 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
                             onDelete={handleDelete}
                             onFillGaps={handleFillGaps}
                             onRecompute={handleRecompute}
-                            onCompareYear={handleCompareYear}
+                            onCompareAmendment={handleCompareAmendment}
                             downloading={downloading}
                             gapFilling={gapFilling}
                             recomputing={recomputing}
@@ -573,7 +560,7 @@ function YearDetail({
   onDelete,
   onFillGaps,
   onRecompute,
-  onCompareYear,
+  onCompareAmendment,
   downloading,
   gapFilling,
   recomputing,
@@ -583,19 +570,18 @@ function YearDetail({
   onDelete: (r: TaxReturn) => void
   onFillGaps: (id: string) => void
   onRecompute: (r: TaxReturn) => void
-  onCompareYear: (year: number) => void
+  onCompareAmendment: (r: TaxReturn) => void
   downloading: string | null
   gapFilling: string | null
   recomputing: string | null
 }) {
   const rows = [
     group.filed,
-    group.amendment,
+    ...group.amendments,
     group.proforma,
     ...group.extensions,
     ...group.others,
   ].filter((r): r is TaxReturn => !!r)
-  const canCompare = Boolean(group.filed && group.amendment)
 
   // Read the filed return's accounting method (Schedule K line 1: cash/accrual/other)
   const readMethod = (r?: TaxReturn): string | null => {
@@ -606,11 +592,11 @@ function YearDetail({
     if (typeof m === 'number') return ['cash', 'accrual', 'other'][m] || null
     return null
   }
-  const methodStr = readMethod(group.filed) || readMethod(group.amendment)
+  const methodStr = readMethod(group.filed) || readMethod(group.amendments[0])
 
   return (
     <div className="space-y-3">
-      {(canCompare || methodStr) && (
+      {(methodStr || group.amendments.length > 1) && (
         <div className="flex items-center gap-2 flex-wrap">
           {methodStr && (
             <Badge variant="outline" className="text-xs capitalize gap-1">
@@ -618,16 +604,14 @@ function YearDetail({
               Return basis: {methodStr}
             </Badge>
           )}
-          {canCompare && (
-            <Button
+          {group.amendments.length > 1 && (
+            <Badge
               variant="outline"
-              size="sm"
-              onClick={() => onCompareYear(group.year)}
-              className="gap-1 text-xs h-7"
+              className="text-xs gap-1 bg-amber-500/10 text-amber-400 border-amber-500/30"
+              title="Multiple amendments exist for this year. Review each and delete the stale ones."
             >
-              <Scale className="h-3 w-3" />
-              Line-by-line compare ({group.year})
-            </Button>
+              {group.amendments.length} amendments — delete duplicates below
+            </Badge>
           )}
         </div>
       )}
@@ -665,6 +649,18 @@ function YearDetail({
                   >
                     {gapFilling === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                     Fill gaps
+                  </Button>
+                )}
+                {r.source === 'amendment' && group.filed && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onCompareAmendment(r)}
+                    className="gap-1 text-xs h-7"
+                    title={`Line-by-line compare of this amendment (${r.id.slice(0, 8)}) against filed ${group.filed.id.slice(0, 8)}`}
+                  >
+                    <Scale className="h-3 w-3" />
+                    Compare vs filed
                   </Button>
                 )}
                 {canRecompute && (

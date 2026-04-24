@@ -162,6 +162,7 @@ export default function Compare() {
   const [searchParams] = useSearchParams()
   const focusYearRaw = searchParams.get('year')
   const focusYear = focusYearRaw ? Number(focusYearRaw) : null
+  const focusAmendmentId = searchParams.get('amendment_id')
   const nav = useNavigate()
   const { entity } = useEntity(entityId)
   const { data, loading, error } = useCompareReturns(entityId)
@@ -211,6 +212,74 @@ export default function Compare() {
       <div className="text-center py-16">
         <p className="text-muted-foreground">{error || 'Failed to load comparison'}</p>
         <Button variant="link" onClick={() => nav(-1)}>← Back</Button>
+      </div>
+    )
+  }
+
+  // Single-amendment focused view: ?amendment_id=<id> takes precedence over
+  // ?year=. Resolve the amendment row, find its parent (supersedes_id → filed,
+  // falling back to the year's latest filed_import), and render the line-by-
+  // line diff for that specific amendment.
+  if (focusAmendmentId) {
+    const amendRow = data.all_rows.find(r => r.id === focusAmendmentId && r.source === 'amendment')
+    let filedRow: TaxReturn | undefined
+    if (amendRow?.supersedes_id) {
+      filedRow = data.all_rows.find(r => r.id === amendRow.supersedes_id)
+    }
+    if (!filedRow && amendRow) {
+      // Fallback: latest filed_import for same year
+      filedRow = data.all_rows
+        .filter(r => r.source === 'filed_import' && r.tax_year === amendRow.tax_year)
+        .sort((a, b) => (b.computed_at || '').localeCompare(a.computed_at || ''))[0]
+    }
+    const canCompare = Boolean(amendRow && filedRow)
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => nav(-1)}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+              <GitBranch className="h-4 w-4 text-amber-400" />
+              <h1 className="text-xl sm:text-2xl font-semibold tracking-tight truncate">
+                {entity?.name || data.entity.name} — {amendRow?.tax_year ?? '?'} Amendment vs Filed
+              </h1>
+            </div>
+            {amendRow && (
+              <p className="text-sm text-muted-foreground">
+                {amendRow.form_type} · amended {amendRow.id.slice(0, 8)}
+                {amendRow.computed_at ? ` (${new Date(amendRow.computed_at).toLocaleDateString()})` : ''}
+                {filedRow ? ` vs filed ${filedRow.id.slice(0, 8)}` : ' — no filed parent found'}
+              </p>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => nav(`/app/compare/${entityId}`)}
+            className="gap-1"
+            title="See all years side-by-side"
+          >
+            <BarChart3 className="h-4 w-4" />
+            All years
+          </Button>
+        </div>
+
+        {!canCompare ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              {!amendRow && 'Amendment not found.'}
+              {amendRow && !filedRow && `No filed parent found for amendment ${amendRow.id.slice(0, 8)}.`}
+            </CardContent>
+          </Card>
+        ) : (
+          <LineByLineMatrix
+            filedId={filedRow!.id}
+            amendId={amendRow!.id}
+            year={amendRow!.tax_year}
+          />
+        )}
       </div>
     )
   }
