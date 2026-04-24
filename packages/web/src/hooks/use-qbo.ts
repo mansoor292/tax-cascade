@@ -6,6 +6,7 @@ export interface QboStatus {
   company_name?: string
   last_synced_at?: string
   realm_id?: string
+  accounting_method?: string | null
 }
 
 export interface Financials {

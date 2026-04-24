@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Download, FileText, Loader2, GitBranch, Sparkles, BarChart3, Trash2, ChevronRight } from 'lucide-react'
+import { Plus, Download, FileText, Loader2, GitBranch, Sparkles, BarChart3, Trash2, ChevronRight, RefreshCw, Scale } from 'lucide-react'
 import { type Entity } from '@/hooks/use-entities'
 import { useReturns, type TaxReturn, type ReturnSource } from '@/hooks/use-returns'
 import { useSchema } from '@/hooks/use-schema'
@@ -104,7 +104,7 @@ function totalTax(r: TaxReturn | undefined): number | undefined {
 
 export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
   const nav = useNavigate()
-  const { returns, loading, compute, createAmendment, validate, getPdf, remove, fillGaps } = useReturns(entityId)
+  const { returns, loading, compute, computeFromQbo, createAmendment, validate, getPdf, remove, fillGaps } = useReturns(entityId)
   const [showCompute, setShowCompute] = useState(false)
   const [formType, setFormType] = useState(entity.form_type || '1040')
   const [taxYear, setTaxYear] = useState(2024)
@@ -114,6 +114,7 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
   const [downloading, setDownloading] = useState<string | null>(null)
   const [gapFilling, setGapFilling] = useState<string | null>(null)
   const [creatingAmendment, setCreatingAmendment] = useState<string | null>(null)
+  const [recomputing, setRecomputing] = useState<string | null>(null)
   const { schema, loading: schemaLoading } = useSchema(showCompute ? formType : undefined, showCompute ? taxYear : undefined)
 
   const grouped = useMemo(() => groupByYear(returns), [returns])
@@ -180,6 +181,40 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
       toast.error(e instanceof Error ? e.message : 'Gap-fill failed')
     }
     setGapFilling(null)
+  }
+
+  const handleRecompute = async (r: TaxReturn) => {
+    setRecomputing(r.id)
+    try {
+      const isCorporate = r.form_type === '1120' || r.form_type === '1120S'
+      if (isCorporate) {
+        await computeFromQbo({
+          entity_id:  r.entity_id,
+          tax_year:   r.tax_year,
+          form_type:  r.form_type,
+          return_id:  r.id,
+          overrides:  (r.input_data as Record<string, unknown>) || {},
+        })
+        toast.success(`Recomputed ${r.tax_year} ${r.form_type} from QBO`)
+      } else {
+        await compute({
+          entity_id:  r.entity_id,
+          tax_year:   r.tax_year,
+          form_type:  r.form_type,
+          return_id:  r.id,
+          inputs:     { tax_year: r.tax_year, ...(r.input_data as Record<string, unknown> || {}) },
+        })
+        toast.success(`Recomputed ${r.tax_year} ${r.form_type}`)
+      }
+      onUpdate()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Recompute failed')
+    }
+    setRecomputing(null)
+  }
+
+  const handleCompareYear = (year: number) => {
+    nav(`/app/compare/${entityId}?year=${year}`)
   }
 
   const handleDelete = async (r: TaxReturn) => {
@@ -288,9 +323,40 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
                       </TableCell>
                       <TableCell>
                         {g.amendment ? (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.amendment}`}>Amended</Badge>
-                            <span className="text-sm font-mono">{fmt(amendTax)}</span>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.amendment}`}>Amended</Badge>
+                              <span className="text-sm font-mono">{fmt(amendTax)}</span>
+                            </div>
+                            <div className="flex gap-1">
+                              {g.filed && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={e => { e.stopPropagation(); handleCompareYear(g.year) }}
+                                  className="gap-1 text-xs h-6 px-2"
+                                  title="Line-by-line comparison of filed vs amended"
+                                >
+                                  <Scale className="h-3 w-3" />
+                                  Compare
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={e => { e.stopPropagation(); handleRecompute(g.amendment!) }}
+                                disabled={recomputing === g.amendment.id}
+                                className="gap-1 text-xs h-6 px-2"
+                                title={g.amendment.form_type === '1120' || g.amendment.form_type === '1120S'
+                                  ? 'Pull latest QBO data and recompute this amendment'
+                                  : 'Recompute this amendment with its current inputs'}
+                              >
+                                {recomputing === g.amendment.id
+                                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                                  : <RefreshCw className="h-3 w-3" />}
+                                Recompute
+                              </Button>
+                            </div>
                           </div>
                         ) : g.filed ? (
                           <Button
@@ -338,8 +404,11 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
                             onPdf={handlePdf}
                             onDelete={handleDelete}
                             onFillGaps={handleFillGaps}
+                            onRecompute={handleRecompute}
+                            onCompareYear={handleCompareYear}
                             downloading={downloading}
                             gapFilling={gapFilling}
+                            recomputing={recomputing}
                           />
                         </TableCell>
                       </TableRow>
@@ -433,15 +502,21 @@ function YearDetail({
   onPdf,
   onDelete,
   onFillGaps,
+  onRecompute,
+  onCompareYear,
   downloading,
   gapFilling,
+  recomputing,
 }: {
   group: GroupedYear
   onPdf: (id: string) => void
   onDelete: (r: TaxReturn) => void
   onFillGaps: (id: string) => void
+  onRecompute: (r: TaxReturn) => void
+  onCompareYear: (year: number) => void
   downloading: string | null
   gapFilling: string | null
+  recomputing: string | null
 }) {
   const rows = [
     group.filed,
@@ -450,12 +525,47 @@ function YearDetail({
     ...group.extensions,
     ...group.others,
   ].filter((r): r is TaxReturn => !!r)
+  const canCompare = Boolean(group.filed && group.amendment)
+
+  // Read the filed return's accounting method (Schedule K line 1: cash/accrual/other)
+  const readMethod = (r?: TaxReturn): string | null => {
+    if (!r) return null
+    const fv = (r.field_values || {}) as Record<string, unknown>
+    const m = fv['meta.sched_k.K1_method'] ?? fv['schedK.K1_method'] ?? fv['meta.accounting_method']
+    if (typeof m === 'string') return m
+    if (typeof m === 'number') return ['cash', 'accrual', 'other'][m] || null
+    return null
+  }
+  const methodStr = readMethod(group.filed) || readMethod(group.amendment)
 
   return (
     <div className="space-y-3">
+      {(canCompare || methodStr) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {methodStr && (
+            <Badge variant="outline" className="text-xs capitalize gap-1">
+              <Scale className="h-3 w-3" />
+              Return basis: {methodStr}
+            </Badge>
+          )}
+          {canCompare && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onCompareYear(group.year)}
+              className="gap-1 text-xs h-7"
+            >
+              <Scale className="h-3 w-3" />
+              Line-by-line compare ({group.year})
+            </Button>
+          )}
+        </div>
+      )}
       {rows.map(r => {
         const c = r.computed_data?.computed as Record<string, number> | undefined
         const gap = r.verification?.gemini_gap_fill
+        const canRecompute = r.source === 'amendment' || r.source === 'proforma'
+        const isCorp = r.form_type === '1120' || r.form_type === '1120S'
         return (
           <div key={r.id} className="bg-background rounded-lg border px-3 py-2">
             <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -485,6 +595,21 @@ function YearDetail({
                   >
                     {gapFilling === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                     Fill gaps
+                  </Button>
+                )}
+                {canRecompute && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRecompute(r)}
+                    disabled={recomputing === r.id}
+                    className="gap-1 text-xs h-7"
+                    title={isCorp
+                      ? 'Pull latest QBO data and recompute this return'
+                      : 'Recompute this return with its saved inputs'}
+                  >
+                    {recomputing === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                    {isCorp ? 'Recompute from QBO' : 'Recompute'}
                   </Button>
                 )}
                 <Button

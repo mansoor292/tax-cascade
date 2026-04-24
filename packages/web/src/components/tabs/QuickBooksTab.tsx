@@ -6,6 +6,8 @@ import {
   TrendingUp,
   Building,
   CheckCircle,
+  Maximize2,
+  Loader2,
 } from 'lucide-react'
 import { type Entity } from '@/hooks/use-entities'
 import { useQbo, type Transaction, type Account } from '@/hooks/use-qbo'
@@ -30,6 +32,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
 
 function fmt(n: unknown): string {
@@ -42,8 +50,13 @@ interface Props {
   entity: Entity
 }
 
+interface DrilldownState {
+  report: 'profit-and-loss' | 'balance-sheet' | 'trial-balance'
+  title: string
+}
+
 export default function QuickBooksTab({ entityId, entity }: Props) {
-  const { status, loading, connect, getFinancials, getTransactions, getAccounts, getMapping } = useQbo(entityId)
+  const { status, loading, connect, getFinancials, getReport, getTransactions, getAccounts, getMapping } = useQbo(entityId)
   const [year, setYear] = useState(2024)
   const [financials, setFinancials] = useState<Record<string, unknown> | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -52,6 +65,7 @@ export default function QuickBooksTab({ entityId, entity }: Props) {
   const [loadingData, setLoadingData] = useState(false)
   const [txFilter, setTxFilter] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [drilldown, setDrilldown] = useState<DrilldownState | null>(null)
 
   const loadData = async (refresh = false) => {
     setLoadingData(true)
@@ -147,6 +161,19 @@ export default function QuickBooksTab({ entityId, entity }: Props) {
             <CheckCircle className="h-3 w-3" />
             Connected
           </Badge>
+          {status.accounting_method && (
+            <Badge
+              variant="outline"
+              className={
+                status.accounting_method.toLowerCase() === 'cash'
+                  ? 'gap-1 text-blue-400 border-blue-500/20 bg-blue-500/5'
+                  : 'gap-1 text-amber-400 border-amber-500/20 bg-amber-500/5'
+              }
+              title="QBO ReportBasis preference — all financials below are reported on this basis"
+            >
+              {status.accounting_method} basis
+            </Badge>
+          )}
           {status.company_name && (
             <span className="text-sm text-muted-foreground">{status.company_name}</span>
           )}
@@ -183,13 +210,21 @@ export default function QuickBooksTab({ entityId, entity }: Props) {
           {loadingData ? (
             <div className="grid gap-4 md:grid-cols-2">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-40" />)}</div>
           ) : (
+            <>
             <div className="grid gap-4 md:grid-cols-2">
               {/* P&L Card */}
-              <Card>
+              <Card
+                className="cursor-pointer hover:border-primary/40 hover:bg-accent/30 transition-colors"
+                onClick={() => setDrilldown({ report: 'profit-and-loss', title: 'Profit & Loss' })}
+                title="Click to view full profit & loss detail"
+              >
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                    Profit & Loss
+                  <CardTitle className="text-sm font-medium flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      Profit & Loss
+                    </span>
+                    <Maximize2 className="h-3.5 w-3.5 text-muted-foreground/60" />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -212,11 +247,18 @@ export default function QuickBooksTab({ entityId, entity }: Props) {
               </Card>
 
               {/* Balance Sheet Card */}
-              <Card>
+              <Card
+                className="cursor-pointer hover:border-primary/40 hover:bg-accent/30 transition-colors"
+                onClick={() => setDrilldown({ report: 'balance-sheet', title: 'Balance Sheet' })}
+                title="Click to view full balance sheet detail"
+              >
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-primary" />
-                    Balance Sheet
+                  <CardTitle className="text-sm font-medium flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-primary" />
+                      Balance Sheet
+                    </span>
+                    <Maximize2 className="h-3.5 w-3.5 text-muted-foreground/60" />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -238,6 +280,16 @@ export default function QuickBooksTab({ entityId, entity }: Props) {
                 </CardContent>
               </Card>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDrilldown({ report: 'trial-balance', title: 'Trial Balance' })}
+              className="gap-2"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+              Open Trial Balance
+            </Button>
+            </>
           )}
         </TabsContent>
 
@@ -340,6 +392,151 @@ export default function QuickBooksTab({ entityId, entity }: Props) {
           </TabsContent>
         )}
       </Tabs>
+
+      {drilldown && (
+        <ReportDrilldownDialog
+          open={!!drilldown}
+          onOpenChange={(open) => !open && setDrilldown(null)}
+          title={drilldown.title}
+          year={year}
+          accountingMethod={status.accounting_method}
+          fetch={() => getReport(drilldown.report, year)}
+        />
+      )}
     </div>
+  )
+}
+
+// ─── Full-report drilldown dialog ───
+
+interface ReportRow {
+  label: string
+  value: number | string
+  depth?: number
+  isTotal?: boolean
+}
+
+function flattenQboRows(rows: unknown[], depth = 0, out: ReportRow[] = []): ReportRow[] {
+  if (!Array.isArray(rows)) return out
+  for (const row of rows as Array<Record<string, any>>) {
+    const colData = row.ColData as Array<{ value?: string }> | undefined
+    const headerCol = row.Header?.ColData as Array<{ value?: string }> | undefined
+    const summaryCol = row.Summary?.ColData as Array<{ value?: string }> | undefined
+    const children = row.Rows?.Row as unknown[] | undefined
+
+    if (row.type === 'Section') {
+      const headerLabel = headerCol?.[0]?.value || row.group
+      if (headerLabel) out.push({ label: String(headerLabel), value: '', depth, isTotal: false })
+      if (children) flattenQboRows(children, depth + 1, out)
+      if (summaryCol) {
+        const label = summaryCol[0]?.value || `Total ${headerLabel || ''}`.trim()
+        const val = parseFloat(summaryCol[1]?.value || '')
+        out.push({ label: String(label), value: Number.isFinite(val) ? val : '', depth, isTotal: true })
+      }
+    } else if (row.type === 'Data' && colData) {
+      const label = colData[0]?.value || ''
+      const val = parseFloat(colData[1]?.value || '')
+      out.push({ label: String(label), value: Number.isFinite(val) ? val : '', depth, isTotal: false })
+    }
+  }
+  return out
+}
+
+function fmtReport(v: number | string): string {
+  if (typeof v !== 'number') return String(v || '')
+  return v < 0 ? `-$${Math.abs(v).toLocaleString()}` : `$${v.toLocaleString()}`
+}
+
+function ReportDrilldownDialog({
+  open,
+  onOpenChange,
+  title,
+  year,
+  accountingMethod,
+  fetch,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  year: number
+  accountingMethod?: string | null
+  fetch: () => Promise<unknown>
+}) {
+  const [rows, setRows] = useState<ReportRow[]>([])
+  const [flat, setFlat] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true); setError(null); setRows([]); setFlat({})
+    fetch()
+      .then((data: any) => {
+        if (cancelled) return
+        // Prefer the raw QBO tree so we can render nested section totals.
+        const raw = data?.raw_data
+        const rawRows = raw?.Rows?.Row as unknown[] | undefined
+        if (rawRows) setRows(flattenQboRows(rawRows))
+        const summary = (data?.summary || {}) as Record<string, number>
+        setFlat(summary)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load report')
+      })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [open])
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
+            {title} <span className="text-muted-foreground font-normal text-sm">· {year}</span>
+            {accountingMethod && (
+              <Badge variant="outline" className="text-xs">{accountingMethod} basis</Badge>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+        {loading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : error ? (
+          <p className="text-sm text-destructive py-4">{error}</p>
+        ) : rows.length > 0 ? (
+          <Table>
+            <TableBody>
+              {rows.map((r, i) => (
+                <TableRow key={i} className={r.isTotal ? 'font-semibold bg-muted/30' : ''}>
+                  <TableCell
+                    className="text-sm"
+                    style={{ paddingLeft: `${(r.depth || 0) * 16 + 12}px` }}
+                  >
+                    {r.label}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-sm">
+                    {r.value === '' ? '' : fmtReport(r.value)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : Object.keys(flat).length > 0 ? (
+          <Table>
+            <TableBody>
+              {Object.entries(flat).map(([k, v]) => (
+                <TableRow key={k}>
+                  <TableCell className="text-sm">{k}</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmtReport(v)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <p className="text-sm text-muted-foreground py-4">No data available.</p>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

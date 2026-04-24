@@ -13,7 +13,7 @@
  * diff their field_values + computed_data.computed into canonical rows.
  */
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, BarChart3, Loader2, GitBranch, ChevronRight } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useCompareReturns, type TaxReturn } from '@/hooks/use-returns'
@@ -128,6 +128,9 @@ function sortKey(a: string, b: string): number {
 
 export default function Compare() {
   const { entityId } = useParams<{ entityId: string }>()
+  const [searchParams] = useSearchParams()
+  const focusYearRaw = searchParams.get('year')
+  const focusYear = focusYearRaw ? Number(focusYearRaw) : null
   const nav = useNavigate()
   const { entity } = useEntity(entityId)
   const { data, loading, error } = useCompareReturns(entityId)
@@ -301,7 +304,7 @@ export default function Compare() {
               </TableHeader>
               <TableBody>
                 {filedVsAmended.map(row => (
-                  <YearRow key={row.year} row={row} />
+                  <YearRow key={row.year} row={row} autoExpand={focusYear === row.year} />
                 ))}
               </TableBody>
             </Table>
@@ -322,9 +325,12 @@ interface YearRowData {
   amendRow?: TaxReturn
 }
 
-function YearRow({ row }: { row: YearRowData }) {
-  const [expanded, setExpanded] = useState(false)
+function YearRow({ row, autoExpand = false }: { row: YearRowData; autoExpand?: boolean }) {
   const canExpand = Boolean(row.filedRow && row.amendRow)
+  const [expanded, setExpanded] = useState(autoExpand && canExpand)
+  useEffect(() => {
+    if (autoExpand && canExpand) setExpanded(true)
+  }, [autoExpand, canExpand])
 
   const ftax = row.filed?.total_tax
   const atax = row.amendment?.total_tax

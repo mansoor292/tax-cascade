@@ -77,6 +77,25 @@ export function useReturns(entityId?: string) {
     return data
   }
 
+  /** Recompute a corporate return (1120 / 1120S) by pulling current QBO P&L + BS. */
+  const computeFromQbo = async (body: {
+    entity_id: string
+    tax_year: number
+    form_type: string
+    overrides?: Record<string, unknown>
+    return_id?: string
+    amend_of?: string
+    new_row?: boolean
+    save?: boolean
+  }) => {
+    const data = await api<any>('/api/returns/compute_from_qbo', {
+      method: 'POST',
+      body: JSON.stringify({ save: true, ...body }),
+    })
+    await load()
+    return data
+  }
+
   /** Create an amendment that supersedes a filed_import (or another amendment). */
   const createAmendment = async (
     filedReturn: TaxReturn,
@@ -123,7 +142,7 @@ export function useReturns(entityId?: string) {
     })
   }
 
-  return { returns, loading, reload: load, compute, createAmendment, validate, getPdf, compare, remove, fillGaps }
+  return { returns, loading, reload: load, compute, computeFromQbo, createAmendment, validate, getPdf, compare, remove, fillGaps }
 }
 
 /** Dedicated hook for the compare_returns endpoint — used by the Compare page. */

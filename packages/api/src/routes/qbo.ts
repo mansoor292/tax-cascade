@@ -370,7 +370,16 @@ router.get('/:entity_id/status', async (req, res) => {
     .eq('entity_id', req.params.entity_id).single()
 
   if (!conn) return res.json({ connected: false })
-  res.json({ connected: conn.is_active, ...conn })
+
+  // Best-effort: the active connection's ReportBasis from QBO Preferences.
+  // Cached after first fetch so we don't hit Preferences on every status poll.
+  let accounting_method: string | null = null
+  if (conn.is_active) {
+    try { accounting_method = await getAccountingMethod(req.params.entity_id) }
+    catch { /* stay null if Preferences read fails */ }
+  }
+
+  res.json({ connected: conn.is_active, accounting_method, ...conn })
 })
 
 // ─── Disconnect ───
