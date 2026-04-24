@@ -96,6 +96,59 @@ function groupByYear(returns: TaxReturn[]): GroupedYear[] {
   return Array.from(byYear.values()).sort((a, b) => b.year - a.year)
 }
 
+// Canonical ordered metric list per form type. Always render these 8 rows
+// in this order for any Filed / Amendment / Proforma / Extension of that
+// form, so the reader can scan filed-vs-amended-vs-proforma without the
+// fields shuffling based on object key insertion order.
+const METRICS_BY_FORM: Record<string, Array<{ key: string; label: string }>> = {
+  '1120': [
+    { key: 'gross_receipts',   label: 'Gross receipts' },
+    { key: 'total_income',     label: 'Total income' },
+    { key: 'total_deductions', label: 'Total deductions' },
+    { key: 'taxable_income',   label: 'Taxable income' },
+    { key: 'income_tax',       label: 'Income tax' },
+    { key: 'total_tax',        label: 'Total tax' },
+    { key: 'total_payments',   label: 'Total payments' },
+    { key: 'overpayment',      label: 'Overpayment' },
+  ],
+  '1120S': [
+    { key: 'gross_receipts',        label: 'Gross receipts' },
+    { key: 'gross_profit',          label: 'Gross profit' },
+    { key: 'total_income',          label: 'Total income' },
+    { key: 'total_deductions',      label: 'Total deductions' },
+    { key: 'ordinary_income_loss',  label: 'Ordinary income/loss' },
+    { key: 'total_tax',             label: 'Total tax' },
+    { key: 'total_payments',        label: 'Total payments' },
+    { key: 'overpayment',           label: 'Overpayment' },
+  ],
+  '1040': [
+    { key: 'total_income',     label: 'Total income' },
+    { key: 'agi',              label: 'AGI' },
+    { key: 'taxable_income',   label: 'Taxable income' },
+    { key: 'income_tax',       label: 'Income tax' },
+    { key: 'total_tax',        label: 'Total tax' },
+    { key: 'total_payments',   label: 'Total payments' },
+    { key: 'refund',           label: 'Refund' },
+    { key: 'balance_due',      label: 'Balance due' },
+  ],
+  '7004': [
+    { key: 'tentative_tax',    label: 'Tentative tax' },
+    { key: 'total_payments',   label: 'Total payments' },
+    { key: 'balance_due',      label: 'Balance due' },
+    { key: 'overpayment',      label: 'Overpayment' },
+  ],
+  '4868': [
+    { key: 'tentative_tax',    label: 'Tentative tax' },
+    { key: 'total_payments',   label: 'Total payments' },
+    { key: 'balance_due',      label: 'Balance due' },
+    { key: 'overpayment',      label: 'Overpayment' },
+  ],
+}
+
+function metricsForForm(form_type: string): Array<{ key: string; label: string }> {
+  return METRICS_BY_FORM[form_type] || METRICS_BY_FORM['1120']
+}
+
 // Column metric: what moves most on an amendment for this form.
 //   1120  → corporate total_tax
 //   1120S → ordinary_income_loss (pass-through to K-1s; no corp tax)
@@ -652,16 +705,22 @@ function YearDetail({
               </div>
             </div>
             <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              {c && Object.entries(c)
-                .filter(([, v]) => typeof v === 'number' && !isNaN(v) && v !== 0)
-                .slice(0, 8)
-                .map(([k, v]) => (
-                  <div key={k} className="flex flex-col">
-                    <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>
-                    <span className="font-mono">{fmt(v)}</span>
+              {c && metricsForForm(r.form_type).map(({ key, label }) => {
+                const v = c[key]
+                const isNum = typeof v === 'number' && !isNaN(v)
+                return (
+                  <div key={key} className="flex flex-col">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className={`font-mono ${isNum ? '' : 'text-muted-foreground'}`}>
+                      {isNum ? fmt(v) : '—'}
+                    </span>
                   </div>
-                ))}
-              {c && Object.entries(c).filter(([, v]) => typeof v === 'number' && !isNaN(v) && v !== 0).length === 0 && (
+                )
+              })}
+              {c && metricsForForm(r.form_type).every(({ key }) => {
+                const v = c[key]
+                return typeof v !== 'number' || isNaN(v)
+              }) && (
                 <div className="col-span-full text-center text-muted-foreground py-1 italic">
                   No computed values — extract values from field_values below or re-archive.
                 </div>
