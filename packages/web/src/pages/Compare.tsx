@@ -51,6 +51,7 @@ const SECTION_ORDER = [
   'income', 'cogs', 'deductions', 'tax', 'credits', 'payments',
   'result', 'refund', 'owed', 'overpayment',
   'schedJ', 'schedL', 'schedM1', 'schedM2', 'schedK', 'schedB', 'schedE',
+  'engine',
   'meta', 'preparer',
 ]
 
@@ -72,9 +73,34 @@ const SECTION_LABELS: Record<string, string> = {
   schedK:      'Schedule K',
   schedB:      'Schedule B',
   schedE:      'Schedule E',
+  engine:      'Engine-computed totals',
   meta:        'Entity Metadata',
   preparer:    'Preparer',
   other:       'Other',
+}
+
+// Engine flat key → sectioned canonical key (matching field_values). When a
+// sectioned peer is already in the collected values for a row, we drop the
+// flat duplicate; otherwise we promote it into the "engine" section so it
+// renders under a meaningful header instead of "Other".
+const COMPUTED_TO_SECTIONED: Record<string, string> = {
+  total_tax:                 'tax.L31_total_tax',
+  taxable_income:            'tax.L30_taxable_income',
+  taxable_income_before_nol: 'tax.L28_ti_before_nol',
+  income_tax:                'tax.L31_total_tax',
+  total_income:              'income.L11_total_income',
+  total_deductions:          'deductions.L27_total_deductions',
+  gross_profit:              'income.L3_gross_profit',
+  gross_receipts:            'income.L1a_gross_receipts',
+  cost_of_goods_sold:        'income.L2_cogs',
+  cogs:                      'income.L2_cogs',
+  total_payments:            'payments.L33_total_payments',
+  overpayment:               'payments.L36_overpayment',
+  refund:                    'payments.L37_refunded',
+  amount_owed:               'payments.L35_amount_owed',
+  balance_due:               'payments.L35_amount_owed',
+  balance_1c:                'income.L1c_balance',
+  gross_receipts_balance:    'income.L1c_balance',
 }
 
 function fmt(n: unknown): string {
@@ -98,10 +124,15 @@ function collectValues(ret: TaxReturn | undefined): Record<string, number> {
   }
   const c = (ret.computed_data?.computed || {}) as Record<string, unknown>
   for (const [k, v] of Object.entries(c)) {
-    // Engine output — prefix so we don't collide with field_values
-    if (typeof v === 'number' && !isNaN(v) && !(k in out)) {
-      out[`computed.${k}`] = v
-    }
+    if (typeof v !== 'number' || isNaN(v)) continue
+    // Skip engine flat keys whose sectioned peer already carries the value —
+    // tax.L31_total_tax, income.L1a_gross_receipts, etc. already landed in
+    // `out` from field_values above.
+    const sectioned = COMPUTED_TO_SECTIONED[k]
+    if (sectioned && sectioned in out) continue
+    // True engine-only metric (nol_*, special_deductions, total_credits) —
+    // route into the 'engine' section rather than the catch-all 'other'.
+    out[`engine.${k}`] = v
   }
   return out
 }

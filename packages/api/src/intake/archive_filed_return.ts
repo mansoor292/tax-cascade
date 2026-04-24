@@ -10,6 +10,7 @@
  */
 import type { MappingResult } from './json_model_mapper.js'
 import { getCanonicalAliases } from '../maps/engine_to_pdf.js'
+import { canonicalizeComputed } from '../maps/computed_aliases.js'
 
 export interface FiledReturnArchive {
   /** All canonical fields extracted from the PDF, trusted verbatim. */
@@ -97,5 +98,9 @@ export function archiveFiledReturn(
     totals.overpayment           = num(field_values, 'payments.L36_overpayment',         'payments.overpayment', 'overpayment.L27')
   }
 
-  return { field_values, totals }
+  // Dual-write alias keys so archiver totals line up with the engine's
+  // computed_data.computed shape (amount_owed ↔ balance_due, cogs ↔
+  // cost_of_goods_sold, etc.). Without this, Filed vs Amended comparisons
+  // show empty cells under different names for the same concept.
+  return { field_values, totals: canonicalizeComputed(totals) as Record<string, number | null> }
 }

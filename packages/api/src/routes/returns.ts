@@ -12,6 +12,7 @@ import { createClient } from '@supabase/supabase-js'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
 import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
 import { encryptedFields } from '../lib/row_crypto.js'
+import { canonicalizeComputed } from '../maps/computed_aliases.js'
 
 const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
 
@@ -235,6 +236,7 @@ router.post('/process/:document_id', async (req, res) => {
     // /process call creates a new row (unique constraint was removed so
     // multiple filed_imports per year are allowed if the PDF is re-ingested
     // after corrections). Callers pick the authoritative one by computed_at.
+    if (engineResult) engineResult.computed = canonicalizeComputed(engineResult.computed)
     const processRaw = {
       input_data: engineInput,
       computed_data: engineResult,
@@ -1316,14 +1318,27 @@ router.post('/compute', async (req, res) => {
         // include the numeric ones, skip the text ones individually.
         const nonNumericPrefixes = ['meta.', 'preparer.', 'schedK.L1_method']
         const nonNumericExact = new Set(['schedB.L1c_other', 'schedB.L2b_product'])
+        // When the seed row is authoritative (we're amending, or updating an
+        // existing amendment/filed_import), preserve its values for any key
+        // the engine didn't recompute. The 1120 engine only writes J1a and
+        // J14 on Schedule J and nothing on Schedule M-1/M-2 — a blind zero-
+        // default wipes real Textract data we copied down from the parent.
+        // Proforma computes stay fully engine-driven (no preserveSeed) so
+        // stale values don't linger across recomputes.
+        const preserveSeed =
+          Boolean(amendOfRow) ||
+          (targetRow as any)?.source === 'amendment' ||
+          (targetRow as any)?.source === 'filed_import'
         for (const canonKey of Object.keys(pdfMap)) {
           if (canonKey in scheduleFieldValues) continue
           if (nonNumericExact.has(canonKey)) continue
           if (nonNumericPrefixes.some(p => canonKey.startsWith(p))) continue
+          if (preserveSeed && canonKey in existingFieldValues) continue
           scheduleFieldValues[canonKey] = 0
         }
       } catch (_) { /* optional — skip if map import fails */ }
 
+      if (engineResult) engineResult.computed = canonicalizeComputed(engineResult.computed)
       const rawPayload = {
         entity_id,
         tax_year,
@@ -2079,6 +2094,7 @@ print(json.dumps({'url': url}))
     // (entity, year, form_type); update if present, else insert.
     let taxReturn = null
     if (save && entity_id) {
+      if (result) (result as any).computed = canonicalizeComputed(result.computed)
       const extRaw = { input_data: inputs, computed_data: result }
       const extEnc = await encryptedFields(supabase, userId, extRaw, ENCRYPTED_RETURN_FIELDS)
       const rowPayload = {
