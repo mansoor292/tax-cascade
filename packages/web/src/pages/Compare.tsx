@@ -184,6 +184,61 @@ export default function Compare() {
     )
   }
 
+  // Single-year focused view: when ?year=YYYY is set, show only that year's
+  // filed-vs-amended line-by-line matrix. Everything else is noise here.
+  if (focusYear !== null) {
+    const focused = filedVsAmended.find(r => r.year === focusYear)
+    const canCompare = Boolean(focused?.filedRow && focused?.amendRow)
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => nav(-1)}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+              <GitBranch className="h-4 w-4 text-amber-400" />
+              <h1 className="text-xl sm:text-2xl font-semibold tracking-tight truncate">
+                {entity?.name || data.entity.name} — {focusYear} Filed vs Amended
+              </h1>
+            </div>
+            {focused?.filedRow && focused?.amendRow && (
+              <p className="text-sm text-muted-foreground">
+                {focused.filedRow.form_type} · filed {focused.filedRow.id.slice(0, 8)} vs amended {focused.amendRow.id.slice(0, 8)}
+              </p>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => nav(`/app/compare/${entityId}`)}
+            className="gap-1"
+            title="See all years side-by-side"
+          >
+            <BarChart3 className="h-4 w-4" />
+            All years
+          </Button>
+        </div>
+
+        {!canCompare ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              {focused?.filedRow && !focused?.amendRow && 'No amendment exists for this year yet.'}
+              {focused?.amendRow && !focused?.filedRow && 'No filed return on file for this year.'}
+              {!focused && `No returns found for ${focusYear}.`}
+            </CardContent>
+          </Card>
+        ) : (
+          <LineByLineMatrix
+            filedId={focused!.filedRow!.id}
+            amendId={focused!.amendRow!.id}
+            year={focusYear}
+          />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
