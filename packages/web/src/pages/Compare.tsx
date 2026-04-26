@@ -136,7 +136,40 @@ export default function Compare() {
   const { entity } = useEntity(entityId)
   const { data, loading, error } = useCompareReturns(entityId)
 
-  // Build Filed vs Amended pairings per year.
+  // Build Filed vs Amended pairings per year. Flat metrics (total_tax,
+  // taxable_income, overpayment) are derived from the row's sectioned
+  // field_values via per-form keys — computed_data.computed is no longer
+  // persisted (golden model: field_values).
+  const TOTAL_TAX_KEY: Record<string, string> = {
+    '1120':  'tax.L31_total_tax',
+    '1120S': 'tax.L22_total_tax',
+    '1040':  'tax.L24_total_tax',
+  }
+  const TAXABLE_INCOME_KEY: Record<string, string> = {
+    '1120':  'tax.L30_taxable_income',
+    '1120S': 'tax.L21_ordinary_income',
+    '1040':  'tax.L15_taxable_income',
+  }
+  const OVERPAYMENT_KEY: Record<string, string> = {
+    '1120':  'payments.L36_overpayment',
+    '1120S': 'payments.L36_overpayment',
+    '1040':  'result.L34_overpayment',
+  }
+  const metricsFromFieldValues = (r?: TaxReturn): { total_tax?: number; taxable_income?: number; overpayment?: number } => {
+    if (!r?.field_values) return {}
+    const fv = r.field_values as Record<string, unknown>
+    const fk = (m: Record<string, string>) => m[r.form_type]
+    const num = (k?: string) => {
+      if (!k) return undefined
+      const v = fv[k]
+      return typeof v === 'number' ? v : undefined
+    }
+    return {
+      total_tax:      num(fk(TOTAL_TAX_KEY)),
+      taxable_income: num(fk(TAXABLE_INCOME_KEY)),
+      overpayment:    num(fk(OVERPAYMENT_KEY)),
+    }
+  }
   const filedVsAmended = useMemo(() => {
     if (!data) return []
     const byYear = new Map<number, { filed?: TaxReturn; amendment?: TaxReturn }>()
@@ -149,11 +182,13 @@ export default function Compare() {
     }
     return Array.from(byYear.entries())
       .filter(([, v]) => v.filed || v.amendment)
-      .map(([year, v]) => {
-        const fc = v.filed?.computed_data?.computed as Record<string, number> | undefined
-        const ac = v.amendment?.computed_data?.computed as Record<string, number> | undefined
-        return { year, filed: fc, amendment: ac, filedRow: v.filed, amendRow: v.amendment }
-      })
+      .map(([year, v]) => ({
+        year,
+        filed:     metricsFromFieldValues(v.filed),
+        amendment: metricsFromFieldValues(v.amendment),
+        filedRow:  v.filed,
+        amendRow:  v.amendment,
+      }))
       .sort((a, b) => a.year - b.year)
   }, [data])
 

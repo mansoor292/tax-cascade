@@ -112,8 +112,15 @@ export default function Dashboard() {
       }
       for (const { filed, amend } of byYear.values()) {
         if (!filed || !amend) continue
-        const filedTax  = (filed as any).computed_data?.computed?.total_tax  ?? 0
-        const amendTax  = (amend as any).computed_data?.computed?.total_tax  ?? 0
+        // Read total_tax from field_values (golden model) per form. 1120 → tax.L31,
+        // 1120S → tax.L22, 1040 → tax.L24. Fall back to 0 if absent.
+        const totalTaxKey = (r: Return): string =>
+          r.form_type === '1120S' ? 'tax.L22_total_tax'
+          : r.form_type === '1040' ? 'tax.L24_total_tax'
+          : 'tax.L31_total_tax'
+        const fv = (r: Return) => ((r as any).field_values || {}) as Record<string, number>
+        const filedTax  = fv(filed)[totalTaxKey(filed)]   ?? 0
+        const amendTax  = fv(amend)[totalTaxKey(amend)]   ?? 0
         totalDelta += (filedTax - amendTax)      // positive = amendment lowers tax = refund potential
         years += 1
       }

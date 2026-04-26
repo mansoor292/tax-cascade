@@ -106,68 +106,74 @@ function groupByYear(returns: TaxReturn[]): GroupedYear[] {
 // Canonical ordered metric list per form type. Always render these 8 rows
 // in this order for any Filed / Amendment / Proforma / Extension of that
 // form, so the reader can scan filed-vs-amended-vs-proforma without the
-// fields shuffling based on object key insertion order.
-const METRICS_BY_FORM: Record<string, Array<{ key: string; label: string }>> = {
+// fields shuffling based on object key insertion order. Each metric maps
+// to a sectioned field_values key (golden model) — we never read from
+// computed_data here.
+const METRICS_BY_FORM: Record<string, Array<{ fv_key: string; label: string }>> = {
   '1120': [
-    { key: 'gross_receipts',   label: 'Gross receipts' },
-    { key: 'total_income',     label: 'Total income' },
-    { key: 'total_deductions', label: 'Total deductions' },
-    { key: 'taxable_income',   label: 'Taxable income' },
-    { key: 'income_tax',       label: 'Income tax' },
-    { key: 'total_tax',        label: 'Total tax' },
-    { key: 'total_payments',   label: 'Total payments' },
-    { key: 'overpayment',      label: 'Overpayment' },
+    { fv_key: 'income.L1a_gross_receipts',         label: 'Gross receipts' },
+    { fv_key: 'income.L11_total_income',           label: 'Total income' },
+    { fv_key: 'deductions.L27_total_deductions',   label: 'Total deductions' },
+    { fv_key: 'tax.L30_taxable_income',            label: 'Taxable income' },
+    { fv_key: 'schedJ.J1a_income_tax',             label: 'Income tax' },
+    { fv_key: 'tax.L31_total_tax',                 label: 'Total tax' },
+    { fv_key: 'payments.L33_total_payments',       label: 'Total payments' },
+    { fv_key: 'payments.L36_overpayment',          label: 'Overpayment' },
   ],
   '1120S': [
-    { key: 'gross_receipts',        label: 'Gross receipts' },
-    { key: 'gross_profit',          label: 'Gross profit' },
-    { key: 'total_income',          label: 'Total income' },
-    { key: 'total_deductions',      label: 'Total deductions' },
-    { key: 'ordinary_income_loss',  label: 'Ordinary income/loss' },
-    { key: 'total_tax',             label: 'Total tax' },
-    { key: 'total_payments',        label: 'Total payments' },
-    { key: 'overpayment',           label: 'Overpayment' },
+    { fv_key: 'income.L1a_gross_receipts',         label: 'Gross receipts' },
+    { fv_key: 'income.L3_gross_profit',            label: 'Gross profit' },
+    { fv_key: 'income.L6_total_income',            label: 'Total income' },
+    { fv_key: 'deductions.L20_total_deductions',   label: 'Total deductions' },
+    { fv_key: 'tax.L21_ordinary_income',           label: 'Ordinary income/loss' },
+    { fv_key: 'tax.L22_total_tax',                 label: 'Total tax' },
+    { fv_key: 'payments.L33_total_payments',       label: 'Total payments' },
+    { fv_key: 'payments.L36_overpayment',          label: 'Overpayment' },
   ],
   '1040': [
-    { key: 'total_income',     label: 'Total income' },
-    { key: 'agi',              label: 'AGI' },
-    { key: 'taxable_income',   label: 'Taxable income' },
-    { key: 'income_tax',       label: 'Income tax' },
-    { key: 'total_tax',        label: 'Total tax' },
-    { key: 'total_payments',   label: 'Total payments' },
-    { key: 'refund',           label: 'Refund' },
-    { key: 'balance_due',      label: 'Balance due' },
+    { fv_key: 'income.L9_total_income',            label: 'Total income' },
+    { fv_key: 'income.L11b_agi',                   label: 'AGI' },
+    { fv_key: 'tax.L15_taxable_income',            label: 'Taxable income' },
+    { fv_key: 'tax.L16_income_tax',                label: 'Income tax' },
+    { fv_key: 'tax.L24_total_tax',                 label: 'Total tax' },
+    { fv_key: 'payments.L33_total',                label: 'Total payments' },
+    { fv_key: 'refund.L35a_refunded',              label: 'Refund' },
+    { fv_key: 'result.L37_balance_due',            label: 'Balance due' },
   ],
   '7004': [
-    { key: 'tentative_tax',    label: 'Tentative tax' },
-    { key: 'total_payments',   label: 'Total payments' },
-    { key: 'balance_due',      label: 'Balance due' },
-    { key: 'overpayment',      label: 'Overpayment' },
+    { fv_key: 'tentative_tax',                     label: 'Tentative tax' },
+    { fv_key: 'total_payments',                    label: 'Total payments' },
+    { fv_key: 'balance_due',                       label: 'Balance due' },
+    { fv_key: 'overpayment',                       label: 'Overpayment' },
   ],
   '4868': [
-    { key: 'tentative_tax',    label: 'Tentative tax' },
-    { key: 'total_payments',   label: 'Total payments' },
-    { key: 'balance_due',      label: 'Balance due' },
-    { key: 'overpayment',      label: 'Overpayment' },
+    { fv_key: 'tentative_tax',                     label: 'Tentative tax' },
+    { fv_key: 'total_payments',                    label: 'Total payments' },
+    { fv_key: 'balance_due',                       label: 'Balance due' },
+    { fv_key: 'overpayment',                       label: 'Overpayment' },
   ],
 }
 
-function metricsForForm(form_type: string): Array<{ key: string; label: string }> {
+function metricsForForm(form_type: string): Array<{ fv_key: string; label: string }> {
   return METRICS_BY_FORM[form_type] || METRICS_BY_FORM['1120']
 }
 
-// Column metric: what moves most on an amendment for this form.
-//   1120  → corporate total_tax
-//   1120S → ordinary_income_loss (pass-through to K-1s; no corp tax)
-//   1040  → total_tax
+// Column metric: what moves most on an amendment for this form. Read from
+// field_values (golden model) — never computed_data, which we no longer
+// persist as a flat-totals dict.
+//   1120  → corporate total_tax           (tax.L31_total_tax)
+//   1120S → ordinary income loss (L21)    (tax.L21_ordinary_income)
+//   1040  → total_tax                     (tax.L24_total_tax)
 function keyMetric(r: TaxReturn | undefined): { value: number | undefined; label: string } {
   if (!r) return { value: undefined, label: 'Δ Tax' }
-  const c = r.computed_data?.computed as Record<string, number> | undefined
-  if (!c) return { value: undefined, label: 'Δ Tax' }
-  if (r.form_type === '1120S') {
-    return { value: c.ordinary_income_loss, label: 'Δ Ord. income' }
+  const fv = (r.field_values || {}) as Record<string, unknown>
+  const num = (k: string) => {
+    const v = fv[k]
+    return typeof v === 'number' && !isNaN(v) ? v : undefined
   }
-  return { value: c.total_tax, label: 'Δ Tax' }
+  if (r.form_type === '1120S') return { value: num('tax.L21_ordinary_income'), label: 'Δ Ord. income' }
+  if (r.form_type === '1040')  return { value: num('tax.L24_total_tax'),       label: 'Δ Tax' }
+  return                              { value: num('tax.L31_total_tax'),       label: 'Δ Tax' }
 }
 
 export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
@@ -616,7 +622,6 @@ function YearDetail({
         </div>
       )}
       {rows.map(r => {
-        const c = r.computed_data?.computed as Record<string, number> | undefined
         const gap = r.verification?.gemini_gap_fill
         const canRecompute = r.source === 'amendment' || r.source === 'proforma'
         const isCorp = r.form_type === '1120' || r.form_type === '1120S'
@@ -713,26 +718,33 @@ function YearDetail({
               </div>
             </div>
             <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              {c && metricsForForm(r.form_type).map(({ key, label }) => {
-                const v = c[key]
-                const isNum = typeof v === 'number' && !isNaN(v)
-                return (
-                  <div key={key} className="flex flex-col">
-                    <span className="text-muted-foreground">{label}</span>
-                    <span className={`font-mono ${isNum ? '' : 'text-muted-foreground'}`}>
-                      {isNum ? fmt(v) : '—'}
-                    </span>
-                  </div>
-                )
-              })}
-              {c && metricsForForm(r.form_type).every(({ key }) => {
-                const v = c[key]
-                return typeof v !== 'number' || isNaN(v)
-              }) && (
-                <div className="col-span-full text-center text-muted-foreground py-1 italic">
-                  No computed values — extract values from field_values below or re-archive.
-                </div>
-              )}
+              {(() => {
+                const fv = (r.field_values || {}) as Record<string, unknown>
+                const metrics = metricsForForm(r.form_type)
+                const allBlank = metrics.every(({ fv_key }) => {
+                  const v = fv[fv_key]
+                  return typeof v !== 'number' || isNaN(v)
+                })
+                if (allBlank) {
+                  return (
+                    <div className="col-span-full text-center text-muted-foreground py-1 italic">
+                      Stale shape — click Recompute (or Re-archive on the source PDF) to regenerate.
+                    </div>
+                  )
+                }
+                return metrics.map(({ fv_key, label }) => {
+                  const v = fv[fv_key]
+                  const isNum = typeof v === 'number' && !isNaN(v)
+                  return (
+                    <div key={fv_key} className="flex flex-col">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className={`font-mono ${isNum ? '' : 'text-muted-foreground'}`}>
+                        {isNum ? fmt(v as number) : '—'}
+                      </span>
+                    </div>
+                  )
+                })
+              })()}
             </div>
             {gap && (typeof gap.gaps_total === 'number' || gap.model) && (
               <div className="mt-2 pt-2 border-t text-xs text-muted-foreground">

@@ -1,24 +1,26 @@
 /**
  * Canonical schema — single source of truth for the shape of
- * `tax_return.field_values` and `tax_return.computed_data.computed`.
+ * `tax_return.field_values`.
  *
- * Three slots, three responsibilities, no overlap:
+ * `field_values` IS the golden model: every IRS-line concept lives there
+ * under its sectioned canonical key (`income.L1a_gross_receipts`,
+ * `deductions.L16_advertising`, `tax.L31_total_tax`). Flat metric names
+ * (`total_tax`, `taxable_income`, `agi`) are NOT a separate persisted slot —
+ * they're per-form aliases for specific sectioned lines and live in code
+ * (`maps/metric_to_field.ts`), not the DB.
  *
- *   - `input_data`     descriptive (what the caller / mapper / QBO emitted)
- *   - `field_values`   sectioned IRS-line keys ONLY — `income.L1a_gross_receipts`,
- *                      `deductions.L16_advertising`, `tax.L31_total_tax`, …
- *   - `computed_data.computed`  flat derived totals ONLY — `total_tax`,
- *                      `balance_due`, `gross_profit`, `taxable_income`. NO
- *                      overlap with field_values.
+ * `input_data` carries the descriptive snapshot of what the caller passed.
+ * `computed_data` retains structural engine output (citations, k1s array,
+ * qbo_warnings) but no longer holds a flat-totals dict.
  *
  * Translation from descriptive → sectioned happens once at the boundary
  * (mapper output, qbo_to_inputs output, request body). Internal code
  * (engine, persist path, PDF builder, validators, Compare UI) speaks
  * sectioned only and never mixes the two.
  *
- * `validateFieldValues()` runs in the persist path and throws on any key
+ * `validateFieldValues()` runs in the persist path and warns on any key
  * that isn't in this schema, catching writers that drift back to the old
- * mixed-shape style before the bad data hits the DB.
+ * mixed-shape style.
  */
 
 /** Allowed prefixes for `field_values`. Keys must be of the form
@@ -64,61 +66,6 @@ const DESCRIPTIVE_KEY_PATTERNS: RegExp[] = [
   /^schedule_k\./, // legacy descriptive schedK shape
 ]
 
-/** Computed keys are flat (no dots). The full set per form is small —
- *  these are derived totals, not lines. Anything line-like belongs in
- *  field_values. */
-export const COMPUTED_KEYS_BY_FORM: Record<string, string[]> = {
-  '1120': [
-    'balance_1c',
-    'gross_profit',
-    'total_income',
-    'total_deductions',
-    'taxable_income_before_nol',
-    'special_deductions',
-    'nol_applied',
-    'nol_carryforward_remaining',
-    'nol_generated',
-    'taxable_income',
-    'income_tax',
-    'total_credits',
-    'total_tax',
-    'total_payments',
-    'balance_due',
-    'overpayment',
-  ],
-  '1120S': [
-    'balance_1c',
-    'gross_profit',
-    'total_income',
-    'total_deductions',
-    'ordinary_income_loss',
-    // k1s array carries shareholder allocations — not a flat scalar but lives
-    // in computed alongside the totals; allow it through
-    'k1s',
-  ],
-  '1040': [
-    'total_income',
-    'agi',
-    'taxable_income',
-    'income_tax',
-    'total_tax',
-    'total_payments',
-    'refund',
-    'balance_due',
-    'standard_deduction',
-    'qbi_deduction',
-    'self_employment_tax',
-    'additional_medicare',
-    'niit',
-    'amt',
-    'ctc',
-    'eitc',
-  ],
-  '7004': ['tentative_tax', 'total_payments', 'balance_due', 'overpayment'],
-  '4868': ['tentative_tax', 'total_payments', 'balance_due', 'overpayment'],
-  '8868': ['tentative_tax', 'total_payments', 'balance_due', 'overpayment'],
-}
-
 /** Check that a field_values dict contains only sectioned canonical keys. */
 export function validateFieldValues(
   fv: Record<string, any> | null | undefined,
@@ -146,23 +93,3 @@ export function validateFieldValues(
   return { ok: errors.length === 0, errors }
 }
 
-/** Check that a computed dict contains only flat keys allowed for the form. */
-export function validateComputed(
-  c: Record<string, any> | null | undefined,
-  form_type: string,
-): { ok: boolean; errors: string[] } {
-  if (!c) return { ok: true, errors: [] }
-  const allowed = new Set(COMPUTED_KEYS_BY_FORM[form_type] || [])
-  if (allowed.size === 0) return { ok: true, errors: [] } // unknown form — skip
-  const errors: string[] = []
-  for (const k of Object.keys(c)) {
-    if (k.includes('.')) {
-      errors.push(`${k}: dotted key in computed — should be flat`)
-      continue
-    }
-    if (!allowed.has(k)) {
-      errors.push(`${k}: not in COMPUTED_KEYS_BY_FORM['${form_type}']`)
-    }
-  }
-  return { ok: errors.length === 0, errors }
-}

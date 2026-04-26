@@ -12,21 +12,9 @@ import { createClient } from '@supabase/supabase-js'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
 import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
 import { encryptedFields } from '../lib/row_crypto.js'
+import { extractAggregates as extractAggregatesFromFv, readMetric, COMPARE_METRICS } from '../maps/metric_to_field.js'
 
 const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
-
-/** Pull the 4 aggregate numerics (agg_*) out of a computed engine result so
- *  compare_returns and dashboards can query in plaintext even after the
- *  JSON columns are nulled out. Missing fields are left as null. */
-function extractAggregates(engineResult: any): Record<string, number | null> {
-  const c = engineResult?.computed || {}
-  return {
-    agg_total_income:   c.total_income   ?? null,
-    agg_taxable_income: c.taxable_income ?? null,
-    agg_total_tax:      c.total_tax      ?? null,
-    agg_agi:            c.agi            ?? null,
-  }
-}
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { buildCanonicalModel, buildReturnPdf } from '../builders/build_return_pdf.js'
@@ -235,9 +223,16 @@ router.post('/process/:document_id', async (req, res) => {
     // /process call creates a new row (unique constraint was removed so
     // multiple filed_imports per year are allowed if the PDF is re-ingested
     // after corrections). Callers pick the authoritative one by computed_at.
+    // Strip the redundant flat `computed` dict from the persisted shape —
+    // every flat metric maps to a sectioned field_values line via
+    // maps/metric_to_field.ts, so storing it twice was a second source of
+    // truth. We keep citations / k1s / qbo_warnings for debug + scenario
+    // structural data.
+    const { computed: _processComputed, ...processComputedData } = (engineResult ?? {}) as any
+    void _processComputed
     const processRaw = {
       input_data: engineInput,
-      computed_data: engineResult,
+      computed_data: processComputedData,
       field_values: extracted,
       verification: {
         mapper_stats: mapped.stats,
@@ -256,7 +251,7 @@ router.post('/process/:document_id', async (req, res) => {
       is_amended: false,
       ...processRaw,
       ...processEnc,
-      ...extractAggregates(engineResult),
+      ...extractAggregatesFromFv(extracted, formType),
       computed_at: new Date().toISOString(),
       pdf_s3_path: null,
     }).select().single()
@@ -445,17 +440,18 @@ router.get('/compare/:entity_id', async (req, res) => {
   const returns = [...byYear.values()].sort((a, b) => a.tax_year - b.tax_year)
 
   const years = returns.map(r => r.tax_year)
-  const metrics = ['gross_profit', 'total_income', 'total_deductions', 'taxable_income',
-    'income_tax', 'total_tax', 'overpayment', 'balance_due', 'ordinary_income_loss',
-    'agi', 'amount_owed', 'refund', 'total_payments']
+  const metrics = COMPARE_METRICS as readonly string[]
 
   const matrix: Record<string, Record<number, number>> = {}
   for (const m of metrics) matrix[m] = {}
 
+  // Read every metric from field_values (golden model) — never from
+  // computed_data. The flat-metric → sectioned-key mapping is form-aware
+  // and lives in maps/metric_to_field.ts.
   for (const r of returns) {
-    const c = r.computed_data?.computed || {}
     for (const m of metrics) {
-      if (c[m] !== undefined && c[m] !== null) matrix[m][r.tax_year] = c[m]
+      const v = readMetric(r.field_values, r.form_type, m)
+      if (v !== null) matrix[m][r.tax_year] = v
     }
   }
 
@@ -909,11 +905,15 @@ router.post('/compute', async (req, res) => {
     if (entity_id && form_type === '1120') {
       try {
         const { data: priorRet } = await supabase.from('tax_return')
-          .select('id, computed_data')
+          .select('id, field_values')
           .eq('entity_id', entity_id).eq('tax_year', tax_year - 1)
           .eq('form_type', '1120')
           .order('computed_at', { ascending: false }).limit(1).maybeSingle()
-        const priorNolGenerated = priorRet?.computed_data?.computed?.nol_generated || 0
+        // NOL carryforward generated this year = max(0, -L28). Read from the
+        // golden-model field_values rather than a separate computed dict.
+        const priorTiBeforeNol = (priorRet?.field_values as any)?.['tax.L28_ti_before_nol']
+        const priorNolGenerated = (typeof priorTiBeforeNol === 'number' && priorTiBeforeNol < 0)
+          ? Math.abs(priorTiBeforeNol) : 0
         if (priorNolGenerated > 0) {
           setIfUnset('nol_deduction', Math.round(priorNolGenerated), `prior-year NOL (${tax_year - 1})`, 1, `cross_year:nol_carryforward`)
         }
@@ -1306,26 +1306,27 @@ router.post('/compute', async (req, res) => {
       const mergedFieldValues = { ...existingFieldValues, ...scheduleFieldValues }
 
       // Validate before persist. Catches any writer that drifts back to
-      // the old descriptive shape (or invents new keys) before bad data
-      // hits the DB. Logs and continues — never blocks a compute on a
-      // schema warning, since we'd rather store partial data than crash.
-      const { validateFieldValues, validateComputed } = await import('../maps/canonical_schema.js')
+      // the old descriptive shape before bad data hits the DB. Logs and
+      // continues — never blocks a compute on a schema warning.
+      const { validateFieldValues } = await import('../maps/canonical_schema.js')
       const fvCheck = validateFieldValues(mergedFieldValues, form_type)
       if (!fvCheck.ok) {
         console.warn(`[compute] field_values shape drift on ${form_type}:`, fvCheck.errors.slice(0, 5))
       }
-      const cCheck = validateComputed(engineResult?.computed, form_type)
-      if (!cCheck.ok) {
-        console.warn(`[compute] computed shape drift on ${form_type}:`, cCheck.errors.slice(0, 5))
-      }
 
+      // Strip the redundant flat `computed` dict from the persisted shape —
+      // every flat metric maps to a sectioned field_values line via
+      // maps/metric_to_field.ts. Keep citations / k1s / qbo_warnings for
+      // debug + scenario structural data.
+      const { computed: _computed, ...computedDataPayload } = (engineResult ?? {}) as any
+      void _computed
       const rawPayload = {
         entity_id,
         tax_year,
         form_type,
         status: 'computed',
         input_data: mergedInputs,
-        computed_data: engineResult,
+        computed_data: computedDataPayload,
         field_values: mergedFieldValues,
         computed_at: new Date().toISOString(),
         pdf_s3_path: null,
@@ -1335,7 +1336,7 @@ router.post('/compute', async (req, res) => {
       const rowPayload = {
         ...rawPayload,
         ...encPayload,
-        ...extractAggregates(engineResult),
+        ...extractAggregatesFromFv(mergedFieldValues, form_type),
       }
 
       // Route the write: UPDATE an existing row, INSERT an amendment, or
@@ -1406,7 +1407,9 @@ router.post('/compute', async (req, res) => {
     // Fetch the prior year's return (if any) for comparison
     const isExtensionForm = ['4868', '7004', '8868'].includes(form_type)
     let priorYearInputs: Record<string, any> = {}
-    let priorYearComputed: Record<string, any> = {}
+    // priorYearComputed retired — readers now bridge via INPUT_TO_CANONICAL +
+    // priorYearFieldValues (sectioned IRS-line keys, the golden model).
+    const priorYearComputed: Record<string, any> = {}
     let priorYearFieldValues: Record<string, any> = {}
     if (entity_id && !isExtensionForm) {
       // Prefer the filed return as the YOY baseline; if none, fall back to the
@@ -1428,8 +1431,7 @@ router.post('/compute', async (req, res) => {
           return (b.updated_at || '').localeCompare(a.updated_at || '')
         })[0]
         priorYearInputs = priorRet.input_data || {}
-        priorYearComputed = priorRet.computed_data?.computed || {}
-        priorYearFieldValues = priorRet.field_values || priorRet.computed_data?.field_values || {}
+        priorYearFieldValues = priorRet.field_values || {}
       }
     }
 
@@ -1717,7 +1719,6 @@ router.post('/use-prior-year', async (req, res) => {
   const currentRet = currentRows?.[0] || null
 
   const priorInputs: Record<string, any> = priorRet.input_data || {}
-  const priorComputed: Record<string, any> = priorRet.computed_data?.computed || {}
   const priorFieldValues: Record<string, any> = (priorRet as any).field_values || {}
   const currentInputs: Record<string, any> = currentRet?.input_data || {}
   // For filed_import rows, input_data carries archival metadata not engine keys —
@@ -1733,13 +1734,11 @@ router.post('/use-prior-year', async (req, res) => {
   const copied: Record<string, { from_prior: number; via?: string }> = {}
   const updatedInputs = { ...currentInputs }
   for (const f of targetFields) {
-    // Resolve prior-year value: engine input > computed total > canonical field_value
+    // Resolve prior-year value: engine input first, then sectioned field_values
+    // via the engine→canonical map. computed_data is no longer consulted —
+    // every total maps to a sectioned field_values line per the golden model.
     let priorVal: any = priorInputs[f]
     let via: string | undefined
-    if (priorVal === undefined || priorVal === null) {
-      priorVal = priorComputed[f]
-      if (priorVal !== undefined) via = 'computed'
-    }
     if ((priorVal === undefined || priorVal === null) && engineToCanon[f]) {
       priorVal = priorFieldValues[engineToCanon[f]]
       if (priorVal !== undefined) via = `field_values.${engineToCanon[f]}`
@@ -1921,7 +1920,11 @@ print(json.dumps({'url': url}))
         taxYear: taxReturn.tax_year,
         entity: entityData,
         inputData: taxReturn.input_data,
-        computedData: taxReturn.computed_data?.computed,
+        // Pass the full computed_data (without the deprecated `.computed`
+        // flat dict) so structural payloads like schedule_e survive — the
+        // builder still reads computedData?.schedule_e for nested rentals/
+        // partnerships data. Flat metrics flow via fieldValues only.
+        computedData: taxReturn.computed_data,
         fieldValues: { ...taxReturn.field_values, ...schedLOverrides },
         textractKvs,
       })
@@ -2074,7 +2077,11 @@ print(json.dumps({'url': url}))
     // (entity, year, form_type); update if present, else insert.
     let taxReturn = null
     if (save && entity_id) {
-      const extRaw = { input_data: inputs, computed_data: result }
+      // Strip the flat computed dict for symmetry with proforma/amendment
+      // persists; keeps citations + qbo_warnings if any.
+      const { computed: _extComputed, ...extComputedData } = (result ?? {}) as any
+      void _extComputed
+      const extRaw = { input_data: inputs, computed_data: extComputedData }
       const extEnc = await encryptedFields(supabase, userId, extRaw, ENCRYPTED_RETURN_FIELDS)
       const rowPayload = {
         entity_id,
@@ -2085,7 +2092,10 @@ print(json.dumps({'url': url}))
         is_amended: false,
         ...extRaw,
         ...extEnc,
-        ...extractAggregates(result),
+        // Extensions don't populate agg_* — those are full-return metrics.
+        // The helper returns all-null for unknown form types, which matches
+        // the prior behavior (extension result.computed never had these keys).
+        ...extractAggregatesFromFv(null, extension_type),
         computed_at: new Date().toISOString(),
         pdf_s3_path: null,
       }

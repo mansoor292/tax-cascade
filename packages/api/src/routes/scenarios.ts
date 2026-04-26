@@ -74,12 +74,22 @@ router.post('/:id/compute', async (req, res) => {
       result = calc1040(merged)
     }
 
-    // Get base return for comparison if available
+    // Get base return for comparison if available. Build the flat-metric
+    // baseline from base_return.field_values via the per-form metric map —
+    // computed_data.computed is no longer persisted (golden model = field_values).
     let baseComputed: Record<string, number> | null = null
     if (scenario.base_return_id) {
       const { data: baseReturn } = await supabase.from('tax_return')
-        .select('computed_data').eq('id', scenario.base_return_id).single()
-      if (baseReturn?.computed_data?.computed) baseComputed = baseReturn.computed_data.computed
+        .select('field_values, form_type').eq('id', scenario.base_return_id).single()
+      if (baseReturn?.field_values && baseReturn.form_type) {
+        const { COMPARE_METRICS, readMetric } = await import('../maps/metric_to_field.js')
+        const metrics: Record<string, number> = {}
+        for (const m of COMPARE_METRICS) {
+          const v = readMetric(baseReturn.field_values as any, baseReturn.form_type, m)
+          if (v !== null) metrics[m] = v
+        }
+        baseComputed = metrics
+      }
     }
 
     // Build field-by-field diff vs base
