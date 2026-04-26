@@ -51,7 +51,6 @@ const SECTION_ORDER = [
   'income', 'cogs', 'deductions', 'tax', 'credits', 'payments',
   'result', 'refund', 'owed', 'overpayment',
   'schedJ', 'schedL', 'schedM1', 'schedM2', 'schedK', 'schedB', 'schedE',
-  'totals',
   'meta', 'preparer',
 ]
 
@@ -73,7 +72,6 @@ const SECTION_LABELS: Record<string, string> = {
   schedK:      'Schedule K',
   schedB:      'Schedule B',
   schedE:      'Schedule E',
-  totals:      'Derived Totals',
   meta:        'Entity Metadata',
   preparer:    'Preparer',
   other:       'Other',
@@ -91,23 +89,19 @@ function fmtDelta(n: number): string {
 }
 
 /** Collect all numeric canonical key/value pairs from a return row.
- *  Post-refactor shape contract:
- *    field_values         — sectioned IRS-line keys ONLY
- *    computed_data.computed — flat derived totals ONLY (no overlap with field_values)
- *  So the two halves render side-by-side with no alias dance: every key from
- *  field_values lands in its IRS section by prefix, and every key from
- *  computed lands under the synthetic 'totals' section. */
+ *  Line-by-line comparison is about WHAT'S ON THE FORM — every IRS line
+ *  the return populates. That's `field_values` (sectioned IRS-line keys).
+ *  We deliberately skip `computed_data.computed`: those are flat derived
+ *  totals (`total_tax`, `balance_due`) that just duplicate sectioned lines
+ *  (`tax.L31_total_tax`, `payments.L35_amount_owed`) under engine names.
+ *  Flat totals drive the multi-year YoY matrix and the agg_* columns
+ *  elsewhere — they're not form lines and don't belong here. */
 function collectValues(ret: TaxReturn | undefined): Record<string, number> {
   if (!ret) return {}
   const out: Record<string, number> = {}
   const fv = (ret.field_values || {}) as Record<string, unknown>
   for (const [k, v] of Object.entries(fv)) {
     if (typeof v === 'number' && !isNaN(v)) out[k] = v
-  }
-  const c = (ret.computed_data?.computed || {}) as Record<string, unknown>
-  for (const [k, v] of Object.entries(c)) {
-    if (typeof v !== 'number' || isNaN(v)) continue
-    out[`totals.${k}`] = v
   }
   return out
 }
