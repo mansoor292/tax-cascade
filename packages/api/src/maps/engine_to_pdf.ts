@@ -233,3 +233,40 @@ export function getCanonicalAliases(formType: string): Record<string, string> {
     default: return {}
   }
 }
+
+/**
+ * Sync alias pairs so a row's field_values never carries divergent values for
+ * the same concept. The map is descriptive → sectioned (e.g.
+ * `deductions.advertising` → `deductions.L16_advertising`); this helper walks
+ * every pair and force-mirrors values in BOTH directions:
+ *
+ *   - if the sectioned key has a number, copy it to the descriptive key
+ *     (overwriting any stale value left over from a parent-seeded amendment)
+ *   - if only the descriptive key has a number, lift it to the sectioned key
+ *     (so engine-only consumers see the same value)
+ *
+ * Both forms end up carrying the same number. Mutates fv in place. Returns
+ * the same object for fluent chaining.
+ */
+export function syncFieldValueAliases(
+  fv: Record<string, any>,
+  formType: string,
+): Record<string, any> {
+  const aliases = getCanonicalAliases(formType)
+  for (const [descriptive, sectioned] of Object.entries(aliases)) {
+    const sv = fv[sectioned]
+    const dv = fv[descriptive]
+    const sIsNum = typeof sv === 'number' && !isNaN(sv)
+    const dIsNum = typeof dv === 'number' && !isNaN(dv)
+    if (sIsNum) {
+      // Sectioned wins — that's what the engine and PDF maps use as the
+      // source of truth. Overwrites the descriptive form even if it has a
+      // (stale) number. The previous behavior of preserving descriptive on
+      // amend caused divergent rows in Filed-vs-Amended comparisons.
+      fv[descriptive] = sv
+    } else if (dIsNum) {
+      fv[sectioned] = dv
+    }
+  }
+  return fv
+}

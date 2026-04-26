@@ -1339,6 +1339,15 @@ router.post('/compute', async (req, res) => {
       } catch (_) { /* optional — skip if map import fails */ }
 
       if (engineResult) engineResult.computed = canonicalizeComputed(engineResult.computed)
+      // Force descriptive ↔ sectioned alias keys to agree. Without this, an
+      // amendment keeps the parent's stale `deductions.advertising` value
+      // alongside the engine's freshly-recomputed `deductions.L16_advertising`,
+      // and the Compare page shows two conflicting rows for the same line.
+      const { syncFieldValueAliases } = await import('../maps/engine_to_pdf.js')
+      const mergedFieldValues = syncFieldValueAliases(
+        { ...existingFieldValues, ...scheduleFieldValues },
+        form_type,
+      )
       const rawPayload = {
         entity_id,
         tax_year,
@@ -1346,7 +1355,7 @@ router.post('/compute', async (req, res) => {
         status: 'computed',
         input_data: mergedInputs,
         computed_data: engineResult,
-        field_values: { ...existingFieldValues, ...scheduleFieldValues },
+        field_values: mergedFieldValues,
         computed_at: new Date().toISOString(),
         pdf_s3_path: null,
         reviewed_at: null,

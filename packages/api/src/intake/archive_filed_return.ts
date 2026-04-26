@@ -9,7 +9,7 @@
  * returns up year-over-year regardless of source.
  */
 import type { MappingResult } from './json_model_mapper.js'
-import { getCanonicalAliases } from '../maps/engine_to_pdf.js'
+import { getCanonicalAliases, syncFieldValueAliases } from '../maps/engine_to_pdf.js'
 import { canonicalizeComputed } from '../maps/computed_aliases.js'
 
 export interface FiledReturnArchive {
@@ -102,5 +102,8 @@ export function archiveFiledReturn(
   // computed_data.computed shape (amount_owed ↔ balance_due, cogs ↔
   // cost_of_goods_sold, etc.). Without this, Filed vs Amended comparisons
   // show empty cells under different names for the same concept.
+  // Also sync field_values descriptive ↔ sectioned aliases so any later
+  // engine recompute can never disagree with the archived form.
+  syncFieldValueAliases(field_values, formType)
   return { field_values, totals: canonicalizeComputed(totals) as Record<string, number | null> }
 }
