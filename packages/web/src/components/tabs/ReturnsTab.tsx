@@ -620,13 +620,25 @@ function YearDetail({
         const gap = r.verification?.gemini_gap_fill
         const canRecompute = r.source === 'amendment' || r.source === 'proforma'
         const isCorp = r.form_type === '1120' || r.form_type === '1120S'
+        const isStale = r.status === 'invalidated'
         return (
-          <div key={r.id} className="bg-background rounded-lg border px-3 py-2">
+          <div key={r.id} className={`bg-background rounded-lg border px-3 py-2 ${isStale ? 'border-amber-500/40' : ''}`}>
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT[r.source!] || ''}`}>
                   {SOURCE_LABEL[r.source!] || r.source}
                 </Badge>
+                {isStale && (
+                  <Badge
+                    variant="outline"
+                    className="text-xs bg-amber-500/15 text-amber-300 border-amber-500/40"
+                    title={r.source === 'filed_import'
+                      ? 'Pre-refactor data shape — re-archive the source PDF (Documents tab) to regenerate.'
+                      : 'Pre-refactor data shape — click Recompute to regenerate.'}
+                  >
+                    Stale — regenerate
+                  </Badge>
+                )}
                 <Badge variant="outline" className="text-xs">{r.form_type}</Badge>
                 <span className="text-xs text-muted-foreground font-mono">
                   {r.id.slice(0, 8)}
