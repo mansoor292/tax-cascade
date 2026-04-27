@@ -6,29 +6,30 @@
  * can inspect classification decisions before committing them.
  *
  * Returns a structured packet:
- *   { inputs, audit, warnings }
- * where every auto-derived value in `inputs` has a corresponding `audit`
- * entry citing its QBO source + confidence. The caller edits `inputs` in
- * place (overriding any classification) and passes the edited packet back
- * to /api/returns/compute.
+ *   { inputs, audit, dropped, warnings }
+ * where every QBO leaf account either:
+ *   - lands on a tax-form input with an `audit` entry citing source + rule, or
+ *   - is recorded in `dropped` with a reason — never silently lost.
  *
  * Coverage:
- *   - P&L → 1120/1120S deduction buckets (COGS, salaries, rents, taxes,
- *     advertising, interest, depreciation, depletion, pension, benefits,
- *     bad_debts, repairs, charitable, other_deductions)
- *   - OtherIncome (non-portfolio) → other_income (L5)
- *   - Balance sheet → Schedule L canonical keys (schedL.L1_cash_eoy_d, etc.)
- *   - Schedule M-1 seed values (net income per books)
+ *   - Income leaves → gross_receipts (positive) / returns_allowances (contra)
+ *   - OtherIncome portfolio leaves (interest, dividend, capital gain, royalty)
+ *     → Schedule K lines on 1120S, L4/L5 on 1120
+ *   - OtherIncome non-portfolio → other_income (L5 1120 / L5 1120S)
+ *   - COGS → cost_of_goods_sold + leaf-level reclass to specific deduction lines
+ *     (e.g. payroll under COGS → salaries_wages)
+ *   - Expenses + OtherExpenses → DEDUCTION_RULES per leaf, fall through to
+ *     other_deductions (L20 1120S / L26 1120) — NEVER drop a leaf
+ *   - Parent-direct postings (QBO accounts with values posted at the parent
+ *     section header rather than a leaf) are picked up via the (Direct)
+ *     markers emitted by flattenReport, classified by parent name, and
+ *     surfaced as PARENT_DIRECT_POSTING warnings
+ *   - Balance sheet → Schedule L canonical keys
  *
- * NOT covered (by design — other sources are authoritative):
- *   - Schedule K portfolio items (interest, dividends, cap gains) — come
- *     from 1099 facts in the /compute auto-merge block to avoid double-
- *     count with QBO's book-level interest/dividend accounts.
- *   - Officer compensation split — emits OFFICER_COMP_UNSPLIT warning
- *     because the preparer's call; QBO doesn't track it separately.
- *
- * Every classification the caller might disagree with emits a warning or
- * is tagged with low-confidence audit so the override path is discoverable.
+ * NOT covered (other sources are authoritative):
+ *   - Officer compensation split — emits OFFICER_COMP_SPLIT_NEEDED warning
+ *   - Meals 50% disallowance — emits MEALS_NEEDS_DISALLOWANCE; preparer
+ *     applies via meals override + M-1 add-back
  */
 import type { Form1120S_Inputs, Form1120_Inputs } from '../engine/tax_engine.js'
 import { isSstbByNaics } from '../engine/tax_tables.js'
@@ -42,14 +43,22 @@ export interface AuditEntry {
   tax_field: string
   qbo_source: string
   amount: number
-  /** `rule:<name>` | `fallback:other` | `fact:<doc_type>.<key>` | `aggregate:<parent>` */
+  /** `rule:<name>` | `fallback:other_deductions` | `aggregate:<parent>` |
+   *  `parent_direct:<section>` | `skipped:portfolio_routed_to_sched_k` */
   confidence: string
+}
+
+export interface DroppedEntry {
+  qbo_source: string
+  amount: number
+  reason: string
 }
 
 export interface Warning {
   code: string
   message: string
   fix_hint?: string
+  affected_lines?: string[]
 }
 
 export interface MapperInput {
@@ -63,6 +72,7 @@ export interface MapperInput {
 export interface MapperOutput {
   inputs: Record<string, number>
   audit: AuditEntry[]
+  dropped: DroppedEntry[]
   warnings: Warning[]
 }
 
@@ -82,20 +92,18 @@ const DEDUCTION_RULES: Array<{ bucket: keyof Form1120S_Inputs; patterns: RegExp[
   { bucket: 'salaries_wages',     rule: 'salaries',     patterns: [/^salaries ?&? ?wages?$/i, /^wages?$/i, /^payroll( expenses?)?( \(direct\))?$/i, /contract labor/i, /^(sales )?commissions$/i] },
 ]
 
-// OtherIncome leaves → Schedule K (1120S) — tracked here only so we can SKIP
-// them (they're authoritative via 1099 facts, not QBO).
-const SCHED_K_PATTERNS: RegExp[] = [
-  /^interest (earned|income)/i,
-  /^dividend income/i,
-  /^dividends$/i,
-  /^royalt(y|ies)/i,
-  /sale of investments/i,
-  /^realized gain/i,
-  /^capital gain/i,
-  /tax[- ]?exempt interest/i,
+// OtherIncome leaves matching these patterns are PORTFOLIO income — they
+// route to Schedule K for 1120S (passthrough to shareholders) or L4/L5 for
+// 1120, NOT to ordinary trade/business income.
+const PORTFOLIO_PATTERNS: Array<{ kind: 'interest' | 'dividend' | 'cap_gain' | 'royalty' | 'tax_exempt_interest'; patterns: RegExp[] }> = [
+  { kind: 'interest',            patterns: [/^interest (earned|income)/i, /^interest$/i, /bank interest/i] },
+  { kind: 'dividend',            patterns: [/^dividend(s)?( income)?$/i] },
+  { kind: 'cap_gain',            patterns: [/^realized (gain|loss)/i, /^capital (gain|loss)/i, /sale of investments?/i, /investment (gain|loss)/i] },
+  { kind: 'royalty',             patterns: [/^royalt(y|ies)/i] },
+  { kind: 'tax_exempt_interest', patterns: [/tax[- ]?exempt interest/i, /municipal bond interest/i] },
 ]
 
-// Income leaves that should NOT be in gross_receipts
+// Income leaves that should NOT be in gross_receipts.
 const REVENUE_EXCLUSIONS: Array<{ target: 'other_income'; patterns: RegExp[]; rule: string }> = [
   { target: 'other_income', rule: 'uncategorized_income', patterns: [/uncategorized income/i] },
 ]
@@ -105,7 +113,20 @@ const EXPENSE_RECLASS: Array<{ target: keyof Form1120S_Inputs; patterns: RegExp[
   { target: 'charitable_contrib', rule: 'charitable', patterns: [/contributions? to charit/i, /^charitable/i, /donations?$/i] },
 ]
 
+// Names that look like contra-revenue regardless of sign — these flow to
+// returns_allowances (L1b) rather than netting silently into gross_receipts.
+const CONTRA_REVENUE_NAME = /^(refunds?|returns?|discounts?|allowances?|chargebacks?)|customer deposit|contingent refund/i
+
 // ─── Helpers ─────────────────────────────────────────────────────────────
+
+interface Leaf {
+  name: string       // last segment of the path (e.g. "Business Insurance")
+  path: string       // full QBO path ("Expenses > Insurance > Business Insurance")
+  amount: number
+  /** True for parent-section direct postings (QBO Header.ColData entries
+   *  flattened into "{Section} (Direct)" by qbo.ts:flattenReport). */
+  parent_direct?: boolean
+}
 
 function matchDeduction(name: string): { bucket: string; rule: string } | null {
   for (const r of DEDUCTION_RULES) {
@@ -128,20 +149,49 @@ function matchRevenueExclusion(name: string): { target: string; rule: string } |
   return null
 }
 
-function isScheduleK(name: string): boolean {
-  return SCHED_K_PATTERNS.some(p => p.test(name))
+function matchPortfolio(name: string): 'interest' | 'dividend' | 'cap_gain' | 'royalty' | 'tax_exempt_interest' | null {
+  for (const p of PORTFOLIO_PATTERNS) {
+    if (p.patterns.some(re => re.test(name))) return p.kind
+  }
+  return null
 }
 
-/** Collect leaf items under a parent prefix (e.g. "Expenses > Foo"). */
-function collectLeaves(pnl: Pnl, parentPrefix: string): Array<{ name: string; amount: number }> {
+/** Walk EVERY real leaf under a parent prefix, at any depth. Skips section
+ *  totals ("(Total)") and parent-direct postings ("(Direct)"). The previous
+ *  implementation only handled depth-1 leaves, silently dropping nested QBO
+ *  accounts (e.g. `Expenses > Insurance > Business Insurance`). */
+function collectAllLeaves(pnl: Pnl, parentPrefix: string): Leaf[] {
   const prefix = parentPrefix.endsWith('>') ? parentPrefix : `${parentPrefix} >`
-  const out: Array<{ name: string; amount: number }> = []
+  const out: Leaf[] = []
   for (const [k, v] of Object.entries(pnl)) {
     if (typeof v !== 'number' || v === 0) continue
     if (!k.startsWith(prefix)) continue
-    const leaf = k.slice(prefix.length).trim()
-    if (leaf.includes(' > ')) continue
-    out.push({ name: leaf, amount: v })
+    if (k.endsWith(' (Total)')) continue        // section sum — would double-count
+    if (k.endsWith(' (Direct)')) continue       // parent direct posting — handled separately
+    const path = k                              // full QBO path for audit
+    const tail = k.slice(prefix.length).trim() // e.g. "Insurance > Business Insurance"
+    const segments = tail.split(' > ').map(s => s.trim())
+    const name = segments[segments.length - 1] // last segment for classification
+    out.push({ name, path, amount: v })
+  }
+  return out
+}
+
+/** Walk every (Direct) marker under a parent prefix. These are amounts QBO
+ *  posted at a section header rather than to a leaf (e.g. payroll JE at the
+ *  parent "Payroll Expenses" account with -395K offset). Without picking
+ *  these up we'd silently lose those entries. */
+function collectDirectPostings(pnl: Pnl, parentPrefix: string): Leaf[] {
+  const prefix = parentPrefix.endsWith('>') ? parentPrefix : `${parentPrefix} >`
+  const out: Leaf[] = []
+  for (const [k, v] of Object.entries(pnl)) {
+    if (typeof v !== 'number' || v === 0) continue
+    if (!k.startsWith(prefix)) continue
+    if (!k.endsWith(' (Direct)')) continue
+    const tail = k.slice(prefix.length, -' (Direct)'.length).trim()
+    const segments = tail.split(' > ').map(s => s.trim())
+    const name = segments[segments.length - 1]
+    out.push({ name, path: k, amount: v, parent_direct: true })
   }
   return out
 }
@@ -157,6 +207,7 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
   const { pnl, bs, priorBs, form_type, business_code } = opts
   const inputs: Record<string, number> = {}
   const audit: AuditEntry[] = []
+  const dropped: DroppedEntry[] = []
   const warnings: Warning[] = []
 
   const record = (field: string, amount: number, source: string, confidence: string) => {
@@ -170,117 +221,187 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
     audit.push({ tax_field: field, qbo_source: source, amount: rounded, confidence })
   }
 
-  const warn = (code: string, message: string, fix_hint?: string) => {
-    warnings.push({ code, message, fix_hint })
+  const warn = (code: string, message: string, fix_hint?: string, affected_lines?: string[]) => {
+    warnings.push({ code, message, ...(fix_hint ? { fix_hint } : {}), ...(affected_lines ? { affected_lines } : {}) })
   }
 
   // ── Revenue ──
   const incomeTotal = totalOrZero(pnl, 'Income (Total)')
-  let grossReceipts = incomeTotal
-  let incomeSource = 'Income (Total)'
-  let grossReceiptsHasAggregate = incomeTotal > 0
-  const contraRevenue: Array<{ name: string; amount: number }> = []
-  for (const leaf of collectLeaves(pnl, 'Income')) {
+  const incomeLeaves = collectAllLeaves(pnl, 'Income')
+  const contraRevenue: Leaf[] = []   // negative amounts and refund/return-named accounts
+  const grossLeaves: Leaf[] = []     // positive ordinary revenue
+  for (const leaf of incomeLeaves) {
     const reclass = matchRevenueExclusion(leaf.name)
     if (reclass) {
-      record(reclass.target, leaf.amount, `Income > ${leaf.name}`, `rule:${reclass.rule}`)
-      grossReceipts -= leaf.amount
-    }
-    if (/customer deposit/i.test(leaf.name)) {
-      warn(
-        'CONTINGENCY_IN_REVENUE',
-        `"${leaf.name}" appears under Income at $${Math.round(leaf.amount).toLocaleString()}. Included in gross_receipts by default — this assumes the contingency was released to revenue.`,
-        'If the deposit is still an unreleased liability, override gross_receipts in inputs and book as a liability on Schedule L instead.',
-      )
-    }
-    if (leaf.amount < -10000) {
-      contraRevenue.push({ name: leaf.name, amount: leaf.amount })
-    }
-  }
-  if (grossReceipts) {
-    record('gross_receipts', grossReceipts, incomeSource, grossReceiptsHasAggregate ? 'aggregate:Income' : 'rule:gross_receipts')
-  }
-  if (contraRevenue.length) {
-    const total = contraRevenue.reduce((s, r) => s + r.amount, 0)
-    const list = contraRevenue.map(r => `"${r.name}" ($${Math.round(r.amount).toLocaleString()})`).join(', ')
-    warn(
-      'LARGE_CONTRA_REVENUE',
-      `Income section contains ${contraRevenue.length} negative leaf(s) totaling $${Math.round(total).toLocaleString()}: ${list}. These are reducing current-year gross_receipts.`,
-      'If these adjustments relate to a prior period, consider amending the prior-year return instead of recording against current-year revenue.',
-    )
-  }
-
-  // ── Other income (non-portfolio OtherIncome) ──
-  for (const leaf of collectLeaves(pnl, 'OtherIncome')) {
-    if (isScheduleK(leaf.name)) {
-      // Skip — 1099 facts drive these in the /compute auto-merge block.
-      // Emit an informational audit so the caller knows WHY they don't
-      // see schedule_k_* fields sourced from QBO here.
-      audit.push({
-        tax_field: 'schedule_k_*',
-        qbo_source: `OtherIncome > ${leaf.name}`,
-        amount: Math.round(leaf.amount),
-        confidence: 'skipped:portfolio_item_from_1099_facts',
-      })
+      record(reclass.target, leaf.amount, leaf.path, `rule:${reclass.rule}`)
+      // Don't include in gross or contra — already booked as other_income.
       continue
     }
-    record('other_income', leaf.amount, `OtherIncome > ${leaf.name}`, 'rule:other_income_nonportfolio')
+    if (CONTRA_REVENUE_NAME.test(leaf.name) || leaf.amount < 0) {
+      contraRevenue.push(leaf)
+    } else {
+      grossLeaves.push(leaf)
+    }
+  }
+  // Sum gross + contra leaves; if no leaves found, fall back to the section total.
+  const grossSum  = grossLeaves.reduce((s, l) => s + l.amount, 0)
+  const contraSum = contraRevenue.reduce((s, l) => s + l.amount, 0)  // typically negative
+  if (grossLeaves.length) {
+    for (const l of grossLeaves) {
+      record('gross_receipts', l.amount, l.path, 'rule:income_leaf')
+    }
+  } else if (incomeTotal) {
+    record('gross_receipts', incomeTotal, 'Income (Total)', 'aggregate:Income')
+  }
+  if (contraRevenue.length) {
+    // Returns_allowances on the form is positive — flip the sign of the
+    // contra (which is typically negative in QBO).
+    record('returns_allowances', Math.abs(contraSum), contraRevenue.map(l => l.path).join('; '), 'rule:contra_revenue')
+    if (Math.abs(contraSum) > 10000) {
+      warn(
+        'LARGE_CONTRA_REVENUE',
+        `Income section contains ${contraRevenue.length} contra-revenue leaf(s) totaling $${Math.round(Math.abs(contraSum)).toLocaleString()}: ${contraRevenue.map(l => `"${l.name}" ($${Math.round(l.amount).toLocaleString()})`).join(', ')}. Routed to L1b returns_allowances.`,
+        'If these adjustments relate to a prior period, consider amending the prior-year return instead of recording against current-year revenue.',
+        ['income.L1b_returns'],
+      )
+    }
+    for (const l of contraRevenue) {
+      if (/customer deposit|contingent/i.test(l.name)) {
+        warn(
+          'CONTINGENCY_IN_REVENUE',
+          `"${l.name}" appears under Income at $${Math.round(l.amount).toLocaleString()}. Booked as L1b returns_allowances by default — this assumes the contingency was released to revenue.`,
+          'If the deposit is still an unreleased liability, override returns_allowances and book as a liability on Schedule L instead.',
+        )
+      }
+    }
+  }
+  // Income parent-direct postings — surface them; do not silently drop.
+  for (const direct of collectDirectPostings(pnl, 'Income')) {
+    warn(
+      'PARENT_DIRECT_POSTING',
+      `Income parent "${direct.name}" has direct postings of $${Math.round(direct.amount).toLocaleString()} not reflected in leaf accounts. Included in gross_receipts.`,
+      'Reclassify in QBO to a leaf account, or override gross_receipts in inputs.',
+      ['income.L1a_gross_receipts'],
+    )
+    record('gross_receipts', direct.amount, direct.path, `parent_direct:${direct.name}`)
+  }
+
+  // ── Other income (non-portfolio OtherIncome) + portfolio routing ──
+  for (const leaf of collectAllLeaves(pnl, 'OtherIncome')) {
+    const portfolio = matchPortfolio(leaf.name)
+    if (portfolio) {
+      // Portfolio income — pass-through on 1120S (Schedule K), ordinary on
+      // 1120 (page 1 line 4 dividends / line 5 interest).
+      if (form_type === '1120S') {
+        const target =
+          portfolio === 'interest'            ? 'schedule_k_interest' :
+          portfolio === 'dividend'            ? 'schedule_k_dividends_ordinary' :
+          portfolio === 'cap_gain'            ? 'schedule_k_lt_cap_gain' :
+          portfolio === 'royalty'             ? 'schedule_k_royalties' :
+          /* tax_exempt */                     'schedule_k_tax_exempt_interest'
+        record(target, leaf.amount, leaf.path, `rule:portfolio_${portfolio}`)
+      } else {
+        // 1120 — interest on L5, dividends on L4, royalties on L7, cap gains
+        // on L8 (which the engine handles as `capital_gains` input).
+        const target =
+          portfolio === 'interest'            ? 'interest_income' :
+          portfolio === 'dividend'            ? 'dividends' :
+          portfolio === 'cap_gain'            ? 'capital_gains' :
+          portfolio === 'royalty'             ? 'gross_royalties' :
+          /* tax_exempt — 1120 has no separate slot; defer to other_income */ 'other_income'
+        record(target, leaf.amount, leaf.path, `rule:portfolio_${portfolio}`)
+      }
+      continue
+    }
+    record('other_income', leaf.amount, leaf.path, 'rule:other_income_nonportfolio')
   }
 
   // ── COGS ──
-  const cogsLeaves = collectLeaves(pnl, 'COGS')
+  const cogsLeaves = collectAllLeaves(pnl, 'COGS')
   if (cogsLeaves.length) {
-    for (const { name, amount } of cogsLeaves) {
+    for (const { name, path, amount } of cogsLeaves) {
       const reclass = matchDeduction(name)
       if (reclass) {
-        record(reclass.bucket, amount, `COGS > ${name}`, `rule:${reclass.rule}`)
+        record(reclass.bucket, amount, path, `rule:${reclass.rule}`)
       } else {
-        record('cost_of_goods_sold', amount, `COGS > ${name}`, 'rule:cogs_leaf')
+        record('cost_of_goods_sold', amount, path, 'rule:cogs_leaf')
       }
     }
   } else {
     const cogsTotal = totalOrZero(pnl, 'COGS (Total)')
     if (cogsTotal) record('cost_of_goods_sold', cogsTotal, 'COGS (Total)', 'aggregate:COGS')
   }
+  for (const direct of collectDirectPostings(pnl, 'COGS')) {
+    warn(
+      'PARENT_DIRECT_POSTING',
+      `COGS parent "${direct.name}" has direct postings of $${Math.round(direct.amount).toLocaleString()}. Included in cost_of_goods_sold.`,
+      'Reclassify to a leaf account in QBO.',
+      ['income.L2_cogs'],
+    )
+    record('cost_of_goods_sold', direct.amount, direct.path, `parent_direct:${direct.name}`)
+  }
 
   // ── Expenses + OtherExpenses (ordinary operating deductions) ──
-  const unmatchedExpenses: Array<{ name: string; amount: number }> = []
-  const mealsLeaves: Array<{ name: string; amount: number }> = []
-  const uncategorizedLeaves: Array<{ name: string; amount: number }> = []
+  // Walks every leaf at any depth, classifies via DEDUCTION_RULES /
+  // EXPENSE_RECLASS, falls through to other_deductions (L20 1120S / L26
+  // 1120) for anything unmatched. Parent-direct postings are picked up
+  // from "(Direct)" markers and emit PARENT_DIRECT_POSTING warnings.
+  const unmatchedExpenses: Leaf[] = []
+  const mealsLeaves: Leaf[] = []
+  const uncategorizedExpenseLeaves: Leaf[] = []
   let payrollishDetected = false
   let expensesLeafTotal = 0
   for (const parent of ['Expenses', 'OtherExpenses']) {
-    for (const { name, amount } of collectLeaves(pnl, parent)) {
-      expensesLeafTotal += amount
-      if (/meals|entertainment/i.test(name)) mealsLeaves.push({ name, amount })
-      if (/uncategorized/i.test(name)) uncategorizedLeaves.push({ name, amount })
-      if (/payroll|salar|wages|contract labor|commissions/i.test(name)) payrollishDetected = true
+    const allItems = [
+      ...collectAllLeaves(pnl, parent),
+      ...collectDirectPostings(pnl, parent),
+    ]
+    for (const leaf of allItems) {
+      expensesLeafTotal += leaf.amount
+      if (/meals|entertainment/i.test(leaf.name)) mealsLeaves.push(leaf)
+      if (/uncategorized/i.test(leaf.name)) uncategorizedExpenseLeaves.push(leaf)
+      if (/payroll|salar|wages|contract labor|commissions/i.test(leaf.name)) payrollishDetected = true
 
-      const reclass = matchReclass(name)
+      const conf = leaf.parent_direct ? `parent_direct:${leaf.name}` : `rule`
+      const sourcePath = leaf.path
+
+      const reclass = matchReclass(leaf.name)
       if (reclass) {
-        record(reclass.target, amount, `${parent} > ${name}`, `rule:${reclass.rule}`)
+        record(reclass.target, leaf.amount, sourcePath, leaf.parent_direct ? conf : `rule:${reclass.rule}`)
+        if (leaf.parent_direct) emitParentDirectWarning(warn, parent, leaf, [reclass.target])
         continue
       }
-      const specific = matchDeduction(name)
+      const specific = matchDeduction(leaf.name)
       if (specific) {
-        record(specific.bucket, amount, `${parent} > ${name}`, `rule:${specific.rule}`)
+        record(specific.bucket, leaf.amount, sourcePath, leaf.parent_direct ? conf : `rule:${specific.rule}`)
+        if (leaf.parent_direct) emitParentDirectWarning(warn, parent, leaf, [`deductions.${specific.bucket}`])
         continue
       }
-      unmatchedExpenses.push({ name: `${parent} > ${name}`, amount })
-      record('other_deductions', amount, `${parent} > ${name}`, 'fallback:other_deductions')
+      // Fallback — every unmatched expense lands on other_deductions (L20
+      // on 1120S, L26 on 1120). Never silently dropped.
+      unmatchedExpenses.push(leaf)
+      record('other_deductions', leaf.amount, sourcePath, leaf.parent_direct ? conf : 'fallback:other_deductions')
+      if (parent === 'OtherExpenses') {
+        warn(
+          'OTHER_EXPENSES_AS_ORDINARY',
+          `"${leaf.path}" was on QBO's "Other Expenses" section (below Net Operating Income) — routed to L20 as ordinary. Confirm it is not a §162 capital item or below-the-line.`,
+          'Override other_deductions or move the expense into the main Expenses section in QBO if it is operating.',
+          ['deductions.other_deductions'],
+        )
+      }
+      if (leaf.parent_direct) emitParentDirectWarning(warn, parent, leaf, ['deductions.other_deductions'])
     }
   }
 
-  // Sanity check: leaves should roughly equal the parent-section totals.
-  // A large gap means the flattener is dropping parent-level direct postings.
+  // Sanity check: leaves + directs should equal the parent-section totals.
   const expensesTotal = totalOrZero(pnl, 'Expenses (Total)') + totalOrZero(pnl, 'OtherExpenses (Total)')
   if (expensesTotal > 0) {
     const drift = Math.abs(expensesTotal - expensesLeafTotal)
     if (drift > Math.max(100, expensesTotal * 0.02)) {
       warn(
         'EXPENSE_TOTAL_MISMATCH',
-        `Sum of Expense leaves ($${Math.round(expensesLeafTotal).toLocaleString()}) differs from Expense totals ($${Math.round(expensesTotal).toLocaleString()}) by $${Math.round(drift).toLocaleString()}. Some postings may not be reaching the tax return.`,
-        'Check QBO for amounts posted directly to parent accounts instead of leaf accounts.',
+        `Sum of Expense leaves+directs ($${Math.round(expensesLeafTotal).toLocaleString()}) differs from Expense totals ($${Math.round(expensesTotal).toLocaleString()}) by $${Math.round(drift).toLocaleString()}. Some postings may not be reaching the tax return.`,
+        'Inspect the QBO P&L for accounts on a different basis or with manual JE adjustments.',
       )
     }
   }
@@ -302,15 +423,10 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
   }
 
   // ── 1120 (C-Corp) field-name translation ──
-  // The mapping up to this point uses 1120S field names. For 1120 callers
-  // we rename the few that differ. 1120 splits portfolio income into
-  // dedicated lines; those come from 1099 facts (not here).
   if (form_type === '1120') {
-    // interest (L13 1120S deduction) → interest_expense on 1120
     if (inputs.interest !== undefined) {
       inputs.interest_expense = inputs.interest
       delete inputs.interest
-      // Retag the audit entry
       for (const e of audit) if (e.tax_field === 'interest') e.tax_field = 'interest_expense'
     }
   }
@@ -328,51 +444,81 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
   if ((inputs.salaries_wages || payrollishDetected) && !inputs.officer_compensation) {
     const sw = (inputs.salaries_wages as number) || 0
     warn(
-      'OFFICER_COMP_UNSPLIT',
+      'OFFICER_COMP_SPLIT_NEEDED',
       `Payroll-type expenses detected${sw ? ` (salaries_wages = $${sw.toLocaleString()})` : ''} but no officer_compensation provided. QBO does not separate officer compensation from other salaries; 1120/1120S splits them (officer → L7 on 1120S / L12 on 1120, rest → L8 / L13). Currently $0 on the officer line.`,
       `Override officer_compensation in inputs using the officer's W-2 Box 1 (reasonable salary standard for shareholder-employees).`,
+      form_type === '1120S'
+        ? ['deductions.L7_officer_comp', 'deductions.L8_salaries']
+        : ['deductions.L12_officer_comp', 'deductions.L13_salaries'],
     )
   }
 
   if (unmatchedExpenses.length) {
-    const total = unmatchedExpenses.reduce((s, r) => s + r.amount, 0)
-    // Top-ten preview so the warning is actionable but bounded.
+    const total = unmatchedExpenses.reduce((s, l) => s + l.amount, 0)
     const preview = [...unmatchedExpenses]
       .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
       .slice(0, 10)
-      .map(r => `${r.name} ($${Math.round(r.amount).toLocaleString()})`)
+      .map(l => `${l.path} ($${Math.round(l.amount).toLocaleString()})`)
       .join('; ')
     warn(
       'UNMATCHED_EXPENSE_LINES',
-      `${unmatchedExpenses.length} QBO expense account(s) totaling $${Math.round(total).toLocaleString()} had no matching IRS-line rule and fell through to other_deductions (L26 on 1120 / L20 on 1120S). Top by amount: ${preview}${unmatchedExpenses.length > 10 ? '; …' : ''}.`,
-      'Review the list and override the right field in inputs (e.g. salaries_wages, taxes_licenses). If these belong in other_deductions, you can leave them — but L26 being a catch-all triggers preparer scrutiny.',
+      `${unmatchedExpenses.length} QBO expense account(s) totaling $${Math.round(total).toLocaleString()} had no matching IRS-line rule and fell through to other_deductions (${form_type === '1120S' ? 'L20' : 'L26'}). Top by amount: ${preview}${unmatchedExpenses.length > 10 ? '; …' : ''}.`,
+      'Review the list and override the right field in inputs (e.g. salaries_wages, taxes_licenses) if a stricter classification is appropriate.',
+      ['deductions.other_deductions'],
     )
   }
 
   if (mealsLeaves.length) {
-    const total = mealsLeaves.reduce((s, r) => s + r.amount, 0)
+    const total = mealsLeaves.reduce((s, l) => s + l.amount, 0)
     warn(
       'MEALS_NEEDS_DISALLOWANCE',
-      `Meals/entertainment totaling $${Math.round(total).toLocaleString()} is in other_deductions at 100%. §274(n) limits the business-meal deduction to 50% (and disallows entertainment entirely). Current return takes the full amount.`,
+      `Meals/entertainment totaling $${Math.round(total).toLocaleString()} is in other_deductions at 100%. §274(n) limits the business-meal deduction to 50% (and disallows entertainment entirely).`,
       `Reduce other_deductions by 50% of meals and 100% of entertainment, or pass a meals_50pct override if/when the engine adds that bucket.`,
+      ['deductions.other_deductions'],
     )
   }
 
-  if (uncategorizedLeaves.length) {
-    const total = uncategorizedLeaves.reduce((s, r) => s + r.amount, 0)
+  if (uncategorizedExpenseLeaves.length) {
+    const total = uncategorizedExpenseLeaves.reduce((s, l) => s + l.amount, 0)
     warn(
-      'UNCATEGORIZED_EXPENSE',
-      `QBO contains Uncategorized Expense(s) totaling $${Math.round(total).toLocaleString()}. These are posted to a placeholder account and should be reclassified before filing.`,
-      'Reclassify the underlying transactions in QBO (or record_tax_fact overrides here) so they land on the correct IRS line.',
+      'UNCATEGORIZED_ACCOUNT',
+      `QBO contains Uncategorized Expense leaf(s) totaling $${Math.round(total).toLocaleString()}. These are placeholder accounts and should be reclassified before filing.`,
+      'Reclassify the underlying transactions in QBO so they land on the correct IRS line.',
+      ['deductions.other_deductions'],
+    )
+  }
+  // Income side too — Bug 5 wanted Uncategorized Income flagged.
+  const uncategorizedIncomeLeaves = incomeLeaves.filter(l => /uncategorized/i.test(l.name))
+  if (uncategorizedIncomeLeaves.length) {
+    const total = uncategorizedIncomeLeaves.reduce((s, l) => s + l.amount, 0)
+    warn(
+      'UNCATEGORIZED_ACCOUNT',
+      `QBO contains Uncategorized Income leaf(s) totaling $${Math.round(total).toLocaleString()}. Placeholder account — review transactions before filing.`,
+      'Reclassify in QBO so the income lands on the correct revenue account.',
+      ['income.L1a_gross_receipts'],
     )
   }
 
-  return { inputs, audit, warnings }
+  return { inputs, audit, dropped, warnings }
+}
+
+/** Emit a PARENT_DIRECT_POSTING warning for a (Direct) marker. Hoisted out
+ *  of the loop so the body stays scannable. */
+function emitParentDirectWarning(
+  warn: (code: string, message: string, fix_hint?: string, affected_lines?: string[]) => void,
+  parent: string,
+  leaf: Leaf,
+  affected_lines: string[],
+) {
+  warn(
+    'PARENT_DIRECT_POSTING',
+    `${parent} parent "${leaf.name}" has direct postings of $${Math.round(leaf.amount).toLocaleString()} not reflected in any leaf account.`,
+    'These are JE-level postings at the parent. Either reclassify in QBO to a leaf account or override the affected input field manually.',
+    affected_lines,
+  )
 }
 
 // ─── Back-compat wrappers ────────────────────────────────────────────────
-// The previous signature returned a flat Partial<Form1120S_Inputs>. Kept
-// for any callers that haven't migrated to the packet shape yet.
 
 export function build1120SInputsFromQbo(pnl: Pnl): Partial<Form1120S_Inputs> {
   return buildCorporateInputsFromQbo({ pnl, form_type: '1120S' }).inputs as Partial<Form1120S_Inputs>

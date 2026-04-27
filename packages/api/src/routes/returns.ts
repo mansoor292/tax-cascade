@@ -1663,20 +1663,71 @@ router.post('/compute_from_qbo', async (req, res) => {
       body: JSON.stringify(computeBody),
     }).then(r => r.json())
 
-    // Surface the mapper packet alongside the compute result so the
-    // caller sees audit + warnings without another round-trip.
+    // Reconciliation: the dollar-level "did the QBO P&L make it onto the
+    // tax form?" check. Without this, a missing $200K of operating expenses
+    // produces a quietly-too-high amendment that's invisible to the caller.
+    const qboNoiTotal = (() => {
+      // QBO "Net Operating Income" = Income (Total) - Expenses (Total)
+      // (excludes OtherIncome and OtherExpenses below NOI). We use NOI +
+      // OtherIncome - OtherExpenses ≈ "Net Income" because everything
+      // operational flows through the form.
+      const inc      = pnl['Income (Total)']        || 0
+      const exp      = pnl['Expenses (Total)']      || 0
+      const otherInc = pnl['OtherIncome (Total)']   || 0
+      const otherExp = pnl['OtherExpenses (Total)'] || 0
+      return inc - exp + otherInc - otherExp
+    })()
+    const computed = (computeResp?.computed_data?.computed) || (computeResp?.result?.computed) || {}
+    const formOrdinary: number =
+      typeof computed.ordinary_income_loss === 'number' ? computed.ordinary_income_loss
+      : typeof computed.taxable_income === 'number'      ? computed.taxable_income
+      : 0
+    // Schedule K portfolio total (1120S) — interest + dividends + cap gains
+    // + royalties + tax-exempt interest. For 1120 these flow to L4/L5 and
+    // are already in formOrdinary, so portfolio total stays 0.
+    const schedKPortfolio: number = form_type === '1120S'
+      ? (mergedInputs.schedule_k_interest || 0)
+        + (mergedInputs.schedule_k_dividends_ordinary || 0)
+        + (mergedInputs.schedule_k_lt_cap_gain || 0)
+        + (mergedInputs.schedule_k_st_cap_gain || 0)
+        + (mergedInputs.schedule_k_royalties || 0)
+        + (mergedInputs.schedule_k_tax_exempt_interest || 0)
+      : 0
+    const reconciliationDelta = Math.round(qboNoiTotal - formOrdinary - schedKPortfolio)
+    const deltaExplanation: string[] = []
+    if (Math.abs(reconciliationDelta) > 1000) {
+      deltaExplanation.push(
+        `Δ ≈ $${reconciliationDelta.toLocaleString()} of QBO P&L did not reach the form. Common causes: meals 50% disallowance, depreciation differences (book vs MACRS), Schedule M-1 add-backs, parent-direct postings, capital items expensed in books.`,
+      )
+    }
+
     res.json({
       ...computeResp,
       qbo_mapper: {
         audit: packet.audit,
+        dropped: packet.dropped,
         warnings: packet.warnings,
-        overrides_applied: Object.keys(overrides || {}),
+        overrides_applied: Object.fromEntries(
+          Object.entries(overrides || {}).map(([k, v]) => [
+            k,
+            { from_qbo: packet.inputs[k] ?? null, to: v },
+          ]),
+        ),
         sources: {
+          report: 'profit-and-loss',
+          basis: finResp?.profit_and_loss?.accounting_method || null,
           pnl_as_of: finResp?.profit_and_loss?.fetched_at || null,
           bs_as_of: finResp?.balance_sheet?.fetched_at || null,
           prior_bs_as_of: priorFinResp?.balance_sheet?.fetched_at || null,
           business_code: entityRow?.meta?.business_code || null,
         },
+      },
+      reconciliation: {
+        qbo_net_income:        Math.round(qboNoiTotal),
+        form_ordinary_income:  Math.round(formOrdinary),
+        schedule_k_portfolio:  Math.round(schedKPortfolio),
+        delta:                 reconciliationDelta,
+        delta_explanation:     deltaExplanation,
       },
     })
   } catch (e: any) {
