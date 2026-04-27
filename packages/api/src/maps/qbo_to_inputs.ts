@@ -226,15 +226,21 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
   }
 
   // ── Revenue ──
-  const incomeTotal = totalOrZero(pnl, 'Income (Total)')
-  const incomeLeaves = collectAllLeaves(pnl, 'Income')
-  const contraRevenue: Leaf[] = []   // negative amounts and refund/return-named accounts
-  const grossLeaves: Leaf[] = []     // positive ordinary revenue
-  for (const leaf of incomeLeaves) {
+  // Treat parent-direct postings as leaves: Income (Total) already includes
+  // them, so adding both would double-count. Combining them with the leaf
+  // list lets a single decision (use leaves OR fallback to Total) keep the
+  // accounting straight. The Direct entries still get a PARENT_DIRECT_POSTING
+  // warning for preparer visibility.
+  const incomeTotal      = totalOrZero(pnl, 'Income (Total)')
+  const incomeLeaves     = collectAllLeaves(pnl, 'Income')
+  const incomeDirects    = collectDirectPostings(pnl, 'Income')
+  const incomeAllLeaves  = [...incomeLeaves, ...incomeDirects]
+  const contraRevenue: Leaf[] = []
+  const grossLeaves: Leaf[] = []
+  for (const leaf of incomeAllLeaves) {
     const reclass = matchRevenueExclusion(leaf.name)
     if (reclass) {
       record(reclass.target, leaf.amount, leaf.path, `rule:${reclass.rule}`)
-      // Don't include in gross or contra — already booked as other_income.
       continue
     }
     if (CONTRA_REVENUE_NAME.test(leaf.name) || leaf.amount < 0) {
@@ -243,19 +249,16 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
       grossLeaves.push(leaf)
     }
   }
-  // Sum gross + contra leaves; if no leaves found, fall back to the section total.
-  const grossSum  = grossLeaves.reduce((s, l) => s + l.amount, 0)
-  const contraSum = contraRevenue.reduce((s, l) => s + l.amount, 0)  // typically negative
   if (grossLeaves.length) {
     for (const l of grossLeaves) {
-      record('gross_receipts', l.amount, l.path, 'rule:income_leaf')
+      const conf = l.parent_direct ? `parent_direct:${l.name}` : 'rule:income_leaf'
+      record('gross_receipts', l.amount, l.path, conf)
     }
   } else if (incomeTotal) {
     record('gross_receipts', incomeTotal, 'Income (Total)', 'aggregate:Income')
   }
   if (contraRevenue.length) {
-    // Returns_allowances on the form is positive — flip the sign of the
-    // contra (which is typically negative in QBO).
+    const contraSum = contraRevenue.reduce((s, l) => s + l.amount, 0)
     record('returns_allowances', Math.abs(contraSum), contraRevenue.map(l => l.path).join('; '), 'rule:contra_revenue')
     if (Math.abs(contraSum) > 10000) {
       warn(
@@ -275,38 +278,43 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
       }
     }
   }
-  // Income parent-direct postings — surface them; do not silently drop.
-  for (const direct of collectDirectPostings(pnl, 'Income')) {
+  for (const direct of incomeDirects) {
     warn(
       'PARENT_DIRECT_POSTING',
-      `Income parent "${direct.name}" has direct postings of $${Math.round(direct.amount).toLocaleString()} not reflected in leaf accounts. Included in gross_receipts.`,
+      `Income parent "${direct.name}" has direct postings of $${Math.round(direct.amount).toLocaleString()} not reflected in leaf accounts. Treated as a leaf under Income.`,
       'Reclassify in QBO to a leaf account, or override gross_receipts in inputs.',
       ['income.L1a_gross_receipts'],
     )
-    record('gross_receipts', direct.amount, direct.path, `parent_direct:${direct.name}`)
   }
 
   // ── Other income (non-portfolio OtherIncome) + portfolio routing ──
+  // Cap gain is intentionally not auto-routed: QBO's "Sale of investments"
+  // doesn't carry a holding period. The 1099-B auto-merge has authoritative
+  // ST/LT split, so we record an audit-only entry and let that path win
+  // (writing here too would dual-count after the auto-merge runs).
   for (const leaf of collectAllLeaves(pnl, 'OtherIncome')) {
     const portfolio = matchPortfolio(leaf.name)
+    if (portfolio === 'cap_gain') {
+      audit.push({
+        tax_field: 'schedule_k_*_cap_gain',
+        qbo_source: leaf.path,
+        amount: Math.round(leaf.amount),
+        confidence: 'skipped:cap_gain_holding_period_unknown_defer_to_1099b',
+      })
+      continue
+    }
     if (portfolio) {
-      // Portfolio income — pass-through on 1120S (Schedule K), ordinary on
-      // 1120 (page 1 line 4 dividends / line 5 interest).
       if (form_type === '1120S') {
         const target =
           portfolio === 'interest'            ? 'schedule_k_interest' :
           portfolio === 'dividend'            ? 'schedule_k_dividends_ordinary' :
-          portfolio === 'cap_gain'            ? 'schedule_k_lt_cap_gain' :
           portfolio === 'royalty'             ? 'schedule_k_royalties' :
           /* tax_exempt */                     'schedule_k_tax_exempt_interest'
         record(target, leaf.amount, leaf.path, `rule:portfolio_${portfolio}`)
       } else {
-        // 1120 — interest on L5, dividends on L4, royalties on L7, cap gains
-        // on L8 (which the engine handles as `capital_gains` input).
         const target =
           portfolio === 'interest'            ? 'interest_income' :
           portfolio === 'dividend'            ? 'dividends' :
-          portfolio === 'cap_gain'            ? 'capital_gains' :
           portfolio === 'royalty'             ? 'gross_royalties' :
           /* tax_exempt — 1120 has no separate slot; defer to other_income */ 'other_income'
         record(target, leaf.amount, leaf.path, `rule:portfolio_${portfolio}`)
@@ -317,28 +325,29 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
   }
 
   // ── COGS ──
-  const cogsLeaves = collectAllLeaves(pnl, 'COGS')
-  if (cogsLeaves.length) {
-    for (const { name, path, amount } of cogsLeaves) {
-      const reclass = matchDeduction(name)
-      if (reclass) {
-        record(reclass.bucket, amount, path, `rule:${reclass.rule}`)
-      } else {
-        record('cost_of_goods_sold', amount, path, 'rule:cogs_leaf')
-      }
+  // Same Direct-as-leaf pattern as Income: COGS (Total) already includes
+  // any Direct postings, so combining the lists prevents double-count.
+  const cogsLeaves   = collectAllLeaves(pnl, 'COGS')
+  const cogsDirects  = collectDirectPostings(pnl, 'COGS')
+  const cogsAll      = [...cogsLeaves, ...cogsDirects]
+  if (cogsAll.length) {
+    for (const leaf of cogsAll) {
+      const reclass = matchDeduction(leaf.name)
+      const conf = leaf.parent_direct ? `parent_direct:${leaf.name}` : (reclass ? `rule:${reclass.rule}` : 'rule:cogs_leaf')
+      const target = reclass ? reclass.bucket : 'cost_of_goods_sold'
+      record(target, leaf.amount, leaf.path, conf)
     }
   } else {
     const cogsTotal = totalOrZero(pnl, 'COGS (Total)')
     if (cogsTotal) record('cost_of_goods_sold', cogsTotal, 'COGS (Total)', 'aggregate:COGS')
   }
-  for (const direct of collectDirectPostings(pnl, 'COGS')) {
+  for (const direct of cogsDirects) {
     warn(
       'PARENT_DIRECT_POSTING',
-      `COGS parent "${direct.name}" has direct postings of $${Math.round(direct.amount).toLocaleString()}. Included in cost_of_goods_sold.`,
+      `COGS parent "${direct.name}" has direct postings of $${Math.round(direct.amount).toLocaleString()}.`,
       'Reclassify to a leaf account in QBO.',
       ['income.L2_cogs'],
     )
-    record('cost_of_goods_sold', direct.amount, direct.path, `parent_direct:${direct.name}`)
   }
 
   // ── Expenses + OtherExpenses (ordinary operating deductions) ──

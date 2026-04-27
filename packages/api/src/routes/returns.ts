@@ -1677,7 +1677,13 @@ router.post('/compute_from_qbo', async (req, res) => {
       const otherExp = pnl['OtherExpenses (Total)'] || 0
       return inc - exp + otherInc - otherExp
     })()
-    const computed = (computeResp?.computed_data?.computed) || (computeResp?.result?.computed) || {}
+    // /compute (loopback) returns engine output at top-level `computed`.
+    // Older shapes also nested it under computed_data.computed or
+    // result.computed; check all three for forward/backward compat.
+    const computed = computeResp?.computed
+      || computeResp?.computed_data?.computed
+      || computeResp?.result?.computed
+      || {}
     const formOrdinary: number =
       typeof computed.ordinary_income_loss === 'number' ? computed.ordinary_income_loss
       : typeof computed.taxable_income === 'number'      ? computed.taxable_income
