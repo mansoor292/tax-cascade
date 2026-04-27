@@ -1667,15 +1667,18 @@ router.post('/compute_from_qbo', async (req, res) => {
     // tax form?" check. Without this, a missing $200K of operating expenses
     // produces a quietly-too-high amendment that's invisible to the caller.
     const qboNoiTotal = (() => {
-      // QBO "Net Operating Income" = Income (Total) - Expenses (Total)
-      // (excludes OtherIncome and OtherExpenses below NOI). We use NOI +
-      // OtherIncome - OtherExpenses ≈ "Net Income" because everything
-      // operational flows through the form.
+      // QBO "Net Income" = Income - COGS - Expenses + OtherIncome - OtherExpenses.
+      // QBO's standard P&L lists COGS as its own section between Income and
+      // Expenses (yielding Gross Profit, then Net Operating Income, then
+      // Net Income). Forgetting to subtract COGS made the reconciliation
+      // delta look like the entire COGS total — fooling readers into
+      // thinking ~$2.9M of expenses had gone missing.
       const inc      = pnl['Income (Total)']        || 0
+      const cogs     = pnl['COGS (Total)']          || 0
       const exp      = pnl['Expenses (Total)']      || 0
       const otherInc = pnl['OtherIncome (Total)']   || 0
       const otherExp = pnl['OtherExpenses (Total)'] || 0
-      return inc - exp + otherInc - otherExp
+      return inc - cogs - exp + otherInc - otherExp
     })()
     // /compute (loopback) returns engine output at top-level `computed`.
     // Older shapes also nested it under computed_data.computed or
