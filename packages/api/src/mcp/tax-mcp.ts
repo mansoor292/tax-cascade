@@ -318,7 +318,22 @@ S-Corp inputs require \`shareholders: [{ name, pct }]\` summing to 100.`, {
   // round-trip. Typical flow: call this first with no overrides; if the
   // result + audit surfaces a classification you disagree with, call again
   // with `overrides: { field: corrected_value }`.
-  server.tool('compute_return_from_qbo', 'Pull QBO data → map to 1120/1120S inputs → apply overrides → compute in one call. Response includes the compute result plus qbo_mapper.{audit, warnings, sources, overrides_applied}. Intended to replace the multi-turn "pull P&L, hand-classify each line, total deductions, call compute" workflow with 1–3 round trips to converge. Pass overrides to correct specific classifications; all other fields keep their mapper-derived values.', {
+  server.tool('compute_return_from_qbo', `Pull QBO data → map to 1120/1120S inputs → apply overrides → compute in one call. Response includes the compute result plus qbo_mapper.{audit, dropped, warnings, sources, overrides_applied} and a top-level reconciliation block.
+
+Iteration pattern — DO NOT just accept the first response and report numbers:
+
+1. Call with no overrides. Inspect qbo_mapper.warnings.
+2. Each warning may carry a \`decision\` block of shape:
+     { question: string,
+       options: [{ label, summary, overrides: {…} }],
+       default_label: string }
+   These are mapper judgment calls (Contract Labor → COGS vs salaries, meals 50% disallowance, contingent customer deposits as L1b vs liability, officer comp split, etc.). The mapper has already applied the option matching default_label; the decision block lets you ask the user which option they want.
+3. For each warning with a decision block, ASK THE USER the \`question\`, present the options' labels + summaries, and let them pick. If the user defers, leave the default — but tell them what defaulted.
+4. Merge the chosen options' \`overrides\` into a single overrides dict, then call this tool again with overrides set. Repeat if reconciliation.delta is still material (>$1K relative to qbo_net_income).
+
+Reconciliation: top-level \`reconciliation: { qbo_net_income, form_ordinary_income, schedule_k_portfolio, delta, delta_explanation }\` — delta should be near zero for a clean return. Material delta means the form misses real income/expense (book-vs-tax differences like meals 50% or MACRS-vs-book depreciation are normal residuals).
+
+Caller-provided overrides always win, INCLUDING explicit 0 or null (that's how you force-zero a QBO-defaulted field). Only fields you pass in overrides are touched; everything else stays at the mapper default.`, {
     entity_id: z.string().describe('Entity UUID'),
     tax_year: z.number().describe('Tax year'),
     form_type: z.string().describe('1120 or 1120S'),

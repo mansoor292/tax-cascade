@@ -54,11 +54,36 @@ export interface DroppedEntry {
   reason: string
 }
 
+/** A structured judgment-call decision attached to a warning. The mapper
+ *  picks one option as `default` (already applied to inputs); the LLM
+ *  client is expected to surface `question` to the user, then resubmit
+ *  compute_return_from_qbo with the chosen option's `overrides` payload.
+ *  Calling the tool a second time with overrides applies them on top of
+ *  the mapper-derived inputs, so the LLM never has to reconstruct the
+ *  full inputs object — just the deltas it wants to change. */
+export interface Decision {
+  /** Plain-language question to ask the user. */
+  question: string
+  /** Each option = a label, short rationale, and the override payload to
+   *  pass back. Apply by calling the tool with `overrides: <option.overrides>`. */
+  options: Array<{
+    label: string
+    summary: string
+    overrides: Record<string, number | string | boolean | null>
+  }>
+  /** Which option label the mapper applied by default. The LLM should tell
+   *  the user "I went with X by default — does that match your intent?" */
+  default_label: string
+}
+
 export interface Warning {
   code: string
   message: string
   fix_hint?: string
   affected_lines?: string[]
+  /** Present when the warning represents a judgment call the LLM should
+   *  surface to the user. Absent for pure informational warnings. */
+  decision?: Decision
 }
 
 export interface MapperInput {
@@ -116,6 +141,64 @@ const EXPENSE_RECLASS: Array<{ target: keyof Form1120S_Inputs; patterns: RegExp[
 // Names that look like contra-revenue regardless of sign — these flow to
 // returns_allowances (L1b) rather than netting silently into gross_receipts.
 const CONTRA_REVENUE_NAME = /^(refunds?|returns?|discounts?|allowances?|chargebacks?)|customer deposit|contingent refund/i
+
+/** Account-name patterns whose tax line is genuinely a judgment call.
+ *  When the mapper sees one, it routes to the default bucket AND emits a
+ *  RECLASS_AMBIGUOUS warning carrying a decision the LLM can interrogate.
+ *
+ *  `default_field` is the engine input the mapper writes to first (matches
+ *  the relevant DEDUCTION_RULES entry). `alternatives` enumerate other
+ *  defensible homes; each is rendered as an option in the decision block
+ *  with the override payload to switch the value out of `default_field`
+ *  and into the alternative. */
+const RECLASS_AMBIGUOUS: Array<{
+  patterns: RegExp[]
+  default_field: string
+  default_irs_line: string
+  alternatives: Array<{ field: string; irs_line: string; rationale: string }>
+}> = [
+  {
+    patterns: [/contract labor/i],
+    default_field: 'salaries_wages',
+    default_irs_line: 'L13 (1120) / L8 (1120S)',
+    alternatives: [
+      { field: 'cost_of_goods_sold', irs_line: 'L2',  rationale: 'If the labor directly produces goods/services the company resells (typical for manufacturers and resellers).' },
+      { field: 'other_deductions',   irs_line: 'L26 (1120) / L20 (1120S)', rationale: 'If the labor is back-office / administrative and not directly tied to revenue production.' },
+    ],
+  },
+  {
+    patterns: [/^legal( fees)?$/i, /legal &? professional/i, /^professional fees$/i],
+    default_field: 'other_deductions',
+    default_irs_line: 'L26 (1120) / L20 (1120S)',
+    alternatives: [
+      { field: 'taxes_licenses', irs_line: 'L17 (1120) / L12 (1120S)', rationale: 'If the fee is for a license, registration, or annual filing rather than legal advice.' },
+    ],
+  },
+  {
+    patterns: [/^insurance( expense)?$/i, /^business insurance$/i],
+    default_field: 'other_deductions',
+    default_irs_line: 'L26 (1120) / L20 (1120S)',
+    alternatives: [
+      { field: 'employee_benefits', irs_line: 'L24 (1120) / L18 (1120S)', rationale: 'If this is health/group insurance for employees rather than property/liability/E&O.' },
+    ],
+  },
+  {
+    patterns: [/^(sales )?commissions$/i],
+    default_field: 'salaries_wages',
+    default_irs_line: 'L13 (1120) / L8 (1120S)',
+    alternatives: [
+      { field: 'cost_of_goods_sold', irs_line: 'L2', rationale: 'If commissions are paid to non-employees on resale margins (some retailers/distributors).' },
+      { field: 'other_deductions',   irs_line: 'L26 (1120) / L20 (1120S)', rationale: 'If paid to outside reps as a generic operating expense.' },
+    ],
+  },
+]
+
+function matchAmbiguous(name: string) {
+  for (const r of RECLASS_AMBIGUOUS) {
+    if (r.patterns.some(p => p.test(name))) return r
+  }
+  return null
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
@@ -221,9 +304,26 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
     audit.push({ tax_field: field, qbo_source: source, amount: rounded, confidence })
   }
 
-  const warn = (code: string, message: string, fix_hint?: string, affected_lines?: string[]) => {
-    warnings.push({ code, message, ...(fix_hint ? { fix_hint } : {}), ...(affected_lines ? { affected_lines } : {}) })
+  const warn = (
+    code: string,
+    message: string,
+    fix_hint?: string,
+    affected_lines?: string[],
+    decision?: Decision,
+  ) => {
+    warnings.push({
+      code, message,
+      ...(fix_hint ? { fix_hint } : {}),
+      ...(affected_lines ? { affected_lines } : {}),
+      ...(decision ? { decision } : {}),
+    })
   }
+
+  // Ambiguous leaves are collected during classification and emitted at the
+  // end so the decision payload can reference final input totals (e.g. a
+  // "subtract X from salaries_wages" override needs to know what
+  // salaries_wages would be without the leaf).
+  const ambiguousLeaves: Array<{ leaf: Leaf; rule: ReturnType<typeof matchAmbiguous> }> = []
 
   // ── Revenue ──
   // Treat parent-direct postings as leaves: Income (Total) already includes
@@ -270,10 +370,29 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
     }
     for (const l of contraRevenue) {
       if (/customer deposit|contingent/i.test(l.name)) {
+        const amt = Math.abs(Math.round(l.amount))
+        const currentRA = Math.round(Math.abs(contraSum))
         warn(
           'CONTINGENCY_IN_REVENUE',
           `"${l.name}" appears under Income at $${Math.round(l.amount).toLocaleString()}. Booked as L1b returns_allowances by default — this assumes the contingency was released to revenue.`,
           'If the deposit is still an unreleased liability, override returns_allowances and book as a liability on Schedule L instead.',
+          undefined,
+          {
+            question: `"${l.name}" is $${amt.toLocaleString()} of contingent customer deposits. Released to revenue this period (current treatment), or still an open liability?`,
+            default_label: 'Released — keep on L1b returns_allowances',
+            options: [
+              {
+                label: 'Released — keep on L1b returns_allowances',
+                summary: `Default. Treats the $${amt.toLocaleString()} as a refund of revenue. L1b stays at $${currentRA.toLocaleString()}.`,
+                overrides: {},
+              },
+              {
+                label: 'Still a liability — remove from L1b',
+                summary: `Override returns_allowances down by $${amt.toLocaleString()}; the deposit stays on Schedule L as a liability and never touches the income statement.`,
+                overrides: { returns_allowances: Math.max(0, currentRA - amt) },
+              },
+            ],
+          },
         )
       }
     }
@@ -371,6 +490,13 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
       if (/uncategorized/i.test(leaf.name)) uncategorizedExpenseLeaves.push(leaf)
       if (/payroll|salar|wages|contract labor|commissions/i.test(leaf.name)) payrollishDetected = true
 
+      // Tag ambiguous accounts (Contract Labor, Legal/Professional Fees,
+      // Insurance, Sales Commissions) so we can attach a Decision block
+      // after classification — the decision needs the post-classification
+      // totals to construct override numbers.
+      const ambig = matchAmbiguous(leaf.name)
+      if (ambig) ambiguousLeaves.push({ leaf, rule: ambig })
+
       const conf = leaf.parent_direct ? `parent_direct:${leaf.name}` : `rule`
       const sourcePath = leaf.path
 
@@ -452,13 +578,29 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
 
   if ((inputs.salaries_wages || payrollishDetected) && !inputs.officer_compensation) {
     const sw = (inputs.salaries_wages as number) || 0
+    const officerLine = form_type === '1120S' ? 'L7' : 'L12'
+    const salaryLine  = form_type === '1120S' ? 'L8' : 'L13'
     warn(
       'OFFICER_COMP_SPLIT_NEEDED',
-      `Payroll-type expenses detected${sw ? ` (salaries_wages = $${sw.toLocaleString()})` : ''} but no officer_compensation provided. QBO does not separate officer compensation from other salaries; 1120/1120S splits them (officer → L7 on 1120S / L12 on 1120, rest → L8 / L13). Currently $0 on the officer line.`,
+      `Payroll-type expenses detected${sw ? ` (salaries_wages = $${sw.toLocaleString()})` : ''} but no officer_compensation provided. QBO does not separate officer compensation from other salaries; 1120/1120S splits them (officer → ${officerLine} / rest → ${salaryLine}). Currently $0 on the officer line.`,
       `Override officer_compensation in inputs using the officer's W-2 Box 1 (reasonable salary standard for shareholder-employees).`,
-      form_type === '1120S'
-        ? ['deductions.L7_officer_comp', 'deductions.L8_salaries']
-        : ['deductions.L12_officer_comp', 'deductions.L13_salaries'],
+      [`deductions.${officerLine}_officer_comp`, `deductions.${salaryLine}_salaries`],
+      {
+        question: `QBO doesn't track officer status separately. How much of the $${sw.toLocaleString()} salaries_wages is officer compensation (W-2 Box 1 for shareholder-officers)?`,
+        default_label: 'No officer comp (default)',
+        options: [
+          {
+            label: 'No officer comp (default)',
+            summary: `Leave L${officerLine} = $0; entire $${sw.toLocaleString()} stays on L${salaryLine}. Risky for shareholder-officers — IRS audit hot spot for reasonable comp.`,
+            overrides: { officer_compensation: 0 },
+          },
+          {
+            label: 'Ask user for officer W-2 amount',
+            summary: 'Pass the officer\'s W-2 Box 1 wages; mapper will subtract from salaries_wages. The LLM should ask the user for the actual figure before resubmitting.',
+            overrides: { officer_compensation: '<ask user — W-2 Box 1>' as any, salaries_wages: '<sw - officer_compensation>' as any },
+          },
+        ],
+      },
     )
   }
 
@@ -478,12 +620,35 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
   }
 
   if (mealsLeaves.length) {
-    const total = mealsLeaves.reduce((s, l) => s + l.amount, 0)
+    const total = Math.round(mealsLeaves.reduce((s, l) => s + l.amount, 0))
+    const half = Math.round(total / 2)
+    const otherDed = (inputs.other_deductions as number) || 0
     warn(
       'MEALS_NEEDS_DISALLOWANCE',
-      `Meals/entertainment totaling $${Math.round(total).toLocaleString()} is in other_deductions at 100%. §274(n) limits the business-meal deduction to 50% (and disallows entertainment entirely).`,
-      `Reduce other_deductions by 50% of meals and 100% of entertainment, or pass a meals_50pct override if/when the engine adds that bucket.`,
+      `Meals/entertainment totaling $${total.toLocaleString()} is in other_deductions at 100%. §274(n) limits the business-meal deduction to 50% (and disallows entertainment entirely).`,
+      `Apply 50% disallowance: subtract half of meals from other_deductions. If any portion is entertainment, disallow 100%.`,
       ['deductions.other_deductions'],
+      {
+        question: `QBO meals/entertainment is $${total.toLocaleString()}. §274(n) caps the deduction at 50% for meals; entertainment is fully disallowed. Apply the 50% reduction now?`,
+        default_label: 'Keep 100% (default — preparer to fix at filing)',
+        options: [
+          {
+            label: 'Keep 100% (default — preparer to fix at filing)',
+            summary: `Leave other_deductions = $${otherDed.toLocaleString()}. Risk: overstates deductions by $${half.toLocaleString()}; preparer must remember to add back on M-1.`,
+            overrides: {},
+          },
+          {
+            label: 'Apply 50% meals disallowance',
+            summary: `Reduce other_deductions to $${(otherDed - half).toLocaleString()} ($${half.toLocaleString()} disallowed). Use when entire amount is meals (no entertainment).`,
+            overrides: { other_deductions: otherDed - half },
+          },
+          {
+            label: 'Disallow 100% (treat all as entertainment)',
+            summary: `Reduce other_deductions to $${(otherDed - total).toLocaleString()} ($${total.toLocaleString()} disallowed). Use only if all is entertainment.`,
+            overrides: { other_deductions: otherDed - total },
+          },
+        ],
+      },
     )
   }
 
@@ -505,6 +670,46 @@ export function buildCorporateInputsFromQbo(opts: MapperInput): MapperOutput {
       `QBO contains Uncategorized Income leaf(s) totaling $${Math.round(total).toLocaleString()}. Placeholder account — review transactions before filing.`,
       'Reclassify in QBO so the income lands on the correct revenue account.',
       ['income.L1a_gross_receipts'],
+    )
+  }
+
+  // ── Per-leaf RECLASS_AMBIGUOUS decisions ──
+  // For each Contract Labor / Legal Fees / Insurance / Sales Commissions
+  // leaf the mapper saw, emit a warning carrying a Decision the LLM can
+  // surface to the user. Each option's overrides field carries a complete,
+  // numerically-correct payload — the LLM doesn't have to do arithmetic.
+  for (const { leaf, rule } of ambiguousLeaves) {
+    if (!rule) continue
+    const amt = Math.round(leaf.amount)
+    const defaultBalance  = (inputs[rule.default_field] as number) || 0
+    const altOptions = rule.alternatives.map(alt => {
+      const altBalance = (inputs[alt.field] as number) || 0
+      return {
+        label: `Move to ${alt.field} (${alt.irs_line})`,
+        summary: alt.rationale,
+        overrides: {
+          [rule.default_field]: defaultBalance - amt,
+          [alt.field]:          altBalance + amt,
+        },
+      }
+    })
+    warn(
+      'RECLASS_AMBIGUOUS',
+      `"${leaf.path}" ($${amt.toLocaleString()}) was routed to ${rule.default_field} (${rule.default_irs_line}) by default. This is a judgment call — the same QBO account is sometimes classified differently depending on the entity's facts.`,
+      `Confirm the default with the user, or pass the chosen option's overrides to compute_return_from_qbo.`,
+      [`deductions.${rule.default_field}`],
+      {
+        question: `Where should QBO's "${leaf.name}" ($${amt.toLocaleString()}) land on the ${form_type}? The mapper auto-routed to ${rule.default_field} (${rule.default_irs_line}).`,
+        default_label: `Keep on ${rule.default_field} (${rule.default_irs_line})`,
+        options: [
+          {
+            label: `Keep on ${rule.default_field} (${rule.default_irs_line})`,
+            summary: `Default — applies the rule that matched the account name.`,
+            overrides: {},
+          },
+          ...altOptions,
+        ],
+      },
     )
   }
 
