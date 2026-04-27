@@ -1687,9 +1687,19 @@ router.post('/compute_from_qbo', async (req, res) => {
       || computeResp?.computed_data?.computed
       || computeResp?.result?.computed
       || {}
+    // For reconciliation we compare current-period book NOI to current-period
+    // taxable income BEFORE NOL. NOL is a carryforward from prior years —
+    // applying it would make the delta = nol_applied for any return that
+    // uses a carryforward, which is misleading (the deduction is real, just
+    // not a current-period book/tax difference).
+    //   1120S → ordinary_income_loss (no NOL deduction at the entity level)
+    //   1120  → taxable_income_before_nol
+    //   1040  → taxable_income (1040 NOL is a Schedule 1 line item; treat
+    //           same as 1120S for now)
     const formOrdinary: number =
-      typeof computed.ordinary_income_loss === 'number' ? computed.ordinary_income_loss
-      : typeof computed.taxable_income === 'number'      ? computed.taxable_income
+      typeof computed.ordinary_income_loss === 'number'      ? computed.ordinary_income_loss
+      : typeof computed.taxable_income_before_nol === 'number' ? computed.taxable_income_before_nol
+      : typeof computed.taxable_income === 'number'          ? computed.taxable_income
       : 0
     // Schedule K portfolio total (1120S) — interest + dividends + cap gains
     // + royalties + tax-exempt interest. For 1120 these flow to L4/L5 and
