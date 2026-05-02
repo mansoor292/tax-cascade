@@ -367,10 +367,33 @@ async function saveFieldMap(formName: string, year: number, fieldMap: FieldEntry
 export async function discoverForm(
   formName: string,
   year: number,
-  opts: { base64?: string; s3_key?: string } = {},
+  opts: { base64?: string; s3_key?: string; force?: boolean } = {},
 ): Promise<DiscoveryResult> {
   const result: DiscoveryResult = { status: 'pending', form_name: formName, tax_year: year }
   const userProvided = !!(opts.base64 || opts.s3_key)
+
+  // Idempotency guard: discovery is expensive (40-100 page IRS form PDF
+  // through Textract FORMS at ~$0.05/page = $2-5 each). The auto-trigger
+  // in routes/documents.ts already checks hasFieldMap() before calling
+  // here, but defending in depth costs a single import — and protects
+  // against ad-hoc / dev re-runs that would otherwise silently rebuild
+  // a working map.
+  if (!opts.force && !userProvided) {
+    try {
+      const { hasFieldMap } = await import('../maps/field_maps.js')
+      if (hasFieldMap(formName, year)) {
+        return {
+          status: 'success',
+          form_name: formName,
+          tax_year: year,
+          map_count: 0,
+          error: undefined,
+          // Surface that we skipped intentionally — calling code can log it.
+          skipped_reason: 'pdf_field_map already exists; pass {force:true} to rebuild',
+        } as any
+      }
+    } catch { /* if import fails, fall through and run discovery */ }
+  }
 
   try {
     // Create/update discovery record

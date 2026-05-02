@@ -248,20 +248,56 @@ router.post('/ingest', async (req, res) => {
     heic: 'image/heic', webp: 'image/webp',
   } as any)[ext] || 'application/octet-stream'
 
-  // Upload to S3 via boto3 (base64 decoded Python-side to avoid JS buffer bloat)
+  // Upload to S3 via boto3 (base64 decoded Python-side to avoid JS buffer
+  // bloat). Also computes the SHA-256 of the file content so we can
+  // dedupe against prior uploads — when the same PDF is uploaded twice
+  // (different filename, different s3_key, same bytes) the second
+  // upload reuses the cached textract_data and skips the AWS call
+  // entirely. Saves the full ~$0.065/page bill on repeated uploads.
   try {
     const uploadScript = `
-import boto3, base64
+import boto3, base64, hashlib
 s3 = boto3.client('s3', region_name='us-east-1')
 data = base64.b64decode('${base64}')
 s3.put_object(Bucket='${S3_BUCKET}', Key='${s3Key}', Body=data, ContentType='${contentType}')
-print(len(data))
+sha = hashlib.sha256(data).hexdigest()
+print(f"{len(data)}|{sha}")
 `
-    const size = parseInt(runPython(uploadScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }).trim()) || 0
+    const out = runPython(uploadScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }).trim()
+    const [sizeStr, contentHash] = out.split('|')
+    const size = parseInt(sizeStr) || 0
 
-    // Forward to /register by calling the same handler logic
-    req.body = { s3_key: s3Key, filename, file_size: size, entity_id }
-    // Continue to /register — we're now on the same code path
+    // Look for a prior document with the same content hash that already has
+    // a successful Textract extraction. We can copy its textract_data and
+    // skip the AWS call. The presigned-upload path doesn't go through here
+    // (it skips straight to registerHandler), so this dedupe only kicks in
+    // for inline-base64 uploads — which is fine, that's where the hash is
+    // already in hand.
+    let dedupeTextract: any = null
+    if (contentHash) {
+      const { data: priorDoc } = await supabase.from('document')
+        .select('textract_data, doc_type, tax_year, meta')
+        .eq('user_id', userId)
+        .eq('meta->>content_hash', contentHash)
+        .not('textract_data', 'is', null)
+        .order('extracted_at', { ascending: false })
+        .limit(1).maybeSingle()
+      if (priorDoc?.textract_data) {
+        await hydrate(supabase, priorDoc, ENCRYPTED_DOC_FIELDS)
+        dedupeTextract = priorDoc.textract_data
+      }
+    }
+
+    // Forward to /register — pass content_hash so registerHandler can stash
+    // it on the new row and (if dedupe hit) skip the Textract call.
+    req.body = {
+      s3_key: s3Key,
+      filename,
+      file_size: size,
+      entity_id,
+      content_hash: contentHash,
+      ...(dedupeTextract ? { _deduped_textract: dedupeTextract } : {}),
+    }
     return registerHandler(req, res)
   } catch (e: any) {
     res.status(500).json({ error: e.message })
@@ -271,10 +307,10 @@ print(len(data))
 // Factored so /ingest can reuse it
 const registerHandler = async (req: any, res: any) => {
   const userId = await getUser(req)
-  
+
   if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  const { s3_key, filename, file_size, entity_id } = req.body
+  const { s3_key, filename, file_size, entity_id, content_hash, _deduped_textract } = req.body
   if (!s3_key || !filename) return res.status(400).json({ error: 's3_key and filename required' })
 
   const ext = filename.split('.').pop()?.toLowerCase() || ''
@@ -334,16 +370,28 @@ Fall back to "1099" only if the variant is unclear.` }
     }
   }
 
-  // Run Textract (for PDFs/images)
-  let textractData: any = null
-  if (['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
+  // Run Textract (for PDFs/images). Three short-circuit paths first:
+  //   1. Dedupe — if /ingest matched the file's SHA-256 against a prior
+  //      document, skip the AWS call and reuse the cached extraction.
+  //   2. TABLES costs an extra ~$0.015/page on top of FORMS. Only request
+  //      it for prior returns where Schedule L (1120/1120S balance sheet)
+  //      actually needs table extraction. 1099s/W-2s/K-1s/receipts use
+  //      FORMS only — saves ~25% of the per-page Textract bill.
+  let textractData: any = _deduped_textract || null
+  if (textractData) {
+    console.log(`[ingest] reused cached textract_data via content_hash for ${filename}`)
+  }
+  if (!textractData && ['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
+    const needsTables = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s']
+      .includes(classification.doc_type || '')
+    const featureTypes = needsTables ? "['FORMS', 'TABLES']" : "['FORMS']"
     try {
       const txScript = `
 import boto3, json, time
 textract = boto3.client('textract', region_name='us-east-1')
 job = textract.start_document_analysis(
     DocumentLocation={'S3Object': {'Bucket': '${S3_BUCKET}', 'Name': '${s3_key}'}},
-    FeatureTypes=['FORMS', 'TABLES'])
+    FeatureTypes=${featureTypes})
 jid = job['JobId']
 while True:
     resp = textract.get_document_analysis(JobId=jid)
@@ -408,14 +456,17 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
     }
   }
 
-  // Save to DB (dual-write plaintext + _enc for meta + textract_data)
-  const metaPayload = {
+  // Save to DB (dual-write plaintext + _enc for meta + textract_data).
+  // Stash content_hash on meta so future uploads of the same file can
+  // dedupe against this row's textract_data without paying for AWS again.
+  const metaPayload: Record<string, any> = {
     size: file_size,
     entity_name: classification.entity_name || '',
     ein_or_ssn: classification.ein_or_ssn || '',
     summary: classification.summary || '',
     key_values: classification.key_values || {},
   }
+  if (content_hash) metaPayload.content_hash = content_hash
   const docEnc = await encryptedFields(supabase, userId,
     { meta: metaPayload, textract_data: textractData }, ENCRYPTED_DOC_FIELDS)
   const { data: doc, error } = await supabase.from('document').insert({
@@ -739,12 +790,36 @@ router.delete('/:id', async (req, res) => {
 // Run Textract
 router.post('/:id/extract', async (req, res) => {
   const userId = await getUser(req)
-  
+
   if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
   const { data: doc } = await supabase.from('document')
     .select('*').eq('id', req.params.id).eq('user_id', userId!).single()
   if (!doc) return res.status(404).json({ error: 'Not found' })
+  await hydrate(supabase, doc, ENCRYPTED_DOC_FIELDS)
+
+  // Idempotency: if we already have textract_data for this doc and the
+  // caller didn't explicitly ask for a refresh, return the cached result
+  // instead of paying for another AWS call. Prior returns are 30-50 pages
+  // @ ~$0.065/page = $2-3 each — easy to drop $50+ on accidental re-runs.
+  // Force a refresh with ?force=true.
+  const force = req.query.force === 'true' || req.body?.force === true
+  if (!force && doc.textract_data?.kvs?.length && doc.extracted_at) {
+    return res.json({
+      document_id: req.params.id,
+      extraction: doc.textract_data,
+      cached: true,
+      extracted_at: doc.extracted_at,
+      note: 'Returning cached extraction. Pass ?force=true to re-run Textract (charged per page).',
+    })
+  }
+
+  // Same TABLES gating as /ingest — only prior returns benefit; everything
+  // else uses FORMS-only. /extract is also called manually for re-runs of
+  // misclassified docs, so honor the doc_type that's now on the row.
+  const needsTables = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s']
+    .includes(doc.doc_type || '')
+  const featureTypes = needsTables ? "['FORMS', 'TABLES']" : "['FORMS']"
 
   try {
     const script = `
@@ -752,7 +827,7 @@ import boto3, json, time
 textract = boto3.client('textract', region_name='us-east-1')
 job = textract.start_document_analysis(
     DocumentLocation={'S3Object': {'Bucket': '${S3_BUCKET}', 'Name': '${doc.s3_path}'}},
-    FeatureTypes=['FORMS', 'TABLES'])
+    FeatureTypes=${featureTypes})
 jid = job['JobId']
 while True:
     resp = textract.get_document_analysis(JobId=jid)
