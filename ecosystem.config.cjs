@@ -18,18 +18,38 @@
 //   pm2 delete tax-api 2>/dev/null || true
 //   pm2 start /opt/tax-api/ecosystem.config.cjs
 //   pm2 save   # persist so pm2 resurrect picks it up after reboot
+// Why `--import tsx` and NOT the tsx bin shim:
+//
+// The shim (node_modules/.bin/tsx) SPAWNS A CHILD to run the script. Under
+// cluster mode that child is not a cluster worker, so it calls a plain
+// listen() instead of inheriting the master's shared socket. With two
+// workers the second child hit EADDRINUSE, exited 1, and pm2 respawned it —
+// 4.2 million times over 135 days, burning a core and leaving exactly ONE
+// worker actually serving. Silent, because pm2 restarts forever without
+// complaint and the surviving worker kept answering.
+//
+// `node --import tsx src/server.ts` loads TypeScript in-process, so the
+// pm2-forked worker IS the server and cluster socket sharing works.
+// Verified: under the shim the script runs in a child pid; under --import
+// it runs in the forked pid itself.
 module.exports = {
   apps: [{
     name: 'tax-api',
-    script: '/opt/tax-api/node_modules/.bin/tsx',  // hoisted in the workspace
-    args: 'src/server.ts',
+    script: 'src/server.ts',
+    interpreter: 'node',
+    // tsx resolves from the hoisted workspace root.
+    interpreter_args: '--import tsx --unhandled-rejections=warn',
     cwd: '/opt/tax-api/packages/api',
     instances: 'max',        // one worker per CPU core
     exec_mode: 'cluster',
     merge_logs: true,
     autorestart: true,
     max_memory_restart: '768M',
-    node_args: ['--unhandled-rejections=warn'],
+    // Guardrails so a future crash loop is LOUD instead of invisible: a
+    // worker that cannot stay up for 30s more than 10 times in a row is
+    // marked errored and left down, rather than respawned indefinitely.
+    min_uptime: '30s',
+    max_restarts: 10,
     env: {
       NODE_ENV: 'production',
     },
