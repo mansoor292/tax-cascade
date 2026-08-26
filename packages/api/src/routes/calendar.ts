@@ -66,16 +66,26 @@ async function refreshForUser(userId: string, entityId?: string) {
 
   // Which years already have a filed extension, so the generator can use the
   // extended due date rather than the original one.
-  const { data: extRows } = await supabase.from('tax_return')
-    .select('entity_id, tax_year, source')
+  const { data: returnRows } = await supabase.from('tax_return')
+    .select('entity_id, tax_year, source, status')
     .in('entity_id', ids)
-    .eq('source', 'extension')
 
   const extendedByEntity = new Map<string, number[]>()
-  for (const r of extRows || []) {
-    const list = extendedByEntity.get(r.entity_id) || []
-    list.push(r.tax_year)
-    extendedByEntity.set(r.entity_id, list)
+  // A year whose return is already filed is CLOSED: its estimated payments are
+  // history, not outstanding work. Without this the calendar opens with dozens
+  // of years-old "overdue" estimateds, which is both wrong and alarming.
+  const closedYears = new Map<string, Set<number>>()
+  for (const r of returnRows || []) {
+    if (r.source === 'extension') {
+      const list = extendedByEntity.get(r.entity_id) || []
+      list.push(r.tax_year)
+      extendedByEntity.set(r.entity_id, list)
+    }
+    if (r.source === 'filed_import' || r.status === 'filed') {
+      const set = closedYears.get(r.entity_id) || new Set<number>()
+      set.add(r.tax_year)
+      closedYears.set(r.entity_id, set)
+    }
   }
 
   const today = todayIso()
@@ -89,11 +99,26 @@ async function refreshForUser(userId: string, entityId?: string) {
       fiscal_year_end: e.fiscal_year_end,
       extended_years: extendedByEntity.get(e.id) || [],
     }
+    const closed = closedYears.get(e.id) || new Set<number>()
     for (const year of targetYears(today)) {
-      generated.push(...generateObligations(forCal, year))
+      for (const o of generateObligations(forCal, year)) {
+        // Closed year: drop everything except the return row itself, which is
+        // inserted below already marked done so the history stays legible.
+        if (closed.has(year) && o.kind !== 'return') continue
+        // Anything more than a full cycle past due is history the calendar
+        // cannot act on. A genuine recent miss still surfaces as overdue.
+        if (daysUntil(o.due_date, today) < -400) continue
+        generated.push(o)
+      }
     }
   }
   if (!generated.length) return { generated: 0, entities: entities.length }
+
+  /** A return obligation for an already-filed year lands as done, not pending. */
+  const initialStatus = (g: GeneratedObligation): 'pending' | 'done' =>
+    g.kind === 'return' && (closedYears.get(g.entity_id)?.has(g.tax_year) ?? false)
+      ? 'done'
+      : 'pending'
 
   const { data: existing } = await supabase.from('obligation')
     .select('id, entity_id, obligation_key')
@@ -120,6 +145,7 @@ async function refreshForUser(userId: string, entityId?: string) {
       jurisdiction: g.jurisdiction,
       form: g.form,
       extended: g.extended,
+      status: initialStatus(g),
       meta: g.note ? { note: g.note } : {},
     }))
 
