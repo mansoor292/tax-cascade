@@ -16,23 +16,11 @@
  *   fill_pdf, list_forms, get_field_map
  */
 
-// Load env before anything else imports process.env (crypto module, routes).
-// Three-layer precedence (first-loaded wins — dotenv default):
-//   1. .env.production (deploy-specific non-secrets: PORT, region, URLs)
-//   2. AWS SSM Parameter Store /tax-api/* (third-party secrets: QBO, Gemini…)
-//   3. .env (local dev baseline; skipped in prod if SSM won)
-// SSM is synchronous via aws CLI — keeps this block linear and lets route
-// modules capture env at module-load without a bootstrap refactor.
-import { config as loadEnv } from 'dotenv'
-if (process.env.NODE_ENV === 'production') {
-  loadEnv({ path: '.env.production' })
-}
-import { loadSsmParametersSync } from './lib/ssm.js'
-const __ssm = loadSsmParametersSync()
-if (__ssm.error) console.warn(`[ssm] load skipped: ${__ssm.error}`)
-else console.log(`[ssm] loaded ${__ssm.loaded.length} params (${__ssm.skipped.length} already set)`)
-loadEnv({ path: '.env' })
-if (process.env.DOTENV_CONFIG_PATH) loadEnv({ path: process.env.DOTENV_CONFIG_PATH })
+// MUST stay the first import. ESM hoists and fully evaluates every import
+// below before any statement in this file's body runs, so env loading cannot
+// live inline here — the route modules would already have captured their
+// fallbacks. See bootstrap_env.ts for the full explanation.
+import './bootstrap_env.js'
 
 import express from 'express'
 import cors from 'cors'
