@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Wrench,
   Bot,
+  CalendarClock,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -89,6 +90,12 @@ export function AppSidebar() {
                 <SidebarMenuButton render={<NavLink to="/app" end />}>
                   <LayoutDashboard className="shrink-0" />
                   <span>Dashboard</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton render={<NavLink to="/app/calendar" />}>
+                  <CalendarClock className="shrink-0" />
+                  <span>Calendar</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>

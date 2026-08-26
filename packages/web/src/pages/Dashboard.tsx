@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Building2, FileText, FlaskConical, Link2, Clock, ArrowRight, GitBranch, Bot } from 'lucide-react'
+import { Building2, FileText, FlaskConical, Link2, Clock, ArrowRight, GitBranch, Bot, CalendarClock } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useCalendar } from '@/hooks/use-calendar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -54,6 +55,8 @@ function fmtSigned(n: number): string {
 
 export default function Dashboard() {
   const nav = useNavigate()
+  const { data: calendar } = useCalendar()
+  const nextDue = calendar?.obligations?.find(o => o.status === 'pending')
   const [entities, setEntities] = useState<Entity[]>([])
   const [returns, setReturns] = useState<Return[]>([])
   const [scenarios, setScenarios] = useState<Scenario[]>([])
@@ -154,7 +157,33 @@ export default function Dashboard() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {/* Next deadline — the client-facing "due in N days" line */}
+        <Card className="cursor-pointer hover:border-primary/50 transition" onClick={() => nav('/app/calendar')}>
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-sm text-muted-foreground">
+                  {calendar?.overdue ? 'Overdue' : 'Next deadline'}
+                </p>
+                {calendar?.overdue ? (
+                  <p className="text-2xl font-bold text-red-400">{calendar.overdue}</p>
+                ) : nextDue ? (
+                  <>
+                    <p className={`text-2xl font-bold ${nextDue.days_until <= 30 ? 'text-amber-400' : ''}`}>
+                      {nextDue.days_until === 0 ? 'Today' : `${nextDue.days_until}d`}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">{nextDue.title}</p>
+                  </>
+                ) : (
+                  <p className="text-2xl font-bold">—</p>
+                )}
+              </div>
+              <CalendarClock className="w-8 h-8 text-muted-foreground/30 shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="cursor-pointer hover:border-primary/50 transition" onClick={() => nav('/app/entities')}>
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">

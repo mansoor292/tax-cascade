@@ -6,6 +6,7 @@ import OAuthAuthorize from '@/pages/OAuthAuthorize'
 import Login from '@/pages/Login'
 import Layout from '@/pages/Layout'
 import Dashboard from '@/pages/Dashboard'
+import Calendar from './pages/Calendar'
 import Entities from '@/pages/Entities'
 import EntityDetail from '@/pages/EntityDetail'
 import Scenarios from '@/pages/Scenarios'
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/app" element={<Guard><Layout /></Guard>}>
             <Route index element={<Dashboard />} />
+            <Route path="calendar" element={<Calendar />} />
             <Route path="scenarios" element={<Scenarios />} />
             <Route path="entities" element={<Entities />} />
             <Route path="entities/:id" element={<EntityDetail />} />

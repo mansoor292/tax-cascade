@@ -202,11 +202,11 @@ export default function DocumentsTab({ entityId }: Props) {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    {doc.textract_data && (
+                    {doc.textract_summary && (
                       <span className="text-xs text-muted-foreground mr-2 font-mono whitespace-nowrap">
-                        {doc.textract_data.num_pages || '?'}p
-                        {' · '}{doc.textract_data.kvs?.length || 0}kv
-                        {doc.textract_data.tables?.length ? ` · ${doc.textract_data.tables.length}t` : ''}
+                        {doc.textract_summary.num_pages || '?'}p
+                        {' · '}{doc.textract_summary.kv_count || 0}kv
+                        {doc.textract_summary.table_count ? ` · ${doc.textract_summary.table_count}t` : ''}
                       </span>
                     )}
                     {doc.doc_type?.startsWith('prior_return') && (

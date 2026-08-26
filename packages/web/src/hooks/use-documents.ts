@@ -10,11 +10,13 @@ export interface Document {
   tax_year?: number
   file_size?: number
   uploaded_at?: string
-  textract_data?: {
-    num_pages?: number
-    kvs?: { key: string; value: string }[]
-    tables?: Array<{ row_count?: number; col_count?: number }>
-  }
+  // The list endpoint returns counts only; the full Textract blob is available
+  // from GET /api/documents/:id or the list endpoint with ?full=1.
+  textract_summary?: {
+    num_pages?: number | null
+    kv_count?: number
+    table_count?: number
+  } | null
   textract_status?: string
   gemini_classification?: Record<string, unknown>
   meta?: {

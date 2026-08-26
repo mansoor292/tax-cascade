@@ -56,6 +56,7 @@ import qboRoutes from './routes/qbo.js'
 import stripeRoutes from './routes/stripe.js'
 import scratchRoutes from './routes/scratch.js'
 import intakeRoutes from './routes/intake.js'
+import calendarRoutes from './routes/calendar.js'
 import discoveryRoutes from './discovery/discovery_routes.js'
 import { mountMCP } from './mcp/tax-mcp.js'
 import { mountOAuth } from './mcp/oauth.js'
@@ -186,6 +187,7 @@ app.use('/api/qbo', qboRoutes)
 app.use('/api/stripe', stripeRoutes)
 app.use('/api/scratch', scratchRoutes)
 app.use('/api/intake', intakeRoutes)
+app.use('/api/calendar', calendarRoutes)
 app.use('/api/discover', discoveryRoutes)
 
 // ─── Health ───

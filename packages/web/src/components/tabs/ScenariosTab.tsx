@@ -9,9 +9,11 @@ import {
   FlaskConical,
   ArrowUpIcon,
   ArrowDownIcon,
+  X,
 } from 'lucide-react'
 import { type Entity } from '@/hooks/use-entities'
 import { useScenarios, type Scenario } from '@/hooks/use-scenarios'
+import { useSchema } from '@/hooks/use-schema'
 import { useReturns } from '@/hooks/use-returns'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -47,7 +49,7 @@ interface Props {
   onUpdate: () => void
 }
 
-export default function ScenariosTab({ entityId, entity: _entity, onUpdate }: Props) {
+export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
   const { scenarios, loading, create, compute, analyze, promote, getPdf } = useScenarios(entityId)
   const { returns } = useReturns(entityId)
   const [showNew, setShowNew] = useState(false)
@@ -55,15 +57,36 @@ export default function ScenariosTab({ entityId, entity: _entity, onUpdate }: Pr
   const [description, setDescription] = useState('')
   const [taxYear, setTaxYear] = useState(2024)
   const [baseReturnId, setBaseReturnId] = useState('')
+  // Adjustments are built one field at a time from the form schema. `adjRows`
+  // is the editable list; it's collapsed to the {key: number} shape the API
+  // wants on submit. Advanced mode keeps the old raw-JSON escape hatch for
+  // keys the schema doesn't expose.
+  const [adjRows, setAdjRows] = useState<Array<{ key: string; value: string }>>([{ key: '', value: '' }])
+  const [rawMode, setRawMode] = useState(false)
   const [adjJson, setAdjJson] = useState('{\n  \n}')
+  const { schema } = useSchema(entity?.form_type, taxYear)
   const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
+  const buildAdjustments = (): Record<string, number> => {
+    if (rawMode) return JSON.parse(adjJson)
+    const out: Record<string, number> = {}
+    for (const r of adjRows) {
+      if (!r.key || r.value.trim() === '') continue
+      // Tolerate "$1,500,000" and "1500000" alike — accountants paste both.
+      const n = Number(r.value.replace(/[$,\s]/g, ''))
+      if (Number.isNaN(n)) throw new Error(`"${r.value}" is not a number`)
+      out[r.key] = n
+    }
+    if (Object.keys(out).length === 0) throw new Error('Add at least one adjustment')
+    return out
+  }
+
   const handleCreate = async () => {
     setCreating(true)
     try {
-      const adj = JSON.parse(adjJson)
+      const adj = buildAdjustments()
       const scenario = await create({
         entity_id: entityId,
         name,
@@ -79,6 +102,7 @@ export default function ScenariosTab({ entityId, entity: _entity, onUpdate }: Pr
       setShowNew(false)
       setName('')
       setDescription('')
+      setAdjRows([{ key: '', value: '' }])
       setAdjJson('{\n  \n}')
       onUpdate()
     } catch (e: unknown) {
@@ -312,14 +336,85 @@ export default function ScenariosTab({ entityId, entity: _entity, onUpdate }: Pr
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Adjustments (JSON)</Label>
-              <Textarea
-                value={adjJson}
-                onChange={e => setAdjJson(e.target.value)}
-                rows={6}
-                className="font-mono text-sm"
-                placeholder='{ "gross_receipts": 1500000 }'
-              />
+              <div className="flex items-center justify-between">
+                <Label>Adjustments</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-7"
+                  onClick={() => setRawMode(!rawMode)}
+                >
+                  {rawMode ? 'Use fields' : 'Advanced (JSON)'}
+                </Button>
+              </div>
+
+              {rawMode ? (
+                <Textarea
+                  value={adjJson}
+                  onChange={e => setAdjJson(e.target.value)}
+                  rows={6}
+                  className="font-mono text-sm"
+                  placeholder='{ "gross_receipts": 1500000 }'
+                />
+              ) : (
+                <div className="space-y-2">
+                  {adjRows.map((row, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <Select
+                        value={row.key}
+                        onValueChange={v =>
+                          setAdjRows(rows => rows.map((r, j) => (j === i ? { ...r, key: v ?? '' } : r)))
+                        }
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Choose a line…" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-72">
+                          {(schema?.fields || []).map(f => (
+                            <SelectItem key={f.key} value={f.key}>
+                              {f.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        className="w-40"
+                        inputMode="decimal"
+                        placeholder="0"
+                        value={row.value}
+                        onChange={e =>
+                          setAdjRows(rows =>
+                            rows.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)),
+                          )
+                        }
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        disabled={adjRows.length === 1}
+                        onClick={() => setAdjRows(rows => rows.filter((_, j) => j !== i))}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setAdjRows(rows => [...rows, { key: '', value: '' }])}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add adjustment
+                  </Button>
+                  {!schema && (
+                    <p className="text-xs text-muted-foreground">
+                      No field list for {entity?.form_type} {taxYear} — use Advanced (JSON).
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

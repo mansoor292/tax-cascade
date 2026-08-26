@@ -720,6 +720,11 @@ print(base64.b64encode(obj['Body'].read()).decode())
 
 // List documents — includes presigned download_url per doc so callers
 // don't have to round-trip through /:id/download.
+//
+// Textract payloads are stripped by default. They dominate the response:
+// on a 22-document account, textract_data + textract_data_enc were 98% of
+// a 4.9 MB body, which overflows an MCP client's context on the first call.
+// Callers that need the raw KVs fetch one doc via GET /:id, or pass ?full=1.
 router.get('/', async (req, res) => {
   const userId = await getUser(req)
 
@@ -756,10 +761,30 @@ print(json.dumps(out))
     }
   }
 
-  const documents = docs.map((d: any) => ({
-    ...d,
-    download_url: d.s3_path ? urlMap[d.s3_path] || null : null,
-  }))
+  const full = req.query.full === '1' || req.query.full === 'true'
+
+  const documents = docs.map((d: any) => {
+    const base = {
+      ...d,
+      download_url: d.s3_path ? urlMap[d.s3_path] || null : null,
+    }
+    if (full) return base
+
+    // Replace the Textract blob with the three counts the UI actually renders,
+    // and drop the ciphertext columns — they're never read client-side.
+    const t = d.textract_data
+    const { textract_data, textract_data_enc, meta_enc, ...rest } = base
+    return {
+      ...rest,
+      textract_summary: t
+        ? {
+            num_pages: t.num_pages ?? null,
+            kv_count: t.kvs?.length ?? 0,
+            table_count: t.tables?.length ?? 0,
+          }
+        : null,
+    }
+  })
 
   res.json({ documents })
 })

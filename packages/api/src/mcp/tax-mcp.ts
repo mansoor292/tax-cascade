@@ -180,8 +180,23 @@ function createServer(apiKey: string): McpServer {
   const call = (method: string, path: string, body?: any) => api(apiKey, method, path, body)
 
   // ─── Tool: list_entities ───
-  server.tool('list_entities', 'List all tax entities and their tax_return rows (computed/parsed — NOT filed PDFs). Each return carries a `source` field: `filed_import` (parsed from an uploaded prior-year PDF), `proforma` (current-year work), `extension`, `amendment`. For the signed/filed PDF itself, use list_documents filtered by doc_type starting with `prior_return_`.', {}, async () => {
-    return text(await call('GET', '/api/entities'))
+  // Trimmed at this layer, not in the route — the web app reads the full shape
+  // from /api/entities. Dropped here: ciphertext columns, user_id, and the
+  // 30-key Schedule K yes/no questionnaire, none of which are useful to a model
+  // browsing the account. get_entity still returns everything for one entity.
+  server.tool('list_entities', 'List all tax entities and their tax_return rows (computed/parsed — NOT filed PDFs). Each return carries a `source` field: `filed_import` (parsed from an uploaded prior-year PDF), `proforma` (current-year work), `extension`, `amendment`. Summary view — call get_entity for full detail including the Schedule K questionnaire. For the signed/filed PDF itself, use list_documents filtered by doc_type starting with `prior_return_`.', {}, async () => {
+    const resp = await call('GET', '/api/entities')
+    if (!resp?.entities) return text(resp)
+    return text({
+      entities: resp.entities.map((e: any) => {
+        const { ein_enc, ein_hash, user_id, meta, ...rest } = e
+        const { sched_k, ...metaRest } = meta || {}
+        return {
+          ...rest,
+          meta: sched_k ? { ...metaRest, sched_k: '(omitted — see get_entity)' } : metaRest,
+        }
+      }),
+    })
   })
 
   // ─── Tool: get_schema ───
@@ -564,7 +579,7 @@ Present in plain English using the \`description\` field, grouped by category. E
   })
 
   // ─── Tool: list_documents ───
-  server.tool('list_documents', 'List all uploaded documents (authoritative source for filed/signed PDFs). Documents with doc_type starting with `prior_return_` (prior_return_1040/1120/1120s) ARE the filed returns the user uploaded. Each doc includes a presigned download_url (1-hour expiry). For the parsed line-by-line data from those filed returns, see the matching tax_return row via list_entities (source=filed_import).', {}, async () => {
+  server.tool('list_documents', 'List all uploaded documents (authoritative source for filed/signed PDFs). Documents with doc_type starting with `prior_return_` (prior_return_1040/1120/1120s) ARE the filed returns the user uploaded. Each doc includes a presigned download_url (1-hour expiry) and a `textract_summary` (page/KV/table counts) — the raw Textract key-values are NOT included here because they are far too large; fetch them for one document at a time via get_pdf/document detail, or use fill_extraction_gaps which reads them server-side. For the parsed line-by-line data from those filed returns, see the matching tax_return row via list_entities (source=filed_import).', {}, async () => {
     return text(await call('GET', '/api/documents'))
   })
 
@@ -754,6 +769,50 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
     }
     return text({ error: 'Invalid operation' })
   })
+
+  // ─── Tool: tax_calendar ───
+  // The deadline surface. Obligations are generated from rules, not authored,
+  // so this is accurate the moment an entity exists.
+  server.tool('tax_calendar',
+    'List upcoming and overdue tax obligations across all entities — return due dates, extension deadlines, quarterly estimated payments, and state filings (Florida annual report and F-1120 where applicable). Due dates account for weekends and federal holidays, and reflect filed extensions automatically. Each item carries days_until (negative = overdue) and urgency (overdue / due_soon / upcoming). Use this to answer "what is due next", "did we miss anything", or to build a client-facing status update. Defaults to everything pending; pass within_days to narrow to a horizon (overdue items are always included).',
+    {
+      entity_id: z.string().optional().describe('Limit to one entity. Omit for the whole account.'),
+      within_days: z.number().optional().describe('Only show obligations due within this many days. Overdue items are always shown regardless.'),
+      include_dismissed: z.boolean().optional().describe('Include obligations marked not-applicable. Default false.'),
+    },
+    async ({ entity_id, within_days, include_dismissed }) => {
+      const qs = new URLSearchParams()
+      if (entity_id) qs.set('entity_id', entity_id)
+      if (within_days !== undefined) qs.set('within_days', String(within_days))
+      if (include_dismissed) qs.set('include_dismissed', 'true')
+      const q = qs.toString()
+      return text(await call('GET', `/api/calendar${q ? `?${q}` : ''}`))
+    })
+
+  // ─── Tool: update_obligation ───
+  server.tool('update_obligation',
+    'Mark a tax calendar obligation done or not-applicable, or record the amount paid and a note. Use status="done" when a filing or payment has been made, and status="dismissed" when it genuinely does not apply to this entity (for example an S-corp that owes no Florida F-1120). Generated obligations cannot be deleted — dismiss them instead.',
+    {
+      obligation_id: z.string().describe('Obligation UUID from tax_calendar'),
+      status: z.enum(['pending', 'done', 'dismissed']).optional().describe('done = filed/paid. dismissed = not applicable to this entity.'),
+      amount: z.number().optional().describe('Amount paid, for estimated payments'),
+      notes: z.string().optional().describe('Free-text note — confirmation number, who filed it, why it was dismissed'),
+    },
+    async ({ obligation_id, ...patch }) => {
+      return text(await call('PATCH', `/api/calendar/${obligation_id}`, patch))
+    })
+
+  // ─── Tool: add_obligation ───
+  server.tool('add_obligation',
+    'Add a custom deadline to the tax calendar that the rules engine does not generate — an insurance renewal, a business licence, a trust review, a board meeting. For tax filings and estimated payments, do NOT use this: those are generated automatically and adding them by hand creates duplicates.',
+    {
+      entity_id: z.string().describe('Entity UUID this deadline belongs to'),
+      title: z.string().describe('What is due, in plain language'),
+      due_date: z.string().describe('Due date as YYYY-MM-DD'),
+      notes: z.string().optional().describe('Detail — policy number, who owns it, what happens if missed'),
+      amount: z.number().optional().describe('Amount due, if there is one'),
+    },
+    async (params) => text(await call('POST', '/api/calendar', params)))
 
   // ─── Tool: request_form ───
   // Response includes the live discovery status record inline (folds in the old check_form_status tool).
