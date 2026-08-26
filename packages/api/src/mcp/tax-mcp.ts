@@ -579,8 +579,10 @@ Present in plain English using the \`description\` field, grouped by category. E
   })
 
   // ─── Tool: list_documents ───
-  server.tool('list_documents', 'List all uploaded documents (authoritative source for filed/signed PDFs). Documents with doc_type starting with `prior_return_` (prior_return_1040/1120/1120s) ARE the filed returns the user uploaded. Each doc includes a presigned download_url (1-hour expiry) and a `textract_summary` (page/KV/table counts) — the raw Textract key-values are NOT included here because they are far too large; fetch them for one document at a time via get_pdf/document detail, or use fill_extraction_gaps which reads them server-side. For the parsed line-by-line data from those filed returns, see the matching tax_return row via list_entities (source=filed_import).', {}, async () => {
-    return text(await call('GET', '/api/documents'))
+  server.tool('list_documents', 'List all uploaded documents (authoritative source for filed/signed PDFs). Documents with doc_type starting with `prior_return_` (prior_return_1040/1120/1120s) ARE the filed returns the user uploaded. Each doc carries a `textract_summary` (page/KV/table counts); the raw Textract key-values are NOT included because they are far too large — use fill_extraction_gaps, which reads them server-side. Presigned download links are omitted by default (they were the majority of the response); pass include_download_urls when the user actually needs a link. For the parsed line-by-line data from those filed returns, see the matching tax_return row via list_entities (source=filed_import).', {
+    include_download_urls: z.boolean().optional().describe('Include a presigned download_url per document (1-hour expiry). Off by default — only ask for it when the user wants to open or download a file.'),
+  }, async ({ include_download_urls }) => {
+    return text(await call('GET', `/api/documents${include_download_urls ? '?urls=1' : ''}`))
   })
 
   // ─── Tool: fill_extraction_gaps ───

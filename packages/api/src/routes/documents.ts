@@ -739,9 +739,16 @@ router.get('/', async (req, res) => {
 
   const docs = data || []
   await hydrateAll(supabase, docs, ENCRYPTED_DOC_FIELDS)
-  const keys = docs.map((d: any) => d.s3_path).filter(Boolean)
 
-  // Batch-generate presigned URLs for all docs in one boto3 call
+  const full = req.query.full === '1' || req.query.full === 'true'
+  const wantUrls = full || req.query.urls === '1' || req.query.urls === 'true'
+
+  const keys = wantUrls ? docs.map((d: any) => d.s3_path).filter(Boolean) : []
+
+  // Batch-generate presigned URLs for all docs in one boto3 call.
+  // Skipped unless asked for: the URLs were 60% of the response body and the
+  // web app never used them (it calls GET /:id/download on demand), so this
+  // also removes a boto3 subprocess from every list request.
   let urlMap: Record<string, string> = {}
   if (keys.length) {
     try {
@@ -761,12 +768,10 @@ print(json.dumps(out))
     }
   }
 
-  const full = req.query.full === '1' || req.query.full === 'true'
-
   const documents = docs.map((d: any) => {
     const base = {
       ...d,
-      download_url: d.s3_path ? urlMap[d.s3_path] || null : null,
+      ...(wantUrls ? { download_url: d.s3_path ? urlMap[d.s3_path] || null : null } : {}),
     }
     if (full) return base
 
