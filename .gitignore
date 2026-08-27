@@ -15,3 +15,8 @@ packages/api/.env.production
 
 # Supabase CLI session state — never commit, regenerated on `supabase link`
 packages/api/supabase/.temp/
+
+# Playwright
+packages/web/test-results/
+packages/web/playwright-report/
+packages/web/blob-report/
