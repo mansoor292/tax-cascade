@@ -11,7 +11,9 @@
     "verify": "tsx scripts/verify_pipeline.ts",
     "fill:1040": "tsx src/builders/build_1040.ts",
     "fill:1120": "tsx src/builders/build_1120.ts",
-    "fill:1120s": "tsx src/builders/build_1120s.ts"
+    "fill:1120s": "tsx src/builders/build_1120s.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.1033.0",
@@ -35,6 +37,7 @@
     "@types/node": "^22.13.10",
     "@types/uuid": "^10.0.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^4.1.11"
   }
 }

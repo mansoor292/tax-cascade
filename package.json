@@ -10,7 +10,9 @@
     "api:start": "npm run start -w packages/api",
     "web:dev": "npm run dev -w packages/web",
     "web:build": "npm run build -w packages/web",
-    "dev": "concurrently \"npm run api:dev\" \"npm run web:dev\""
+    "dev": "concurrently \"npm run api:dev\" \"npm run web:dev\"",
+    "test": "npm run test -w packages/api",
+    "test:e2e": "npm run test:e2e -w packages/web"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"
