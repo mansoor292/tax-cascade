@@ -113,14 +113,15 @@ test.describe('document upload', () => {
     await page.setInputFiles('input[type="file"]', 'e2e/fixtures/sample-1040.pdf')
 
     // Extraction runs on register, so allow generous time.
-    await expect(page.getByText('sample-1040.pdf')).toBeVisible({ timeout: 90_000 })
+    // exact: the success toast also contains the filename; we want the LIST row.
+    await expect(page.getByText('sample-1040.pdf', { exact: true })).toBeVisible({ timeout: 90_000 })
     await expect(page.getByText('No documents uploaded yet.')).toHaveCount(0)
 
     // And it must SURVIVE a reload — proving it was attached, not just held
     // in local state by the component that uploaded it.
     await page.reload()
     await page.getByRole('tab', { name: /Documents/i }).click()
-    await expect(page.getByText('sample-1040.pdf')).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText('sample-1040.pdf', { exact: true })).toBeVisible({ timeout: 30_000 })
 
     await deleteUserByEmail(email2)
   })
