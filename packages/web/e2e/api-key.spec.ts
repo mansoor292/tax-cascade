@@ -40,8 +40,12 @@ test.describe('API keys', () => {
     await page.getByPlaceholder('e.g. Development, Claude MCP').fill('Claude Cowork')
     await page.getByRole('button', { name: 'Create', exact: true }).click()
 
-    // The key is shown exactly once, on success. Its prefix is txk_.
-    await expect(page.getByText(/txk_/)).toBeVisible({ timeout: 20_000 })
+    // The key is shown exactly once, on success, in a read-only field so it
+    // can be copied. It is an input VALUE, not page text — getByText will not
+    // see it.
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('heading', { name: 'API Key Created' })).toBeVisible({ timeout: 20_000 })
+    await expect(dialog.getByRole('textbox')).toHaveValue(/^txk_/)
 
     // The reported symptom, asserted directly.
     await expect(page.getByText('404', { exact: true })).toHaveCount(0)
