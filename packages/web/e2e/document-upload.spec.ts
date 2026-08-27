@@ -75,4 +75,53 @@ test.describe('document upload', () => {
     ).toBeUndefined()
     expect(result.ok, `S3 rejected the upload: HTTP ${result.status}`).toBe(true)
   })
+
+  test('an uploaded document is attached to the entity and visible afterwards', async ({ page }) => {
+    /*
+     * The second half of the reported problem: after the transport was fixed,
+     * the app said "Uploaded 2022 1040 Tax Return.pdf" and the Documents tab
+     * still read "No documents uploaded yet".
+     *
+     * The upload hook knows which entity it is working in — it uses that id to
+     * FILTER the list — but never sent it when registering the document. So
+     * every upload was stored with entity_id null and then filtered out of the
+     * very view that created it. The file was safe the whole time; it was
+     * simply attached to nothing.
+     *
+     * Telling a user their tax return uploaded successfully and then not
+     * showing it is the worst failure of the three, because they have no way
+     * to tell whether we hold their document.
+     *
+     * This one DOES register, which runs extraction, so it is the only test in
+     * the suite that costs anything. One small page, and it is the only way to
+     * cover the attachment.
+     */
+    const email2 = testEmail('upload-attach')
+    await signUpThroughUi(page, email2)
+    await expect(page).toHaveURL(/\/app/, { timeout: 20_000 })
+
+    // A document has nowhere to attach without an entity.
+    await page.goto('/app/entities')
+    await page.getByRole('button', { name: /Create Entity|New Entity|Create/ }).first().click()
+    await page.getByPlaceholder('e.g. John Smith or Acme Corp').fill('Upload Test Individual')
+    await page.getByRole('button', { name: 'Create', exact: true }).click()
+    await page.getByText('Upload Test Individual').first().click()
+
+    await page.getByRole('tab', { name: /Documents/i }).click()
+    await expect(page.getByText('No documents uploaded yet.')).toBeVisible()
+
+    await page.setInputFiles('input[type="file"]', 'e2e/fixtures/sample-1040.pdf')
+
+    // Extraction runs on register, so allow generous time.
+    await expect(page.getByText('sample-1040.pdf')).toBeVisible({ timeout: 90_000 })
+    await expect(page.getByText('No documents uploaded yet.')).toHaveCount(0)
+
+    // And it must SURVIVE a reload — proving it was attached, not just held
+    // in local state by the component that uploaded it.
+    await page.reload()
+    await page.getByRole('tab', { name: /Documents/i }).click()
+    await expect(page.getByText('sample-1040.pdf')).toBeVisible({ timeout: 30_000 })
+
+    await deleteUserByEmail(email2)
+  })
 })

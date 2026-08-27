@@ -64,9 +64,19 @@ export function useDocuments(entityId?: string) {
     })
 
     onProgress?.('Classifying and extracting...')
+    // entity_id MUST be sent. This hook already knows the entity — it uses
+    // entityId to filter the list below — but register was never told, so
+    // every upload was stored with entity_id null and then filtered out of
+    // the very view that uploaded it. The file was safe; it was attached to
+    // nothing, and the user was shown a success toast and an empty list.
     const doc = await api<{ document: Document }>('/api/documents/register', {
       method: 'POST',
-      body: JSON.stringify({ s3_key: presign.s3_key, filename: file.name, file_size: file.size }),
+      body: JSON.stringify({
+        s3_key: presign.s3_key,
+        filename: file.name,
+        file_size: file.size,
+        entity_id: entityId,
+      }),
     })
 
     await load()
