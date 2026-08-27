@@ -23,6 +23,14 @@ import {
  * if the SDK's derivation rules change, or ours drift from the spec, this
  * fails without anyone having to guess a URL again.
  */
+
+/** Streamable HTTP may answer as SSE or plain JSON — accept either. */
+function parseMcp(body: string): any {
+  if (!body.startsWith('event:')) return JSON.parse(body)
+  const line = body.split('\n').find(l => l.startsWith('data: ')) || ''
+  return JSON.parse(line.slice(6))
+}
+
 const MCP_URL = (base: string) => `${base}/mcp`
 
 test.describe('MCP discovery, as a real client performs it', () => {
@@ -126,6 +134,53 @@ test.describe('MCP discovery, as a real client performs it', () => {
       expect(Array.isArray(tools), `no tool list returned: ${body.slice(0, 200)}`).toBe(true)
       expect(tools.length).toBeGreaterThan(10)
       expect(tools.map((t: any) => t.name)).toContain('list_entities')
+    })
+
+
+    test('initialize declares the tools capability', async ({ request, baseURL }) => {
+      // If a server does not advertise tools, a client has no reason to
+      // surface them as callable. Reported symptom was "connected as an MCP
+      // source but not available as a direct tool", so this is worth pinning.
+      const { apiKey } = await createUserWithApiKey(testEmail('mcpcap'))
+      const res = await request.post(`${baseURL}/mcp`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+        },
+        data: {
+          jsonrpc: '2.0', id: 1, method: 'initialize',
+          params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } },
+        },
+      })
+      expect(res.status()).toBe(200)
+      const json = parseMcp(await res.text())
+      expect(json.result?.capabilities?.tools, 'server must advertise a tools capability').toBeTruthy()
+      expect(json.result?.serverInfo?.name).toBeTruthy()
+      expect(json.result?.protocolVersion).toBeTruthy()
+    })
+
+    test('a tool can actually be CALLED, not merely listed', async ({ request, baseURL }) => {
+      // tools/list succeeding proves nothing about invocation. This is the
+      // exact request behind "list my tax entities" — the thing that failed.
+      const { apiKey } = await createUserWithApiKey(testEmail('mcpcall'))
+      const res = await request.post(`${baseURL}/mcp`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+        },
+        data: {
+          jsonrpc: '2.0', id: 2, method: 'tools/call',
+          params: { name: 'list_entities', arguments: {} },
+        },
+      })
+      expect(res.status()).toBe(200)
+      const json = parseMcp(await res.text())
+      expect(json.error, `tools/call returned an error: ${JSON.stringify(json.error)}`).toBeUndefined()
+      // A brand-new account has no entities; an empty list is the right answer.
+      const text = json.result?.content?.[0]?.text || ''
+      expect(JSON.parse(text)).toHaveProperty('entities')
     })
 
     test('the 401 exposes WWW-Authenticate to browser clients', async ({ request, baseURL }) => {
