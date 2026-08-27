@@ -12,7 +12,12 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 
 const MCP_URL = 'https://fin.catipult.ai/mcp'
-const CLAUDE_ADD_CONNECTOR = 'https://claude.ai/settings/connectors?modal=add-custom-connector'
+// Deliberately NOT a deep link into a specific dialog. The old
+// ?modal=add-custom-connector URL now lands on a dead-end page reading
+// "Connectors have moved to Customize", which strands a new user at the one
+// step they cannot work around. Anthropic reorganises this area, so we link
+// to the stable settings root and spell out the path in words.
+const CLAUDE_SETTINGS = 'https://claude.ai/settings'
 
 const TOOL_HIGHLIGHTS = [
   { name: 'list_entities',            desc: 'Pull all your tax entities + return history' },
@@ -74,17 +79,21 @@ export default function ConnectClaude() {
           <div className="flex gap-4">
             <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-mono text-primary">2</div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium mb-2">Open Claude's Add Custom Connector dialog</p>
+              <p className="text-sm font-medium mb-2">Add it as a custom connector in Claude</p>
               <a
-                href={CLAUDE_ADD_CONNECTOR}
+                href={CLAUDE_SETTINGS}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => navigator.clipboard.writeText(MCP_URL)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-input bg-background hover:bg-accent text-sm font-medium transition"
               >
-                Open dialog <ExternalLink className="h-3.5 w-3.5" />
+                Open Claude settings <ExternalLink className="h-3.5 w-3.5" />
               </a>
-              <p className="text-xs text-muted-foreground mt-1.5">Opens in a new tab. Paste the URL you just copied.</p>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Opens in a new tab. Go to <span className="font-medium">Customize → Connectors → Add custom connector</span>,
+                then paste the URL you just copied. (Claude has moved this between Settings and Customize before — if you
+                don't see Connectors in one, check the other.)
+              </p>
             </div>
           </div>
 

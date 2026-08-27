@@ -129,4 +129,19 @@ test.describe('MCP connector handshake', () => {
     expect(res?.status()).toBeLessThan(400)
     await expect(page.locator('body')).not.toBeEmpty()
   })
+
+  test('the setup instructions do not link to the retired connector dialog', async ({ page, baseURL }) => {
+    // claude.ai moved connectors under Customize; the old deep link
+    // ?modal=add-custom-connector now lands on a dead-end page. That strands a
+    // new user at the one step they cannot work around, and it fails silently
+    // because our page still looks correct. Third-party URLs rot, so assert we
+    // are not shipping a known-dead one.
+    await page.goto(`${baseURL}/app/connect-claude`)
+    const stale = page.locator('a[href*="modal=add-custom-connector"]')
+    await expect(stale, 'links to the retired Claude connector dialog').toHaveCount(0)
+
+    // The landing page carries the same instructions.
+    await page.goto(`${baseURL}/`)
+    await expect(page.locator('a[href*="modal=add-custom-connector"]')).toHaveCount(0)
+  })
 })

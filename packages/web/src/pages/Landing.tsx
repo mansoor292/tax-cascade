@@ -116,7 +116,7 @@ export default function Landing() {
               </li>
             </ol>
             <a
-              href="https://claude.ai/settings/connectors?modal=add-custom-connector"
+              href="https://claude.ai/settings"
               target="_blank" rel="noopener"
               onClick={copyMcp}
               className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-4 py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"
@@ -433,7 +433,7 @@ export default function Landing() {
             </div>
             <ol className="space-y-3 text-sm text-zinc-400">
               <li className="flex gap-3"><span className="text-blue-400 font-mono">1.</span> Copy the URL above</li>
-              <li className="flex gap-3"><span className="text-blue-400 font-mono">2.</span> <a href="https://claude.ai/settings/connectors?modal=add-custom-connector" target="_blank" rel="noopener" className="text-blue-400 hover:underline">Open Claude's Add Custom Connector dialog</a> and paste it</li>
+              <li className="flex gap-3"><span className="text-blue-400 font-mono">2.</span> <a href="https://claude.ai/settings" target="_blank" rel="noopener" className="text-blue-400 hover:underline">Open Claude settings → Customize → Connectors → Add custom connector</a> and paste it</li>
               <li className="flex gap-3"><span className="text-blue-400 font-mono">3.</span> Sign in with OAuth</li>
               <li className="flex gap-3"><span className="text-blue-400 font-mono">4.</span> Ask Claude: "Show me my tax entities"</li>
             </ol>
