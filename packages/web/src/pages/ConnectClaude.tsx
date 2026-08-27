@@ -151,7 +151,7 @@ export default function ConnectClaude() {
             <div className="rounded-lg border bg-card p-3">
               <Key className="h-4 w-4 text-primary mb-2" />
               <p className="font-medium mb-1">OAuth 2.0 with PKCE</p>
-              <p className="text-muted-foreground">No shared API keys. The access token is scoped to your account.</p>
+              <p className="text-muted-foreground">Claude never sees your password. Authorising creates an access token that works only for your account.</p>
             </div>
             <div className="rounded-lg border bg-card p-3">
               <Shield className="h-4 w-4 text-primary mb-2" />
@@ -161,7 +161,7 @@ export default function ConnectClaude() {
             <div className="rounded-lg border bg-card p-3">
               <Bot className="h-4 w-4 text-primary mb-2" />
               <p className="font-medium mb-1">You control the session</p>
-              <p className="text-muted-foreground">Revoke Claude's access anytime from your Claude settings — the API key stays in our database and you keep control.</p>
+              <p className="text-muted-foreground">Revoke Claude's access at any time — from Claude's settings, or from Settings here. Nothing you revoke keeps working.</p>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">

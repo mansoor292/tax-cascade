@@ -63,3 +63,24 @@
   from   = "/*"
   to     = "/index.html"
   status = 200
+
+# ─── OAuth discovery metadata content type ───
+# public/.well-known/oauth-* are extensionless files, so Netlify serves them as
+# text/plain. RFC 9728 requires application/json, and a strict MCP client
+# rejects the document and reports the whole server as unreachable — with
+# nothing to indicate a content-type was the reason.
+#
+# Fixed with headers rather than by proxying to the API: the API builds these
+# documents from the REQUEST HOST, so proxied it advertises
+# tax-api.catalogshub.com as the issuer, while /oauth/token and /oauth/register
+# are Netlify Functions that exist only on fin.catipult.ai. The static copies
+# carry the correct public URLs; only their content type was wrong.
+[[headers]]
+  for = "/.well-known/oauth-authorization-server"
+  [headers.values]
+    Content-Type = "application/json; charset=utf-8"
+
+[[headers]]
+  for = "/.well-known/oauth-protected-resource"
+  [headers.values]
+    Content-Type = "application/json; charset=utf-8"
