@@ -1,0 +1,984 @@
+{
+  "_note": "Structure captured from a real QBO report; all amounts replaced with deterministic synthetic values. See scripts/extract_qbo_fixture.ts.",
+  "report_type": "profit-and-loss",
+  "accounting_method": "Accrual",
+  "raw_data": {
+    "Rows": {
+      "Row": [
+        {
+          "Rows": {
+            "Row": [
+              {
+                "Rows": {
+                  "Row": [
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "436",
+                          "value": "Commission Income"
+                        },
+                        {
+                          "value": "39414"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "442",
+                          "value": "Web Notifications"
+                        },
+                        {
+                          "value": "84091"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "type": "Section",
+                "Header": {
+                  "ColData": [
+                    {
+                      "id": "386",
+                      "value": "Advertising Revenue"
+                    },
+                    {
+                      "value": "66630"
+                    }
+                  ]
+                },
+                "Summary": {
+                  "ColData": [
+                    {
+                      "value": "Total Advertising Revenue"
+                    },
+                    {
+                      "value": "52097"
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "354",
+                    "value": "Catalogs"
+                  },
+                  {
+                    "value": "10782"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "353",
+                    "value": "Dynalogs"
+                  },
+                  {
+                    "value": "38082"
+                  }
+                ]
+              },
+              {
+                "Rows": {
+                  "Row": [
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "458",
+                          "value": "Management Fee Income — EZ-A"
+                        },
+                        {
+                          "value": "19399"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "1150040006",
+                          "value": "Profit Share"
+                        },
+                        {
+                          "value": "68716"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "1150040011",
+                          "value": "Restatement of Double Billing"
+                        },
+                        {
+                          "value": "55969"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "type": "Section",
+                "Header": {
+                  "ColData": [
+                    {
+                      "id": "1150040010",
+                      "value": "EZ Advisors"
+                    },
+                    {
+                      "value": ""
+                    }
+                  ]
+                },
+                "Summary": {
+                  "ColData": [
+                    {
+                      "value": "Total EZ Advisors"
+                    },
+                    {
+                      "value": "41129"
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "319",
+                    "value": "Sales"
+                  },
+                  {
+                    "value": "90074"
+                  }
+                ]
+              }
+            ]
+          },
+          "type": "Section",
+          "group": "Income",
+          "Header": {
+            "ColData": [
+              {
+                "value": "Income"
+              },
+              {
+                "value": ""
+              }
+            ]
+          },
+          "Summary": {
+            "ColData": [
+              {
+                "value": "Total Income"
+              },
+              {
+                "value": "59738"
+              }
+            ]
+          }
+        },
+        {
+          "Rows": {
+            "Row": [
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "348",
+                    "value": "Data Scraping And Feed"
+                  },
+                  {
+                    "value": "10684"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "367",
+                    "value": "Email Service Providers"
+                  },
+                  {
+                    "value": "36854"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "285",
+                    "value": "Merchant Account Fees"
+                  },
+                  {
+                    "value": "34786"
+                  }
+                ]
+              }
+            ]
+          },
+          "type": "Section",
+          "group": "COGS",
+          "Header": {
+            "ColData": [
+              {
+                "value": "Cost of Goods Sold"
+              },
+              {
+                "value": ""
+              }
+            ]
+          },
+          "Summary": {
+            "ColData": [
+              {
+                "value": "Total Cost of Goods Sold"
+              },
+              {
+                "value": "28753"
+              }
+            ]
+          }
+        },
+        {
+          "type": "Section",
+          "group": "GrossProfit",
+          "Summary": {
+            "ColData": [
+              {
+                "value": "Gross Profit"
+              },
+              {
+                "value": "20536"
+              }
+            ]
+          }
+        },
+        {
+          "Rows": {
+            "Row": [
+              {
+                "Rows": {
+                  "Row": [
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "374",
+                          "value": "Performance & Lead Gen"
+                        },
+                        {
+                          "value": "72325"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "type": "Section",
+                "Header": {
+                  "ColData": [
+                    {
+                      "id": "299",
+                      "value": "Advertising and Promotion"
+                    },
+                    {
+                      "value": "38836"
+                    }
+                  ]
+                },
+                "Summary": {
+                  "ColData": [
+                    {
+                      "value": "Total Advertising and Promotion"
+                    },
+                    {
+                      "value": "34975"
+                    }
+                  ]
+                }
+              },
+              {
+                "Rows": {
+                  "Row": [
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "456",
+                          "value": "Fuel"
+                        },
+                        {
+                          "value": "42186"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "type": "Section",
+                "Header": {
+                  "ColData": [
+                    {
+                      "id": "292",
+                      "value": "Automobile Expense"
+                    },
+                    {
+                      "value": "83092"
+                    }
+                  ]
+                },
+                "Summary": {
+                  "ColData": [
+                    {
+                      "value": "Total Automobile Expense"
+                    },
+                    {
+                      "value": "18759"
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "284",
+                    "value": "Bank Service Charges"
+                  },
+                  {
+                    "value": "76825"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "371",
+                    "value": "Conferences & Training"
+                  },
+                  {
+                    "value": "21821"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "427",
+                    "value": "Donations"
+                  },
+                  {
+                    "value": "19576"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "306",
+                    "value": "Dues and Subscriptions"
+                  },
+                  {
+                    "value": "80490"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "431",
+                    "value": "Gifts"
+                  },
+                  {
+                    "value": "40968"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "308",
+                    "value": "Insurance Expense"
+                  },
+                  {
+                    "value": "35726"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "288",
+                    "value": "Interest Expense"
+                  },
+                  {
+                    "value": "17013"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "289",
+                    "value": "Internet"
+                  },
+                  {
+                    "value": "16155"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "363",
+                    "value": "Legal & Professional  Fees"
+                  },
+                  {
+                    "value": "45206"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "294",
+                    "value": "Meals and Entertainment"
+                  },
+                  {
+                    "value": "72183"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "1150040002",
+                    "value": "Miscellaneous Business Service"
+                  },
+                  {
+                    "value": "1862"
+                  }
+                ]
+              },
+              {
+                "Rows": {
+                  "Row": [
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "293",
+                          "value": "Freight and Shipping Costs"
+                        },
+                        {
+                          "value": "71696"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "283",
+                          "value": "Office Supplies"
+                        },
+                        {
+                          "value": "60894"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "297",
+                          "value": "Rent Expense"
+                        },
+                        {
+                          "value": "90677"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "type": "Section",
+                "Header": {
+                  "ColData": [
+                    {
+                      "id": "358",
+                      "value": "Office Expense"
+                    },
+                    {
+                      "value": "17295"
+                    }
+                  ]
+                },
+                "Summary": {
+                  "ColData": [
+                    {
+                      "value": "Total Office Expense"
+                    },
+                    {
+                      "value": "76146"
+                    }
+                  ]
+                }
+              },
+              {
+                "Rows": {
+                  "Row": [
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "373",
+                          "value": "Contract Labor"
+                        },
+                        {
+                          "value": "90363"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "361",
+                          "value": "Other Payroll Expense"
+                        },
+                        {
+                          "value": "35629"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "366",
+                          "value": "Payroll Service Fee"
+                        },
+                        {
+                          "value": "58167"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "type": "Section",
+                "Header": {
+                  "ColData": [
+                    {
+                      "id": "313",
+                      "value": "Payroll Expenses"
+                    },
+                    {
+                      "value": "62484"
+                    }
+                  ]
+                },
+                "Summary": {
+                  "ColData": [
+                    {
+                      "value": "Total Payroll Expenses"
+                    },
+                    {
+                      "value": "66535"
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "1150040001",
+                    "value": "Permits & Licenses"
+                  },
+                  {
+                    "value": "58208"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "351",
+                    "value": "Software Subscription"
+                  },
+                  {
+                    "value": "20089"
+                  }
+                ]
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "1150040000",
+                    "value": "Supplies & Materials"
+                  },
+                  {
+                    "value": "27481"
+                  }
+                ]
+              },
+              {
+                "Rows": {
+                  "Row": [
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "454",
+                          "value": "Airfare"
+                        },
+                        {
+                          "value": "16233"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "455",
+                          "value": "Hotels"
+                        },
+                        {
+                          "value": "77319"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "394",
+                          "value": "Parking"
+                        },
+                        {
+                          "value": "72887"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "453",
+                          "value": "Rides"
+                        },
+                        {
+                          "value": "27473"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "type": "Section",
+                "Header": {
+                  "ColData": [
+                    {
+                      "id": "305",
+                      "value": "Travel Expense"
+                    },
+                    {
+                      "value": "11631"
+                    }
+                  ]
+                },
+                "Summary": {
+                  "ColData": [
+                    {
+                      "value": "Total Travel Expense"
+                    },
+                    {
+                      "value": "70482"
+                    }
+                  ]
+                }
+              },
+              {
+                "Rows": {
+                  "Row": [
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "300",
+                          "value": "Telephone Expense"
+                        },
+                        {
+                          "value": "31447"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "type": "Section",
+                "Header": {
+                  "ColData": [
+                    {
+                      "id": "314",
+                      "value": "Utilities"
+                    },
+                    {
+                      "value": ""
+                    }
+                  ]
+                },
+                "Summary": {
+                  "ColData": [
+                    {
+                      "value": "Total Utilities"
+                    },
+                    {
+                      "value": "70480"
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "435",
+                    "value": "Website"
+                  },
+                  {
+                    "value": "80180"
+                  }
+                ]
+              }
+            ]
+          },
+          "type": "Section",
+          "group": "Expenses",
+          "Header": {
+            "ColData": [
+              {
+                "value": "Expenses"
+              },
+              {
+                "value": ""
+              }
+            ]
+          },
+          "Summary": {
+            "ColData": [
+              {
+                "value": "Total Expenses"
+              },
+              {
+                "value": "37399"
+              }
+            ]
+          }
+        },
+        {
+          "type": "Section",
+          "group": "NetOperatingIncome",
+          "Summary": {
+            "ColData": [
+              {
+                "value": "Net Operating Income"
+              },
+              {
+                "value": "1442"
+              }
+            ]
+          }
+        },
+        {
+          "Rows": {
+            "Row": [
+              {
+                "type": "Data",
+                "ColData": [
+                  {
+                    "id": "1150040005",
+                    "value": "Interest Income"
+                  },
+                  {
+                    "value": "64333"
+                  }
+                ]
+              }
+            ]
+          },
+          "type": "Section",
+          "group": "OtherIncome",
+          "Header": {
+            "ColData": [
+              {
+                "value": "Other Income"
+              },
+              {
+                "value": ""
+              }
+            ]
+          },
+          "Summary": {
+            "ColData": [
+              {
+                "value": "Total Other Income"
+              },
+              {
+                "value": "11914"
+              }
+            ]
+          }
+        },
+        {
+          "Rows": {
+            "Row": [
+              {
+                "Rows": {
+                  "Row": [
+                    {
+                      "type": "Data",
+                      "ColData": [
+                        {
+                          "id": "303",
+                          "value": "Depreciation Expense"
+                        },
+                        {
+                          "value": "16945"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "type": "Section",
+                "Header": {
+                  "ColData": [
+                    {
+                      "id": "404",
+                      "value": "Depreciation"
+                    },
+                    {
+                      "value": ""
+                    }
+                  ]
+                },
+                "Summary": {
+                  "ColData": [
+                    {
+                      "value": "Total Depreciation"
+                    },
+                    {
+                      "value": "20764"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "type": "Section",
+          "group": "OtherExpenses",
+          "Header": {
+            "ColData": [
+              {
+                "value": "Other Expenses"
+              },
+              {
+                "value": ""
+              }
+            ]
+          },
+          "Summary": {
+            "ColData": [
+              {
+                "value": "Total Other Expenses"
+              },
+              {
+                "value": "57169"
+              }
+            ]
+          }
+        },
+        {
+          "type": "Section",
+          "group": "NetOtherIncome",
+          "Summary": {
+            "ColData": [
+              {
+                "value": "Net Other Income"
+              },
+              {
+                "value": "23149"
+              }
+            ]
+          }
+        },
+        {
+          "type": "Section",
+          "group": "NetIncome",
+          "Summary": {
+            "ColData": [
+              {
+                "value": "Net Income"
+              },
+              {
+                "value": "70372"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "Header": {
+      "Time": "2026-07-28T12:56:01-07:00",
+      "Currency": "USD",
+      "EndPeriod": "2024-12-31",
+      "ReportName": "profit-and-loss",
+      "ReportBasis": "Accrual",
+      "StartPeriod": "2024-01-01",
+      "SummarizeColumnsBy": "Total"
+    },
+    "Columns": {
+      "Column": [
+        {
+          "ColType": "Account",
+          "ColTitle": "",
+          "MetaData": [
+            {
+              "Name": "ColKey",
+              "Value": "account"
+            }
+          ]
+        },
+        {
+          "ColType": "Money",
+          "ColTitle": "Total",
+          "MetaData": [
+            {
+              "Name": "ColKey",
+              "Value": "total"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
