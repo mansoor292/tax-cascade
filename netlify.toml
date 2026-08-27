@@ -108,6 +108,25 @@
   status = 200
   force  = true
 
+# Any OTHER discovery document must 404, not fall through to the SPA.
+# The MCP client tries several candidates in order and moves on from a 404,
+# but an HTML page returned with a 200 gets parsed as metadata and the
+# connection is reported as broken. We do not implement OIDC discovery, so
+# saying so plainly is the correct answer.
+#
+# These MUST come after the oauth-* rules above and before the SPA fallback.
+[[redirects]]
+  from   = "/.well-known/*"
+  to     = "/not-found.json"
+  status = 404
+  force  = true
+
+[[redirects]]
+  from   = "/mcp/.well-known/*"
+  to     = "/not-found.json"
+  status = 404
+  force  = true
+
 # ─── SPA fallback ───
 # MUST come after the specific redirects above.
 [[redirects]]
