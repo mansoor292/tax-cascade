@@ -41,6 +41,22 @@
   status = 200
   force  = true
 
+# /auth/* is a SECOND backend surface, mounted separately from /api in
+# server.ts (app.use('/auth', authRoutes)). It serves /auth/me and API-key
+# create/revoke — the step that produces the key for the Claude connector.
+#
+# Without this rule the SPA fallback below swallowed it: POST /auth/api-keys
+# hit index.html and returned a bare 404, and GET /auth/me returned HTML with
+# a 200, so the key list silently rendered empty. Login was unaffected because
+# it talks to Supabase directly, which is why this went unnoticed.
+#
+# Must stay ABOVE the SPA fallback — redirects are matched in order.
+[[redirects]]
+  from   = "/auth/*"
+  to     = "https://tax-api.catalogshub.com/auth/:splat"
+  status = 200
+  force  = true
+
 # ─── SPA fallback ───
 # MUST come after the specific redirects above.
 [[redirects]]
