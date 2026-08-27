@@ -51,7 +51,15 @@ import { mountOAuth } from './mcp/oauth.js'
 
 const app = express()
 app.set('trust proxy', true)
-app.use(cors())
+// A browser can only read response headers a server explicitly exposes, and
+// cors() exposes none by default. An MCP client running in a browser needs
+// WWW-Authenticate off the 401 to discover where to authenticate, and
+// Mcp-Session-Id / Mcp-Protocol-Version to talk Streamable HTTP. Without
+// these the headers are sent but invisible to the client, which surfaces as
+// an opaque connection failure rather than an auth challenge.
+app.use(cors({
+  exposedHeaders: ['WWW-Authenticate', 'Mcp-Session-Id', 'Mcp-Protocol-Version'],
+}))
 
 // ─── Deploy webhook — must be before express.json() so we get the raw body for HMAC ───
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || ''

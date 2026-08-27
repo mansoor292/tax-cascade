@@ -43,3 +43,30 @@ export async function deleteUserByEmail(email: string): Promise<'deleted' | 'ski
   await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${user.id}`, { method: 'DELETE', headers: auth })
   return 'deleted'
 }
+
+/**
+ * Sign up via the API and mint an API key, without driving a browser.
+ * Used by the MCP tests, where the subject is the protocol rather than the UI.
+ */
+export async function createUserWithApiKey(email: string): Promise<{ apiKey: string }> {
+  const ANON = process.env.VITE_SUPABASE_ANON_KEY
+    || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
+  const base = process.env.BASE_URL || 'https://fin.catipult.ai'
+
+  const signup = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    method: 'POST',
+    headers: { apikey: ANON, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: TEST_PASSWORD }),
+  })
+  const session: any = await signup.json()
+  if (!session?.access_token) throw new Error(`signup failed: ${JSON.stringify(session).slice(0, 200)}`)
+
+  const keyRes = await fetch(`${base}/auth/api-keys`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'e2e mcp probe' }),
+  })
+  const key: any = await keyRes.json()
+  if (!key?.api_key?.key_value) throw new Error(`key creation failed: ${JSON.stringify(key).slice(0, 200)}`)
+  return { apiKey: key.api_key.key_value }
+}

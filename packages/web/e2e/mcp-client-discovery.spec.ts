@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { testEmail, deleteUserByEmail, createUserWithApiKey } from './helpers'
 import {
   buildDiscoveryUrls,
   discoverOAuthProtectedResourceMetadata,
@@ -85,5 +86,59 @@ test.describe('MCP discovery, as a real client performs it', () => {
     // transport or parse failure is what the user saw as "Couldn't reach".
     expect(text, `connect failed for the wrong reason: ${text}`).toMatch(/unauthorized|401|authoriz/i)
     expect(text).not.toMatch(/ENOTFOUND|ECONNREFUSED|Unexpected token|<!doctype/i)
+  })
+
+  /**
+   * The authenticated path — what actually happens after a user approves
+   * access. Everything above verifies a client can DISCOVER and be told to
+   * authorize; none of it proves a tool call works once it has a token. That
+   * is the step a connector fails on after OAuth succeeds, and it had no
+   * coverage at all.
+   */
+  test.describe('authenticated tool call', () => {
+    const email = testEmail('mcpauth')
+
+    test.afterAll(async () => {
+      const r = await deleteUserByEmail(email)
+      if (r === 'skipped') console.log(`NOTE: no service role key — left ${email} behind`)
+    })
+
+    test('a token holder can list tools through the deployed endpoint', async ({ request, baseURL }) => {
+      const { apiKey } = await createUserWithApiKey(email)
+
+      const res = await request.post(`${baseURL}/mcp`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+        },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      })
+      expect(res.status(), 'authenticated tools/list must succeed').toBe(200)
+
+      // Streamable HTTP may answer as SSE, so parse either shape.
+      const body = await res.text()
+      const json = body.startsWith('event:')
+        ? JSON.parse(body.slice(body.indexOf('data: ') + 6).split('\n')[0])
+        : JSON.parse(body)
+
+      const tools = json?.result?.tools
+      expect(Array.isArray(tools), `no tool list returned: ${body.slice(0, 200)}`).toBe(true)
+      expect(tools.length).toBeGreaterThan(10)
+      expect(tools.map((t: any) => t.name)).toContain('list_entities')
+    })
+
+    test('the 401 exposes WWW-Authenticate to browser clients', async ({ request, baseURL }) => {
+      // Headers a server does not EXPOSE are invisible to browser JavaScript,
+      // even though curl sees them. A browser-based client then cannot read
+      // the auth challenge and reports an opaque connection failure.
+      const res = await request.post(`${baseURL}/mcp`, {
+        headers: { Origin: 'https://claude.ai', 'Content-Type': 'application/json' },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      })
+      expect(res.status()).toBe(401)
+      const exposed = (res.headers()['access-control-expose-headers'] || '').toLowerCase()
+      expect(exposed, 'WWW-Authenticate must be readable by a browser client').toContain('www-authenticate')
+    })
   })
 })
