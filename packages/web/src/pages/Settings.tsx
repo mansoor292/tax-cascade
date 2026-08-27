@@ -47,8 +47,12 @@ export default function Settings() {
   const loadKeys = async () => {
     setLoading(true)
     try {
-      const data = await api<{ user: { api_keys?: ApiKey[] } }>('/auth/me')
-      setKeys(data.user?.api_keys || [])
+      // /auth/me returns { user, profile, api_keys } — api_keys is TOP-LEVEL,
+      // not nested under user. Reading data.user.api_keys silently yielded
+      // undefined, so the list rendered empty no matter how many keys existed
+      // and a freshly created key vanished the moment the dialog closed.
+      const data = await api<{ api_keys?: ApiKey[] }>('/auth/me')
+      setKeys(data.api_keys || [])
     } catch {
       setKeys([])
     }
