@@ -18,6 +18,43 @@ import { test, expect } from '@playwright/test'
 const MCP_PATH = '/mcp'
 
 test.describe('MCP connector handshake', () => {
+
+  /**
+   * RFC 9728 §3.1 / RFC 8414 §3.1: when the protected resource has a PATH
+   * component — ours is /mcp — the client builds the metadata URL by
+   * inserting the well-known segment BEFORE that path, not by appending it to
+   * the host alone. Serving only the bare form meant the derived lookups fell
+   * through to the SPA fallback and returned an HTML page with a 200, and the
+   * connector reported the server as unreachable.
+   *
+   * The earlier fix corrected the content type on the bare URLs only, which
+   * is why probing those passed while a real client still failed. Every form
+   * a client may derive is checked here.
+   */
+  const DERIVED_METADATA_URLS = [
+    '/.well-known/oauth-protected-resource',
+    '/.well-known/oauth-protected-resource/mcp',
+    '/mcp/.well-known/oauth-protected-resource',
+    '/.well-known/oauth-authorization-server',
+    '/.well-known/oauth-authorization-server/mcp',
+    '/mcp/.well-known/oauth-authorization-server',
+  ]
+
+  for (const path of DERIVED_METADATA_URLS) {
+    test(`metadata at ${path} is JSON, not the SPA`, async ({ request, baseURL }) => {
+      const res = await request.get(`${baseURL}${path}`)
+      expect(res.status()).toBe(200)
+
+      const ct = res.headers()['content-type'] || ''
+      expect(ct, `${path} returned ${ct} — an HTML body here reads as "server unreachable"`)
+        .toContain('application/json')
+
+      // Must parse, and be one of the two metadata documents.
+      const body = await res.json()
+      expect(body.resource || body.issuer, `${path} returned JSON without resource/issuer`).toBeTruthy()
+    })
+  }
+
   test('the protected-resource metadata is served as JSON', async ({ request, baseURL }) => {
     const res = await request.get(`${baseURL}/.well-known/oauth-protected-resource`)
     expect(res.status()).toBe(200)

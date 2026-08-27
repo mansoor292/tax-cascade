@@ -57,30 +57,60 @@
   status = 200
   force  = true
 
+# ─── OAuth discovery metadata ───
+# RFC 9728 / RFC 8414: when the resource has a PATH (ours is /mcp), a client
+# derives the metadata URL by inserting the well-known segment BEFORE that
+# path — https://host/.well-known/oauth-protected-resource/mcp — not by
+# appending it to the host alone. Only the bare form existed, so the
+# path-suffixed lookups fell through to the SPA fallback and returned an HTML
+# page with a 200. A client asking for JSON metadata and receiving a web page
+# reports the whole server as unreachable, which is what "Couldn't reach"
+# meant.
+#
+# Both spellings are served, plus the OIDC-style /mcp/.well-known/... form.
+# The files carry a .json extension so the content type comes from the
+# extension rather than a headers rule.
+#
+# These MUST stay above the SPA fallback.
+[[redirects]]
+  from   = "/.well-known/oauth-protected-resource"
+  to     = "/.well-known/oauth-protected-resource.json"
+  status = 200
+  force  = true
+
+[[redirects]]
+  from   = "/.well-known/oauth-protected-resource/*"
+  to     = "/.well-known/oauth-protected-resource.json"
+  status = 200
+  force  = true
+
+[[redirects]]
+  from   = "/mcp/.well-known/oauth-protected-resource"
+  to     = "/.well-known/oauth-protected-resource.json"
+  status = 200
+  force  = true
+
+[[redirects]]
+  from   = "/.well-known/oauth-authorization-server"
+  to     = "/.well-known/oauth-authorization-server.json"
+  status = 200
+  force  = true
+
+[[redirects]]
+  from   = "/.well-known/oauth-authorization-server/*"
+  to     = "/.well-known/oauth-authorization-server.json"
+  status = 200
+  force  = true
+
+[[redirects]]
+  from   = "/mcp/.well-known/oauth-authorization-server"
+  to     = "/.well-known/oauth-authorization-server.json"
+  status = 200
+  force  = true
+
 # ─── SPA fallback ───
 # MUST come after the specific redirects above.
 [[redirects]]
   from   = "/*"
   to     = "/index.html"
   status = 200
-
-# ─── OAuth discovery metadata content type ───
-# public/.well-known/oauth-* are extensionless files, so Netlify serves them as
-# text/plain. RFC 9728 requires application/json, and a strict MCP client
-# rejects the document and reports the whole server as unreachable — with
-# nothing to indicate a content-type was the reason.
-#
-# Fixed with headers rather than by proxying to the API: the API builds these
-# documents from the REQUEST HOST, so proxied it advertises
-# tax-api.catalogshub.com as the issuer, while /oauth/token and /oauth/register
-# are Netlify Functions that exist only on fin.catipult.ai. The static copies
-# carry the correct public URLs; only their content type was wrong.
-[[headers]]
-  for = "/.well-known/oauth-authorization-server"
-  [headers.values]
-    Content-Type = "application/json; charset=utf-8"
-
-[[headers]]
-  for = "/.well-known/oauth-protected-resource"
-  [headers.values]
-    Content-Type = "application/json; charset=utf-8"
