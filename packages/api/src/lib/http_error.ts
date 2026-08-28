@@ -32,6 +32,16 @@ export function sendError(res: Response, e: any, fallback = 'Internal error') {
   if (/violates foreign key constraint/i.test(msg)) {
     return res.status(400).json({ error: 'Referenced record does not exist.' })
   }
+  // A value the database refuses is a bad argument, not a broken server. The
+  // raw text named the constraint and nothing a caller could act on.
+  if (/violates check constraint/i.test(msg)) {
+    const con = msg.match(/constraint "([^"]+)"/)?.[1] || ''
+    const field = con.replace(/^tax_entity_|^tax_return_|^document_|_check$/g, '') || undefined
+    return res.status(400).json({
+      error: field ? `Unsupported value for ${field}.` : 'That value is not one of the supported options.',
+      field,
+    })
+  }
   if (/duplicate key value/i.test(msg)) {
     return res.status(409).json({ error: 'That record already exists.' })
   }

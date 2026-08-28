@@ -44,6 +44,25 @@ const FORM_TYPE_LABEL: Record<string, string> = {
   '1065': 'Partnership',
 }
 
+// What the entity legally IS, as distinct from how it is taxed. An LLC may
+// file a 1065 or, having elected on Form 2553, an 1120-S.
+const LEGAL_FORMS = [
+  { value: '',                 label: 'Not specified' },
+  { value: 'llc',              label: 'LLC' },
+  { value: 'corporation',      label: 'Corporation' },
+  { value: 'partnership',      label: 'Partnership' },
+  { value: 'sole_proprietor',  label: 'Sole proprietor' },
+  { value: 'trust',            label: 'Trust' },
+  { value: 'estate',           label: 'Estate' },
+  { value: 'individual',       label: 'Individual' },
+]
+
+export const LEGAL_FORM_LABEL: Record<string, string> = {
+  llc: 'LLC', corporation: 'Corporation', partnership: 'Partnership',
+  sole_proprietor: 'Sole proprietor', trust: 'Trust', estate: 'Estate',
+  individual: 'Individual',
+}
+
 const FORM_TYPE_COLOR: Record<string, string> = {
   '1040': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   '1120': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -59,6 +78,7 @@ export default function Entities() {
   const showNew = searchParams.get('new') === '1'
   const [name, setName] = useState('')
   const [formType, setFormType] = useState('1040')
+  const [legalForm, setLegalForm] = useState('')
   const [ein, setEin] = useState('')
   const [creating, setCreating] = useState(false)
 
@@ -69,7 +89,7 @@ export default function Entities() {
     if (!name.trim()) return
     setCreating(true)
     try {
-      const entity = await create({ name: name.trim(), form_type: formType, ein: ein || undefined })
+      const entity = await create({ name: name.trim(), form_type: formType, ein: ein || undefined, legal_form: legalForm || undefined })
       toast.success(`Created ${name}`)
       closeNew()
       if (entity?.id) nav(`/app/entities/${entity.id}`)
@@ -141,6 +161,11 @@ export default function Entities() {
                       )}
                     </div>
                   </div>
+                  {entity.legal_form && (
+                    <Badge variant="outline" className="bg-muted text-muted-foreground">
+                      {LEGAL_FORM_LABEL[entity.legal_form] || entity.legal_form}
+                    </Badge>
+                  )}
                   <Badge variant="outline" className={FORM_TYPE_COLOR[entity.form_type] || ''}>
                     {FORM_TYPE_LABEL[entity.form_type] || entity.form_type}
                   </Badge>
@@ -176,7 +201,7 @@ export default function Entities() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="form_type">Entity Type</Label>
+              <Label htmlFor="form_type">Tax treatment</Label>
               <Select value={formType} onValueChange={(v) => v && setFormType(v)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -187,6 +212,26 @@ export default function Entities() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Which return this entity files. This drives every calculation and deadline.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="legal_form">Legal form (optional)</Label>
+              <Select value={legalForm || '__none__'} onValueChange={(v) => setLegalForm(v === '__none__' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEGAL_FORMS.map(lf => (
+                    <SelectItem key={lf.value || '__none__'} value={lf.value || '__none__'}>{lf.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                What the entity legally is. An LLC that elected S-corp treatment on Form 2553
+                is an LLC filing an 1120-S.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="ein">EIN / SSN (optional)</Label>

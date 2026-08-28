@@ -81,14 +81,18 @@ router.post('/', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const { name, ein, address, entity_type } = req.body
+  const { name, ein, address, entity_type, legal_form } = req.body
   let { form_type } = req.body
   if (!name) return res.status(400).json({ error: 'name is required' })
 
   // Derive entity_type from form_type if not provided
+  // These four are what the database actually accepts. The map used to also
+  // list 990, 4868, 7004 and 8868 — so those were offered as entity form types
+  // and every one of them failed on a check constraint with a 500. The
+  // extension forms were never entity types at all; they are filings an entity
+  // makes, and 990 is not supported yet.
   const FORM_TO_ENTITY: Record<string, string> = {
     '1040': 'individual', '1120': 'c_corp', '1120S': 's_corp', '1065': 'partnership',
-    '990': 'nonprofit', '4868': 'individual', '7004': 'c_corp', '8868': 'nonprofit',
   }
   // form_type is NOT NULL in the database, but this handler used to write
   // `form_type || null` — so creating an entity without one answered 500 with
@@ -125,6 +129,7 @@ router.post('/', async (req, res) => {
     ein_hash: safeBlindIndex(ein),
     ...einEnc,
     address: address || null,
+    legal_form: legal_form || null,
   }).select().single()
 
   if (error) return sendDbError(res, error)
@@ -137,7 +142,7 @@ router.put('/:id', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const { name, form_type, ein, address, city, state, zip, date_incorporated, meta, meta_merge } = req.body
+  const { name, form_type, ein, address, city, state, zip, date_incorporated, meta, meta_merge, legal_form } = req.body
   const updates: any = {}
   if (name !== undefined) updates.name = name
   if (form_type !== undefined) {
@@ -147,7 +152,6 @@ router.put('/:id', async (req, res) => {
     // the compute engine and any downstream filtering).
     const FORM_TO_ENTITY: Record<string, string> = {
       '1040': 'individual', '1120': 'c_corp', '1120S': 's_corp', '1065': 'partnership',
-      '990': 'nonprofit', '4868': 'individual', '7004': 'c_corp', '8868': 'nonprofit',
     }
     if (FORM_TO_ENTITY[form_type]) updates.entity_type = FORM_TO_ENTITY[form_type]
   }
@@ -157,6 +161,8 @@ router.put('/:id', async (req, res) => {
     Object.assign(updates, await encryptedFields(supabase, userId, { ein }, ENCRYPTED_ENTITY_FIELDS))
   }
   if (address !== undefined) updates.address = address
+  // Legal form is its own axis — changing the tax treatment must not clear it.
+  if (legal_form !== undefined) updates.legal_form = legal_form || null
   if (city !== undefined) updates.city = city
   if (state !== undefined) updates.state = state
   if (zip !== undefined) updates.zip = zip

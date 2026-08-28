@@ -5,6 +5,8 @@ export interface Entity {
   id: string
   name: string
   form_type: string
+  /** Legal form of organisation, independent of tax treatment. */
+  legal_form?: string | null
   ein?: string
   address?: string
   city?: string
@@ -36,7 +38,7 @@ export function useEntities() {
 
   useEffect(() => { load() }, [load])
 
-  const create = async (body: { name: string; form_type: string; ein?: string }) => {
+  const create = async (body: { name: string; form_type: string; ein?: string; legal_form?: string }) => {
     const data = await api<{ entity: Entity }>('/api/entities', {
       method: 'POST',
       body: JSON.stringify(body),

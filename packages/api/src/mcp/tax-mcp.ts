@@ -217,10 +217,11 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: create_entity ───
-  server.tool('create_entity', 'Create a new tax entity (individual, C-Corp, S-Corp). entity_type is auto-derived from form_type if omitted (1040→individual, 1120→c_corp, 1120S→s_corp).', {
+  server.tool('create_entity', 'Create a new tax entity. form_type is the return it files (1040, 1120, 1120S, 1065) and drives all calculation; entity_type is auto-derived from it. Pass legal_form separately when the entity is an LLC, trust or similar — an LLC taxed as an S-corp is legal_form=llc with form_type=1120S, and an ordinary pass-through LLC is legal_form=llc with form_type=1065.', {
     name: z.string().describe('Entity name (person or business)'),
-    form_type: z.string().optional().describe('Tax form: 1040, 1120, 1120S, 1065, 990'),
-    entity_type: z.string().optional().describe('Entity type: individual, c_corp, s_corp, partnership, llc, nonprofit. Auto-derived from form_type if omitted.'),
+    form_type: z.string().optional().describe('Tax form the entity FILES — 1040, 1120, 1120S or 1065. This drives every calculation and deadline.'),
+    entity_type: z.string().optional().describe('individual, c_corp, s_corp or partnership. Auto-derived from form_type if omitted; there is no separate llc or nonprofit value here — see legal_form.'),
+    legal_form: z.string().optional().describe('What the entity legally IS, independent of how it is taxed: llc, corporation, partnership, sole_proprietor, trust, estate, individual. An LLC that elected S-corp treatment on Form 2553 is legal_form=llc with form_type=1120S; an ordinary pass-through LLC is legal_form=llc with form_type=1065.'),
     ein: z.string().optional().describe('EIN (business) or SSN (individual)'),
     address: z.string().optional().describe('Street address'),
   }, async (params) => {
