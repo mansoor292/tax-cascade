@@ -32,6 +32,8 @@
 // pm2-forked worker IS the server and cluster socket sharing works.
 // Verified: under the shim the script runs in a child pid; under --import
 // it runs in the forked pid itself.
+// Deploys reload this cluster via scripts/deploy-reload.sh, double-forked out
+// of the webhook so pm2's treekill cannot cut it short partway through.
 module.exports = {
   apps: [{
     name: 'tax-api',
