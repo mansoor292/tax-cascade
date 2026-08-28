@@ -323,13 +323,39 @@ export function daysUntil(dueDate: string, today: string): number {
   return Math.round((utc(dueDate) - utc(today)) / 86_400_000)
 }
 
-export type ObligationUrgency = 'overdue' | 'due_soon' | 'upcoming' | 'done' | 'dismissed'
+export type ObligationUrgency =
+  | 'overdue' | 'due_soon' | 'upcoming' | 'done' | 'dismissed'
+  /** Due date has passed, but we have no basis for saying it was missed. */
+  | 'unverified'
 
-export function urgency(dueDate: string, today: string, status: string): ObligationUrgency {
+/**
+ * How to describe an obligation today.
+ *
+ * `knownSince` is the date the entity was added. Anything that fell due before
+ * that cannot be called overdue: the deadline applied, but we have no way of
+ * knowing whether it was met. Reported during testing — a brand-new 1040
+ * entity showed six OVERDUE items within seconds of being created, including
+ * estimated payments that may never have been required and an extension that
+ * may well have been filed. Stating "you missed this" from a date alone is
+ * asserting something we have not observed, and in a tax product that is not
+ * a small thing to get wrong.
+ *
+ * Once the deadline falls inside the period we have been watching, an
+ * unsatisfied obligation genuinely is overdue.
+ */
+export function urgency(
+  dueDate: string,
+  today: string,
+  status: string,
+  knownSince?: string | null,
+): ObligationUrgency {
   if (status === 'done') return 'done'
   if (status === 'dismissed') return 'dismissed'
   const d = daysUntil(dueDate, today)
-  if (d < 0) return 'overdue'
+  if (d < 0) {
+    if (knownSince && dueDate < knownSince) return 'unverified'
+    return 'overdue'
+  }
   if (d <= 30) return 'due_soon'
   return 'upcoming'
 }

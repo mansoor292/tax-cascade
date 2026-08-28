@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/sidebar'
 import { useEntities, type Entity } from '@/hooks/use-entities'
 import { Skeleton } from '@/components/ui/skeleton'
+import { maskTaxId } from '@/lib/mask'
 
 const FORM_TYPE_LABEL: Record<string, string> = {
   '1040': 'Individual',
@@ -58,7 +59,7 @@ function EntityItem({ entity }: { entity: Entity }) {
           <span className="truncate font-medium">{entity.name}</span>
           <span className="text-xs text-muted-foreground">
             {FORM_TYPE_LABEL[entity.form_type] || entity.form_type}
-            {entity.ein ? ` · ${entity.ein}` : ''}
+            {entity.ein ? ` · ${maskTaxId(entity.ein)}` : ''}
           </span>
         </div>
       </SidebarMenuButton>

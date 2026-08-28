@@ -205,10 +205,19 @@ router.get('/', async (req, res) => {
     if (error) return sendDbError(res, error)
 
     const today = todayIso()
+
+    // An obligation that fell due before we knew the entity existed cannot be
+    // reported as missed — see urgency() in the calendar engine.
+    const { data: ents } = await supabase.from('tax_entity')
+      .select('id, created_at').eq('user_id', userId)
+    const knownSince = new Map<string, string>(
+      (ents || []).map((e: any) => [e.id, String(e.created_at).slice(0, 10)]),
+    )
+
     let rows = (data || []).map((r: any) => ({
       ...r,
       days_until: daysUntil(r.due_date, today),
-      urgency: urgency(r.due_date, today, r.status),
+      urgency: urgency(r.due_date, today, r.status, knownSince.get(r.entity_id) || null),
     }))
 
     const within = Number(req.query.within_days)
@@ -222,6 +231,7 @@ router.get('/', async (req, res) => {
       today,
       count: rows.length,
       overdue: rows.filter((r: any) => r.urgency === 'overdue').length,
+      unverified: rows.filter((r: any) => r.urgency === 'unverified').length,
       due_soon: rows.filter((r: any) => r.urgency === 'due_soon').length,
       obligations: rows,
     })

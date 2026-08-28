@@ -3,7 +3,7 @@
  * deadlines for those years, not whatever the code happened to emit.
  */
 import { describe, it, expect } from 'vitest'
-import { generateObligations, nextBusinessDay, daysUntil } from './tax_calendar.js'
+import { generateObligations, nextBusinessDay, daysUntil, urgency } from './tax_calendar.js'
 
 describe('nextBusinessDay (IRC §7503)', () => {
   it('leaves a weekday deadline alone', () => {
@@ -101,5 +101,36 @@ describe('generateObligations', () => {
     const again = generateObligations({ id: 'A', form_type: '1120', ...fl } as any, 2025)
     expect(again.map(o => o.obligation_key))
       .toEqual(generateObligations({ id: 'A', form_type: '1120', ...fl } as any, 2025).map(o => o.obligation_key))
+  })
+})
+
+describe('an obligation that predates the entity is not called overdue', () => {
+  /**
+   * Reported during testing: a brand-new 1040 entity showed six OVERDUE items
+   * seconds after being created — estimated payments that may never have been
+   * required, a prior-year return, and "file an extension if needed". The
+   * deadlines were real; the claim that they had been MISSED was not something
+   * the system had any way to know.
+   */
+  it('reports unverified when the due date precedes the entity being added', () => {
+    expect(urgency('2025-04-15', '2026-08-28', 'pending', '2026-08-27')).toBe('unverified')
+  })
+
+  it('still reports overdue once the deadline falls inside the observed period', () => {
+    expect(urgency('2026-08-01', '2026-08-28', 'pending', '2026-07-01')).toBe('overdue')
+  })
+
+  it('without a known-since date it behaves as before', () => {
+    expect(urgency('2025-04-15', '2026-08-28', 'pending')).toBe('overdue')
+  })
+
+  it('a completed obligation is done whichever side of the boundary it sits', () => {
+    expect(urgency('2025-04-15', '2026-08-28', 'done', '2026-08-27')).toBe('done')
+    expect(urgency('2025-04-15', '2026-08-28', 'dismissed', '2026-08-27')).toBe('dismissed')
+  })
+
+  it('future deadlines are unaffected', () => {
+    expect(urgency('2026-09-10', '2026-08-28', 'pending', '2026-08-27')).toBe('due_soon')
+    expect(urgency('2027-04-15', '2026-08-28', 'pending', '2026-08-27')).toBe('upcoming')
   })
 })

@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
+import { maskTaxId } from '@/lib/mask'
 
 const FORM_TYPES = [
   { value: '1040', label: 'Individual (1040)' },
@@ -129,7 +130,7 @@ export default function Entities() {
                     <div>
                       <h3 className="font-medium leading-none">{entity.name}</h3>
                       {entity.ein && (
-                        <p className="text-xs text-muted-foreground mt-1 font-mono">{entity.ein}</p>
+                        <p className="text-xs text-muted-foreground mt-1 font-mono">{maskTaxId(entity.ein)}</p>
                       )}
                     </div>
                   </div>

@@ -15,6 +15,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
+import { maskTaxId } from '@/lib/mask'
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   w2: 'W-2',
@@ -213,17 +214,21 @@ export default function DocumentsTab({ entityId }: Props) {
                       {doc.meta?.entity_name && (
                         <p className="text-xs text-muted-foreground/60">
                           {doc.meta.entity_name}
-                          {doc.meta.ein_or_ssn ? ` · ${doc.meta.ein_or_ssn}` : ''}
+                          {doc.meta.ein_or_ssn ? ` · ${maskTaxId(doc.meta.ein_or_ssn)}` : ''}
                         </p>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {doc.textract_summary && (
-                      <span className="text-xs text-muted-foreground mr-2 font-mono whitespace-nowrap">
-                        {doc.textract_summary.num_pages || '?'}p
-                        {' · '}{doc.textract_summary.kv_count || 0}kv
-                        {doc.textract_summary.table_count ? ` · ${doc.textract_summary.table_count}t` : ''}
+                      // "12p · 340kv · 34t" meant nothing to the person reading
+                      // it. Pages are worth showing; the rest was our own
+                      // extraction counters, which say nothing about whether
+                      // the document is right.
+                      <span className="text-xs text-muted-foreground mr-2 whitespace-nowrap">
+                        {doc.textract_summary.num_pages
+                          ? `${doc.textract_summary.num_pages} page${doc.textract_summary.num_pages === 1 ? '' : 's'}`
+                          : ''}
                       </span>
                     )}
                     {doc.doc_type?.startsWith('prior_return') && (

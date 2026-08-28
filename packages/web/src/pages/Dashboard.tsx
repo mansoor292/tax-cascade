@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { CompareReturnsResponse } from '@/hooks/use-returns'
+import { maskTaxId } from '@/lib/mask'
 
 interface Entity {
   id: string; name: string; form_type: string; ein: string
@@ -267,7 +268,7 @@ export default function Dashboard() {
                       <div className="font-medium text-sm">{e.name}</div>
                       <div className="text-xs text-muted-foreground">
                         {FORM_LABEL[e.form_type] || e.form_type}
-                        {e.ein ? ` · ${e.ein}` : ''}
+                        {e.ein ? ` · ${maskTaxId(e.ein)}` : ''}
                       </div>
                     </div>
                   </div>

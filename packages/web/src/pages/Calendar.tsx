@@ -9,6 +9,9 @@ import { toast } from '@/lib/toast'
 
 const URGENCY_STYLE: Record<Urgency, { label: string; className: string }> = {
   overdue:   { label: 'Overdue',   className: 'bg-red-500/15 text-red-400 border-red-500/30' },
+  // The deadline passed before this entity existed here, so whether it was met
+  // is not something we know. Saying "overdue" would be asserting it was not.
+  unverified: { label: 'Needs confirming', className: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
   due_soon:  { label: 'Due soon',  className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
   upcoming:  { label: 'Upcoming',  className: 'bg-muted text-muted-foreground' },
   done:      { label: 'Done',      className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
@@ -113,6 +116,7 @@ export default function Calendar() {
   const completed = all.filter(o => o.status !== 'pending')
 
   const overdue = pending.filter(o => o.urgency === 'overdue')
+  const unverified = pending.filter(o => o.urgency === 'unverified')
   const dueSoon = pending.filter(o => o.urgency === 'due_soon')
   const upcoming = pending.filter(o => o.urgency === 'upcoming')
 
@@ -144,10 +148,14 @@ export default function Calendar() {
         <Button variant="outline" size="sm" onClick={reload}>Refresh</Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card><CardContent className="p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Overdue</div>
           <div className={`text-2xl font-semibold ${overdue.length ? 'text-red-400' : ''}`}>{overdue.length}</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Needs confirming</div>
+          <div className={`text-2xl font-semibold ${unverified.length ? 'text-sky-400' : ''}`}>{unverified.length}</div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Next 30 days</div>
@@ -168,6 +176,20 @@ export default function Calendar() {
       )}
 
       <Section title="Overdue" items={overdue} />
+      {unverified.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="text-sm uppercase tracking-wide text-muted-foreground mb-1">
+              Needs confirming <span className="ml-1 font-mono">{unverified.length}</span>
+            </h3>
+            <p className="text-xs text-muted-foreground mb-2">
+              These fell due before this entity was added, so we don't know whether they
+              were handled. Mark each one done or not applicable and it will stop asking.
+            </p>
+            <div>{unverified.map(o => <ObligationRow key={o.id} o={o} onUpdate={update} />)}</div>
+          </CardContent>
+        </Card>
+      )}
       <Section title="Due soon" items={dueSoon} />
       <Section title="Upcoming" items={upcoming} />
 

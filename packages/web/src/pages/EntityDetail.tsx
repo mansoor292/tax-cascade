@@ -29,6 +29,7 @@ import ReturnsTab from '@/components/tabs/ReturnsTab'
 import ScenariosTab from '@/components/tabs/ScenariosTab'
 import DocumentsTab from '@/components/tabs/DocumentsTab'
 import QuickBooksTab from '@/components/tabs/QuickBooksTab'
+import { maskTaxId } from '@/lib/mask'
 
 const FORM_TYPE_LABEL: Record<string, string> = {
   '1040': 'Individual (1040)',
@@ -148,7 +149,7 @@ export default function EntityDetail() {
                 </Badge>
               )}
               {entity.ein && (
-                <span className="text-xs text-muted-foreground font-mono">{entity.ein}</span>
+                <span className="text-xs text-muted-foreground font-mono">{maskTaxId(entity.ein)}</span>
               )}
             </div>
           </div>

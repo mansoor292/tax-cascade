@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 
-export type Urgency = 'overdue' | 'due_soon' | 'upcoming' | 'done' | 'dismissed'
+export type Urgency = 'overdue' | 'unverified' | 'due_soon' | 'upcoming' | 'done' | 'dismissed'
 
 export interface Obligation {
   id: string
