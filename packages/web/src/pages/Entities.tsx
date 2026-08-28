@@ -29,6 +29,11 @@ const FORM_TYPES = [
   { value: '1040', label: 'Individual (1040)' },
   { value: '1120', label: 'C-Corporation (1120)' },
   { value: '1120S', label: 'S-Corporation (1120-S)' },
+  // A partnership filing without this had to be recorded as an individual,
+  // which silently gave it the wrong filing deadline: a 1065 is due 15 March,
+  // a 1040 on 15 April. The entity and calendar handling already existed —
+  // only the choice was missing.
+  { value: '1065', label: 'Partnership (1065)' },
 ]
 
 const FORM_TYPE_LABEL: Record<string, string> = {
@@ -36,6 +41,7 @@ const FORM_TYPE_LABEL: Record<string, string> = {
   '1120': 'C-Corp',
   '1120S': 'S-Corp',
   '1120-S': 'S-Corp',
+  '1065': 'Partnership',
 }
 
 const FORM_TYPE_COLOR: Record<string, string> = {
@@ -43,6 +49,7 @@ const FORM_TYPE_COLOR: Record<string, string> = {
   '1120': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   '1120S': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
   '1120-S': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  '1065': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
 }
 
 export default function Entities() {

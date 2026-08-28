@@ -207,6 +207,7 @@ export default function EntityDetail() {
                   <SelectItem value="1040">Individual (1040)</SelectItem>
                   <SelectItem value="1120">C-Corporation (1120)</SelectItem>
                   <SelectItem value="1120S">S-Corporation (1120-S)</SelectItem>
+                  <SelectItem value="1065">Partnership (1065)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

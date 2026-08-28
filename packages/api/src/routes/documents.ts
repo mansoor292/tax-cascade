@@ -56,7 +56,14 @@ async function archiveDocumentAsReturn(
     const formTypeMap: Record<string, string> = {
       prior_return_1040: '1040', prior_return_1120: '1120', prior_return_1120s: '1120S',
     }
-    const formType = formTypeMap[classification.doc_type] || '1120'
+    // No silent default. Archiving an unrecognised return as an 1120 would
+    // file a partnership's figures onto a C-corporation form — wrong in a way
+    // nobody would notice until it mattered.
+    const formType = formTypeMap[classification.doc_type]
+    if (!formType) {
+      console.warn(`[archive] no return mapping for doc_type ${classification.doc_type} — stored, not archived`)
+      return null
+    }
     const txYear = classification.tax_year || doc.tax_year
 
     const mapped = mapToCanonical({
@@ -402,7 +409,7 @@ print(base64.b64encode(data).decode())
 {
   "doc_type": one of
     "w2" | "1099_int" | "1099_div" | "1099_b" | "1099_r" | "1099_misc" | "1099_nec" | "1099_k" | "1099_g" | "1099_sa" | "1099_oid" | "1099"
-    | "k1" | "prior_return_1040" | "prior_return_1120" | "prior_return_1120s"
+    | "k1" | "prior_return_1040" | "prior_return_1120" | "prior_return_1120s" | "prior_return_1065"
     | "bank_statement" | "invoice" | "receipt" | "tax_transcript" | "other",
   "tax_year": integer or null,
   "entity_name": string or "",

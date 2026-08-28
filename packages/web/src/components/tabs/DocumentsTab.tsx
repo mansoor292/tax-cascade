@@ -24,6 +24,7 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   prior_return_1040: '1040 Return',
   prior_return_1120: '1120 Return',
   prior_return_1120s: '1120-S Return',
+  prior_return_1065: '1065 Return',
   bank_statement: 'Bank Statement',
   invoice: 'Invoice',
   receipt: 'Receipt',
@@ -38,6 +39,7 @@ const DOC_TYPE_VARIANT: Record<string, string> = {
   prior_return_1040: 'bg-green-500/10 text-green-400 border-green-500/20',
   prior_return_1120: 'bg-green-500/10 text-green-400 border-green-500/20',
   prior_return_1120s: 'bg-green-500/10 text-green-400 border-green-500/20',
+  prior_return_1065: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   bank_statement: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
   tax_transcript: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
 }

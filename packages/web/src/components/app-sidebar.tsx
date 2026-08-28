@@ -37,6 +37,7 @@ const FORM_TYPE_LABEL: Record<string, string> = {
   '1120': 'C-Corp',
   '1120S': 'S-Corp',
   '1120-S': 'S-Corp',
+  '1065': 'Partnership',
 }
 
 const tools = [
