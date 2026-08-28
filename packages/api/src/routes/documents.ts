@@ -11,7 +11,7 @@ import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
-import { runPython } from '../lib/run_python.js'
+import { runPython, runPythonAsync } from '../lib/run_python.js'
 import { encryptedFields, hydrate, hydrateAll } from '../lib/row_crypto.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 
@@ -390,7 +390,7 @@ obj = s3.get_object(Bucket='${S3_BUCKET}', Key='${s3_key}')
 data = obj['Body'].read()
 print(base64.b64encode(data).decode())
 `
-      const base64 = runPython(dlScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })
+      const base64 = await runPythonAsync(dlScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })
 
       const genAI = new GoogleGenerativeAI(GEMINI_KEY)
       const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
@@ -511,7 +511,7 @@ for b in blocks:
 np = sum(1 for b in blocks if b['BlockType'] == 'PAGE')
 print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': len(blocks)}))
 `
-      const txResult = runPython(txScript, { timeout: 180000 })
+      const txResult = await runPythonAsync(txScript, { timeout: 180000 })
       textractData = JSON.parse(txResult.trim())
     } catch (e: any) {
       console.error('Textract failed:', e.message)
