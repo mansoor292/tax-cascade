@@ -100,32 +100,36 @@ app.post('/deploy', express.raw({ type: 'application/json' }), (req, res) => {
     'chmod +x scripts/load-ssm-env.sh',
   ].join(' && ')
 
-  // The restart CANNOT run here.
+  // The reload CANNOT run here, and `detached: true` alone is not enough.
   //
-  // This handler is itself executing inside a pm2 cluster worker. `pm2
-  // restart` cycles workers one at a time, and the first one it takes down is
-  // the one running this execSync — which kills the command before it reaches
-  // the others. On a two-core box that left exactly half the fleet on the old
-  // build, and requests round-robin between them: measured 10/20 responses
-  // from new code and 10/20 from old, indefinitely. Every deploy has behaved
-  // this way, so any fix looked intermittent and any bug looked flaky.
+  // This handler runs inside a pm2 cluster worker. pm2 cycles workers one at
+  // a time and takes down the one handling this request first — and its
+  // treekill (on by default) walks that worker's child tree by ppid, which
+  // reaches a detached child despite setsid giving it a new session. So the
+  // reload died after cycling this worker and never reached the other one,
+  // leaving half the fleet on the old build with requests round-robining
+  // between them: measured 10 of 20 identical requests answered by new code
+  // and 10 by old, stable across repeated polls.
   //
-  // Detaching puts the reload in its own session, so it survives this worker
-  // being replaced and can finish cycling the rest. `reload` rather than
-  // `restart` brings workers up one at a time and keeps the service answering
-  // throughout, which also removes the need to deploy outside working hours.
-  const reloadCmd = [
-    'cd /opt/tax-api/packages/api',
-    'export $(cat .env | xargs)',
-    'eval "$(./scripts/load-ssm-env.sh)"',
-    'pm2 reload tax-api --update-env',
-  ].join(' && ')
+  // That has been true of every deploy, which means fixes were landing for
+  // roughly half of all traffic — bugs looked intermittent and verification
+  // looked flaky, on both counts wrongly.
+  //
+  // Double-fork so the reload is reparented to init before the killing
+  // starts. The script sleeps first to let that settle, reads everything it
+  // needs from disk, uses `reload` (workers cycle one at a time, so the API
+  // keeps answering), and then CONFIRMS every worker reports the same commit
+  // rather than assuming it.
+  const detach =
+    'setsid nohup bash /opt/tax-api/packages/api/scripts/deploy-reload.sh ' +
+    '>> /tmp/tax-api-reload.log 2>&1 &'
 
   try {
     execSync(fetchCmd, { timeout: 120000 })
-    const child = spawn('bash', ['-lc', reloadCmd], { detached: true, stdio: 'ignore' })
+    execSync('chmod +x scripts/deploy-reload.sh', { cwd: '/opt/tax-api/packages/api' })
+    const child = spawn('bash', ['-lc', detach], { detached: true, stdio: 'ignore' })
     child.unref()
-    console.log('Deploy: fetched, reload detached:', payload.head_commit?.message)
+    console.log('Deploy: fetched, reload handed off:', payload.head_commit?.message)
   } catch (e: any) {
     console.error('Deploy failed:', e.message)
   }
