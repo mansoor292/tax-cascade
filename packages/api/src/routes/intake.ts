@@ -66,8 +66,14 @@ router.post('/gap-fill', async (req, res) => {
 
   // Mode A: by return_id
   if (return_id) {
+    // verification and the *_enc siblings MUST be selected. hydrate() only acts
+    // on a `*_enc` column it can see, so without them it silently no-ops and
+    // this handler reads the stale plaintext copy. Worse, `verification` was
+    // not selected at all, so the spread below started from undefined and
+    // overwrote the column with a single key — losing source, mapper_stats,
+    // unmapped_count and extracted_count on every gap-fill run.
     const { data: ret } = await supabase.from('tax_return')
-      .select('id, entity_id, tax_year, form_type, source, input_data, field_values')
+      .select('id, entity_id, tax_year, form_type, source, input_data, field_values, verification, input_data_enc, computed_data_enc, field_values_enc, verification_enc')
       .eq('id', return_id).single()
     if (!ret) return res.status(404).json({ error: `return ${return_id} not found` })
     await hydrate(supabase, ret, ENCRYPTED_RETURN_FIELDS)
@@ -123,8 +129,12 @@ router.post('/gap-fill', async (req, res) => {
           },
         },
       }
+      // Write BOTH copies. Writing only the ciphertext is what let the two
+      // drift apart: this handler updated `_enc` while every read in
+      // routes/returns.ts served the plaintext column.
       const enc = await encryptedFields(supabase, userId, updates, ENCRYPTED_RETURN_FIELDS)
-      const { error } = await supabase.from('tax_return').update(enc).eq('id', return_id)
+      const { error } = await supabase.from('tax_return')
+        .update({ ...updates, ...enc }).eq('id', return_id)
       if (error) return res.status(500).json({ error: error.message })
       persisted = true
     }

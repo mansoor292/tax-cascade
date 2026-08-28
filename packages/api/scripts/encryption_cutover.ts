@@ -196,6 +196,64 @@ async function verify(): Promise<boolean> {
   return ok
 }
 
+/**
+ * Merge rows where the two copies have diverged, then rewrite both in step.
+ *
+ * They diverged because routes/returns.ts read the plaintext column while
+ * routes/intake.ts wrote only the ciphertext. Neither copy is uniformly
+ * authoritative: on `field_values` the ciphertext is a superset (it holds the
+ * Gemini gap-filled lines), while on `verification` the ciphertext had LOST
+ * keys, because intake never selected that column and so overwrote it from
+ * `undefined`.
+ *
+ * A top-level union with the ciphertext winning ties restores the full set in
+ * both directions: nothing present in either copy is dropped, and where both
+ * hold a key the newer write is kept.
+ */
+async function reconcile(apply: boolean) {
+  console.log(`\n=== RECONCILE ${apply ? '(applying)' : '(dry run)'} ===\n`)
+  let merged = 0
+  for (const t of TARGETS) {
+    const rows = await loadRows(t)
+    for (const r of rows) {
+      const userId = await ownerOf(t, r)
+      if (!userId) continue
+      const patch: Record<string, any> = {}
+      for (const c of t.columns) {
+        const p = r[c.name]
+        const e = r[`${c.name}_enc`]
+        if (p === null || p === undefined || e === null || e === undefined) continue
+        let dec: any
+        let dek: Buffer
+        try {
+          dek = await getDek(supabase, userId)
+          dec = c.kind === 'json' ? decryptJson(dek, bytea(e)) : decryptString(dek, bytea(e))
+        } catch { continue }
+        const same = c.kind === 'json' ? canonical(dec) === canonical(p) : String(dec) === String(p)
+        if (same) continue
+
+        const mergeable = c.kind === 'json' && dec && p
+          && typeof dec === 'object' && typeof p === 'object'
+          && !Array.isArray(dec) && !Array.isArray(p)
+        const union = mergeable ? { ...(p as object), ...(dec as object) } : dec
+        const pk = mergeable ? Object.keys(p).length : 1
+        const dk = mergeable ? Object.keys(dec).length : 1
+        const uk = mergeable ? Object.keys(union as object).length : 1
+        console.log(`  ${t.table}.${c.name} ${r.id}: plaintext ${pk} + ciphertext ${dk} -> ${uk} keys`)
+        patch[c.name] = union
+        patch[`${c.name}_enc`] = byteaWrite(encrypt(dek, c.kind === 'json' ? union : String(union)))
+      }
+      if (!Object.keys(patch).length) continue
+      merged++
+      if (apply) {
+        const { error } = await supabase.from(t.table).update(patch).eq('id', r.id)
+        if (error) throw new Error(`reconcile ${t.table} ${r.id}: ${error.message}`)
+      }
+    }
+  }
+  console.log(`\n${apply ? 'reconciled' : 'would reconcile'} ${merged} row(s)`)
+}
+
 async function cutover(apply: boolean) {
   const ok = await verify()
   if (!ok) {
@@ -229,10 +287,11 @@ const run = async () => {
   switch (mode) {
     case 'audit':    return audit()
     case 'backfill': return void (await backfill(apply))
-    case 'verify':   return void (await verify())
+    case 'verify':    return void (await verify())
+    case 'reconcile': return reconcile(apply)
     case 'cutover':  return cutover(apply)
     default:
-      console.error('usage: encryption_cutover.ts audit|backfill|verify|cutover [--apply]')
+      console.error('usage: encryption_cutover.ts audit|backfill|reconcile|verify|cutover [--apply]')
       process.exit(1)
   }
 }

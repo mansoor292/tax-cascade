@@ -11,10 +11,40 @@ import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
 import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
-import { encryptedFields } from '../lib/row_crypto.js'
+import { encryptedFields, hydrate } from '../lib/row_crypto.js'
 import { extractAggregates as extractAggregatesFromFv, readMetric, COMPARE_METRICS } from '../maps/metric_to_field.js'
 
 const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
+
+/**
+ * The ciphertext siblings, for selects that name columns explicitly.
+ *
+ * hydrate() only acts when it can SEE a `*_enc` column on the row, so a select
+ * that lists `field_values` without `field_values_enc` silently returns the
+ * plaintext copy. This router had 15 such reads and never called hydrate at
+ * all — so it served the plaintext column while intake wrote only ciphertext,
+ * and the two drifted apart on real returns.
+ */
+const RETURN_ENC_COLS = 'input_data_enc, computed_data_enc, field_values_enc, verification_enc'
+
+/** Decrypt a tax_return row in place. Ownership runs through the entity, so
+ *  the user id has to be passed — the row has no user_id of its own. */
+async function hydrateReturn(row: any, userId: string): Promise<void> {
+  await hydrate(supabase, row, { ...ENCRYPTED_RETURN_FIELDS, userId })
+}
+
+/** Strip ciphertext blobs before sending a row to a client — they are large,
+ *  opaque, and of no use once the row has been decrypted. */
+function stripEnc<T extends Record<string, any>>(row: T): T {
+  if (!row) return row
+  for (const k of Object.keys(row)) if (k.endsWith('_enc')) delete (row as any)[k]
+  return row
+}
+
+/** Same for a list of rows. */
+async function hydrateReturns(rows: any[] | null | undefined, userId: string): Promise<void> {
+  for (const r of rows || []) await hydrateReturn(r, userId)
+}
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { buildCanonicalModel, buildReturnPdf } from '../builders/build_return_pdf.js'
@@ -393,8 +423,9 @@ router.get('/', async (req, res) => {
     .in('entity_id', entityIds)
     .order('tax_year', { ascending: false })
 
-  if (error) return res.status(500).json({ error: error.message })
-  res.json({ returns: data })
+  if (error) return sendDbError(res, error)
+  await hydrateReturns(data, userId)
+  res.json({ returns: (data || []).map(stripEnc) })
 })
 
 // Get single return with full breakdown
@@ -419,7 +450,8 @@ router.get('/:id', async (req, res) => {
   }
   // Do not hand the owner column back to the client.
   if ((data as any).tax_entity) delete (data as any).tax_entity.user_id
-  res.json({ return: data })
+  await hydrateReturn(data, userId)
+  res.json({ return: stripEnc(data as any) })
 })
 
 // Multi-year comparison for an entity
@@ -440,6 +472,9 @@ router.get('/compare/:entity_id', async (req, res) => {
     .eq('entity_id', req.params.entity_id)
     .order('tax_year', { ascending: true })
     .order('computed_at', { ascending: false })
+
+  // Decrypt before anything reads field_values / computed_data below.
+  await hydrateReturns(allRows, userId)
 
   // An entity with no returns yet used to answer { comparison: null }, a
   // shape with no all_rows. The Compare page iterates all_rows directly, so
@@ -684,8 +719,9 @@ router.post('/compute', async (req, res) => {
   let amendOfRow: { id: string; entity_id: string; tax_year: number; form_type: string; field_values: any } | null = null
   if (amend_of) {
     const { data } = await supabase.from('tax_return')
-      .select('id, entity_id, tax_year, form_type, field_values').eq('id', amend_of).single()
+      .select(`id, entity_id, tax_year, form_type, field_values, ${RETURN_ENC_COLS}`).eq('id', amend_of).single()
     if (!data) return res.status(404).json({ error: `amend_of ${amend_of} not found` })
+    await hydrateReturn(data, userId)
     amendOfRow = data
   }
 
@@ -716,7 +752,8 @@ router.post('/compute', async (req, res) => {
       }
       if (seedId) {
         const { data: seedRow } = await supabase.from('tax_return')
-          .select('input_data').eq('id', seedId).single()
+          .select(`input_data, ${RETURN_ENC_COLS}`).eq('id', seedId).single()
+        await hydrateReturn(seedRow, userId)
         existingInputData = (seedRow?.input_data || {}) as Record<string, any>
       }
     }
@@ -934,10 +971,11 @@ router.post('/compute', async (req, res) => {
     if (entity_id && form_type === '1120') {
       try {
         const { data: priorRet } = await supabase.from('tax_return')
-          .select('id, field_values')
+          .select(`id, field_values, ${RETURN_ENC_COLS}`)
           .eq('entity_id', entity_id).eq('tax_year', tax_year - 1)
           .eq('form_type', '1120')
           .order('computed_at', { ascending: false }).limit(1).maybeSingle()
+        await hydrateReturn(priorRet, userId)
         // NOL carryforward generated this year = max(0, -L28). Read from the
         // golden-model field_values rather than a separate computed dict.
         const priorTiBeforeNol = (priorRet?.field_values as any)?.['tax.L28_ti_before_nol']
@@ -960,10 +998,11 @@ router.post('/compute', async (req, res) => {
     if (entity_id && (form_type === '1120' || form_type === '1120S')) {
       try {
         const { data: priorRet } = await supabase.from('tax_return')
-          .select('id, field_values')
+          .select(`id, field_values, ${RETURN_ENC_COLS}`)
           .eq('entity_id', entity_id).eq('tax_year', tax_year - 1)
           .eq('form_type', form_type)
           .order('computed_at', { ascending: false }).limit(1).maybeSingle()
+        await hydrateReturn(priorRet, userId)
         const fv = priorRet?.field_values
         if (fv && typeof fv === 'object') {
           priorSchedLEoy = fv as Record<string, number>
@@ -1209,16 +1248,18 @@ router.post('/compute', async (req, res) => {
       let seededFieldValues: any = {}
       if (targetRow) {
         const { data } = await supabase.from('tax_return')
-          .select('field_values').eq('id', targetRow.id).single()
+          .select(`field_values, ${RETURN_ENC_COLS}`).eq('id', targetRow.id).single()
+        await hydrateReturn(data, userId)
         seededFieldValues = data?.field_values || {}
       } else if (amendOfRow) {
         seededFieldValues = amendOfRow.field_values || {}
       } else {
         const { data } = await supabase.from('tax_return')
-          .select('field_values')
+          .select(`field_values, ${RETURN_ENC_COLS}`)
           .eq('entity_id', entity_id).eq('tax_year', tax_year).eq('form_type', form_type)
           .eq('source', isExtension ? 'extension' : 'proforma')
           .order('computed_at', { ascending: false }).limit(1).maybeSingle()
+        await hydrateReturn(data, userId)
         seededFieldValues = data?.field_values || {}
       }
       const rawExisting: Record<string, any> = seededFieldValues
@@ -1447,8 +1488,9 @@ router.post('/compute', async (req, res) => {
       // .single() was rejecting the lookup — hence every prior_year_value was
       // null and the baseline cross-check never fired.
       const { data: priorRows } = await supabase.from('tax_return')
-        .select('input_data, computed_data, field_values, source, updated_at')
+        .select(`input_data, computed_data, field_values, source, updated_at, ${RETURN_ENC_COLS}`)
         .eq('entity_id', entity_id).eq('tax_year', tax_year - 1).eq('form_type', form_type)
+      await hydrateReturns(priorRows, userId)
       if (priorRows && priorRows.length) {
         const rank = (r: any) =>
           r.source === 'filed_import' ? 0 :
@@ -1796,12 +1838,13 @@ router.post('/use-prior-year', async (req, res) => {
   // Fetch prior-year rows and pick the authoritative one.
   // Preference: filed_import > latest amendment > latest proforma.
   const { data: priorRows } = await supabase.from('tax_return')
-    .select('id, input_data, computed_data, field_values, tax_year, source, computed_at')
+    .select(`id, input_data, computed_data, field_values, tax_year, source, computed_at, ${RETURN_ENC_COLS}`)
     .eq('entity_id', entity_id).eq('tax_year', tax_year - 1).eq('form_type', form_type)
     .order('computed_at', { ascending: false })
   if (!priorRows?.length) {
     return res.status(404).json({ error: `No ${tax_year - 1} ${form_type} return found for this entity` })
   }
+  await hydrateReturns(priorRows, userId)
   const SOURCE_RANK: Record<string, number> = { filed_import: 0, amendment: 1, proforma: 2, extension: 3 }
   const priorRet = [...priorRows].sort((a, b) => {
     const ra = SOURCE_RANK[a.source as string] ?? 9
@@ -1811,10 +1854,11 @@ router.post('/use-prior-year', async (req, res) => {
 
   // Fetch current-year return (latest proforma/amendment, not filed_import)
   const { data: currentRows } = await supabase.from('tax_return')
-    .select('input_data, source')
+    .select(`input_data, source, ${RETURN_ENC_COLS}`)
     .eq('entity_id', entity_id).eq('tax_year', tax_year).eq('form_type', form_type)
     .in('source', ['proforma', 'amendment', 'extension'])
     .order('computed_at', { ascending: false }).limit(1)
+  await hydrateReturns(currentRows, userId)
   const currentRet = currentRows?.[0] || null
 
   const priorInputs: Record<string, any> = priorRet.input_data || {}
