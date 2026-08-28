@@ -25,7 +25,7 @@ import './bootstrap_env.js'
 import express from 'express'
 import cors from 'cors'
 import crypto from 'crypto'
-import { execSync } from 'child_process'
+import { execSync, spawn } from 'child_process'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { runPython } from './lib/run_python.js'
 import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib'
@@ -87,20 +87,43 @@ app.post('/deploy', express.raw({ type: 'application/json' }), (req, res) => {
   // (import hoisting), so any secret only in SSM (e.g. SUPABASE_SERVICE_ROLE_KEY)
   // is undefined at module-load time. Shelling SSM → shell env → pm2 --update-env
   // → node's process.env fixes the ordering. Helper script committed alongside.
-  const cmd = [
+  //
+  // Fetch and install synchronously — neither step touches this process.
+  const fetchCmd = [
     'cd /opt/tax-api',
     'git checkout -- package-lock.json',
     'git pull',
     'cd packages/api',
     'npm install --include=dev',
     'chmod +x scripts/load-ssm-env.sh',
+  ].join(' && ')
+
+  // The restart CANNOT run here.
+  //
+  // This handler is itself executing inside a pm2 cluster worker. `pm2
+  // restart` cycles workers one at a time, and the first one it takes down is
+  // the one running this execSync — which kills the command before it reaches
+  // the others. On a two-core box that left exactly half the fleet on the old
+  // build, and requests round-robin between them: measured 10/20 responses
+  // from new code and 10/20 from old, indefinitely. Every deploy has behaved
+  // this way, so any fix looked intermittent and any bug looked flaky.
+  //
+  // Detaching puts the reload in its own session, so it survives this worker
+  // being replaced and can finish cycling the rest. `reload` rather than
+  // `restart` brings workers up one at a time and keeps the service answering
+  // throughout, which also removes the need to deploy outside working hours.
+  const reloadCmd = [
+    'cd /opt/tax-api/packages/api',
     'export $(cat .env | xargs)',
     'eval "$(./scripts/load-ssm-env.sh)"',
-    'pm2 restart tax-api --update-env',
+    'pm2 reload tax-api --update-env',
   ].join(' && ')
+
   try {
-    execSync(cmd, { timeout: 120000 })
-    console.log('Deploy succeeded:', payload.head_commit?.message)
+    execSync(fetchCmd, { timeout: 120000 })
+    const child = spawn('bash', ['-lc', reloadCmd], { detached: true, stdio: 'ignore' })
+    child.unref()
+    console.log('Deploy: fetched, reload detached:', payload.head_commit?.message)
   } catch (e: any) {
     console.error('Deploy failed:', e.message)
   }
