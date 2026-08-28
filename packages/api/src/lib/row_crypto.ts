@@ -4,9 +4,9 @@
  *
  * Write pattern: caller keeps the plaintext column in the payload and
  *   spreads `...await encryptedFields(supabase, userId, payload, {json, text})`
- *   into the insert/update. This dual-writes plaintext + `_enc` during the
- *   transition; a later cutover nulls plaintext and this helper continues
- *   to work unchanged (it only writes the _enc variants).
+ *   into the insert/update. That spread now carries `field: null` alongside
+ *   `field_enc`, so the readable copy is removed as the row is written. The
+ *   dual-write it used to perform is behind TAX_API_WRITE_PLAINTEXT=1.
  *
  * Read pattern: caller awaits `hydrate(supabase, row, {json, text, userId})`
  *   right after a .select(). For each `*_enc` column that's populated, the
@@ -17,12 +17,39 @@
  * Fallback: if encryption isn't enabled (TAX_API_KMS_KEY unset) or
  * decryption fails for any reason, the plaintext column is left in place
  * and a warning is logged. Requests never fail due to crypto issues.
+ *
+ * Note that this fallback is why the stalled transition stayed invisible: with
+ * the readable copy present, the system behaved identically whether or not
+ * encryption was working. Post-cutover there is no plaintext to fall back to,
+ * so a decrypt failure now surfaces as missing data rather than silence.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { encrypt, decrypt, decryptJson, decryptString, getDek, bytea, byteaWrite } from './crypto.js'
 
 export function encryptionEnabled(): boolean {
   return !!process.env.TAX_API_KMS_KEY
+}
+
+/**
+ * Whether to keep writing the readable copy alongside the ciphertext.
+ *
+ * This was the transition setting, and it stayed on far longer than intended:
+ * every encrypted column still had a plaintext twin, so a database dump gave
+ * up cleartext returns and EINs despite the encryption being in place.
+ *
+ * Now off. Every caller spreads this function's result over its own payload
+ * AFTER the plaintext keys, so returning `field: null` here removes the
+ * readable copy at the point of writing, without touching 12 call sites.
+ *
+ * Only the fields actually being written are nulled — nulling every field in
+ * the spec would wipe columns an UPDATE never intended to touch.
+ *
+ * Set TAX_API_WRITE_PLAINTEXT=1 to restore the old behaviour if a rollback is
+ * ever needed; nothing reads the plaintext column any more, so this is a
+ * safety valve rather than a supported mode.
+ */
+export function writePlaintext(): boolean {
+  return process.env.TAX_API_WRITE_PLAINTEXT === '1'
 }
 
 export interface FieldSpec {
@@ -53,11 +80,17 @@ export async function encryptedFields(
   const dek = await getDek(supabase, userId)
   for (const f of jsonFields) {
     const v = payload[f]
-    if (v !== undefined && v !== null) out[`${f}_enc`] = byteaWrite(encrypt(dek, v))
+    if (v !== undefined && v !== null) {
+      out[`${f}_enc`] = byteaWrite(encrypt(dek, v))
+      if (!writePlaintext()) out[f] = null
+    }
   }
   for (const f of textFields) {
     const v = payload[f]
-    if (v !== undefined && v !== null) out[`${f}_enc`] = byteaWrite(encrypt(dek, String(v)))
+    if (v !== undefined && v !== null) {
+      out[`${f}_enc`] = byteaWrite(encrypt(dek, String(v)))
+      if (!writePlaintext()) out[f] = null
+    }
   }
   return out
 }

@@ -91,10 +91,15 @@ app.post('/deploy', express.raw({ type: 'application/json' }), (req, res) => {
   // → node's process.env fixes the ordering. Helper script committed alongside.
   //
   // Fetch and install synchronously — neither step touches this process.
+  // fetch + reset rather than pull: `git pull` needs a merge strategy and
+  // fails outright once history is rewritten upstream, which silently stopped
+  // every deploy after one force-push. The server should always match
+  // origin/main exactly, so say that directly.
   const fetchCmd = [
     'cd /opt/tax-api',
     'git checkout -- package-lock.json',
-    'git pull',
+    'git fetch origin main',
+    'git reset --hard origin/main',
     'cd packages/api',
     'npm install --include=dev',
     'chmod +x scripts/load-ssm-env.sh',
