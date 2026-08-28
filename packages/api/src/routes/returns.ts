@@ -473,7 +473,7 @@ router.get('/compare/:entity_id', async (req, res) => {
   // entity's full return history, name and figures included, to any signed-in
   // account. Confirm the entity is this user's before reading anything.
   const { data: ownerRow } = await supabase.from('tax_entity')
-    .select('id').eq('id', req.params.entity_id).eq('user_id', userId).maybeSingle()
+    .select('id, name').eq('id', req.params.entity_id).eq('user_id', userId).maybeSingle()
   if (!ownerRow) return res.status(404).json({ error: 'Entity not found' })
 
   const { data: allRows } = await supabase.from('tax_return')
@@ -491,9 +491,13 @@ router.get('/compare/:entity_id', async (req, res) => {
   // page with no nav and no error boundary. Keep the shape constant and the
   // page renders its empty state instead.
   if (!allRows?.length) {
+    // Send the entity even when there is nothing to compare: the page titles
+    // itself from it, and an explicit null here is just as unreadable to that
+    // code as the missing key it replaced.
     return res.json({
       comparison: null,
-      entity: null, years: [], returns: [], all_rows: [], matrix: {}, changes: {},
+      entity: { name: ownerRow.name },
+      years: [], returns: [], all_rows: [], matrix: {}, changes: {},
     })
   }
 

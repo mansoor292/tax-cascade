@@ -248,7 +248,7 @@ export default function Compare() {
             <div className="flex items-center gap-2 mb-0.5 flex-wrap">
               <GitBranch className="h-4 w-4 text-amber-400" />
               <h1 className="text-xl sm:text-2xl font-semibold tracking-tight truncate">
-                {entity?.name || data.entity.name} — {amendRow?.tax_year ?? '?'} Amendment vs Filed
+                {entity?.name || data.entity?.name || 'Entity'} — {amendRow?.tax_year ?? '?'} Amendment vs Filed
               </h1>
             </div>
             {amendRow && (
@@ -304,7 +304,7 @@ export default function Compare() {
             <div className="flex items-center gap-2 mb-0.5 flex-wrap">
               <GitBranch className="h-4 w-4 text-amber-400" />
               <h1 className="text-xl sm:text-2xl font-semibold tracking-tight truncate">
-                {entity?.name || data.entity.name} — {focusYear} Filed vs Amended
+                {entity?.name || data.entity?.name || 'Entity'} — {focusYear} Filed vs Amended
               </h1>
             </div>
             {focused?.filedRow && focused?.amendRow && (
@@ -354,7 +354,7 @@ export default function Compare() {
           <div className="flex items-center gap-2 mb-0.5">
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
             <h1 className="text-xl sm:text-2xl font-semibold tracking-tight truncate">
-              {entity?.name || data.entity.name} — Year over year
+              {entity?.name || data.entity?.name || 'Entity'} — Year over year
             </h1>
           </div>
           <p className="text-sm text-muted-foreground">
