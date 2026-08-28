@@ -30,6 +30,9 @@ export async function signUpThroughUi(page: Page, email: string, name = 'E2E Tes
  * run for a cleanup concern.
  */
 export async function deleteUserByEmail(email: string): Promise<'deleted' | 'skipped' | 'not-found'> {
+  // Without the service role key every run silently leaves its accounts behind.
+  // That went unnoticed long enough to accumulate 52 of them in the production
+  // auth table. `npm run test:e2e:clean` loads the key from SSM first.
   if (!SERVICE) return 'skipped'
   const auth = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` }
 

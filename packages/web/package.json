@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:prod": "BASE_URL=https://fin.catipult.ai playwright test"
+    "test:e2e:prod": "BASE_URL=https://fin.catipult.ai playwright test",
+    "test:e2e:clean": "eval \"$(bash ../api/scripts/load-ssm-env.sh)\" && playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
