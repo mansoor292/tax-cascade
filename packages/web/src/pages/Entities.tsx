@@ -218,7 +218,7 @@ export default function Entities() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="legal_form">Legal form (optional)</Label>
-              <Select value={legalForm || '__none__'} onValueChange={(v) => setLegalForm(v === '__none__' ? '' : v)}>
+              <Select value={legalForm || '__none__'} onValueChange={(v) => setLegalForm(v && v !== '__none__' ? v : '')}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
