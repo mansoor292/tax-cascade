@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   w2: 'W-2',

@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 import { api } from '@/lib/api'
 import ReturnsTab from '@/components/tabs/ReturnsTab'
 import ScenariosTab from '@/components/tabs/ScenariosTab'

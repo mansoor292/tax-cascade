@@ -242,6 +242,27 @@ router.post('/refresh', async (req, res) => {
 })
 
 /** POST /api/calendar — create a custom obligation (insurance renewal, board meeting). */
+
+/**
+ * Accept only a real ISO calendar date.
+ *
+ * The column is `date`, and Postgres accepts its own special literals there:
+ * 'tomorrow' silently became a real date, and 'infinity' was stored as
+ * literal infinity. Both produce an obligation whose due date is not the one
+ * anyone typed — a wrong deadline that looks like a real one, which in a
+ * filing calendar is the whole product being quietly wrong.
+ */
+function isCalendarDate(v: unknown): v is string {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false
+  const [y, m, d] = v.split('-').map(Number)
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  // Rejects 2026-02-30 and friends, which JS would otherwise roll forward.
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+}
+
+const BAD_DATE = 'due_date must be a real calendar date as YYYY-MM-DD'
+
 router.post('/', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
@@ -249,6 +270,9 @@ router.post('/', async (req, res) => {
   const { entity_id, title, due_date, kind, notes, amount, tax_year } = req.body || {}
   if (!entity_id || !title || !due_date) {
     return res.status(400).json({ error: 'entity_id, title and due_date are required' })
+  }
+  if (!isCalendarDate(due_date)) {
+    return res.status(400).json({ error: BAD_DATE, field: 'due_date', received: due_date })
   }
 
   const { data: ent } = await supabase.from('tax_entity')
@@ -288,7 +312,12 @@ router.patch('/:id', async (req, res) => {
   }
   if (amount !== undefined) patch.amount = amount
   if (notes !== undefined) patch.notes = notes
-  if (due_date !== undefined) patch.due_date = due_date
+  if (due_date !== undefined) {
+    if (!isCalendarDate(due_date)) {
+      return res.status(400).json({ error: BAD_DATE, field: 'due_date', received: due_date })
+    }
+    patch.due_date = due_date
+  }
 
   const { data, error } = await supabase.from('obligation')
     .update(patch)

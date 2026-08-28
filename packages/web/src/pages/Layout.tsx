@@ -50,7 +50,7 @@ export default function Layout() {
             </div>
           </main>
         </SidebarInset>
-        <Toaster />
+        <Toaster closeButton duration={6000} />
       </SidebarProvider>
     </TooltipProvider>
   )

@@ -33,6 +33,18 @@ router.post('/', async (req, res) => {
   const userId = (req as any).userId
   const { name, description, entity_id, tax_year, base_return_id, adjustments } = req.body
 
+  // A scenario with no entity has no form type, so computing it used to crash
+  // on `formType.toLowerCase()` and answer 500. It could never do anything
+  // useful — refuse it at creation instead of storing a row that only fails
+  // later. Ownership is checked here too: the foreign key proves the entity
+  // exists, not that it is the caller's.
+  if (!entity_id) {
+    return res.status(400).json({ error: 'entity_id is required.', field: 'entity_id' })
+  }
+  const { data: ownEntity } = await supabase.from('tax_entity')
+    .select('id, form_type').eq('id', entity_id).eq('user_id', userId).maybeSingle()
+  if (!ownEntity) return res.status(404).json({ error: 'Entity not found' })
+
   const { data, error } = await supabase.from('scenario').insert({
     user_id: userId, name, description, entity_id, tax_year,
     base_return_id, adjustments: adjustments || {},
@@ -54,6 +66,14 @@ router.post('/:id/compute', async (req, res) => {
   try {
     const adj = scenario.adjustments || {}
     const formType = scenario.tax_entity?.form_type || adj.form_type
+    // Scenarios created before entity_id was required can still be missing a
+    // form type; say so rather than crashing further down.
+    if (!formType) {
+      return res.status(400).json({
+        error: 'This scenario has no form type — it is not attached to an entity.',
+        field: 'entity_id',
+      })
+    }
 
     // Merge adjustments with base return's input_data (adjustments override)
     let baseInputs: Record<string, any> = {}

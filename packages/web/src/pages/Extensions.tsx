@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 function fmt(n: unknown): string {
   if (typeof n !== 'number') return String(n ?? '')

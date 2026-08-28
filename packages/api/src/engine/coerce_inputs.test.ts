@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calc1040, calc1120, calc1120S, coerceInputs, TaxInputError } from './tax_engine.js'
+import { calc1040, calc1120, calc1120S, coerceInputs, TaxInputError, MAX_TAX_AMOUNT } from './tax_engine.js'
 
 /**
  * Numeric inputs arriving as strings.
@@ -81,6 +81,25 @@ describe('numeric coercion at the engine boundary', () => {
     expect(s.computed.total_income).toBe(500000)
     expect(c.computed.total_income).toBe(500000)
     expect(() => calc1120({ gross_receipts: 'plenty', tax_year: 2024 } as any)).toThrow(TaxInputError)
+  })
+
+  it('refuses an amount too large to be a real figure', () => {
+    // Finite is not the same as plausible: wages of 1e308 used to compute a
+    // tax of 3.79e307 — arithmetically consistent and completely meaningless.
+    expect(() => calc1040({ wages: 1e308, filing_status: 'single', tax_year: 2024 } as any))
+      .toThrow(TaxInputError)
+    expect(() => calc1040({ wages: MAX_TAX_AMOUNT * 10, filing_status: 'single', tax_year: 2024 } as any))
+      .toThrow(TaxInputError)
+  })
+
+  it('still accepts a large but genuinely possible amount', () => {
+    const { computed } = calc1040({ wages: 50_000_000, filing_status: 'single', tax_year: 2024 } as any)
+    expect(computed.agi).toBe(50_000_000)
+  })
+
+  it('applies the ceiling to string input too', () => {
+    expect(() => calc1040({ wages: '99999999999999', filing_status: 'single', tax_year: 2024 } as any))
+      .toThrow(TaxInputError)
   })
 
   it('names the offending field so the caller can fix it', () => {

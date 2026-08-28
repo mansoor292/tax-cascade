@@ -32,7 +32,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 function fmt(n: unknown): string {
   if (typeof n !== 'number') return String(n ?? '—')

@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 const FORM_TYPES = [
   { value: '1040', label: 'Individual (1040)' },

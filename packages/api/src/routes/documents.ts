@@ -822,8 +822,14 @@ router.delete('/:id', async (req, res) => {
   
   if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
-  await supabase.from('document').delete().eq('id', req.params.id).eq('user_id', userId!)
-  res.json({ success: true })
+  // Reporting success for a document that was never there is a small lie with
+  // a real cost: the caller (or Claude, on the user's behalf) concludes the
+  // file is gone when the id was simply wrong, and stops looking for it.
+  const { data: removed, error } = await supabase.from('document')
+    .delete().eq('id', req.params.id).eq('user_id', userId!).select('id')
+  if (error) return sendDbError(res, error)
+  if (!removed?.length) return res.status(404).json({ error: 'Not found' })
+  res.json({ success: true, deleted: removed[0].id })
 })
 
 // Run Textract

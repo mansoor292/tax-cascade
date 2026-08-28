@@ -9,7 +9,7 @@ import { Bot, Copy, ExternalLink, CheckCircle2, ArrowRight, Key, Shield, Zap } f
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 const MCP_URL = 'https://fin.catipult.ai/mcp'
 // Deliberately NOT a deep link into a specific dialog. The old

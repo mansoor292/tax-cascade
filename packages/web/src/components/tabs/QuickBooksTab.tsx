@@ -38,7 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 function fmt(n: unknown): string {
   if (typeof n !== 'number') return String(n ?? '')

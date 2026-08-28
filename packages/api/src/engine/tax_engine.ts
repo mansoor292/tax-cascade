@@ -22,6 +22,17 @@ export const FILING_STATUSES: FilingStatus[] = ['single', 'mfj', 'mfs', 'hoh', '
  * Bad input reaching the engine. Distinct from a genuine failure so callers
  * can answer 400 rather than 500 — the caller made a correctable mistake.
  */
+/**
+ * Ceiling on any single money field: $1 trillion.
+ *
+ * Finite is not the same as plausible. wages: 1e308 sailed through and
+ * produced a tax of 3.79e307 — arithmetically consistent, completely
+ * meaningless, and indistinguishable from a real figure in a PDF. Nothing a
+ * US return legitimately reports comes near this, so a value above it is a
+ * unit error or a corrupted import, and saying so beats computing on it.
+ */
+export const MAX_TAX_AMOUNT = 1e12
+
 export class TaxInputError extends Error {
   readonly field: string
   readonly received: unknown
@@ -64,6 +75,9 @@ export function coerceInputs<T extends object>(defaults: T, raw: unknown): T {
         if (!Number.isFinite(v)) {
           throw new TaxInputError(key, v, 'must be a finite number (got NaN or Infinity)')
         }
+        if (Math.abs(v) > MAX_TAX_AMOUNT) {
+          throw new TaxInputError(key, v, `exceeds the largest supported amount (${MAX_TAX_AMOUNT.toExponential()})`)
+        }
         continue
       }
       // Absent is not an error — that is what the default is for.
@@ -73,6 +87,9 @@ export function coerceInputs<T extends object>(defaults: T, raw: unknown): T {
         const n = Number(cleaned)
         if (cleaned === '' || !Number.isFinite(n)) {
           throw new TaxInputError(key, v, 'expected a number')
+        }
+        if (Math.abs(n) > MAX_TAX_AMOUNT) {
+          throw new TaxInputError(key, v, `exceeds the largest supported amount (${MAX_TAX_AMOUNT.toExponential()})`)
         }
         merged[key] = n
         continue

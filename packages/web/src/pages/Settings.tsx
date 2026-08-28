@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
-import { toast } from 'sonner'
+import { toast } from '@/lib/toast'
 
 interface ApiKey {
   id: string
