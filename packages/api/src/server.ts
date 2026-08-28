@@ -49,6 +49,8 @@ import discoveryRoutes from './discovery/discovery_routes.js'
 import { mountMCP } from './mcp/tax-mcp.js'
 import { mountOAuth } from './mcp/oauth.js'
 
+const STARTED_AT = new Date().toISOString()
+
 const app = express()
 app.set('trust proxy', true)
 // A browser can only read response headers a server explicitly exposes, and
@@ -210,8 +212,31 @@ app.use('/api/calendar', calendarRoutes)
 app.use('/api/discover', discoveryRoutes)
 
 // ─── Health ───
+// Resolved once at boot, so it reports the commit THIS worker actually loaded
+// rather than whatever is on disk now.
+const BUILD_COMMIT = (() => {
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      cwd: '/opt/tax-api', encoding: 'utf8', timeout: 5000,
+    }).trim()
+  } catch {
+    return 'unknown'
+  }
+})()
+
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', version: '0.1.0', forms: Object.keys(FORM_INVENTORY).length })
+  // commit and pid are here because a half-deployed fleet is otherwise
+  // invisible: pm2 runs one worker per core and a deploy could leave some on
+  // the old build, with requests round-robining between them. Poll this a few
+  // times — more than one distinct commit means the deploy did not finish.
+  res.json({
+    status: 'ok',
+    version: '0.1.0',
+    forms: Object.keys(FORM_INVENTORY).length,
+    commit: BUILD_COMMIT,
+    pid: process.pid,
+    started_at: STARTED_AT,
+  })
 })
 
 // ─── List available forms ───
