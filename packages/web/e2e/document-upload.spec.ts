@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { signUpThroughUi, testEmail, deleteUserByEmail } from './helpers'
+import { readFileSync } from 'fs'
+import { signUpThroughUi, signUpViaApi, testEmail, deleteUserByEmail } from './helpers'
 
 /**
  * Document upload (SOP 02, step 1).
@@ -126,3 +127,82 @@ test.describe('document upload', () => {
     await deleteUserByEmail(email2)
   })
 })
+
+/**
+ * Registration must answer before extraction, not after.
+ *
+ * Reported on SOP 02: uploading a 2023 return failed with "Unexpected 504
+ * response from /api/documents/register", and the document did not appear —
+ * except it had actually been stored and fully extracted. Classification and
+ * a Textract job ran on the HTTP request, taking roughly 8s plus 0.85s per
+ * page, and the proxy in front of the site gives up around 26s.
+ *
+ * Measured directly: a 20-page return took 24.8s and just survived; a 34-page
+ * return returned 504 to the browser at 28.0s while the identical request
+ * straight to the API returned 200 and created the document. The upload
+ * succeeded and the person was told it had failed.
+ *
+ * The size that triggers it is a moving target, so this pins the property
+ * that removes the whole class: the response comes back immediately and the
+ * extraction lands afterwards. A one-page file keeps the Textract bill at one
+ * page while still failing against the old behaviour, which only ever replied
+ * once extraction was complete.
+ */
+test.describe('upload registration responds before extraction', () => {
+  const email = testEmail('async-register')
+
+  test.afterAll(async () => {
+    const r = await deleteUserByEmail(email)
+    if (r === 'skipped') console.log(`NOTE: no service role key — left ${email} behind`)
+  })
+
+  test('the file is stored and acknowledged without waiting for extraction', async ({ request, baseURL }) => {
+    test.setTimeout(180_000)
+    const token = await signUpViaApi(email)
+    const auth = { Authorization: `Bearer ${token}` }
+
+    const ent = await request.post(`${baseURL}/api/entities`, {
+      headers: auth, data: { name: 'Async Register Co', form_type: '1040' },
+    })
+    const entityId = (await ent.json())?.entity?.id
+    expect(entityId).toBeTruthy()
+
+    const pre = await request.get(`${baseURL}/api/documents/presign?filename=async.pdf`, { headers: auth })
+    const presign = await pre.json()
+
+    const pdf = readFileSync('e2e/fixtures/sample-1040.pdf')
+    const put = await request.put(presign.upload_url, {
+      headers: { 'Content-Type': presign.content_type }, data: pdf,
+    })
+    expect(put.ok(), 'file must reach storage').toBe(true)
+
+    const started = Date.now()
+    const reg = await request.post(`${baseURL}/api/documents/register`, {
+      headers: auth,
+      data: { s3_key: presign.s3_key, filename: 'async.pdf', entity_id: entityId },
+    })
+    const elapsed = Date.now() - started
+    const body = await reg.json()
+
+    // The old behaviour answered only once Gemini and Textract had finished,
+    // which is what put it over the proxy limit on a real return.
+    expect(reg.status(), `register should acknowledge immediately: ${JSON.stringify(body).slice(0, 200)}`).toBe(202)
+    expect(body.processing, 'response must say extraction is still running').toBe(true)
+    expect(elapsed, `register took ${elapsed}ms — it must not wait for extraction`).toBeLessThan(8_000)
+    expect(body.document?.id, 'the document row must exist immediately').toBeTruthy()
+    expect(body.document?.processing_status).toBe('processing')
+
+    // And it must actually finish, not sit in "processing" forever.
+    const docId = body.document.id
+    let status = 'processing'
+    for (let i = 0; i < 40 && status === 'processing'; i++) {
+      await new Promise(r => setTimeout(r, 3_000))
+      const r = await request.get(`${baseURL}/api/documents/${docId}`, { headers: auth })
+      status = (await r.json())?.document?.processing_status
+    }
+    expect(status, 'extraction must reach a terminal state').not.toBe('processing')
+
+    await request.delete(`${baseURL}/api/entities/${entityId}`, { headers: auth })
+  })
+})
+

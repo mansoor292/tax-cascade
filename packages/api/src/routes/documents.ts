@@ -306,6 +306,23 @@ print(f"{len(data)}|{sha}")
 })
 
 // Factored so /ingest can reuse it
+/**
+ * Register an uploaded file.
+ *
+ * The row is created and returned IMMEDIATELY; classification and extraction
+ * run afterwards and update it.
+ *
+ * They used to run on the request. Gemini plus a Textract job — including its
+ * polling loop — takes roughly 8s plus 0.85s per page, and the proxy in front
+ * of the site gives up at about 26s. Measured: a 20-page return took 24.8s and
+ * squeaked through; a 34-page return answered 504 to the browser at 28.0s
+ * while the same request straight to the API returned 200 and created the
+ * document. So the upload succeeded and the person was told it had failed —
+ * and could not tell that from a genuine failure, which is worse than either.
+ *
+ * Pass ?wait=1 to keep the old synchronous behaviour for callers that control
+ * their own timeout and want the extraction in the response.
+ */
 const registerHandler = async (req: any, res: any) => {
   const userId = await getUser(req)
 
@@ -315,6 +332,50 @@ const registerHandler = async (req: any, res: any) => {
   if (!s3_key || !filename) return res.status(400).json({ error: 's3_key and filename required' })
 
   const ext = filename.split('.').pop()?.toLowerCase() || ''
+  const wait = req.query?.wait === '1' || req.query?.wait === 'true'
+
+  // Create the row up front so the file is visible and attributable the moment
+  // the upload lands, whatever happens to the extraction afterwards.
+  const { data: doc0, error: insErr } = await supabase.from('document').insert({
+    user_id: userId,
+    entity_id: entity_id || null,
+    filename,
+    file_type: ext,
+    s3_path: s3_key,
+    doc_type: 'other',
+    processing_status: 'processing',
+    processing_started_at: new Date().toISOString(),
+  }).select().single()
+  if (insErr) return sendDbError(res, insErr)
+
+  const work = extractAndArchive({
+    docId: doc0.id, userId, s3_key, filename, file_size, ext,
+    entity_id: entity_id || null, content_hash, _deduped_textract,
+  })
+
+  if (!wait) {
+    // Answer now. The browser shows the document as processing and polls.
+    res.status(202).json({
+      document: { ...doc0, processing_status: 'processing' },
+      processing: true,
+      note: 'Upload stored. Classification and extraction are running; the document will update shortly.',
+    })
+    work.catch(e => console.error(`[register] background work failed for ${doc0.id}:`, e?.message))
+    return
+  }
+
+  const result = await work
+  return res.json(result)
+}
+
+/** Everything that used to happen inline. Updates the row it is given. */
+async function extractAndArchive(args: {
+  docId: string; userId: string; s3_key: string; filename: string
+  file_size?: number; ext: string; entity_id: string | null
+  content_hash?: string; _deduped_textract?: any
+}): Promise<any> {
+  const { docId, userId, s3_key, filename, file_size, ext, entity_id, content_hash, _deduped_textract } = args
+  try {
 
   // Categorize with Gemini
   let classification: any = { doc_type: 'other' }
@@ -470,21 +531,20 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
   if (content_hash) metaPayload.content_hash = content_hash
   const docEnc = await encryptedFields(supabase, userId,
     { meta: metaPayload, textract_data: textractData }, ENCRYPTED_DOC_FIELDS)
-  const { data: doc, error } = await supabase.from('document').insert({
-    user_id: userId,
+  // UPDATE, not insert — the row was created before the response went out.
+  const { data: doc, error } = await supabase.from('document').update({
     entity_id: entity_id || null,
-    filename,
-    file_type: ext,
-    s3_path: s3_key,
     doc_type: classification.doc_type || 'other',
     tax_year: classification.tax_year || null,
     textract_data: textractData,
     extracted_at: textractData ? new Date().toISOString() : null,
     meta: metaPayload,
+    processing_status: 'done',
+    processing_error: null,
     ...docEnc,
-  }).select().single()
+  }).eq('id', docId).select().single()
 
-  if (error) return sendDbError(res, error)
+  if (error) throw new Error(error.message)
   await hydrate(supabase, doc, ENCRYPTED_DOC_FIELDS)
 
   // Auto-archive if it's a recognized prior-year return. Inserts a filed_import
@@ -518,12 +578,22 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
     }
   }
 
-  res.json({
+  return {
     document: doc, classification,
     textract: textractData ? { num_pages: textractData.num_pages, num_fields: textractData.kvs?.length } : null,
     processed_return: processedReturn,
     discovery_started: discoveryStarted,
-  })
+  }
+  } catch (e: any) {
+    // Record the failure on the row rather than losing it: the file is stored
+    // and attributed, so the person can see it and retry extraction.
+    console.error(`[register] extraction failed for ${docId}:`, e?.message)
+    await supabase.from('document').update({
+      processing_status: 'failed',
+      processing_error: String(e?.message || e).slice(0, 500),
+    }).eq('id', docId)
+    throw e
+  }
 }
 
 // Expose the register handler as a route

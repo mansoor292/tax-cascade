@@ -18,6 +18,9 @@ export interface Document {
     table_count?: number
   } | null
   textract_status?: string
+  /** 'processing' while classification and extraction run after upload. */
+  processing_status?: 'processing' | 'done' | 'failed'
+  processing_error?: string
   gemini_classification?: Record<string, unknown>
   meta?: {
     summary?: string
@@ -47,6 +50,13 @@ export function useDocuments(entityId?: string) {
 
   useEffect(() => { load() }, [load])
 
+  /** Poll while anything is still being extracted, then stop. */
+  useEffect(() => {
+    if (!documents.some(d => d.processing_status === 'processing')) return
+    const t = setInterval(() => { load() }, 3000)
+    return () => clearInterval(t)
+  }, [documents, load])
+
   const upload = async (
     file: File,
     onProgress?: (status: string) => void
@@ -63,13 +73,16 @@ export function useDocuments(entityId?: string) {
       body: file,
     })
 
-    onProgress?.('Classifying and extracting...')
+    onProgress?.('Saving...')
     // entity_id MUST be sent. This hook already knows the entity — it uses
     // entityId to filter the list below — but register was never told, so
     // every upload was stored with entity_id null and then filtered out of
     // the very view that uploaded it. The file was safe; it was attached to
     // nothing, and the user was shown a success toast and an empty list.
-    const doc = await api<{ document: Document }>('/api/documents/register', {
+    // Answers 202 as soon as the file is stored; classification and extraction
+    // continue in the background and the list polls until they land. Waiting
+    // for them here is what produced a 504 on any sizeable return.
+    const doc = await api<{ document: Document; processing?: boolean }>('/api/documents/register', {
       method: 'POST',
       body: JSON.stringify({
         s3_key: presign.s3_key,

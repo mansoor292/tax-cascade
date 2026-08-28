@@ -181,15 +181,32 @@ export default function DocumentsTab({ entityId }: Props) {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm truncate">{doc.filename}</span>
-                        <Badge variant="outline" className={DOC_TYPE_VARIANT[doc.doc_type] || ''}>
-                          {DOC_TYPE_LABELS[doc.doc_type] || doc.doc_type}
-                        </Badge>
-                        {doc.tax_year && (
-                          <Badge variant="outline" className="text-xs">
-                            {doc.tax_year}
+                        {/* The file is stored the moment it appears here; the
+                            type and year arrive when extraction finishes. */}
+                        {doc.processing_status === 'processing' ? (
+                          <Badge variant="outline" className="text-xs animate-pulse">
+                            Reading document…
                           </Badge>
+                        ) : doc.processing_status === 'failed' ? (
+                          <Badge variant="outline" className="text-xs text-red-400 border-red-400/50">
+                            Could not read — file is saved
+                          </Badge>
+                        ) : (
+                          <>
+                            <Badge variant="outline" className={DOC_TYPE_VARIANT[doc.doc_type] || ''}>
+                              {DOC_TYPE_LABELS[doc.doc_type] || doc.doc_type}
+                            </Badge>
+                            {doc.tax_year && (
+                              <Badge variant="outline" className="text-xs">
+                                {doc.tax_year}
+                              </Badge>
+                            )}
+                          </>
                         )}
                       </div>
+                      {doc.processing_status === 'failed' && doc.processing_error && (
+                        <p className="text-xs text-red-400 mt-0.5">{doc.processing_error}</p>
+                      )}
                       {doc.meta?.summary && (
                         <p className="text-xs text-muted-foreground mt-0.5 truncate">{doc.meta.summary}</p>
                       )}
