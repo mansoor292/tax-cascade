@@ -8,6 +8,12 @@ import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
 import { ordinaryTax, qbiDeduction, niitTax, standardDeduction } from '../engine/tax_tables.js'
 import { encryptedFields } from '../lib/row_crypto.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
+import { hydrate } from '../lib/row_crypto.js'
+
+/** Nested tax_entity(ein) is encrypted; hydrate() does not recurse. */
+async function hydrateNestedEntity(row: any, userId: string): Promise<void> {
+  if (row?.tax_entity) await hydrate(supabase, row.tax_entity, { text: ['ein'], userId })
+}
 
 const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
 
@@ -79,7 +85,8 @@ router.post('/:id/compute', async (req, res) => {
     let baseInputs: Record<string, any> = {}
     if (scenario.base_return_id) {
       const { data: br } = await supabase.from('tax_return')
-        .select('input_data').eq('id', scenario.base_return_id).single()
+        .select('input_data, input_data_enc').eq('id', scenario.base_return_id).single()
+      await hydrate(supabase, br, { ...ENCRYPTED_RETURN_FIELDS, userId })
       if (br?.input_data) baseInputs = br.input_data
     }
     const mergedInputs: Record<string, any> = { ...baseInputs, ...adj }
@@ -101,7 +108,8 @@ router.post('/:id/compute', async (req, res) => {
     let baseComputed: Record<string, number> | null = null
     if (scenario.base_return_id) {
       const { data: baseReturn } = await supabase.from('tax_return')
-        .select('field_values, form_type').eq('id', scenario.base_return_id).single()
+        .select('field_values, form_type, field_values_enc').eq('id', scenario.base_return_id).single()
+      await hydrate(supabase, baseReturn, { ...ENCRYPTED_RETURN_FIELDS, userId })
       if (baseReturn?.field_values && baseReturn.form_type) {
         const { COMPARE_METRICS, readMetric } = await import('../maps/metric_to_field.js')
         const metrics: Record<string, number> = {}
@@ -193,16 +201,18 @@ router.post('/:id/analyze', async (req, res) => {
 
   const userId = (req as any).userId
   const { data: scenario } = await supabase
-    .from('scenario').select('*, tax_entity(name, form_type, ein)')
+    .from('scenario').select('*, tax_entity(name, form_type, ein, ein_enc)')
     .eq('id', req.params.id).eq('user_id', userId).single()
 
   if (!scenario) return res.status(404).json({ error: 'Scenario not found' })
+  await hydrateNestedEntity(scenario, userId)
 
   // Get base return for comparison if available
   let baseReturn = null
   if (scenario.base_return_id) {
     const { data } = await supabase.from('tax_return')
       .select('*').eq('id', scenario.base_return_id).single()
+    await hydrate(supabase, baseReturn, { ...ENCRYPTED_RETURN_FIELDS, userId })
     baseReturn = data
   }
 
@@ -395,11 +405,13 @@ router.post('/:id/promote', async (req, res) => {
 router.get('/:id/pdf', async (req, res) => {
   const userId = (req as any).userId
   const { data: scenario } = await supabase
-    .from('scenario').select('*, tax_entity(name, ein, address, city, state, zip, date_incorporated, meta, form_type)')
+    .from('scenario').select('*, tax_entity(name, ein, ein_enc, address, city, state, zip, date_incorporated, meta, form_type)')
     .eq('id', req.params.id).eq('user_id', userId).single()
 
   if (!scenario) return res.status(404).json({ error: 'Scenario not found' })
   if (!scenario.computed_result) return res.status(400).json({ error: 'Scenario must be computed first' })
+  // The EIN is printed on the PDF, and it is stored encrypted.
+  await hydrateNestedEntity(scenario, userId)
 
   const formType = scenario.tax_entity?.form_type || scenario.adjustments?.form_type
   if (!formType) return res.status(400).json({ error: 'Cannot determine form_type' })

@@ -41,6 +41,12 @@ function stripEnc<T extends Record<string, any>>(row: T): T {
   return row
 }
 
+/** The nested tax_entity(ein) on a joined select is encrypted too, and
+ *  hydrate() does not reach into nested objects. */
+async function hydrateNestedEntity(row: any, userId: string): Promise<void> {
+  if (row?.tax_entity) await hydrate(supabase, row.tax_entity, { text: ['ein'], userId })
+}
+
 /** Same for a list of rows. */
 async function hydrateReturns(rows: any[] | null | undefined, userId: string): Promise<void> {
   for (const r of rows || []) await hydrateReturn(r, userId)
@@ -419,12 +425,13 @@ router.get('/', async (req, res) => {
   if (!entityIds.length) return res.json({ returns: [] })
 
   const { data, error } = await supabase.from('tax_return')
-    .select('*, tax_entity(name, form_type, ein)')
+    .select('*, tax_entity(name, form_type, ein, ein_enc)')
     .in('entity_id', entityIds)
     .order('tax_year', { ascending: false })
 
   if (error) return sendDbError(res, error)
   await hydrateReturns(data, userId)
+  for (const r of data || []) { await hydrateNestedEntity(r, userId); stripEnc((r as any).tax_entity) }
   res.json({ returns: (data || []).map(stripEnc) })
 })
 
@@ -440,7 +447,7 @@ router.get('/:id', async (req, res) => {
   // service-role key (which bypasses RLS) the database did not object
   // either. Any account could read any return by id.
   const { data } = await supabase.from('tax_return')
-    .select('*, tax_entity(name, form_type, ein, user_id), tax_return_form(*)')
+    .select('*, tax_entity(name, form_type, ein, ein_enc, user_id), tax_return_form(*)')
     .eq('id', req.params.id).single()
 
   if (!data) return res.status(404).json({ error: 'Not found' })
@@ -451,6 +458,8 @@ router.get('/:id', async (req, res) => {
   // Do not hand the owner column back to the client.
   if ((data as any).tax_entity) delete (data as any).tax_entity.user_id
   await hydrateReturn(data, userId)
+  await hydrateNestedEntity(data, userId)
+  stripEnc((data as any).tax_entity)
   res.json({ return: stripEnc(data as any) })
 })
 
