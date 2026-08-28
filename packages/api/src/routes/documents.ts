@@ -13,6 +13,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
 import { runPython } from '../lib/run_python.js'
 import { encryptedFields, hydrate, hydrateAll } from '../lib/row_crypto.js'
+import { sendError, sendDbError } from '../lib/http_error.js'
 
 const ENCRYPTED_DOC_FIELDS = { json: ['meta', 'textract_data'] }
 const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
@@ -193,7 +194,7 @@ print(json.dumps({'url': url, 'key': '${s3Key}'}))
       expires_in: 300,
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -219,7 +220,7 @@ print(json.dumps({'url': url}))
     const result = runPython(script, { timeout: 10000 })
     res.json(JSON.parse(result.trim()))
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -300,7 +301,7 @@ print(f"{len(data)}|{sha}")
     }
     return registerHandler(req, res)
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -483,7 +484,7 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
     ...docEnc,
   }).select().single()
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
   await hydrate(supabase, doc, ENCRYPTED_DOC_FIELDS)
 
   // Auto-archive if it's a recognized prior-year return. Inserts a filed_import
@@ -570,6 +571,14 @@ router.post('/fact', async (req, res) => {
     return res.status(400).json({ error: 'entity_id, tax_year, category, values required' })
   }
 
+  // The row is written under the caller's own user_id, so this was never a
+  // cross-account write — but the entity was not checked, so a fact could be
+  // filed against an entity the caller does not own and would then sit in
+  // their account attached to nothing they can see.
+  const { data: ownEntity } = await supabase.from('tax_entity')
+    .select('id').eq('id', entity_id).eq('user_id', userId).maybeSingle()
+  if (!ownEntity) return res.status(404).json({ error: 'Entity not found' })
+
   // Whitelist categories to match doc_type vocabulary
   const validCategories = [
     'w2', 'k1',
@@ -606,7 +615,7 @@ router.post('/fact', async (req, res) => {
     ...factEnc,
   }).select().single()
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
 
   // ── Auto-compute on fact write ────────────────────────────────────
   // Fact drop-ins flow through compute_return's auto-merge block — but
@@ -714,7 +723,7 @@ print(base64.b64encode(obj['Body'].read()).decode())
 
     res.json({ document_id: req.params.id, classification })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -735,7 +744,7 @@ router.get('/', async (req, res) => {
     .eq('user_id', userId!)
     .order('created_at', { ascending: false })
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
 
   const docs = data || []
   await hydrateAll(supabase, docs, ENCRYPTED_DOC_FIELDS)
@@ -928,7 +937,7 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
 
     res.json({ document_id: req.params.id, extraction: textractData })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 

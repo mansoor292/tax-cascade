@@ -14,6 +14,7 @@ import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { buildTokenPayload, readTokensFromRow } from '../lib/qbo_tokens.js'
 import { flattenReport } from '../maps/flatten_report.js'
+import { sendError, sendDbError } from '../lib/http_error.js'
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://tax-api.catalogshub.com'
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
@@ -544,7 +545,7 @@ router.get('/:entity_id/reports/:report', async (req, res) => {
       source: 'qbo',
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -558,7 +559,7 @@ router.get('/:entity_id/reports', async (req, res) => {
     .eq('entity_id', req.params.entity_id)
     .order('fetched_at', { ascending: false })
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
   res.json({ reports: data || [] })
 })
 
@@ -646,7 +647,7 @@ router.get('/:entity_id/financials', async (req, res) => {
       },
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -724,7 +725,7 @@ router.get('/:entity_id/qbo-to-tax-inputs', async (req, res) => {
       note: 'Inspect audit entries to see per-field provenance + confidence. Edit inputs in place and pass the entire packet to POST /api/returns/compute as `inputs` (the extra audit/warnings/sources keys are ignored by compute).',
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -751,7 +752,7 @@ router.get('/:entity_id/accounts', async (req, res) => {
       })),
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -816,7 +817,7 @@ router.get('/:entity_id/transactions', async (req, res) => {
       transactions,
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -842,7 +843,7 @@ router.get('/:entity_id/resource/:resource/:id', async (req, res) => {
     const data = await qboFetch(req.params.entity_id, `/${resource}/${req.params.id}`)
     res.json(data)
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -869,7 +870,7 @@ router.get('/:entity_id/resource/:resource', async (req, res) => {
     const items = data?.QueryResponse?.[matched] || []
     res.json({ count: items.length, resource: matched, items })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -886,7 +887,7 @@ router.post('/:entity_id/resource/:resource', async (req, res) => {
     const data = await qboPost(req.params.entity_id, `/${resource}`, req.body)
     res.json(data)
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -903,7 +904,7 @@ router.put('/:entity_id/resource/:resource', async (req, res) => {
     const data = await qboPost(req.params.entity_id, `/${resource}`, req.body, { operation: 'update' })
     res.json(data)
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -1019,7 +1020,7 @@ router.delete('/:entity_id/resource/:resource', async (req, res) => {
     const data = await qboPost(req.params.entity_id, `/${resource}?operation=delete`, req.body)
     res.json(data)
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -1245,7 +1246,7 @@ Return ONLY a JSON array, no prose, no markdown fences.`
         : 'Apply path not yet implemented — this dry-run result is returned as-is.',
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -1440,7 +1441,7 @@ router.post('/:entity_id/recategorize/apply', async (req, res) => {
         : 'All entries applied successfully.',
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -1701,7 +1702,7 @@ Return ONLY a JSON array of objects, no prose, no markdown fences.`
         : 'Gemini classifier not used (no GEMINI_API_KEY or no unmatched rows). Unmatched rows returned without suggestions.',
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -1744,7 +1745,7 @@ router.get('/:entity_id/query', async (req, res) => {
     const data = await qboFetch(req.params.entity_id, '/query', { query: q })
     res.json(data)
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 

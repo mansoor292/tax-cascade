@@ -19,6 +19,7 @@ import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { buildCanonicalModel, buildReturnPdf } from '../builders/build_return_pdf.js'
 import { buildScheduleL } from '../maps/qbo_to_schedule_l.js'
+import { sendError, sendDbError } from '../lib/http_error.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -371,7 +372,7 @@ router.post('/process/:document_id', async (req, res) => {
       }
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -402,11 +403,22 @@ router.get('/:id', async (req, res) => {
   
   if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
+  // tax_return has no user_id of its own — ownership runs through the
+  // entity. This route checked that the CALLER was signed in and then never
+  // checked the record was theirs, and because every route module uses the
+  // service-role key (which bypasses RLS) the database did not object
+  // either. Any account could read any return by id.
   const { data } = await supabase.from('tax_return')
-    .select('*, tax_entity(name, form_type, ein), tax_return_form(*)')
+    .select('*, tax_entity(name, form_type, ein, user_id), tax_return_form(*)')
     .eq('id', req.params.id).single()
 
   if (!data) return res.status(404).json({ error: 'Not found' })
+  if ((data as any).tax_entity?.user_id !== userId) {
+    // 404 rather than 403: a stranger should not learn the id exists.
+    return res.status(404).json({ error: 'Not found' })
+  }
+  // Do not hand the owner column back to the client.
+  if ((data as any).tax_entity) delete (data as any).tax_entity.user_id
   res.json({ return: data })
 })
 
@@ -416,13 +428,30 @@ router.get('/compare/:entity_id', async (req, res) => {
   
   if (!userId) return res.status(401).json({ error: "Unauthorized" })
 
+  // Same exposure as GET /:id — filtering on entity_id alone returned any
+  // entity's full return history, name and figures included, to any signed-in
+  // account. Confirm the entity is this user's before reading anything.
+  const { data: ownerRow } = await supabase.from('tax_entity')
+    .select('id').eq('id', req.params.entity_id).eq('user_id', userId).maybeSingle()
+  if (!ownerRow) return res.status(404).json({ error: 'Entity not found' })
+
   const { data: allRows } = await supabase.from('tax_return')
     .select('*, tax_entity(name)')
     .eq('entity_id', req.params.entity_id)
     .order('tax_year', { ascending: true })
     .order('computed_at', { ascending: false })
 
-  if (!allRows?.length) return res.json({ comparison: null })
+  // An entity with no returns yet used to answer { comparison: null }, a
+  // shape with no all_rows. The Compare page iterates all_rows directly, so
+  // this threw during render and unmounted the WHOLE app — a blank white
+  // page with no nav and no error boundary. Keep the shape constant and the
+  // page renders its empty state instead.
+  if (!allRows?.length) {
+    return res.json({
+      comparison: null,
+      entity: null, years: [], returns: [], all_rows: [], matrix: {}, changes: {},
+    })
+  }
 
   // Pick one authoritative row per tax_year. Preference order: filed_import >
   // latest amendment > latest proforma > extension. For side-by-side comparison
@@ -1581,7 +1610,7 @@ router.post('/compute', async (req, res) => {
       } : undefined,
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -1750,7 +1779,7 @@ router.post('/compute_from_qbo', async (req, res) => {
       },
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -2027,7 +2056,7 @@ print(json.dumps({'url': url}))
 
     res.json({ url, filled, pages, forms, year: taxReturn.tax_year })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -2192,7 +2221,7 @@ print(json.dumps({'url': url}))
       pdf_filled: pdfFilled,
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 

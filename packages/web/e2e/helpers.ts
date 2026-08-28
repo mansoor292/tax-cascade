@@ -70,3 +70,34 @@ export async function createUserWithApiKey(email: string): Promise<{ apiKey: str
   if (!key?.api_key?.key_value) throw new Error(`key creation failed: ${JSON.stringify(key).slice(0, 200)}`)
   return { apiKey: key.api_key.key_value }
 }
+
+/**
+ * Sign up via the API and return the access token. Used by the API-level
+ * specs, where driving a browser adds nothing but time.
+ */
+export async function signUpViaApi(email: string): Promise<string> {
+  const ANON = process.env.VITE_SUPABASE_ANON_KEY
+    || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    method: 'POST',
+    headers: { apikey: ANON, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: TEST_PASSWORD }),
+  })
+  const session: any = await res.json()
+  if (!session?.access_token) throw new Error(`signup failed: ${JSON.stringify(session).slice(0, 200)}`)
+  return session.access_token
+}
+
+/**
+ * Sign in an existing account through the UI.
+ *
+ * The mode toggle and the submit button are BOTH labelled "Sign In", so a
+ * by-name lookup finds the tab and clicking it does nothing. Target the
+ * form's submit button explicitly.
+ */
+export async function signInThroughUi(page: Page, email: string, password = TEST_PASSWORD) {
+  await page.goto('/login')
+  await page.getByPlaceholder('Email').fill(email)
+  await page.getByPlaceholder('Password').fill(password)
+  await page.locator('form button[type="submit"]').click()
+}

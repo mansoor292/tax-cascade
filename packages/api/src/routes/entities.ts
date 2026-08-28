@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 import { encryptedFields, encryptionEnabled, hydrate, hydrateAll } from '../lib/row_crypto.js'
 import { accountingMethodCacheBust } from './qbo.js'
 import { blindIndex } from '../lib/crypto.js'
+import { sendError, sendDbError } from '../lib/http_error.js'
 
 const ENCRYPTED_ENTITY_FIELDS = { text: ['ein'] }
 const safeBlindIndex = (v: string | null | undefined) =>
@@ -37,7 +38,7 @@ router.get('/', async (req, res) => {
     .eq('user_id', userId)
     .order('name')
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
 
   await hydrateAll(supabase, data || [], ENCRYPTED_ENTITY_FIELDS)
 
@@ -80,7 +81,8 @@ router.post('/', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const { name, form_type, ein, address, entity_type } = req.body
+  const { name, ein, address, entity_type } = req.body
+  let { form_type } = req.body
   if (!name) return res.status(400).json({ error: 'name is required' })
 
   // Derive entity_type from form_type if not provided
@@ -88,13 +90,36 @@ router.post('/', async (req, res) => {
     '1040': 'individual', '1120': 'c_corp', '1120S': 's_corp', '1065': 'partnership',
     '990': 'nonprofit', '4868': 'individual', '7004': 'c_corp', '8868': 'nonprofit',
   }
-  const resolvedEntityType = entity_type || FORM_TO_ENTITY[form_type] || 'individual'
+  // form_type is NOT NULL in the database, but this handler used to write
+  // `form_type || null` — so creating an entity without one answered 500 with
+  // a raw Postgres constraint error. The MCP tool documents form_type as
+  // optional, which made "create an entity for the family trust" a guaranteed
+  // crash on the most natural phrasing.
+  //
+  // Recover it from entity_type when we can. When we cannot, ask — silently
+  // picking a tax form for someone is not a kindness in a tax product.
+  if (!form_type && entity_type) {
+    form_type = Object.keys(FORM_TO_ENTITY).find(f => FORM_TO_ENTITY[f] === entity_type)
+  }
+  if (!form_type) {
+    return res.status(400).json({
+      error: 'form_type is required (or pass entity_type and it will be derived).',
+      supported: Object.keys(FORM_TO_ENTITY),
+    })
+  }
+  if (!FORM_TO_ENTITY[form_type]) {
+    return res.status(400).json({
+      error: `Unsupported form_type: ${form_type}`,
+      supported: Object.keys(FORM_TO_ENTITY),
+    })
+  }
+  const resolvedEntityType = entity_type || FORM_TO_ENTITY[form_type]
 
   const einEnc = await encryptedFields(supabase, userId, { ein }, ENCRYPTED_ENTITY_FIELDS)
   const { data, error } = await supabase.from('tax_entity').insert({
     user_id: userId,
     name,
-    form_type: form_type || null,
+    form_type,
     entity_type: resolvedEntityType,
     ein: ein || null,
     ein_hash: safeBlindIndex(ein),
@@ -102,7 +127,7 @@ router.post('/', async (req, res) => {
     address: address || null,
   }).select().single()
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
   await hydrate(supabase, data, ENCRYPTED_ENTITY_FIELDS)
   res.json({ entity: data })
 })
@@ -148,7 +173,7 @@ router.put('/:id', async (req, res) => {
   const { data, error } = await supabase.from('tax_entity')
     .update(updates).eq('id', req.params.id).eq('user_id', userId).select().single()
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
   if (!data) return res.status(404).json({ error: 'Entity not found' })
 
   // If the accounting method override changed, bust the QBO cache so the
@@ -179,7 +204,7 @@ router.delete('/:id', async (req, res) => {
   await supabase.from('stripe_connection').delete().eq('entity_id', req.params.id)
 
   const { error } = await supabase.from('tax_entity').delete().eq('id', req.params.id)
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
 
   res.json({
     success: true,

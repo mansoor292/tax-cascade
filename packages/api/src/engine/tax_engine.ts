@@ -16,6 +16,100 @@
 
 export type FilingStatus = 'single' | 'mfj' | 'mfs' | 'hoh' | 'qw'
 
+export const FILING_STATUSES: FilingStatus[] = ['single', 'mfj', 'mfs', 'hoh', 'qw']
+
+/**
+ * Bad input reaching the engine. Distinct from a genuine failure so callers
+ * can answer 400 rather than 500 — the caller made a correctable mistake.
+ */
+export class TaxInputError extends Error {
+  readonly field: string
+  readonly received: unknown
+  constructor(field: string, received: unknown, detail: string) {
+    super(`Invalid value for "${field}": ${detail}`)
+    this.name = 'TaxInputError'
+    this.field = field
+    this.received = received
+  }
+}
+
+/**
+ * Merge caller input over the defaults, coercing every field the defaults
+ * declare numeric — and REFUSING anything that is not a number.
+ *
+ * TypeScript's `number` is erased at runtime, so a JSON body, an HTML form
+ * field or an LLM tool call can put a string into a field typed as a number
+ * and nothing objects. The engine then sums the income lines with `+`, and
+ * one string turns addition into concatenation:
+ *
+ *     "150000" + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0  ->  "150000000000000"
+ *
+ * The later `-` coerces that back to a number, so wages of $150,000 became
+ * an AGI of $150 trillion and a tax bill to match — HTTP 200, no warning.
+ * Silently wrong arithmetic is the worst thing a tax engine can do, so the
+ * boundary is enforced here, once, for every caller and every form.
+ *
+ * Digit strings ARE accepted, currency formatting and all ("$150,000"),
+ * because that is what forms and spreadsheets legitimately produce. What is
+ * refused is anything that does not denote a finite number.
+ */
+export function coerceInputs<T extends object>(defaults: T, raw: unknown): T {
+  const merged: any = Object.assign({}, defaults, raw || {})
+
+  for (const [key, def] of Object.entries(defaults as Record<string, unknown>)) {
+    const v = merged[key]
+
+    if (typeof def === 'number') {
+      if (typeof v === 'number') {
+        if (!Number.isFinite(v)) {
+          throw new TaxInputError(key, v, 'must be a finite number (got NaN or Infinity)')
+        }
+        continue
+      }
+      // Absent is not an error — that is what the default is for.
+      if (v === null || v === undefined || v === '') { merged[key] = def; continue }
+      if (typeof v === 'string') {
+        const cleaned = v.replace(/[$,\s]/g, '')
+        const n = Number(cleaned)
+        if (cleaned === '' || !Number.isFinite(n)) {
+          throw new TaxInputError(key, v, 'expected a number')
+        }
+        merged[key] = n
+        continue
+      }
+      throw new TaxInputError(key, v, `expected a number, got ${typeof v}`)
+    }
+
+    if (typeof def === 'boolean') {
+      if (typeof v === 'boolean') continue
+      if (v === null || v === undefined || v === '') { merged[key] = def; continue }
+      // "false" is a truthy string. Left alone it silently flips the flag on,
+      // which would quietly switch a return to itemized deductions.
+      if (typeof v === 'string') {
+        const t = v.trim().toLowerCase()
+        if (t === 'true' || t === '1' || t === 'yes') { merged[key] = true; continue }
+        if (t === 'false' || t === '0' || t === 'no') { merged[key] = false; continue }
+        throw new TaxInputError(key, v, 'expected a boolean')
+      }
+      if (typeof v === 'number') { merged[key] = v !== 0; continue }
+      throw new TaxInputError(key, v, `expected a boolean, got ${typeof v}`)
+    }
+  }
+
+  // An unrecognised filing status silently fell through every bracket
+  // comparison and crashed later with no indication of the real cause.
+  if ('filing_status' in merged && merged.filing_status !== undefined) {
+    if (!FILING_STATUSES.includes(merged.filing_status)) {
+      throw new TaxInputError(
+        'filing_status', merged.filing_status,
+        `expected one of ${FILING_STATUSES.join(', ')}`,
+      )
+    }
+  }
+
+  return merged as T
+}
+
 export interface Form1120S_Inputs {
   // Income
   gross_receipts:       number
@@ -200,7 +294,7 @@ import {
 
 /** Form 1120-S calculation */
 export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
-  const inp: Form1120S_Inputs = Object.assign({
+  const inp: Form1120S_Inputs = coerceInputs<Form1120S_Inputs>({
     gross_receipts: 0, returns_allowances: 0, cost_of_goods_sold: 0,
     net_gain_4797: 0, other_income: 0,
     officer_compensation: 0, salaries_wages: 0, repairs_maintenance: 0,
@@ -334,7 +428,7 @@ function defaults<T extends Record<string, any>>(inp: T, exclude: string[] = [])
 
 /** Form 1120 calculation */
 export function calc1120(raw: Form1120_Inputs): Form1120_Result {
-  const inp: Form1120_Inputs = Object.assign({
+  const inp: Form1120_Inputs = coerceInputs<Form1120_Inputs>({
     gross_receipts: 0, returns_allowances: 0, cost_of_goods_sold: 0,
     dividends: 0, interest_income: 0, gross_rents: 0, gross_royalties: 0,
     capital_gains: 0, net_gain_4797: 0, other_income: 0,
@@ -480,7 +574,7 @@ export function calc1040(raw: Form1040_Inputs): {
   field_values?: Record<string,number>
   citations: string[]
 } {
-  const inp: Form1040_Inputs = Object.assign({
+  const inp: Form1040_Inputs = coerceInputs<Form1040_Inputs>({
     filing_status: 'single' as FilingStatus, tax_year: 2025,
     wages: 0, taxable_interest: 0, ordinary_dividends: 0, qualified_dividends: 0,
     ira_distributions: 0, pensions_annuities: 0, social_security: 0,

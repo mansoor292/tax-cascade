@@ -14,6 +14,7 @@ import {
   type EntityForCalendar,
   type GeneratedObligation,
 } from '../engine/tax_calendar.js'
+import { sendError, sendDbError } from '../lib/http_error.js'
 
 // NOTE: route modules are ESM imports of server.ts, so they evaluate BEFORE
 // server.ts calls loadEnv(). process.env is therefore not yet populated here
@@ -201,7 +202,7 @@ router.get('/', async (req, res) => {
     else if (req.query.include_dismissed !== 'true') q = q.neq('status', 'dismissed')
 
     const { data, error } = await q
-    if (error) return res.status(500).json({ error: error.message })
+    if (error) return sendDbError(res, error)
 
     const today = todayIso()
     let rows = (data || []).map((r: any) => ({
@@ -225,7 +226,7 @@ router.get('/', async (req, res) => {
       obligations: rows,
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -236,7 +237,7 @@ router.post('/refresh', async (req, res) => {
   try {
     res.json(await refreshForUser(userId, req.body?.entity_id))
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -267,7 +268,7 @@ router.post('/', async (req, res) => {
     amount: amount ?? null,
   }).select().single()
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
   res.json({ obligation: data })
 })
 
@@ -296,7 +297,7 @@ router.patch('/:id', async (req, res) => {
     .select()
     .maybeSingle()
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
   if (!data) return res.status(404).json({ error: 'Obligation not found' })
   res.json({ obligation: data })
 })
@@ -316,7 +317,7 @@ router.delete('/:id', async (req, res) => {
   }
 
   const { error } = await supabase.from('obligation').delete().eq('id', req.params.id)
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
   res.json({ ok: true })
 })
 

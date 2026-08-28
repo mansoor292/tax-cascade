@@ -7,6 +7,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
 import { ordinaryTax, qbiDeduction, niitTax, standardDeduction } from '../engine/tax_tables.js'
 import { encryptedFields } from '../lib/row_crypto.js'
+import { sendError, sendDbError } from '../lib/http_error.js'
 
 const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
 
@@ -23,7 +24,7 @@ router.get('/', async (req, res) => {
   const { data, error } = await supabase
     .from('scenario').select('*, tax_entity(name, form_type)')
     .eq('user_id', userId).order('created_at', { ascending: false })
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
   res.json({ scenarios: data })
 })
 
@@ -37,7 +38,7 @@ router.post('/', async (req, res) => {
     base_return_id, adjustments: adjustments || {},
   }).select().single()
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
   res.json({ scenario: data })
 })
 
@@ -162,7 +163,7 @@ router.post('/:id/compute', async (req, res) => {
       },
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -222,7 +223,7 @@ Keep it under 500 words. Use specific dollar amounts.`
 
     res.json({ scenario_id: req.params.id, analysis })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -319,7 +320,7 @@ Keep it under 600 words.`
 
     res.json({ scenarios: summary, analysis })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -360,7 +361,7 @@ router.post('/:id/promote', async (req, res) => {
     pdf_s3_path: null,
   }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
 
   // Mark scenario as promoted
   await supabase.from('scenario').update({
@@ -417,7 +418,7 @@ print(json.dumps({'url': url}))
 
     res.json({ url, filled, pages, forms, scenario_id: scenario.id, scenario_name: scenario.name })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export default function Layout() {
   const { user, signOut } = useAuth()
@@ -43,7 +44,9 @@ export default function Layout() {
           </header>
           <main className="flex-1 overflow-auto p-3 sm:p-6">
             <div className="mx-auto max-w-6xl">
-              <Outlet />
+              <ErrorBoundary>
+                <Outlet />
+              </ErrorBoundary>
             </div>
           </main>
         </SidebarInset>

@@ -17,6 +17,7 @@ import Cascade from '@/pages/Cascade'
 import Extensions from '@/pages/Extensions'
 import TaxTables from '@/pages/TaxTables'
 import Settings from '@/pages/Settings'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 function Guard({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()
@@ -36,6 +37,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <ErrorBoundary>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/security" element={<Security />} />
@@ -62,6 +64,7 @@ export default function App() {
           <Route path="/scenarios" element={<Navigate to="/app/scenarios" />} />
           <Route path="/keys" element={<Navigate to="/app/settings" />} />
         </Routes>
+        </ErrorBoundary>
       </BrowserRouter>
     </AuthProvider>
   )

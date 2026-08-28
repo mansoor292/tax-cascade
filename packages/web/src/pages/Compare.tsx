@@ -173,7 +173,7 @@ export default function Compare() {
   const filedVsAmended = useMemo(() => {
     if (!data) return []
     const byYear = new Map<number, { filed?: TaxReturn; amendment?: TaxReturn }>()
-    for (const r of data.all_rows) {
+    for (const r of (data.all_rows ?? [])) {
       if (!byYear.has(r.tax_year)) byYear.set(r.tax_year, {})
       const slot = byYear.get(r.tax_year)!
       const ts = (row?: TaxReturn) => row?.computed_at || ''
@@ -225,14 +225,15 @@ export default function Compare() {
   // falling back to the year's latest filed_import), and render the line-by-
   // line diff for that specific amendment.
   if (focusAmendmentId) {
-    const amendRow = data.all_rows.find(r => r.id === focusAmendmentId && r.source === 'amendment')
+    const rows = data.all_rows ?? []
+    const amendRow = rows.find(r => r.id === focusAmendmentId && r.source === 'amendment')
     let filedRow: TaxReturn | undefined
     if (amendRow?.supersedes_id) {
-      filedRow = data.all_rows.find(r => r.id === amendRow.supersedes_id)
+      filedRow = rows.find(r => r.id === amendRow.supersedes_id)
     }
     if (!filedRow && amendRow) {
       // Fallback: latest filed_import for same year
-      filedRow = data.all_rows
+      filedRow = rows
         .filter(r => r.source === 'filed_import' && r.tax_year === amendRow.tax_year)
         .sort((a, b) => (b.computed_at || '').localeCompare(a.computed_at || ''))[0]
     }
