@@ -1,10 +1,8 @@
 /**
  * Build a complete filled PDF return package.
  *
- * Unified builder merging logic from the three tested builders:
- *   - build_1120_package.ts  (C-Corp)
- *   - build_1120s_package.ts (S-Corp)
- *   - build_1040_package.ts  (Individual)
+ * Unified builder — absorbed and replaced the per-form package builders
+ * (1120 / 1120S / 1040), which have since been deleted.
  *
  * Takes entity data + engine data + field values -> produces a multi-form PDF package.
  *
