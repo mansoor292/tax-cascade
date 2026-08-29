@@ -33,17 +33,20 @@ export interface Document {
 export function useDocuments(entityId?: string) {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const data = await api<{ documents: Document[] }>('/api/documents')
       const filtered = entityId
         ? (data.documents || []).filter(d => d.entity_id === entityId)
         : data.documents || []
       setDocuments(filtered)
-    } catch {
+    } catch (e: unknown) {
       setDocuments([])
+      setError(e instanceof Error ? e.message : 'Failed to load documents')
     }
     setLoading(false)
   }, [entityId])
@@ -121,5 +124,5 @@ export function useDocuments(entityId?: string) {
     )
   }
 
-  return { documents, loading, reload: load, upload, process, download, remove, rearchive }
+  return { documents, loading, error, reload: load, upload, process, download, remove, rearchive }
 }

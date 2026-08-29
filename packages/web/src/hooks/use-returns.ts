@@ -18,17 +18,20 @@ export interface CompareReturnsResponse {
 export function useReturns(entityId?: string) {
   const [returns, setReturns] = useState<TaxReturn[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const data = await api<{ returns: TaxReturn[] }>('/api/returns')
       const filtered = entityId
         ? (data.returns || []).filter(r => r.entity_id === entityId)
         : data.returns || []
       setReturns(filtered)
-    } catch {
+    } catch (e: unknown) {
       setReturns([])
+      setError(e instanceof Error ? e.message : 'Failed to load returns')
     }
     setLoading(false)
   }, [entityId])
@@ -117,7 +120,7 @@ export function useReturns(entityId?: string) {
     })
   }
 
-  return { returns, loading, reload: load, compute, computeFromQbo, createAmendment, validate, getPdf, compare, remove, fillGaps }
+  return { returns, loading, error, reload: load, compute, computeFromQbo, createAmendment, validate, getPdf, compare, remove, fillGaps }
 }
 
 /** Dedicated hook for the compare_returns endpoint — used by the Compare page. */

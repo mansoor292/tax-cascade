@@ -18,7 +18,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bot, Shield, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { useAuth } from '../lib/auth'
-import { supabase } from '../lib/supabase'
+import AuthForm from '@/components/AuthForm'
 
 interface OAuthParams {
   client_id:             string
@@ -70,13 +70,6 @@ export default function OAuthAuthorize() {
   const { session, loading } = useAuth()
   const params = useMemo(readParams, [])
 
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('')
-  const [authBusy, setAuthBusy] = useState(false)
-  const [authError, setAuthError] = useState('')
-
   const [approveBusy, setApproveBusy] = useState(false)
   const [approveError, setApproveError] = useState('')
 
@@ -101,16 +94,6 @@ export default function OAuthAuthorize() {
   const cancel = () => {
     sessionStorage.removeItem(STORAGE_KEY)
     window.location.assign(buildRedirect(params, { error: 'access_denied', error_description: 'User denied the request' }))
-  }
-
-  const signInSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setAuthBusy(true); setAuthError('')
-    const { error } = mode === 'signin'
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } })
-    setAuthBusy(false)
-    if (error) setAuthError(error.message)
   }
 
   const approve = async () => {
@@ -169,45 +152,9 @@ export default function OAuthAuthorize() {
             <>
               <h1 className="text-xl font-bold mb-1">Sign in to authorize</h1>
               <p className="text-sm text-zinc-500 mb-5">Connect Claude to your tax data.</p>
-              <div className="flex gap-4 mb-5 border-b border-zinc-800 pb-3 text-sm">
-                {(['signin', 'signup'] as const).map(m => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => { setMode(m); setAuthError('') }}
-                    className={`pb-1 border-b-2 font-medium ${mode === m ? 'border-blue-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
-                  >
-                    {m === 'signin' ? 'Sign In' : 'Create Account'}
-                  </button>
-                ))}
-              </div>
-              <form onSubmit={signInSubmit} className="space-y-3">
-                {mode === 'signup' && (
-                  <input
-                    value={fullName} onChange={e => setFullName(e.target.value)}
-                    placeholder="Full name" required
-                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                  />
-                )}
-                <input
-                  type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  placeholder="Email" required autoComplete="email"
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                />
-                <input
-                  type="password" value={password} onChange={e => setPassword(e.target.value)}
-                  placeholder="Password" required
-                  autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                />
-                {authError && <p className="text-red-400 text-xs">{authError}</p>}
-                <button
-                  type="submit" disabled={authBusy}
-                  className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-medium disabled:opacity-50"
-                >
-                  {authBusy ? '…' : mode === 'signin' ? 'Sign In' : 'Create Account'}
-                </button>
-              </form>
+              {/* onSuccess intentionally empty: onAuthStateChange flips
+                  `session` and this page re-renders into the consent view. */}
+              <AuthForm accent="blue" nameRequired onSuccess={() => {}} />
             </>
           ) : (
             <>

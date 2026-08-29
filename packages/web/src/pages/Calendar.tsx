@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
 import { fmtDate } from '@/lib/format'
+import LoadError from '@/components/LoadError'
 
 const URGENCY_STYLE: Record<Urgency, { label: string; className: string }> = {
   overdue:   { label: 'Overdue',   className: 'bg-red-500/15 text-red-400 border-red-500/30' },
@@ -114,11 +115,15 @@ const Section = ({ title, items, onUpdate }: {
   )
 
 export default function Calendar() {
-  const { data, loading, reload, update } = useCalendar()
+  const { data, loading, error, reload, update } = useCalendar()
   const [showCompleted, setShowCompleted] = useState(false)
 
   if (loading) {
     return <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
+  }
+
+  if (error) {
+    return <LoadError message={`Couldn't load the calendar: ${error}`} onRetry={reload} />
   }
 
   const all = data?.obligations || []

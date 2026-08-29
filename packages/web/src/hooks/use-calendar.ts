@@ -35,17 +35,20 @@ export interface CalendarResponse {
 export function useCalendar(entityId?: string, withinDays?: number) {
   const [data, setData] = useState<CalendarResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const qs = new URLSearchParams()
       if (entityId) qs.set('entity_id', entityId)
       if (withinDays) qs.set('within_days', String(withinDays))
       const q = qs.toString()
       setData(await api<CalendarResponse>(`/api/calendar${q ? `?${q}` : ''}`))
-    } catch {
+    } catch (e: unknown) {
       setData(null)
+      setError(e instanceof Error ? e.message : 'Failed to load calendar')
     }
     setLoading(false)
   }, [entityId, withinDays])
@@ -57,5 +60,5 @@ export function useCalendar(entityId?: string, withinDays?: number) {
     await load()
   }, [load])
 
-  return { data, loading, reload: load, update }
+  return { data, loading, error, reload: load, update }
 }

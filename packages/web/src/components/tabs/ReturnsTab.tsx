@@ -1,12 +1,10 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Download, FileText, Loader2, GitBranch, Sparkles, BarChart3, Trash2, ChevronRight, RefreshCw, Scale } from 'lucide-react'
+import { Plus, FileText, Loader2, GitBranch, BarChart3, ChevronRight } from 'lucide-react'
 import { type Entity } from '@/hooks/use-entities'
 import { useReturns, type TaxReturn } from '@/hooks/use-returns'
-import { useSchema } from '@/hooks/use-schema'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import {
   Table,
   TableBody,
@@ -15,27 +13,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
-import { fmtMoney, fmtDelta, coerceNumericInputs } from '@/lib/format'
-import { SOURCE_LABEL, SOURCE_VARIANT, COMPUTABLE_FORM_OPTIONS } from '@/lib/labels'
-import { metricsForForm, keyMetric as keyMetricShared } from '@taxengine/shared'
+import { fmtMoney, fmtDelta } from '@/lib/format'
+import { SOURCE_LABEL, SOURCE_VARIANT } from '@/lib/labels'
+import { keyMetric as keyMetricShared } from '@taxengine/shared'
+import { groupByYear } from './returns/helpers'
+import ComputeDialog from './returns/ComputeDialog'
+import YearDetail from './returns/YearDetail'
+import LoadError from '@/components/LoadError'
 
 const keyMetric = (r: TaxReturn | undefined) => keyMetricShared(r?.form_type, r?.field_values)
 
@@ -47,62 +34,19 @@ interface Props {
   onUpdate: () => void
 }
 
-interface GroupedYear {
-  year: number
-  filed?: TaxReturn
-  /** All amendments for the year, newest first. Duplicates (same supersedes_id,
-   *  separate compute runs) are intentionally preserved so the UI can surface
-   *  them — they're almost always cruft the user needs to see and delete. */
-  amendments: TaxReturn[]
-  proforma?: TaxReturn
-  extensions: TaxReturn[]
-  others: TaxReturn[]
-}
-
-function groupByYear(returns: TaxReturn[]): GroupedYear[] {
-  const byYear = new Map<number, GroupedYear>()
-  for (const r of returns) {
-    if (!byYear.has(r.tax_year)) {
-      byYear.set(r.tax_year, { year: r.tax_year, amendments: [], extensions: [], others: [] })
-    }
-    const slot = byYear.get(r.tax_year)!
-    const pickLatest = (cur: TaxReturn | undefined, next: TaxReturn) => {
-      if (!cur) return next
-      return (next.computed_at || '') > (cur.computed_at || '') ? next : cur
-    }
-    switch (r.source) {
-      case 'filed_import': slot.filed     = pickLatest(slot.filed, r); break
-      case 'amendment':    slot.amendments.push(r); break
-      case 'proforma':     slot.proforma  = pickLatest(slot.proforma, r); break
-      case 'extension':    slot.extensions.push(r); break
-      default:             slot.others.push(r)
-    }
-  }
-  // Sort amendments newest-first within each year
-  for (const g of byYear.values()) {
-    g.amendments.sort((a, b) => (b.computed_at || '').localeCompare(a.computed_at || ''))
-  }
-  return Array.from(byYear.values()).sort((a, b) => b.year - a.year)
-}
 
 // Metric ordering/labels and the keyMetric headline live in @taxengine/shared —
 // the sectioned canonical keys are the API's contract, not this component's.
 
 export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
   const nav = useNavigate()
-  const { returns, loading, compute, computeFromQbo, createAmendment, validate, getPdf, remove, fillGaps } = useReturns(entityId)
+  const { returns, loading, error, reload, compute, computeFromQbo, createAmendment, validate, getPdf, remove, fillGaps } = useReturns(entityId)
   const [showCompute, setShowCompute] = useState(false)
-  const [formType, setFormType] = useState(entity.form_type || '1040')
-  const [taxYear, setTaxYear] = useState(2024)
-  const [inputs, setInputs] = useState<Record<string, string>>({})
-  const [computing, setComputing] = useState(false)
   const [expandedYear, setExpandedYear] = useState<number | null>(null)
   const [downloading, setDownloading] = useState<string | null>(null)
   const [gapFilling, setGapFilling] = useState<string | null>(null)
   const [creatingAmendment, setCreatingAmendment] = useState<string | null>(null)
   const [recomputing, setRecomputing] = useState<string | null>(null)
-  const { schema, loading: schemaLoading } = useSchema(showCompute ? formType : undefined, showCompute ? taxYear : undefined)
-
   const grouped = useMemo(() => groupByYear(returns), [returns])
 
   // Pick the column label off whichever form-type is dominant for this entity.
@@ -111,30 +55,6 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
     const anyReturn = returns[0]
     return anyReturn?.form_type === '1120S' ? 'Δ Ord. income' : 'Δ Tax'
   }, [returns])
-
-  const handleCompute = async () => {
-    setComputing(true)
-    try {
-      const numericInputs = { tax_year: taxYear, ...coerceNumericInputs(inputs) }
-
-      const valResult = await validate({ form_type: formType, tax_year: taxYear, inputs: numericInputs })
-      if (valResult.errors && valResult.errors.length > 0) {
-        toast.error(valResult.errors.join(', '))
-        setComputing(false)
-        return
-      }
-      valResult.warnings?.forEach(w => toast.warning(w))
-
-      await compute({ entity_id: entityId, tax_year: taxYear, form_type: formType, inputs: numericInputs })
-      toast.success('Return computed successfully')
-      setShowCompute(false)
-      setInputs({})
-      onUpdate()
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Computation failed')
-    }
-    setComputing(false)
-  }
 
   const handlePdf = async (returnId: string) => {
     setDownloading(returnId)
@@ -217,19 +137,13 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
     }
   }
 
-  const updateInput = (key: string, value: string) => {
-    setInputs(prev => ({ ...prev, [key]: value }))
-  }
-
-  const sections = schema?.fields?.reduce((acc, field) => {
-    const section = field.section || 'General'
-    if (!acc[section]) acc[section] = []
-    acc[section].push(field)
-    return acc
-  }, {} as Record<string, typeof schema.fields>) || {}
 
   if (loading) {
     return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
+  }
+
+  if (error) {
+    return <LoadError message={`Couldn't load returns: ${error}`} onRetry={reload} />
   }
 
   return (
@@ -393,277 +307,15 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
       )}
 
       {/* Compute dialog */}
-      <Dialog open={showCompute} onOpenChange={setShowCompute}>
-        <DialogContent className="w-[95vw] max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Compute Tax Return</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Form Type</Label>
-                <Select value={formType} onValueChange={(v) => v && setFormType(v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {COMPUTABLE_FORM_OPTIONS.map(f => (
-                      <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Tax Year</Label>
-                <Select value={String(taxYear)} onValueChange={v => setTaxYear(Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {[2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018].map(y => (
-                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {schemaLoading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
-              </div>
-            ) : schema?.fields ? (
-              Object.entries(sections).map(([section, fields]) => (
-                <div key={section}>
-                  <h4 className="text-sm font-medium text-muted-foreground mb-2 uppercase tracking-wide">{section}</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {fields.map(field => (
-                      <div key={field.key} className="space-y-1">
-                        <Label className="text-xs">{field.label || field.key.replace(/_/g, ' ')}</Label>
-                        <Input
-                          type={field.type === 'number' ? 'number' : 'text'}
-                          placeholder={field.default !== undefined ? String(field.default) : '0'}
-                          value={inputs[field.key] || ''}
-                          onChange={e => updateInput(field.key, e.target.value)}
-                          className="h-8 text-sm"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No schema available for this form/year. You can enter fields manually.
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCompute(false)}>Cancel</Button>
-            <Button onClick={handleCompute} disabled={computing}>
-              {computing ? 'Computing...' : 'Compute'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
-
-// ─── Year detail expansion ───
-
-function YearDetail({
-  group,
-  onPdf,
-  onDelete,
-  onFillGaps,
-  onRecompute,
-  onCompareAmendment,
-  downloading,
-  gapFilling,
-  recomputing,
-}: {
-  group: GroupedYear
-  onPdf: (id: string) => void
-  onDelete: (r: TaxReturn) => void
-  onFillGaps: (id: string) => void
-  onRecompute: (r: TaxReturn) => void
-  onCompareAmendment: (r: TaxReturn) => void
-  downloading: string | null
-  gapFilling: string | null
-  recomputing: string | null
-}) {
-  const rows = [
-    group.filed,
-    ...group.amendments,
-    group.proforma,
-    ...group.extensions,
-    ...group.others,
-  ].filter((r): r is TaxReturn => !!r)
-
-  // Read the filed return's accounting method (Schedule K line 1: cash/accrual/other)
-  const readMethod = (r?: TaxReturn): string | null => {
-    if (!r) return null
-    const fv = (r.field_values || {}) as Record<string, unknown>
-    const m = fv['meta.sched_k.K1_method'] ?? fv['schedK.K1_method'] ?? fv['meta.accounting_method']
-    if (typeof m === 'string') return m
-    if (typeof m === 'number') return ['cash', 'accrual', 'other'][m] || null
-    return null
-  }
-  const methodStr = readMethod(group.filed) || readMethod(group.amendments[0])
-
-  return (
-    <div className="space-y-3">
-      {(methodStr || group.amendments.length > 1) && (
-        <div className="flex items-center gap-2 flex-wrap">
-          {methodStr && (
-            <Badge variant="outline" className="text-xs capitalize gap-1">
-              <Scale className="h-3 w-3" />
-              Return basis: {methodStr}
-            </Badge>
-          )}
-          {group.amendments.length > 1 && (
-            <Badge
-              variant="outline"
-              className="text-xs gap-1 bg-amber-500/10 text-amber-400 border-amber-500/30"
-              title="Multiple amendments exist for this year. Review each and delete the stale ones."
-            >
-              {group.amendments.length} amendments — delete duplicates below
-            </Badge>
-          )}
-        </div>
-      )}
-      {rows.map(r => {
-        const gap = r.verification?.gemini_gap_fill
-        const canRecompute = r.source === 'amendment' || r.source === 'proforma'
-        const isCorp = r.form_type === '1120' || r.form_type === '1120S'
-        const isStale = r.status === 'invalidated'
-        return (
-          <div key={r.id} className={`bg-background rounded-lg border px-3 py-2 ${isStale ? 'border-amber-500/40' : ''}`}>
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT[r.source!] || ''}`}>
-                  {SOURCE_LABEL[r.source!] || r.source}
-                </Badge>
-                {isStale && (
-                  <Badge
-                    variant="outline"
-                    className="text-xs bg-amber-500/15 text-amber-300 border-amber-500/40"
-                    title={r.source === 'filed_import'
-                      ? 'Pre-refactor data shape — re-archive the source PDF (Documents tab) to regenerate.'
-                      : 'Pre-refactor data shape — click Recompute to regenerate.'}
-                  >
-                    Stale — regenerate
-                  </Badge>
-                )}
-                <Badge variant="outline" className="text-xs">{r.form_type}</Badge>
-                <span className="text-xs text-muted-foreground font-mono">
-                  {r.id.slice(0, 8)}
-                </span>
-                {r.computed_at && (
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(r.computed_at).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                {r.source === 'filed_import' && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onFillGaps(r.id)}
-                    disabled={gapFilling === r.id}
-                    className="gap-1 text-xs h-7"
-                    title="Re-run Gemini gap-fill on this filed return"
-                  >
-                    {gapFilling === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                    Fill gaps
-                  </Button>
-                )}
-                {r.source === 'amendment' && group.filed && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onCompareAmendment(r)}
-                    className="gap-1 text-xs h-7"
-                    title={`Line-by-line compare of this amendment (${r.id.slice(0, 8)}) against filed ${group.filed.id.slice(0, 8)}`}
-                  >
-                    <Scale className="h-3 w-3" />
-                    Compare vs filed
-                  </Button>
-                )}
-                {canRecompute && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onRecompute(r)}
-                    disabled={recomputing === r.id}
-                    className="gap-1 text-xs h-7"
-                    title={isCorp
-                      ? 'Pull latest QBO data and recompute this return'
-                      : 'Recompute this return with its saved inputs'}
-                  >
-                    {recomputing === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                    {isCorp ? 'Recompute from QBO' : 'Recompute'}
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onPdf(r.id)}
-                  disabled={downloading === r.id}
-                  title="Generate / download PDF"
-                >
-                  {downloading === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                </Button>
-                {r.source !== 'filed_import' && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onDelete(r)}
-                    className="text-muted-foreground hover:text-destructive"
-                    title="Delete"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-            </div>
-            <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              {(() => {
-                const fv = (r.field_values || {}) as Record<string, unknown>
-                const metrics = metricsForForm(r.form_type)
-                const allBlank = metrics.every(({ fv_key }) => {
-                  const v = fv[fv_key]
-                  return typeof v !== 'number' || isNaN(v)
-                })
-                if (allBlank) {
-                  return (
-                    <div className="col-span-full text-center text-muted-foreground py-1 italic">
-                      Stale shape — click Recompute (or Re-archive on the source PDF) to regenerate.
-                    </div>
-                  )
-                }
-                return metrics.map(({ fv_key, label }) => {
-                  const v = fv[fv_key]
-                  const isNum = typeof v === 'number' && !isNaN(v)
-                  return (
-                    <div key={fv_key} className="flex flex-col">
-                      <span className="text-muted-foreground">{label}</span>
-                      <span className={`font-mono ${isNum ? '' : 'text-muted-foreground'}`}>
-                        {isNum ? fmt(v as number) : '—'}
-                      </span>
-                    </div>
-                  )
-                })
-              })()}
-            </div>
-            {gap && (typeof gap.gaps_total === 'number' || gap.model) && (
-              <div className="mt-2 pt-2 border-t text-xs text-muted-foreground">
-                Gap-fill: {gap.gaps_filled ?? 0} of {gap.gaps_total ?? 0} filled
-                {gap.model ? ` · ${gap.model}` : ''}
-                {gap.error ? ` · error: ${gap.error}` : ''}
-              </div>
-            )}
-          </div>
-        )
-      })}
+      <ComputeDialog
+        open={showCompute}
+        onOpenChange={setShowCompute}
+        entityId={entityId}
+        defaultFormType={entity.form_type || '1040'}
+        compute={compute}
+        validate={validate}
+        onComputed={onUpdate}
+      />
     </div>
   )
 }

@@ -32,17 +32,22 @@ export interface Account {
 }
 
 export function useQbo(entityId: string | undefined) {
-  const [status, setStatus] = useState<QboStatus>({ connected: false })
+  const [status, setStatus] = useState<QboStatus | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const loadStatus = useCallback(async () => {
     if (!entityId) return
     setLoading(true)
+    setError(null)
     try {
       const data = await api<QboStatus>(`/api/qbo/${entityId}/status`)
       setStatus(data)
-    } catch {
-      setStatus({ connected: false })
+    } catch (e: unknown) {
+      // A load failure is NOT "not connected" — that lie sent users to
+      // reconnect QBO when the server was down.
+      setStatus(null)
+      setError(e instanceof Error ? e.message : 'Failed to load QuickBooks status')
     }
     setLoading(false)
   }, [entityId])
@@ -97,5 +102,5 @@ export function useQbo(entityId: string | undefined) {
     return api(`/api/schema/${formType}/qbo-mapping`)
   }
 
-  return { status, loading, reloadStatus: loadStatus, connect, getFinancials, getReport, getTransactions, getAccounts, getMapping }
+  return { status, loading, error, reloadStatus: loadStatus, connect, getFinancials, getReport, getTransactions, getAccounts, getMapping }
 }

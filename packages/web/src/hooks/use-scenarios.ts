@@ -7,17 +7,20 @@ export type { Scenario }
 export function useScenarios(entityId?: string) {
   const [scenarios, setScenarios] = useState<Scenario[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const data = await api<{ scenarios: Scenario[] }>('/api/scenarios')
       const filtered = entityId
         ? (data.scenarios || []).filter(s => s.entity_id === entityId)
         : data.scenarios || []
       setScenarios(filtered)
-    } catch {
+    } catch (e: unknown) {
       setScenarios([])
+      setError(e instanceof Error ? e.message : 'Failed to load scenarios')
     }
     setLoading(false)
   }, [entityId])
@@ -71,5 +74,5 @@ export function useScenarios(entityId?: string) {
     })
   }
 
-  return { scenarios, loading, reload: load, create, compute, analyze, promote, getPdf, compareScenarios }
+  return { scenarios, loading, error, reload: load, create, compute, analyze, promote, getPdf, compareScenarios }
 }

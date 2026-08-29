@@ -38,6 +38,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
 import { fmtMoney as fmt } from '@/lib/format'
+import LoadError from '@/components/LoadError'
 
 interface Props {
   entityId: string
@@ -46,7 +47,7 @@ interface Props {
 }
 
 export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
-  const { scenarios, loading, create, compute, analyze, promote, getPdf } = useScenarios(entityId)
+  const { scenarios, loading, error, reload, create, compute, analyze, promote, getPdf } = useScenarios(entityId)
   const { returns } = useReturns(entityId)
   const [showNew, setShowNew] = useState(false)
   const [name, setName] = useState('')
@@ -128,6 +129,10 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
 
   if (loading) {
     return <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
+  }
+
+  if (error) {
+    return <LoadError message={`Couldn't load scenarios: ${error}`} onRetry={reload} />
   }
 
   return (

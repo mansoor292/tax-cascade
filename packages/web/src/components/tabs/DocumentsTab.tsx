@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
 import { maskTaxId } from '@/lib/mask'
+import LoadError from '@/components/LoadError'
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   w2: 'W-2',
@@ -49,7 +50,7 @@ interface Props {
 }
 
 export default function DocumentsTab({ entityId }: Props) {
-  const { documents, loading, upload, process, download, remove, rearchive } = useDocuments(entityId)
+  const { documents, loading, error, reload, upload, process, download, remove, rearchive } = useDocuments(entityId)
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState('')
   const [processing, setProcessing] = useState<string | null>(null)
@@ -124,6 +125,10 @@ export default function DocumentsTab({ entityId }: Props) {
 
   if (loading) {
     return <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
+  }
+
+  if (error) {
+    return <LoadError message={`Couldn't load documents: ${error}`} onRetry={reload} />
   }
 
   return (

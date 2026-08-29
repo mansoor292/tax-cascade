@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from '@/lib/toast'
 import { fmtMoney as fmt } from '@/lib/format'
+import LoadError from '@/components/LoadError'
 
 interface Props {
   entityId: string
@@ -52,7 +53,9 @@ interface DrilldownState {
 }
 
 export default function QuickBooksTab({ entityId, entity }: Props) {
-  const { status, loading, connect, getFinancials, getReport, getTransactions, getAccounts, getMapping } = useQbo(entityId)
+  const { status: statusRaw, loading, error, reloadStatus, connect, getFinancials, getReport, getTransactions, getAccounts, getMapping } = useQbo(entityId)
+  // Load failure keeps status null; the LoadError branch below handles it.
+  const status = statusRaw ?? { connected: false }
   const [year, setYear] = useState(2024)
   const [financials, setFinancials] = useState<Record<string, unknown> | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -114,6 +117,10 @@ export default function QuickBooksTab({ entityId, entity }: Props) {
 
   if (loading) {
     return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
+  }
+
+  if (error) {
+    return <LoadError message={`Couldn't load QuickBooks status: ${error}`} onRetry={reloadStatus} />
   }
 
   if (!status.connected) {
