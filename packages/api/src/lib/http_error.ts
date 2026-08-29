@@ -9,9 +9,16 @@ import type { Response } from 'express'
  * message we were returning leaked database internals — column names,
  * constraint names, PostgREST syntax — to anyone with an account.
  */
-export function sendError(res: Response, e: any, fallback = 'Internal error') {
+/** An HTTP outcome a service function can return without holding a Response. */
+export interface HttpOutcome {
+  status: number
+  body: any
+}
+
+/** The classification behind sendError, usable outside a request handler. */
+export function errorOutcome(e: any, fallback = 'Internal error'): HttpOutcome {
   if (e?.name === 'TaxInputError') {
-    return res.status(400).json({ error: e.message, field: e.field })
+    return { status: 400, body: { error: e.message, field: e.field } }
   }
 
   const msg = String(e?.message || fallback)
@@ -20,43 +27,48 @@ export function sendError(res: Response, e: any, fallback = 'Internal error') {
   // something the caller can act on. Translate the ones a user can actually
   // hit and keep the detail server-side.
   if (/invalid input syntax for type uuid/i.test(msg)) {
-    return res.status(400).json({ error: 'Malformed id — expected a UUID.' })
+    return { status: 400, body: { error: 'Malformed id — expected a UUID.' } }
   }
   if (/violates not-null constraint/i.test(msg)) {
     const col = msg.match(/column "([^"]+)"/)?.[1]
-    return res.status(400).json({
+    return { status: 400, body: {
       error: col ? `${col} is required.` : 'A required field is missing.',
       field: col,
-    })
+    } }
   }
   if (/violates foreign key constraint/i.test(msg)) {
-    return res.status(400).json({ error: 'Referenced record does not exist.' })
+    return { status: 400, body: { error: 'Referenced record does not exist.' } }
   }
   // A value the database refuses is a bad argument, not a broken server. The
   // raw text named the constraint and nothing a caller could act on.
   if (/violates check constraint/i.test(msg)) {
     const con = msg.match(/constraint "([^"]+)"/)?.[1] || ''
     const field = con.replace(/^tax_entity_|^tax_return_|^document_|_check$/g, '') || undefined
-    return res.status(400).json({
+    return { status: 400, body: {
       error: field ? `Unsupported value for ${field}.` : 'That value is not one of the supported options.',
       field,
-    })
+    } }
   }
   if (/duplicate key value/i.test(msg)) {
-    return res.status(409).json({ error: 'That record already exists.' })
+    return { status: 409, body: { error: 'That record already exists.' } }
   }
 
   // A missing integration is the caller's state, not our failure. Returning
   // 500 here told Claude the server was broken and invited a pointless retry.
   if (/no active (qbo|quickbooks|stripe) connection/i.test(msg)) {
-    return res.status(409).json({ error: msg })
+    return { status: 409, body: { error: msg } }
   }
 
   // Anything else keeps its message — most are genuinely useful (a QBO API
   // rejection, a PDF template mismatch) and hiding them helps nobody. Only
   // the database-internal shapes above are rewritten.
   console.error('[error]', e)
-  return res.status(500).json({ error: msg || fallback })
+  return { status: 500, body: { error: msg || fallback } }
+}
+
+export function sendError(res: Response, e: any, fallback = 'Internal error') {
+  const out = errorOutcome(e, fallback)
+  return res.status(out.status).json(out.body)
 }
 
 /** Same mapping for a Supabase `error` object rather than a thrown one. */
