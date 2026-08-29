@@ -815,8 +815,50 @@ router.post('/:id/extract', async (req, res) => {
   const needsTables = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065']
     .includes(doc.doc_type || '')
 
+  // Same shape as /ingest: mark the row in flight, answer 202, finish in the
+  // background. Textract on a 30-50 page prior return runs for minutes, and
+  // holding an HTTP request open for that is what forced the whole API onto a
+  // multi-minute request budget. Pass ?wait=1 for the old blocking behaviour.
+  const wait = req.query?.wait === '1' || req.query?.wait === 'true'
+
+  await supabase.from('document').update({
+    processing_status: 'processing',
+    processing_started_at: new Date().toISOString(),
+    processing_error: null,
+  }).eq('id', req.params.id)
+
+  const work = reextractDocument({
+    docId: req.params.id, userId, s3_path: doc.s3_path, needsTables,
+  })
+
+  if (!wait) {
+    res.status(202).json({
+      document_id: req.params.id,
+      processing: true,
+      note: 'Extraction is running; poll this document until processing_status is done.',
+    })
+    work.catch(e => console.error(`[extract] background work failed for ${req.params.id}:`, e?.message))
+    return
+  }
+
   try {
-    const textractData = await analyzeDocument(doc.s3_path, { tables: needsTables, maxWaitMs: 120000 })
+    res.json(await work)
+  } catch (e: any) {
+    sendError(res, e)
+  }
+})
+
+/**
+ * Re-run Textract for one document and store the result. Mirrors
+ * extractAndArchive's status contract (processing -> done | failed) so a
+ * caller can poll either route's work the same way.
+ */
+async function reextractDocument(args: {
+  docId: string; userId: string; s3_path: string; needsTables: boolean
+}): Promise<any> {
+  const { docId, userId, s3_path, needsTables } = args
+  try {
+    const textractData = await analyzeDocument(s3_path, { tables: needsTables, maxWaitMs: 120000 })
 
     const extractEnc = await encryptedFields(supabase, userId,
       { textract_data: textractData }, ENCRYPTED_DOC_FIELDS)
@@ -824,12 +866,18 @@ router.post('/:id/extract', async (req, res) => {
       textract_data: textractData,
       ...extractEnc,
       extracted_at: new Date().toISOString(),
-    }).eq('id', req.params.id)
+      processing_status: 'done',
+      processing_error: null,
+    }).eq('id', docId)
 
-    res.json({ document_id: req.params.id, extraction: textractData })
+    return { document_id: docId, extraction: textractData }
   } catch (e: any) {
-    sendError(res, e)
+    await supabase.from('document').update({
+      processing_status: 'failed',
+      processing_error: String(e?.message || e).slice(0, 500),
+    }).eq('id', docId)
+    throw e
   }
-})
+}
 
 export default router

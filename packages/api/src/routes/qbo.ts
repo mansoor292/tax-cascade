@@ -15,8 +15,12 @@ import { buildTokenPayload, readTokensFromRow } from '../lib/qbo_tokens.js'
 import { flattenReport } from '../maps/flatten_report.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
+import { mapWithConcurrency } from '../lib/concurrency.js'
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://tax-api.catalogshub.com'
+// How many Gemini calls may be in flight at once. Bounded, not unlimited: the
+// provider rate-limits, and a burst trades a slow answer for a failed one.
+const GEMINI_CONCURRENCY = 4
 const supabase = lazyServiceClient()
 
 // Lazy env accessors — bootstrap (dotenv + SSM fetch) runs AFTER ES imports
@@ -1181,9 +1185,14 @@ router.post('/:entity_id/recategorize', async (req, res) => {
     ).join('\n')
 
     const CHUNK = 150
-    const allSuggestions: Array<any> = []
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const batch = rows.slice(i, i + CHUNK)
+    const batches: any[][] = []
+    for (let i = 0; i < rows.length; i += CHUNK) batches.push(rows.slice(i, i + CHUNK))
+
+    // Each chunk's prompt is self-contained — the whole chart of accounts plus
+    // its own rows — so the chunks are independent and run concurrently.
+    // Sequentially this was one model call per 150 rows, end to end, inside a
+    // single HTTP request.
+    const perBatch = await mapWithConcurrency(batches, GEMINI_CONCURRENCY, async (batch) => {
       const rowsList = batch.map((r, idx) => {
         const desc = `${r.name}${r.memo ? ' | ' + r.memo : ''}`.replace(/"/g, '\\"').slice(0, 180)
         return `  ${idx}: date=${r.date} amount=${r.amount} txn_type=${r.txn_type} "${desc}"`
@@ -1221,6 +1230,8 @@ Return ONLY a JSON array, no prose, no markdown fences.`
       let parsed: any[] = []
       try { parsed = JSON.parse(text) } catch { parsed = [] }
 
+      const out: any[] = []
+
       for (const entry of parsed) {
         const idx = Number(entry?.row_index)
         if (!Number.isInteger(idx) || idx < 0 || idx >= batch.length) continue
@@ -1229,7 +1240,7 @@ Return ONLY a JSON array, no prose, no markdown fences.`
         const valid = validIds.has(suggestedId)
         const destName = valid ? accounts.find((a: any) => a.id === suggestedId)?.name : null
         const conf = Number(entry?.confidence) || 0
-        allSuggestions.push({
+        out.push({
           txn_id: row.txn_id,
           txn_type: row.txn_type,
           date: row.date,
@@ -1244,7 +1255,9 @@ Return ONLY a JSON array, no prose, no markdown fences.`
           would_apply: valid && conf >= min_confidence,
         })
       }
-    }
+      return out
+    })
+    const allSuggestions: any[] = perBatch.flat()
 
     // ── 5. Apply path (non-dry-run) ──
     // Not implemented yet — return dry-run result only. Future: fetch each
