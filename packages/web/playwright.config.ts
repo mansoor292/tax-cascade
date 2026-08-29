@@ -3,13 +3,15 @@ import { defineConfig, devices } from '@playwright/test'
 /**
  * E2E harness.
  *
- * Runs against a deployed URL, not a local dev server: the bugs worth
- * catching here (auth triggers, RLS, env loading) only exist against the real
- * Supabase project and the real API. Override with BASE_URL to point at a
- * preview deploy or localhost.
+ * The bugs worth catching here (auth triggers, RLS, env loading) only exist
+ * against the real Supabase project and the real API — but these tests also
+ * create real accounts, so pointing at production must be a deliberate act:
+ * `npm run test:e2e:prod`. The default is the local vite dev server (whose
+ * /api and /auth proxies still hit the real backend on :3737).
  *
- *   npx playwright test                                  # prod
- *   BASE_URL=http://localhost:5173 npx playwright test   # local vite
+ *   npm run dev & npx playwright test                    # local vite
+ *   npm run test:e2e:prod                                # deployed site
+ *   BASE_URL=https://... npx playwright test             # preview deploy
  */
 export default defineConfig({
   testDir: './e2e',
@@ -22,7 +24,7 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
   use: {
-    baseURL: process.env.BASE_URL || 'https://fin.catipult.ai',
+    baseURL: process.env.BASE_URL || 'http://localhost:5173',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     actionTimeout: 15_000,

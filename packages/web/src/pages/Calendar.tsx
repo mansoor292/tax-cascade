@@ -103,6 +103,22 @@ function ObligationRow({ o, onUpdate }: { o: Obligation; onUpdate: (id: string, 
   )
 }
 
+const Section = ({ title, items, onUpdate }: {
+  title: string
+  items: Obligation[]
+  onUpdate: (id: string, patch: any) => Promise<void>
+}) =>
+  items.length === 0 ? null : (
+    <Card>
+      <CardContent className="p-4">
+        <h3 className="text-sm uppercase tracking-wide text-muted-foreground mb-2">
+          {title} <span className="ml-1 font-mono">{items.length}</span>
+        </h3>
+        <div>{items.map(o => <ObligationRow key={o.id} o={o} onUpdate={onUpdate} />)}</div>
+      </CardContent>
+    </Card>
+  )
+
 export default function Calendar() {
   const { data, loading, reload, update } = useCalendar()
   const [showCompleted, setShowCompleted] = useState(false)
@@ -119,18 +135,6 @@ export default function Calendar() {
   const unverified = pending.filter(o => o.urgency === 'unverified')
   const dueSoon = pending.filter(o => o.urgency === 'due_soon')
   const upcoming = pending.filter(o => o.urgency === 'upcoming')
-
-  const Section = ({ title, items }: { title: string; items: Obligation[] }) =>
-    items.length === 0 ? null : (
-      <Card>
-        <CardContent className="p-4">
-          <h3 className="text-sm uppercase tracking-wide text-muted-foreground mb-2">
-            {title} <span className="ml-1 font-mono">{items.length}</span>
-          </h3>
-          <div>{items.map(o => <ObligationRow key={o.id} o={o} onUpdate={update} />)}</div>
-        </CardContent>
-      </Card>
-    )
 
   return (
     <div className="space-y-4">
@@ -175,7 +179,7 @@ export default function Calendar() {
         </CardContent></Card>
       )}
 
-      <Section title="Overdue" items={overdue} />
+      <Section title="Overdue" items={overdue} onUpdate={update} />
       {unverified.length > 0 && (
         <Card>
           <CardContent className="p-4">
@@ -190,15 +194,15 @@ export default function Calendar() {
           </CardContent>
         </Card>
       )}
-      <Section title="Due soon" items={dueSoon} />
-      <Section title="Upcoming" items={upcoming} />
+      <Section title="Due soon" items={dueSoon} onUpdate={update} />
+      <Section title="Upcoming" items={upcoming} onUpdate={update} />
 
       {completed.length > 0 && (
         <div>
           <Button variant="ghost" size="sm" onClick={() => setShowCompleted(!showCompleted)}>
             {showCompleted ? 'Hide' : 'Show'} filed and not-applicable ({completed.length})
           </Button>
-          {showCompleted && <div className="mt-2"><Section title="Closed" items={completed} /></div>}
+          {showCompleted && <div className="mt-2"><Section title="Closed" items={completed} onUpdate={update} /></div>}
         </div>
       )}
     </div>
