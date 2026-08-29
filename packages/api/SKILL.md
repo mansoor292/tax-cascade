@@ -2,7 +2,12 @@
 
 ## Auth
 - Base URL: `https://tax-api.catalogshub.com`
-- Header: `x-api-key: test-key-2026`
+- Header: `x-api-key: <your API key>` — create one under Settings → API keys in the
+  web app (fin.catipult.ai), or authenticate with a Supabase JWT as a Bearer token.
+  Keys are never published in this repo.
+
+(Developers: see `CLAUDE.md` in this package for architecture and internals — this
+file is the workflow contract for external API consumers.)
 
 ## Discovery
 Always start by calling `GET /api/schema` to see supported forms, years, required inputs, and all available endpoints.

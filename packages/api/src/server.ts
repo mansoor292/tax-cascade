@@ -152,7 +152,13 @@ mountMCP(app)
 app.use('/auth', authRoutes)
 
 // ─── API Key Auth (supports both static keys and Supabase-provisioned keys) ───
-const STATIC_KEYS = new Set((process.env.TAX_API_KEYS || 'test-key-2026').split(','))
+// Static keys come ONLY from TAX_API_KEYS (comma-separated). There is
+// deliberately no default: a well-known fallback key mapped every anonymous
+// caller onto the all-zeros user until it was removed. With the var unset,
+// only Supabase JWTs and provisioned api_key rows authenticate.
+const STATIC_KEYS = new Set(
+  (process.env.TAX_API_KEYS || '').split(',').map(k => k.trim()).filter(Boolean),
+)
 
 app.use('/api', async (req, res, next) => {
   // Public routes — no API key needed

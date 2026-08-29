@@ -6,6 +6,8 @@
  */
 import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
+import { getDek, encrypt, decryptString } from '../lib/crypto.js'
+import { encryptionEnabled } from '../lib/row_crypto.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -21,11 +23,35 @@ async function getUser(req: Request): Promise<string | null> {
   return null
 }
 
+/**
+ * The stripe_key_encrypted column is text (no *_enc bytea twin), so the
+ * ciphertext lives in the column itself behind an `enc1:` prefix:
+ * enc1:<base64 of AES-256-GCM envelope from lib/crypto>. Rows written
+ * before encryption landed hold the raw sk_/rk_ key and are still readable
+ * here; they get re-encrypted the next time the entity reconnects.
+ */
+const STRIPE_KEY_ENC_PREFIX = 'enc1:'
+
+async function sealStripeKey(userId: string, plainKey: string): Promise<string> {
+  if (!encryptionEnabled()) return plainKey
+  const dek = await getDek(supabase, userId)
+  return STRIPE_KEY_ENC_PREFIX + encrypt(dek, plainKey).toString('base64')
+}
+
 async function getStripeKey(entityId: string): Promise<string | null> {
   const { data } = await supabase.from('stripe_connection')
-    .select('stripe_key_encrypted')
+    .select('stripe_key_encrypted, user_id')
     .eq('entity_id', entityId).eq('is_active', true).single()
-  return data?.stripe_key_encrypted || null
+  const stored = data?.stripe_key_encrypted
+  if (!stored) return null
+  if (!stored.startsWith(STRIPE_KEY_ENC_PREFIX)) return stored
+  try {
+    const dek = await getDek(supabase, data.user_id)
+    return decryptString(dek, Buffer.from(stored.slice(STRIPE_KEY_ENC_PREFIX.length), 'base64'))
+  } catch (e: any) {
+    console.error(`getStripeKey: decrypt failed for entity ${entityId}: ${e.message}`)
+    return null
+  }
 }
 
 async function stripeFetch(
@@ -70,7 +96,7 @@ router.post('/:entity_id/connect', async (req, res) => {
   const { error } = await supabase.from('stripe_connection').upsert({
     entity_id: req.params.entity_id,
     user_id: userId,
-    stripe_key_encrypted: stripe_key,
+    stripe_key_encrypted: await sealStripeKey(userId, stripe_key),
     account_name: accountName,
     account_id: accountId,
     connected_at: new Date().toISOString(),
