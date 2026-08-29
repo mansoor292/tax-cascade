@@ -216,6 +216,8 @@ export const FORM_INVENTORY: Record<string, { name: string; years: number[]; map
   f1040:    { name: 'Form 1040',    years: [2020,2021,2022,2023,2024,2025], maps: [2024,2025] },
   f1120:    { name: 'Form 1120',    years: [2020,2021,2022,2023,2024,2025], maps: [2024,2025] },
   f1120s:   { name: 'Form 1120-S',  years: [2020,2021,2022,2023,2024,2025], maps: [2024,2025] },
+  // Field map built by the discovery pipeline from the IRS blank, not by hand.
+  f1065:    { name: 'Form 1065',    years: [2020,2021,2022,2023,2024,2025], maps: [2024] },
 
   // 1040 supporting schedules
   f1040s1:  { name: 'Schedule 1',   years: [2024,2025], maps: [2025] },

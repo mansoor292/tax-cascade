@@ -169,6 +169,58 @@ export const CANONICAL_ALIAS_1120: Record<string, string> = {
   'tax.total_tax':                   'tax.L31_total_tax',
 }
 
+/**
+ * Form 1065 — descriptive mapper keys to sectioned IRS lines.
+ *
+ * Line numbers taken from the field map the discovery pipeline built from the
+ * IRS blank (f1065--2024.pdf): 127 fields, all verified. A partnership has no
+ * tax of its own — line 23 is ordinary business income, which passes through
+ * to the partners on Schedule K-1 — so the lines below stop at the balance
+ * due section rather than a tax computation.
+ */
+export const CANONICAL_ALIAS_1065: Record<string, string> = {
+  // Income (lines 1a-8)
+  'income.gross_receipts':          'income.L1a_gross_receipts',
+  'income.returns_allowances':      'income.L1b_returns',
+  'income.balance_1c':              'income.L1c_balance',
+  'income.cost_of_goods_sold':      'income.L2_cogs',
+  'income.gross_profit':            'income.L3_gross_profit',
+  'income.other_partnerships':      'income.L4_other_partnerships',
+  'income.net_farm_profit':         'income.L5_net_farm',
+  'income.net_gain_4797':           'income.L6_net_gain_4797',
+  'income.other_income':            'income.L7_other_income',
+  'income.total_income':            'income.L8_total_income',
+  // Deductions (lines 9-22)
+  'deductions.salaries_wages':      'deductions.L9_salaries',
+  'deductions.guaranteed_payments': 'deductions.L10_guaranteed_payments',
+  'deductions.repairs_maintenance': 'deductions.L11_repairs',
+  'deductions.bad_debts':           'deductions.L12_bad_debts',
+  'deductions.rents':               'deductions.L13_rent',
+  'deductions.taxes_licenses':      'deductions.L14_taxes',
+  'deductions.interest':            'deductions.L15_interest',
+  'deductions.depreciation':        'deductions.L16a_depreciation',
+  'deductions.depreciation_1125a':  'deductions.L16b_depreciation_1125a',
+  'deductions.depreciation_net':    'deductions.L16c_depreciation_net',
+  'deductions.depletion':           'deductions.L17_depletion',
+  'deductions.retirement_plans':    'deductions.L18_retirement',
+  'deductions.employee_benefits':   'deductions.L19_employee_benefits',
+  'deductions.energy_efficient':    'deductions.L20_energy_efficient',
+  'deductions.other_deductions':    'deductions.L21_other_deductions',
+  'deductions.total_deductions':    'deductions.L22_total_deductions',
+  // Result (line 23) — the figure that flows to the partners
+  'tax.ordinary_income_loss':       'tax.L23_ordinary_business_income',
+  // Balance due section (lines 24-32)
+  'tax.lookback_contracts':         'tax.L24_lookback_contracts',
+  'tax.lookback_forecast':          'tax.L25_lookback_forecast',
+  'tax.bba_imputed_underpayment':   'tax.L26_bba_imputed',
+  'tax.other_taxes':                'tax.L27_other_taxes',
+  'tax.total_balance_due':          'tax.L28_total_balance_due',
+  'payments.elective_payment':      'payments.L29_elective_payment',
+  'payments.payment':               'payments.L30_payment',
+  'owed.amount_owed':               'owed.L31_amount_owed',
+  'overpayment.overpayment':        'overpayment.L32_overpayment',
+}
+
 export const CANONICAL_ALIAS_1120S: Record<string, string> = {
   // Income
   'income.gross_receipts':       'income.L1a_gross_receipts',

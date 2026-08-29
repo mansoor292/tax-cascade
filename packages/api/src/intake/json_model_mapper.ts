@@ -440,10 +440,78 @@ const FUZZY_RULES_1040: FuzzyRule[] = [
   { pattern: /phone\s+no/i,                                                                           canonical_key: 'preparer.firm_phone',       confidence: 0.90 },
 ]
 
+/**
+ * Form 1065 — Textract label to descriptive canonical key.
+ *
+ * Patterns written against the field map the discovery pipeline built from the
+ * IRS blank, so they match the wording actually printed on the form: "10
+ * Guaranteed payments to partners 10", "23 Ordinary business income (loss).
+ * Subtract line 22 from line 8 23".
+ *
+ * A partnership computes no tax of its own — line 23 is the figure that passes
+ * through to each partner's Schedule K-1 — so there is no taxable income or
+ * total tax line to match here, and their absence is correct rather than
+ * missing coverage.
+ */
+const FUZZY_RULES_1065: FuzzyRule[] = [
+  // Meta
+  { pattern: /name\s+of\s+partnership/i,                                  canonical_key: 'meta.entity_name',              confidence: 0.95 },
+  { pattern: /employer\s+identification|^d\s+employer/i,                   canonical_key: 'meta.ein',                      confidence: 0.97 },
+  { pattern: /date\s+business\s+started|^e\s+date\s+business/i,           canonical_key: 'meta.date_incorporated',        confidence: 0.96 },
+  { pattern: /number\s+of\s+schedules?\s+k-?1/i,                          canonical_key: 'meta.num_partners',             confidence: 0.94 },
+  { pattern: /^a\s+principal\s+business\s+activity|principal\s+business\s+activity/i, canonical_key: 'meta.business_activity', confidence: 0.92 },
+  { pattern: /^c\s+business\s+code|business\s+code\s+number/i,            canonical_key: 'meta.business_activity_code',   confidence: 0.94 },
+  // Income, lines 1a-8
+  { pattern: /1a\s+gross\s+receipts|gross\s+receipts\s+or\s+sales/i,     canonical_key: 'income.gross_receipts',         confidence: 0.98 },
+  { pattern: /less\s+returns\s+and\s+allowances|^b\s+less\s+returns/i,   canonical_key: 'income.returns_allowances',     confidence: 0.96 },
+  { pattern: /balance.*subtract\s+line\s+1b|^1c\b/i,                       canonical_key: 'income.balance_1c',             confidence: 0.93 },
+  { pattern: /cost\s+of\s+goods\s+sold/i,                                 canonical_key: 'income.cost_of_goods_sold',     confidence: 0.97 },
+  { pattern: /gross\s+profit.*subtract\s+line\s+2|^3\s+gross\s+profit/i, canonical_key: 'income.gross_profit',           confidence: 0.97 },
+  { pattern: /ordinary\s+income\s*\(loss\)\s+from\s+other\s+partnerships/i, canonical_key: 'income.other_partnerships', confidence: 0.96 },
+  { pattern: /net\s+farm\s+profit/i,                                       canonical_key: 'income.net_farm_profit',        confidence: 0.96 },
+  { pattern: /net\s+gain\s*\(loss\)\s+from\s+form\s+4797/i,             canonical_key: 'income.net_gain_4797',          confidence: 0.96 },
+  { pattern: /^7\s+other\s+income|other\s+income\s*\(loss\)\s*\(attach/i, canonical_key: 'income.other_income',        confidence: 0.94 },
+  { pattern: /total\s+income\s*\(loss\).*combine\s+lines\s+3/i,          canonical_key: 'income.total_income',           confidence: 0.97 },
+  // Deductions, lines 9-22
+  { pattern: /salaries\s+and\s+wages.*other\s+than\s+to\s+partners/i,     canonical_key: 'deductions.salaries_wages',     confidence: 0.97 },
+  { pattern: /guaranteed\s+payments\s+to\s+partners/i,                     canonical_key: 'deductions.guaranteed_payments', confidence: 0.98 },
+  { pattern: /repairs\s+and\s+maintenance/i,                               canonical_key: 'deductions.repairs_maintenance', confidence: 0.96 },
+  { pattern: /^12\s+bad\s+debts|bad\s+debts/i,                            canonical_key: 'deductions.bad_debts',          confidence: 0.95 },
+  { pattern: /^13\s+rent\b|^rent\s+13/i,                                  canonical_key: 'deductions.rents',              confidence: 0.94 },
+  { pattern: /taxes\s+and\s+licenses/i,                                    canonical_key: 'deductions.taxes_licenses',     confidence: 0.96 },
+  { pattern: /^15\s+interest\s*\(see\s+instructions\)/i,                  canonical_key: 'deductions.interest',           confidence: 0.94 },
+  { pattern: /16a\s+depreciation|depreciation\s*\(if\s+required/i,        canonical_key: 'deductions.depreciation',       confidence: 0.95 },
+  { pattern: /less\s+depreciation\s+reported\s+on\s+form\s+1125-?a/i,    canonical_key: 'deductions.depreciation_1125a', confidence: 0.94 },
+  { pattern: /^16c\b/i,                                                     canonical_key: 'deductions.depreciation_net',   confidence: 0.90 },
+  { pattern: /^17\s+depletion|depletion.*do\s+not\s+deduct/i,             canonical_key: 'deductions.depletion',          confidence: 0.95 },
+  { pattern: /retirement\s+plans/i,                                        canonical_key: 'deductions.retirement_plans',   confidence: 0.95 },
+  { pattern: /employee\s+benefit\s+programs/i,                            canonical_key: 'deductions.employee_benefits',  confidence: 0.96 },
+  { pattern: /energy\s+efficient\s+commercial\s+buildings/i,              canonical_key: 'deductions.energy_efficient',   confidence: 0.94 },
+  { pattern: /^21\s+other\s+deductions|other\s+deductions\s*\(attach/i,   canonical_key: 'deductions.other_deductions',   confidence: 0.94 },
+  { pattern: /total\s+deductions.*lines\s+9\s+through\s+21/i,             canonical_key: 'deductions.total_deductions',   confidence: 0.97 },
+  // Result, line 23 — what flows to the partners
+  { pattern: /ordinary\s+business\s+income\s*\(loss\).*subtract\s+line\s+22/i, canonical_key: 'tax.ordinary_income_loss', confidence: 0.98 },
+  // Balance due, lines 24-32
+  { pattern: /look-?back\s+method-?\s*completed\s+long-?term/i,           canonical_key: 'tax.lookback_contracts',        confidence: 0.93 },
+  { pattern: /look-?back\s+method-?\s*income\s+forecast/i,                canonical_key: 'tax.lookback_forecast',         confidence: 0.93 },
+  { pattern: /bba\s+aar\s+imputed\s+underpayment/i,                       canonical_key: 'tax.bba_imputed_underpayment',  confidence: 0.94 },
+  { pattern: /^27\s+other\s+taxes|other\s+taxes\s*\(see\s+instructions\)/i, canonical_key: 'tax.other_taxes',          confidence: 0.92 },
+  { pattern: /total\s+balance\s+due.*lines\s+24\s+through\s+27/i,        canonical_key: 'tax.total_balance_due',         confidence: 0.96 },
+  { pattern: /elective\s+payment\s+election\s+amount/i,                   canonical_key: 'payments.elective_payment',     confidence: 0.94 },
+  { pattern: /^30\s+payment\s*\(see\s+instructions\)/i,                   canonical_key: 'payments.payment',              confidence: 0.92 },
+  { pattern: /amount\s+owed.*smaller\s+than\s+line\s+28/i,                canonical_key: 'owed.amount_owed',              confidence: 0.95 },
+  { pattern: /overpayment.*larger\s+than\s+line\s+28/i,                    canonical_key: 'overpayment.overpayment',       confidence: 0.95 },
+  // Preparer
+  { pattern: /firm's\s+name/i,                                             canonical_key: 'preparer.firm_name',            confidence: 0.90 },
+  { pattern: /firm's\s+ein/i,                                              canonical_key: 'preparer.firm_ein',             confidence: 0.92 },
+  { pattern: /\bptin\b/i,                                                  canonical_key: 'preparer.ptin',                 confidence: 0.93 },
+]
+
 const FUZZY_RULES: Record<string, FuzzyRule[]> = {
   '1120S': FUZZY_RULES_1120S,
   '1120':  FUZZY_RULES_1120,
   '1040':  FUZZY_RULES_1040,
+  '1065':  FUZZY_RULES_1065,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -510,6 +578,8 @@ function detectFormType(kvPairs: TextractKVPair[]): string {
     return '1120S'
   if (text.includes('1120') && !text.includes('1120s'))
     return '1120'
+  if (text.includes('1065') || text.includes('return of partnership'))
+    return '1065'
   if (text.includes('1040'))
     return '1040'
   return '1120S' // default

@@ -18,13 +18,14 @@
  * mapping; not done in this commit to keep the diff focused.
  */
 
-import { CANONICAL_ALIAS_1120, CANONICAL_ALIAS_1120S, CANONICAL_ALIAS_1040 } from './engine_to_pdf.js'
+import { CANONICAL_ALIAS_1120, CANONICAL_ALIAS_1120S, CANONICAL_ALIAS_1040, CANONICAL_ALIAS_1065 } from './engine_to_pdf.js'
 
 function aliasMap(form_type: string): Record<string, string> {
   switch (form_type) {
     case '1120':  return CANONICAL_ALIAS_1120
     case '1120S': return CANONICAL_ALIAS_1120S
     case '1040':  return CANONICAL_ALIAS_1040
+    case '1065':  return CANONICAL_ALIAS_1065
     default: return {}
   }
 }

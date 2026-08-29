@@ -81,6 +81,19 @@ export function archiveFiledReturn(
     totals.balance_due           = num(field_values, 'payments.L35_amount_owed')
     totals.overpayment           = num(field_values, 'payments.L36_overpayment')
     totals.refund                = num(field_values, 'payments.L37_refunded')
+  } else if (formType === '1065') {
+    // A partnership pays no income tax of its own: line 23 is the ordinary
+    // business income that passes through to the partners on Schedule K-1, so
+    // there is deliberately no taxable_income or total_tax here.
+    totals.gross_receipts        = num(field_values, 'income.L1a_gross_receipts')
+    totals.balance_1c            = num(field_values, 'income.L1c_balance')
+    totals.cost_of_goods_sold    = num(field_values, 'income.L2_cogs')
+    totals.gross_profit          = num(field_values, 'income.L3_gross_profit')
+    totals.total_income          = num(field_values, 'income.L8_total_income')
+    totals.total_deductions      = num(field_values, 'deductions.L22_total_deductions')
+    totals.ordinary_income_loss  = num(field_values, 'tax.L23_ordinary_business_income')
+    totals.balance_due           = num(field_values, 'owed.L31_amount_owed')
+    totals.overpayment           = num(field_values, 'overpayment.L32_overpayment')
   } else if (formType === '1120S') {
     totals.gross_receipts        = num(field_values, 'income.L1a_gross_receipts')
     totals.balance_1c            = num(field_values, 'income.L1c_balance')

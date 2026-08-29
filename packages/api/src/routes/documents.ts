@@ -55,6 +55,7 @@ async function archiveDocumentAsReturn(
 
     const formTypeMap: Record<string, string> = {
       prior_return_1040: '1040', prior_return_1120: '1120', prior_return_1120s: '1120S',
+      prior_return_1065: '1065',
     }
     // No silent default. Archiving an unrecognised return as an 1120 would
     // file a partnership's figures onto a C-corporation form — wrong in a way
@@ -451,7 +452,7 @@ Fall back to "1099" only if the variant is unclear.` }
     console.log(`[ingest] reused cached textract_data via content_hash for ${filename}`)
   }
   if (!textractData && ['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
-    const needsTables = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s']
+    const needsTables = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065']
       .includes(classification.doc_type || '')
     const featureTypes = needsTables ? "['FORMS', 'TABLES']" : "['FORMS']"
     try {
@@ -556,7 +557,7 @@ print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': l
 
   // Auto-archive if it's a recognized prior-year return. Inserts a filed_import
   // tax_return row with every extracted canonical field in field_values, verbatim.
-  const isReturn = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s'].includes(classification.doc_type || '')
+  const isReturn = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065'].includes(classification.doc_type || '')
   const processedReturn = isReturn && textractData?.kvs?.length && doc
     ? await archiveDocumentAsReturn(doc, classification, userId, entity_id || null, textractData)
     : null
@@ -620,7 +621,7 @@ router.post('/:id/rearchive', async (req, res) => {
   if (!doc) return res.status(404).json({ error: 'Not found' })
   await hydrate(supabase, doc, ENCRYPTED_DOC_FIELDS)
 
-  const isReturn = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s'].includes(doc.doc_type)
+  const isReturn = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065'].includes(doc.doc_type)
   if (!isReturn) return res.status(400).json({ error: `doc_type ${doc.doc_type} is not a prior return` })
   if (!doc.textract_data?.kvs?.length) {
     return res.status(400).json({ error: 'Document has no textract data — run /extract first' })
@@ -939,7 +940,7 @@ router.post('/:id/extract', async (req, res) => {
   // Same TABLES gating as /ingest — only prior returns benefit; everything
   // else uses FORMS-only. /extract is also called manually for re-runs of
   // misclassified docs, so honor the doc_type that's now on the row.
-  const needsTables = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s']
+  const needsTables = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065']
     .includes(doc.doc_type || '')
   const featureTypes = needsTables ? "['FORMS', 'TABLES']" : "['FORMS']"
 
