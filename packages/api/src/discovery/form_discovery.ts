@@ -9,14 +9,9 @@
 
 import { PDFDocument, PDFTextField } from 'pdf-lib'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
-import { runPythonAsync } from '../lib/run_python.js'
-import { s3PutObject, s3GetObject } from '../lib/s3.js'
+import { s3PutObject, s3GetObject, s3Bucket } from '../lib/s3.js'
+import { analyzeToBlocks, parseKeyValuePairs } from '../lib/textract.js'
 import { serviceClient } from '../lib/supabase.js'
-
-// Used only by the two bespoke Textract scripts below; everything else goes
-// through lib/s3. Porting those scripts to lib/textract is a roadmap item —
-// their reductions (field_id filtering with per-block pages) are custom.
-const S3_BUCKET = process.env.S3_BUCKET || 'tax-api-storage-2026'
 
 const FORMS_DIR = 'data/irs_forms'
 const MAPS_DIR = 'data/field_maps'
@@ -142,72 +137,24 @@ async function labelFields(formName: string, year: number): Promise<{ count: num
 // Step 5: Textract the labeled PDF to build field map
 async function textractMap(formName: string, year: number, labeledPath: string): Promise<FieldEntry[]> {
   const s3Key = `discovery/labels/${formName}_${year}_LABELS.pdf`
+  await s3PutObject(s3Key, readFileSync(labeledPath), 'application/pdf')
 
-  const script = `
-import boto3, json, time
+  const kvs = parseKeyValuePairs(await analyzeToBlocks(s3Key, { maxWaitMs: 180_000 }))
 
-s3 = boto3.client('s3', region_name='us-east-1')
-textract = boto3.client('textract', region_name='us-east-1')
-
-s3.upload_file("${labeledPath}", "${S3_BUCKET}", "${s3Key}")
-
-job = textract.start_document_analysis(
-    DocumentLocation={'S3Object': {'Bucket': '${S3_BUCKET}', 'Name': '${s3Key}'}},
-    FeatureTypes=['FORMS'])
-jid = job['JobId']
-
-while True:
-    resp = textract.get_document_analysis(JobId=jid)
-    if resp['JobStatus'] == 'SUCCEEDED':
-        blocks = resp.get('Blocks', [])
-        nt = resp.get('NextToken')
-        while nt:
-            resp = textract.get_document_analysis(JobId=jid, NextToken=nt)
-            blocks.extend(resp.get('Blocks', []))
-            nt = resp.get('NextToken')
-        break
-    elif resp['JobStatus'] == 'FAILED':
-        print(json.dumps([]))
-        exit(0)
-    time.sleep(3)
-
-bm = {b['Id']: b for b in blocks}
-km, vm = {}, {}
-for b in blocks:
-    if b['BlockType'] == 'KEY_VALUE_SET':
-        if 'KEY' in b.get('EntityTypes', []): km[b['Id']] = b
-        else: vm[b['Id']] = b
-
-def gt(bl):
-    t = ''
-    for rel in bl.get('Relationships', []):
-        if rel['Type'] == 'CHILD':
-            for cid in rel['Ids']:
-                c = bm.get(cid, {})
-                if c.get('BlockType') == 'WORD': t += c.get('Text', '') + ' '
-    return t.strip()
-
-results = []
-for kid, kb in km.items():
-    kt = gt(kb)
-    page = kb.get('Page', 0)
-    vb = None
-    for rel in kb.get('Relationships', []):
-        if rel['Type'] == 'VALUE':
-            for vid in rel['Ids']:
-                if vid in vm: vb = vm[vid]; break
-    vt = gt(vb) if vb else ''
-    if vt.startswith('f') and '_' in vt:
-        results.append({'page': page, 'field_id': vt, 'label': kt})
-    elif kt.startswith('f') and '_' in kt:
-        results.append({'page': page, 'field_id': kt, 'label': vt})
-
-results.sort(key=lambda x: (x['page'], x['field_id']))
-print(json.dumps(results))
-`
-
-  const result = await runPythonAsync(script, { timeout: 180000 })
-  return JSON.parse(result)
+  // The labeling step stamps each field's own id into the field, so one side
+  // of every pair is that id ("f1_07[0]" — leading 'f', contains '_') and the
+  // other is the printed label. Whichever side looks like an id is the id.
+  const isFieldId = (t: string) => t.startsWith('f') && t.includes('_')
+  const results: FieldEntry[] = []
+  for (const kv of kvs) {
+    if (isFieldId(kv.value)) results.push({ page: kv.page, field_id: kv.value, label: kv.key })
+    else if (isFieldId(kv.key)) results.push({ page: kv.page, field_id: kv.key, label: kv.value })
+  }
+  // Codepoint order on field_id, matching the Python tuple sort this replaces
+  // (localeCompare would reorder underscores and case differently).
+  results.sort((a, b) =>
+    a.page - b.page || (a.field_id < b.field_id ? -1 : a.field_id > b.field_id ? 1 : 0))
+  return results
 }
 
 // Step 6: Verify by filling test values and re-extracting
@@ -255,57 +202,11 @@ async function verifyFieldMap(formName: string, year: number, fieldMap: FieldEnt
   const filledPath = `output/discovery/${formName}_${year}_VERIFY.pdf`
   writeFileSync(filledPath, await pdf.save())
 
-  // Textract the filled PDF
+  // Textract the filled PDF and look for the test values back out of it.
   const s3Key = `discovery/verify/${formName}_${year}_VERIFY.pdf`
-  const script = `
-import boto3, json, time
-s3 = boto3.client('s3', region_name='us-east-1')
-textract = boto3.client('textract', region_name='us-east-1')
-s3.upload_file("${filledPath}", "${S3_BUCKET}", "${s3Key}")
-job = textract.start_document_analysis(
-    DocumentLocation={'S3Object': {'Bucket': '${S3_BUCKET}', 'Name': '${s3Key}'}},
-    FeatureTypes=['FORMS'])
-jid = job['JobId']
-while True:
-    resp = textract.get_document_analysis(JobId=jid)
-    if resp['JobStatus'] == 'SUCCEEDED':
-        blocks = resp.get('Blocks', [])
-        nt = resp.get('NextToken')
-        while nt:
-            resp = textract.get_document_analysis(JobId=jid, NextToken=nt)
-            blocks.extend(resp.get('Blocks', []))
-            nt = resp.get('NextToken')
-        break
-    elif resp['JobStatus'] == 'FAILED':
-        print(json.dumps([]))
-        exit(0)
-    time.sleep(3)
-bm = {b['Id']: b for b in blocks}
-km, vm = {}, {}
-for b in blocks:
-    if b['BlockType'] == 'KEY_VALUE_SET':
-        if 'KEY' in b.get('EntityTypes', []): km[b['Id']] = b
-        else: vm[b['Id']] = b
-def gt(bl):
-    t = ''
-    for rel in bl.get('Relationships', []):
-        if rel['Type'] == 'CHILD':
-            for cid in rel['Ids']:
-                c = bm.get(cid, {})
-                if c.get('BlockType') == 'WORD': t += c.get('Text', '') + ' '
-    return t.strip()
-kvs = []
-for kid, kb in km.items():
-    vb = None
-    for rel in kb.get('Relationships', []):
-        if rel['Type'] == 'VALUE':
-            for vid in rel['Ids']:
-                if vid in vm: vb = vm[vid]; break
-    kvs.append({'key': gt(kb), 'value': gt(vb) if vb else ''})
-print(json.dumps(kvs))
-`
-  const kvResult = await runPythonAsync(script, { timeout: 120000 })
-  const kvs = JSON.parse(kvResult)
+  await s3PutObject(s3Key, readFileSync(filledPath), 'application/pdf')
+  const kvs = parseKeyValuePairs(await analyzeToBlocks(s3Key, { maxWaitMs: 120_000 }))
+
 
   // Compare
   let matches = 0, mismatches = 0
@@ -372,7 +273,7 @@ export async function discoverForm(
   try {
     // Create/update discovery record
     const sourceUrl = userProvided
-      ? (opts.s3_key ? `s3://${S3_BUCKET}/${opts.s3_key}` : 'user-provided:base64')
+      ? (opts.s3_key ? `s3://${s3Bucket()}/${opts.s3_key}` : 'user-provided:base64')
       : resolveIrsUrl(formName, year)
     await updateStatus(formName, year, 'pending', { source_url: sourceUrl })
 
