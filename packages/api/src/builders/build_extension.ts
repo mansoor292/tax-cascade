@@ -9,7 +9,7 @@ import { PDFDocument } from 'pdf-lib'
 import { readFileSync, existsSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
-import { setField, checkBox, fillFromMap } from './pdf_filler.js'
+import { checkBox, fillFromMap } from './pdf_filler.js'
 import type { ExtensionInputs, ExtensionType } from '../engine/tax_engine.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))

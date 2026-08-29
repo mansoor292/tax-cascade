@@ -566,7 +566,7 @@ const QBO_LABEL_RULES: Array<[RegExp, string]> = [
 function parseDollar(raw: string | number | null): number | null {
   if (raw === null || raw === undefined || raw === '') return null
   if (typeof raw === 'number') return Math.round(raw)
-  const cleaned = String(raw).replace(/[\$,\s]/g, '').replace(/\((.+)\)/, '-$1')
+  const cleaned = String(raw).replace(/[$,\s]/g, '').replace(/\((.+)\)/, '-$1')
   const n = parseFloat(cleaned)
   return isNaN(n) ? null : Math.round(n)
 }
@@ -717,7 +717,7 @@ function mapFromTextract(input: TextractOutput): MappingResult {
  * - Schedule L (1120/1120-S): balance sheet with BOY/EOY columns
  * - Other tables are ignored for now
  */
-function mapTables(tables: TextractTable[], formType: string): Record<string, number> {
+function mapTables(tables: TextractTable[], _formType: string): Record<string, number> {
   const result: Record<string, number> = {}
 
   // Strict Schedule L detection: real Schedule L has ALL of:
@@ -812,7 +812,7 @@ function mapScheduleLTable(table: TextractTable, out: Record<string, number>) {
   }
 
   // Determine column layout by examining row widths
-  const maxCols = Math.max(...table.rows.map(r => r.length))
+  const _maxCols = Math.max(...table.rows.map(r => r.length))
   // Columns indexes: column 0 = label, last cols = values
   // If 5+ cols: a=1, b=2, c=3, d=4 (with some possibly merged)
   // If 3 cols: b=1, d=2

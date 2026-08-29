@@ -10,7 +10,7 @@
  *   GET /api/qbo/:entity_id/reports/:report — P&L, BalanceSheet, TrialBalance, GeneralLedger
  *   GET /api/qbo/:entity_id/financials — unified view for Claude
  */
-import { Router, type Request } from 'express'
+import { Router,  } from 'express'
 import { buildTokenPayload, readTokensFromRow } from '../lib/qbo_tokens.js'
 import { flattenReport } from '../maps/flatten_report.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
@@ -784,7 +784,7 @@ router.get('/:entity_id/transactions', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const { account, start_date, end_date, type, limit: maxResults } = req.query as Record<string, string>
+  const { account, start_date, end_date, type, limit: _maxResults } = req.query as Record<string, string>
   const year = req.query.year as string
 
   // Build the TransactionList report query
@@ -1094,7 +1094,7 @@ router.post('/:entity_id/recategorize', async (req, res) => {
     const validIds = new Set(accounts.map((a: any) => a.id))
 
     // ── 2. Resolve source accounts ──
-    let sourceAccounts: string[] = Array.isArray(srcIds) && srcIds.length > 0 ? srcIds : []
+    const sourceAccounts: string[] = Array.isArray(srcIds) && srcIds.length > 0 ? srcIds : []
     if (sourceAccounts.length === 0) {
       for (const a of accounts) {
         const n = (a.name || '').toLowerCase()
@@ -1385,7 +1385,7 @@ router.post('/:entity_id/recategorize/apply', async (req, res) => {
         // 2. Find the line(s) hitting an Uncategorized account and swap AccountRef
         let modifiedLines = 0
         for (const line of txn.Line) {
-          const detail = line.AccountBasedExpenseLineDetail
+          const _detail = line.AccountBasedExpenseLineDetail
                       || line.DepositLineDetail
                       || line.JournalEntryLineDetail
                       || line.AccountRef ? line : null
@@ -1549,7 +1549,7 @@ router.post('/:entity_id/reconcile_bank', async (req, res) => {
 
     // ── 6. Classify unmatched via Gemini (if key set + there are unmatched rows) ──
     let gemini_used = false
-    let suggested_postings: Array<{ row: any; suggested_posting: any; confidence: number; reasoning?: string }> = []
+    const suggested_postings: Array<{ row: any; suggested_posting: any; confidence: number; reasoning?: string }> = []
     const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
     if (GEMINI_KEY && recon.missing_in_qbo.length > 0) {
       try {

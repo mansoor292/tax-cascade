@@ -561,7 +561,7 @@ export function ltcgTax(
 ): number {
   if (ltcg_income <= 0) return 0
   const t = TAX_TABLES[year]
-  const total = ordinary_taxable + ltcg_income
+  const _total = ordinary_taxable + ltcg_income
   const zero_limit = t.ltcg_0pct_limit[status]
   const fifteen_limit = t.ltcg_15pct_limit[status]
 

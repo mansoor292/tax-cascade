@@ -10,7 +10,8 @@
     "verify": "tsx scripts/verify_pipeline.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prebuild": "tsc -p ../shared"
+    "prebuild": "tsc -p ../shared",
+    "lint": "eslint src scripts"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.1033.0",
@@ -30,12 +31,16 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.10",
     "@types/uuid": "^10.0.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.11.0",
     "tsx": "^4.19.0",
     "typescript": "^5.8.2",
+    "typescript-eslint": "^8.68.0",
     "vitest": "^4.1.11"
   }
 }

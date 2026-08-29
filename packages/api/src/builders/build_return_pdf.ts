@@ -79,7 +79,7 @@ function setField(form: ReturnType<PDFDocument['getForm']>, shortId: string, val
 
 function parseBSVal(s: string): number {
   if (!s) return 0
-  const n = parseFloat(s.replace(/[\$,\s]/g, '').replace(/\((.+)\)/, '-$1').replace(/\.$/, ''))
+  const n = parseFloat(s.replace(/[$,\s]/g, '').replace(/\((.+)\)/, '-$1').replace(/\.$/, ''))
   return isNaN(n) ? 0 : Math.round(Math.abs(n))
 }
 
@@ -599,7 +599,7 @@ async function generateStatements(
       y -= 14
       // Page overflow: start new page if running low
       if (y < 80) {
-        const nextPage = stmtPdf.addPage([612, 792])
+        const _nextPage = stmtPdf.addPage([612, 792])
         y = 740
         // Continue drawing on new page (simplified: re-bind draw to new page)
         // For now, items that overflow will just clip. In practice, statement
@@ -755,8 +755,8 @@ function fill1120SExtras(
 function fill1040Extras(
   form: ReturnType<PDFDocument['getForm']>,
   entity: EntityData,
-  model: Record<string, string | number>,
-  year: number,
+  _model: Record<string, string | number>,
+  _year: number,
 ) {
   // Filing status checkbox
   const filingStatus = entity.meta?.filing_status as string | undefined

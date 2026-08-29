@@ -13,7 +13,7 @@
  * comments; in particular filed_import rows are never written, and
  * `inputs:{}` is a no-op merge over the seeded row.
  */
-import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
+import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { encryptedFields, hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS, RETURN_ENC_COLS } from '../lib/row_crypto.js'
 import { errorOutcome, type HttpOutcome } from '../lib/http_error.js'
@@ -132,7 +132,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       for (const d of docs) {
         const kv = d.meta?.key_values || {}
         for (const k of keys) {
-          const v = parseFloat(String(kv[k] ?? '').replace(/[\$,]/g, '')) || 0
+          const v = parseFloat(String(kv[k] ?? '').replace(/[$,]/g, '')) || 0
           if (v) { total += v; break }  // first matching key wins per doc
         }
       }

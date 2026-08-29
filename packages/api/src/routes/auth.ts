@@ -4,7 +4,7 @@
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { anonClient, userClient } from '../lib/supabase.js'
-import { sendError, sendDbError } from '../lib/http_error.js'
+import { sendDbError } from '../lib/http_error.js'
 
 // Anon client for auth operations (signup/signin); the per-request
 // RLS-scoped userClient comes from lib/supabase.

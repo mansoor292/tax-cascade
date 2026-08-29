@@ -26,10 +26,10 @@ import cors from 'cors'
 import crypto from 'crypto'
 import { execSync, spawn } from 'child_process'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib'
+import { PDFDocument, PDFTextField } from 'pdf-lib'
 import { calc1120, calc1120S, calc1040, calcCascade } from './engine/tax_engine.js'
 import {
-  ordinaryTax, ltcgTax, niitTax, qbiDeduction, standardDeduction, TAX_TABLES
+  ordinaryTax, niitTax, qbiDeduction, standardDeduction, TAX_TABLES
 } from './engine/tax_tables.js'
 import { FORM_INVENTORY, seedCacheFromSupabase } from './maps/field_maps.js'
 import authRoutes, { supabase } from './routes/auth.js'
@@ -362,7 +362,7 @@ app.post('/api/fill/:form/:year', async (req, res) => {
     }
 
     // Load field map
-    let map: Record<string, string> = fieldMap || {}
+    const map: Record<string, string> = fieldMap || {}
     if (!fieldMap) {
       // Try to load from canonical map files
       try {

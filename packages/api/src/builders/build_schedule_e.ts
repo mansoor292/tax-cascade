@@ -74,7 +74,7 @@ const GRID: Record<string, [string, string, string]> = {
 }
 
 // QJV (qualified joint venture) checkboxes on line 2, one per property
-const QJV_CHECKS: [string, string, string] = ['c1_3', 'c1_4', 'c1_5']
+const _QJV_CHECKS: [string, string, string] = ['c1_3', 'c1_4', 'c1_5']
 
 function fillProperty(
   form: ReturnType<PDFDocument['getForm']>,

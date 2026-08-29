@@ -7,9 +7,9 @@
  *   3. Compare extracted vs computed → discrepancy report
  *   4. Save as tax_return record
  */
-import { Router, type Request } from 'express'
+import { Router,  } from 'express'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
-import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
+import { calc1120, calc1120S, calc1040, calcExtension, type ExtensionInputs, type ExtensionType } from '../engine/tax_engine.js'
 import { encryptedFields, hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS, RETURN_ENC_COLS } from '../lib/row_crypto.js'
 import { extractAggregates as extractAggregatesFromFv, readMetric, COMPARE_METRICS } from '@taxengine/shared'
 
@@ -39,7 +39,7 @@ async function hydrateReturns(rows: any[] | null | undefined, userId: string): P
 }
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
-import { buildCanonicalModel, buildReturnPdf } from '../builders/build_return_pdf.js'
+import { buildReturnPdf } from '../builders/build_return_pdf.js'
 import { buildScheduleL } from '../maps/qbo_to_schedule_l.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 import { getFinancials } from './qbo.js'
@@ -164,7 +164,7 @@ router.post('/process/:document_id', async (req, res) => {
       // Schedule 1 line 10 (additional income = K-1 + other)
       const schedule1 = getNum('income.schedule1_income') || getNum('schedule1.k1_income')
       // If we have AGI directly, use it to validate
-      const extractedAgi = getNum('income.agi')
+      const _extractedAgi = getNum('income.agi')
       engineInput = {
         filing_status: 'mfj', tax_year: taxYear,
         wages,
@@ -287,7 +287,7 @@ router.post('/process/:document_id', async (req, res) => {
 
     const parseDollar = (s: string): number | null => {
       if (!s) return null
-      const c = s.replace(/[\$,\s]/g, '').replace(/\((.+)\)/, '-$1').replace(/\.$/, '')
+      const c = s.replace(/[$,\s]/g, '').replace(/\((.+)\)/, '-$1').replace(/\.$/, '')
       const n = parseFloat(c)
       return isNaN(n) ? null : Math.round(n)
     }

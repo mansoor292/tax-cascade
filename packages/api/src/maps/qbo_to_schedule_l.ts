@@ -62,8 +62,8 @@ export function buildScheduleL(
   // L13a: Intangible assets (gross) — goodwill
   // QBO doesn't separate gross vs accumulated cleanly, but we have:
   // "Accumulated Amortization of Goodwill" and "Amortization"
-  const boyGoodwillGross = abs(g(boy, 'Accumulated Amortization of Goodwill')) + abs(g(boy, 'Amortization'))
-  const eoyGoodwillGross = abs(g(eoy, 'Accumulated Amortization of Goodwill')) + abs(g(eoy, 'Amortization'))
+  const _boyGoodwillGross = abs(g(boy, 'Accumulated Amortization of Goodwill')) + abs(g(boy, 'Amortization'))
+  const _eoyGoodwillGross = abs(g(eoy, 'Accumulated Amortization of Goodwill')) + abs(g(eoy, 'Amortization'))
   // Actually, the OtherAssets total includes intangibles
   // Use OtherAssets minus loans for a rough intangible figure
 

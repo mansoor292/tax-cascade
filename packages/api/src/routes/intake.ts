@@ -12,7 +12,7 @@
  * layer (and any other client) can re-run gap-fill on existing filed
  * returns without a full re-archive.
  */
-import { Router, type Request } from 'express'
+import { Router,  } from 'express'
 import { hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_DOC_FIELDS, RETURN_ENC_COLS, DOC_ENC_COLS } from '../lib/row_crypto.js'
 import { encryptedFields } from '../lib/row_crypto.js'
 import { gapFillWithGemini } from '../intake/gemini_gap_fill.js'
@@ -99,7 +99,7 @@ router.post('/gap-fill', async (req, res) => {
     })
 
     let persisted = false
-    let merged: Record<string, any> = { ...currentFv }
+    const merged: Record<string, any> = { ...currentFv }
     if (persist && Object.keys(result.filled).length > 0) {
       for (const [k, v] of Object.entries(result.filled)) {
         // Non-destructive: never overwrite a value that already exists.

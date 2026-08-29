@@ -1,16 +1,17 @@
 # tax-cascade — working notes for AI agents
 
 Catipult Tax: computes, fills, and validates IRS tax returns. npm-workspaces
-monorepo, two packages, no shared package (yet — see docs/CLEANUP_ROADMAP.md).
+monorepo, three packages.
 
 | Package | What | Where it runs |
 |---|---|---|
 | `packages/api` | Express 4 (ESM) tax engine, REST API, MCP server (43 tools) | EC2 behind pm2 cluster, origin `tax-api.catalogshub.com` |
 | `packages/web` | Vite + React 19 SPA + OAuth Netlify Functions | Netlify at `fin.catipult.ai` |
+| `packages/shared` | Canonical metric maps, section vocabulary, response types | Imported by both (its CLAUDE.md explains the wiring — read before touching) |
 
 The public hostname is **fin.catipult.ai**; Netlify rewrites `/api/*`,
 `/auth/*`, and `/mcp` to the EC2 origin. `tax-engine-app.netlify.app` is a
-legacy domain still present in `packages/api/supabase/config.toml`.
+retired legacy domain.
 Per-package details: `packages/api/CLAUDE.md`, `packages/web/CLAUDE.md`.
 
 ## Run / test
@@ -18,7 +19,7 @@ Per-package details: `packages/api/CLAUDE.md`, `packages/web/CLAUDE.md`.
 ```bash
 npm install            # root — npm workspaces, ONE root package-lock.json
 npm run dev            # api on :3737 + web on :5173 together
-npm test               # api vitest (engine/calendar/QBO mapping only)
+npm test               # vitest in every workspace (api + web)
 npm run test:e2e       # web Playwright vs localhost:5173 (test:e2e:prod for live)
 npm run lint -w packages/web
 ```
@@ -68,20 +69,25 @@ dev server proxies `/api` and `/auth` to `localhost:3737`.
    `DOTENV_CONFIG_PATH`. `.env.production.template` documents every
    variable. Never commit a real value, never invent a fallback literal.
 
-6. **Filed vs computed returns are strictly separated.** Filed imports
+6. **AWS I/O is flag-gated dual-path.** `lib/s3.ts` / `lib/textract.ts` run
+   the AWS SDK when `TAX_API_AWS_SDK=1` and fall back to the historical
+   boto3-subprocess scripts otherwise. Don't add a new inline Python block —
+   add an operation to those modules.
+
+7. **Filed vs computed returns are strictly separated.** Filed imports
    (`source='filed_import'`, from OCR'd prior-year PDFs) are immutable;
    computed returns (proforma/amendment/extension) come from the engine.
    `tax_return.field_values` is the golden model, keyed by sectioned
    canonical keys (`income.L1a_gross_receipts`, `tax.L31_total_tax`); flat
-   metric names are per-form code aliases in
-   `packages/api/src/maps/metric_to_field.ts`, never a persisted slot. See
+   metric names are per-form code aliases in `@taxengine/shared`
+   (packages/shared/src/metrics.ts), never a persisted slot. See
    `packages/api/src/maps/canonical_schema.ts` for the whole contract.
 
 ## Rules
 
-- **Never** re-add hardcoded Supabase URL/anon-key fallback literals. The
-  ones still in route files are vestigial (bootstrap_env made them dead) and
-  are being removed, not multiplied.
+- **Never** re-add hardcoded Supabase URL/anon-key fallback literals — they
+  were removed everywhere (the leaked key is being rotated). Clients come
+  from `api/src/lib/supabase.ts` only.
 - **Never** hand-edit `packages/api/supabase/migrations/*_remote_schema.sql`
   (it's a `db pull` dump). New schema changes are new migration files.
 - **Never** put a real key, EIN, or SSN in a committed file — this repo

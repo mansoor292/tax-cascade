@@ -24,7 +24,7 @@
  * so a decrypt failure now surfaces as missing data rather than silence.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { encrypt, decrypt, decryptJson, decryptString, getDek, bytea, byteaWrite } from './crypto.js'
+import { encrypt, decryptJson, decryptString, getDek, bytea, byteaWrite } from './crypto.js'
 
 export function encryptionEnabled(): boolean {
   return !!process.env.TAX_API_KMS_KEY

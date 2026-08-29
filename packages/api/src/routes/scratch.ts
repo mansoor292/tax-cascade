@@ -9,7 +9,7 @@
  */
 import { Router, type Request } from 'express'
 import { supabase as admin } from './auth.js'
-import { sendError, sendDbError } from '../lib/http_error.js'
+import { sendDbError } from '../lib/http_error.js'
 // Bucket has permissive RLS policies (anon allowed); app layer enforces {user_id}/ scoping.
 // If SUPABASE_SERVICE_ROLE_KEY is later added to env, swap this import for a service-role client.
 

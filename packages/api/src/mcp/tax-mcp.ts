@@ -6,7 +6,6 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { randomUUID } from 'crypto'
 import { z } from 'zod'
 import type { Express, Request, Response } from 'express'
 
@@ -189,7 +188,7 @@ function createServer(apiKey: string): McpServer {
     if (!resp?.entities) return text(resp)
     return text({
       entities: resp.entities.map((e: any) => {
-        const { ein_enc, ein_hash, user_id, meta, ...rest } = e
+        const { _ein_enc, _ein_hash, _user_id, meta, ...rest } = e
         const { sched_k, ...metaRest } = meta || {}
         return {
           ...rest,

@@ -79,7 +79,7 @@ function normalizeDate(s: string): string | null {
 /** Parse a numeric cell, handling parens for negatives, currency symbols, commas. */
 function parseAmount(s: string): number | null {
   if (s === undefined || s === null || s === '') return null
-  const raw = String(s).trim().replace(/[\$€£,]/g, '').replace(/"/g, '')
+  const raw = String(s).trim().replace(/[$€£,]/g, '').replace(/"/g, '')
   if (raw === '') return null
   // Parentheses = negative (accounting convention)
   if (/^\(.+\)$/.test(raw)) {

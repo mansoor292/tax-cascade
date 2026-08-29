@@ -1,11 +1,11 @@
 /**
  * Entity routes — CRUD for tax entities (individuals, corps)
  */
-import { Router, type Request } from 'express'
+import { Router,  } from 'express'
 import { encryptedFields, encryptionEnabled, hydrate, hydrateAll, ENCRYPTED_ENTITY_FIELDS } from '../lib/row_crypto.js'
 import { accountingMethodCacheBust } from './qbo.js'
 import { blindIndex } from '../lib/crypto.js'
-import { sendError, sendDbError } from '../lib/http_error.js'
+import { sendDbError } from '../lib/http_error.js'
 import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
 
 const safeBlindIndex = (v: string | null | undefined) =>

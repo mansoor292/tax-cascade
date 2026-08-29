@@ -4,7 +4,7 @@
  * Users provide their Stripe secret key (sk_live_... or sk_test_...).
  * The key is stored per-entity and used to make Stripe API calls.
  */
-import { Router, type Request } from 'express'
+import { Router,  } from 'express'
 import { getDek, encrypt, decryptString } from '../lib/crypto.js'
 import { encryptionEnabled } from '../lib/row_crypto.js'
 import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
@@ -309,7 +309,7 @@ router.get('/:entity_id/revenue', async (req, res) => {
 
   try {
     // Get all balance transactions for the year (paginate)
-    let allTxns: any[] = []
+    const allTxns: any[] = []
     let hasMore = true
     let startingAfter: string | undefined
 

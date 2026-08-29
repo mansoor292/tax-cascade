@@ -1,10 +1,9 @@
 /**
  * Scenario routes — Create, compute, and AI-analyze tax scenarios
  */
-import { Router, type Request } from 'express'
+import { Router,  } from 'express'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
-import { ordinaryTax, qbiDeduction, niitTax, standardDeduction } from '../engine/tax_tables.js'
 import { encryptedFields } from '../lib/row_crypto.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 import { hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS } from '../lib/row_crypto.js'
@@ -136,7 +135,7 @@ router.post('/:id/compute', async (req, res) => {
     }
 
     // Identify which inputs changed vs base
-    let inputChanges: Record<string, { from: any; to: any }> = {}
+    const inputChanges: Record<string, { from: any; to: any }> = {}
     for (const [k, v] of Object.entries(adj)) {
       if (baseInputs[k] !== v) inputChanges[k] = { from: baseInputs[k] ?? 0, to: v }
     }

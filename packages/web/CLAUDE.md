@@ -25,6 +25,13 @@ src/
 │                        use-returns, use-documents, use-scenarios, use-qbo,
 │                        use-schema, use-calendar). Server state goes through
 │                        these — don't hand-roll fetch+useState in pages.
+│                        Hooks surface `error` + `reload`; consumers render
+│                        <LoadError onRetry> — a load failure must never
+│                        look like an empty state.
+├── components/          AuthForm (THE sign-in/up form — Login and the OAuth
+│                        consent screen both use it via useAuth), LoadError,
+│                        tabs/returns/ (ComputeDialog, YearDetail, groupByYear)
+├── pages/compare/       FocusedCompare, LineByLineMatrix, YearRow + helpers
 ├── pages/               route components
 ├── components/tabs/     the four EntityDetail tabs (Returns is the largest)
 ├── components/ui/       vendored shadcn primitives — treat as vendor code
@@ -34,11 +41,13 @@ netlify/functions/       OAuth 2.1 endpoints (stateless HS256-JWT codes via
 public/.well-known/      OAuth discovery JSON (paired with netlify.toml rules)
 ```
 
-Types for API responses are hand-written in the hooks and can drift from the
-server (the scenario-PDF button once no-oped for exactly that reason:
-POST vs GET and `pdf_url` vs `url`). Until shared types land (roadmap),
-verify the real response shape in `packages/api/src/routes/` before writing
-a new call.
+Entity/TaxReturn/Scenario response types come from `@taxengine/shared`
+(hooks re-export them); the remaining hook types are still hand-written and
+can drift from the server (the scenario-PDF button once no-oped for exactly
+that reason: POST vs GET and `pdf_url` vs `url`) — verify the real response
+shape in `packages/api/src/routes/` before writing a new call. Canonical
+field-path strings and metric labels also come from `@taxengine/shared` —
+never hardcode a `tax.L…` key in a component.
 
 ## Run / test
 
@@ -50,15 +59,22 @@ npm run test:e2e:prod          # vs fin.catipult.ai — creates REAL accounts;
                                # test:e2e:clean sources SSM creds to purge them
 ```
 
-No unit tests exist yet (roadmap). The e2e suite is incident-regression
+```bash
+npm test -w packages/web      # vitest — format/mask/groupByYear/compare helpers
+```
+
+The e2e suite is incident-regression
 style: every spec pins a bug that actually shipped (blank-page states, SPA
 fallback swallowing /auth, OAuth discovery served as HTML, RLS isolation).
 Keep that discipline — a fixed bug gets a spec.
 
 ## Env
 
-`VITE_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — set in
-`netlify.toml` for prod builds; dev falls back to the vite proxy. Netlify
+`VITE_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — the first
+two in `netlify.toml`, the anon key ONLY in the Netlify dashboard (it was
+rotated after living in the committed toml); local dev copies
+`.env.example` → `.env`. There are no fallback literals in code — the app
+fails loudly without env. Netlify
 Functions additionally need `OAUTH_CODE_SECRET`, `SUPABASE_URL`,
 `SUPABASE_ANON_KEY`, `API_BASE_URL` (set in the Netlify dashboard, not in
 the repo).
@@ -72,7 +88,7 @@ the repo).
   but the engine cannot compute one.
 - Touch `netlify.toml` redirects without reading the ordering rules in the
   root CLAUDE.md.
-- Swallow a load error into an empty page state in NEW code — the e2e suite
-  explicitly hunts "loads and quietly shows nothing" (existing hooks still
-  do this; fixing them is a roadmap item).
+- Swallow a load error into an empty page state — hooks return `error`,
+  consumers render <LoadError onRetry>; the e2e suite explicitly hunts
+  "loads and quietly shows nothing".
 - Render an EIN/SSN without `maskTaxId`.

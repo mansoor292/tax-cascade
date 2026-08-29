@@ -14,8 +14,10 @@ schemas = ["public"]
 file_size_limit = "50MiB"
 
 [auth]
-site_url = "https://tax-engine-app.netlify.app"
-additional_redirect_urls = ["https://tax-engine-app.netlify.app/**", "https://tax-api.catalogshub.com/**", "http://localhost:5173/**", "http://localhost:3737/**"]
+# fin.catipult.ai is the live domain; tax-engine-app.netlify.app was the
+# legacy Netlify subdomain and auth emails used to link there.
+site_url = "https://fin.catipult.ai"
+additional_redirect_urls = ["https://fin.catipult.ai/**", "https://tax-api.catalogshub.com/**", "http://localhost:5173/**", "http://localhost:3737/**"]
 
 [auth.email]
 enable_confirmations = false

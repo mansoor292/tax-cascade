@@ -306,7 +306,7 @@ export interface Form1040_Inputs {
 import {
   ordinaryTax, standardDeduction, qbiDeduction,
   ltcgTax, niitTax, amtTax, seTax, childTaxCredit, additionalMedicareTax,
-  TAX_TABLES,
+  
 } from './tax_tables.js'
 
 /** Form 1120-S calculation */
@@ -435,7 +435,7 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
 }
 
 /** Default missing numeric fields to 0 */
-function defaults<T extends Record<string, any>>(inp: T, exclude: string[] = []): T {
+function _defaults<T extends Record<string, any>>(inp: T, exclude: string[] = []): T {
   const result = { ...inp }
   for (const [k, v] of Object.entries(result)) {
     if (v === undefined && !exclude.includes(k)) (result as any)[k] = 0
@@ -1332,7 +1332,7 @@ export function calcScheduleE(inp: ScheduleE_Inputs): ScheduleE_Result {
     const allowed_loss_pool = f8582.computed.rental_re_allowed_loss
     // Pro-rate allowed loss across loss-making properties by magnitude.
     // Properties with positive L21 are fully deductible (income flows through).
-    const total_raw_loss_mag = gross_re_loss + (pp.prior_year_suspended_re || 0)
+    const _total_raw_loss_mag = gross_re_loss + (pp.prior_year_suspended_re || 0)
     per_property = per_property_raw.map(p => {
       if (p.net_income_loss >= 0) {
         return { ...p, deductible_loss: 0 }

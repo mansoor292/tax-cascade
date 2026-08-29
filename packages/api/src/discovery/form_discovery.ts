@@ -8,10 +8,9 @@
  */
 
 import { PDFDocument, PDFTextField } from 'pdf-lib'
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { runPythonAsync } from '../lib/run_python.js'
 import { s3PutObject, s3GetObject } from '../lib/s3.js'
-import { v4 as uuidv4 } from 'uuid'
 import { serviceClient } from '../lib/supabase.js'
 
 // Used only by the two bespoke Textract scripts below; everything else goes
@@ -394,7 +393,7 @@ export async function discoverForm(
     result.field_count = fieldCount
 
     // Step 3: Label
-    const { count, path: labeledPath, acroMap } = await labelFields(formName, year)
+    const { path: labeledPath, acroMap } = await labelFields(formName, year)
     await updateStatus(formName, year, 'labeling', { labeled_s3_key: `discovery/labels/${formName}_${year}_LABELS.pdf` })
 
     // Step 4: Textract map

@@ -5,7 +5,7 @@
  * authored. GET /api/calendar auto-refreshes on read so a newly created
  * entity has a calendar immediately without anyone pressing a button.
  */
-import { Router, type Request } from 'express'
+import { Router,  } from 'express'
 import {
   generateObligations,
   daysUntil,

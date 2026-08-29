@@ -109,7 +109,7 @@ async function labelAndExtract(filename: string): Promise<number> {
   }
 
   const results: Array<{page: number; field_id: string; label: string}> = []
-  for (const [kid, kb] of Object.entries(km) as [string, any][]) {
+  for (const [_kid, kb] of Object.entries(km) as [string, any][]) {
     const label = getText(kb)
     const page = kb.Page || 0
     let vb: any = null

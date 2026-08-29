@@ -7,7 +7,7 @@
  *   3. POST /register — tell API about the file, triggers Gemini categorization
  *   4. POST /:id/extract — run Textract
  */
-import { Router, type Request } from 'express'
+import { Router,  } from 'express'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
 import { s3PresignPut, s3PresignGet, s3PresignGetMany, s3PutObject, s3GetObject } from '../lib/s3.js'
@@ -737,7 +737,7 @@ router.get('/', async (req, res) => {
     // Replace the Textract blob with the three counts the UI actually renders,
     // and drop the ciphertext columns — they're never read client-side.
     const t = d.textract_data
-    const { textract_data, textract_data_enc, meta_enc, ...rest } = base
+    const { _textract_data, _textract_data_enc, _meta_enc, ...rest } = base
     return {
       ...rest,
       textract_summary: t
