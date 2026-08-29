@@ -1,10 +1,14 @@
 /**
  * Encryption helpers for qbo_connection OAuth tokens.
  *
- * Writes are DUAL during transition: both plaintext (access_token /
- * refresh_token) and encrypted (access_token_enc / refresh_token_enc).
- * Reads prefer *_enc; fall back to plaintext if the row hasn't been
- * backfilled yet. A later cutover PR nulls the plaintext columns.
+ * The dual-write transition is OVER: with encryption enabled (and
+ * TAX_API_WRITE_PLAINTEXT unset), writes null the plaintext columns and
+ * store only *_enc — the same posture row_crypto.ts adopted. Reads still
+ * prefer *_enc and fall back to plaintext for rows written before the
+ * cutover; run scripts/backfill_null_qbo_plaintext.ts (encrypts + nulls
+ * legacy rows) so the fallback stops being load-bearing, but note tokens
+ * self-heal anyway — every refresh rewrites the row through
+ * buildTokenPayload.
  *
  * If TAX_API_KMS_KEY isn't configured, the helpers pass through plaintext
  * only — encryption becomes a no-op. This keeps dev environments working
@@ -12,10 +16,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { encrypt, decryptString, getDek, bytea, byteaWrite } from './crypto.js'
-
-function encryptionEnabled(): boolean {
-  return !!process.env.TAX_API_KMS_KEY
-}
+import { encryptionEnabled, writePlaintext } from './row_crypto.js'
 
 /**
  * Build the set of column updates for storing OAuth tokens. Returns both
@@ -37,6 +38,10 @@ export async function buildTokenPayload(
   const dek = await getDek(supabase, userId)
   base.access_token_enc  = byteaWrite(encrypt(dek, tokens.access_token))
   base.refresh_token_enc = byteaWrite(encrypt(dek, tokens.refresh_token))
+  if (!writePlaintext()) {
+    base.access_token = null
+    base.refresh_token = null
+  }
   return base
 }
 
