@@ -1992,7 +1992,7 @@ router.get('/:id/pdf', async (req, res) => {
   // If we already have a cached PDF, return presigned URL (skip with ?regenerate=true)
   if (taxReturn.pdf_s3_path && req.query.regenerate !== 'true') {
     try {
-      const { runPython } = await import('../lib/run_python.js')
+      const { runPythonAsync } = await import('../lib/run_python.js')
       const script = `
 import boto3, json
 s3 = boto3.client('s3', region_name='us-east-1')
@@ -2001,7 +2001,7 @@ url = s3.generate_presigned_url('get_object', Params={
 }, ExpiresIn=3600)
 print(json.dumps({'url': url}))
 `
-      const result = runPython(script, { timeout: 10000 })
+      const result = await runPythonAsync(script, { timeout: 10000 })
       return res.json(JSON.parse(result.trim()))
     } catch {}
   }
@@ -2091,7 +2091,7 @@ print(json.dumps({'url': url}))
     const pdfBytes = await pdf.save()
     const s3Key = `returns/${userId}/${taxReturn.id}.pdf`
 
-    const { runPython } = await import('../lib/run_python.js')
+    const { runPythonAsync } = await import('../lib/run_python.js')
     const { writeFileSync } = await import('fs')
     const tmpPath = `/tmp/${taxReturn.id}.pdf`
     writeFileSync(tmpPath, Buffer.from(pdfBytes))
@@ -2105,7 +2105,7 @@ url = s3.generate_presigned_url('get_object', Params={
 }, ExpiresIn=3600)
 print(json.dumps({'url': url}))
 `
-    const result = runPython(uploadScript, { timeout: 30000 })
+    const result = await runPythonAsync(uploadScript, { timeout: 30000 })
     const { url } = JSON.parse(result.trim())
 
     // Cache the S3 path on the return
@@ -2215,7 +2215,7 @@ router.post('/extension', async (req, res) => {
       writeFileSync(tmpPath, Buffer.from(pdfBytes))
 
       const s3Key = `extensions/${userId}/${extension_type}_${tax_year}_${Date.now()}.pdf`
-      const { runPython } = await import('../lib/run_python.js')
+      const { runPythonAsync } = await import('../lib/run_python.js')
       const uploadScript = `
 import boto3, json
 s3 = boto3.client('s3', region_name='us-east-1')
@@ -2225,7 +2225,7 @@ url = s3.generate_presigned_url('get_object', Params={
 }, ExpiresIn=3600)
 print(json.dumps({'url': url}))
 `
-      const uploadResult = runPython(uploadScript, { timeout: 30000 })
+      const uploadResult = await runPythonAsync(uploadScript, { timeout: 30000 })
       pdfUrl = JSON.parse(uploadResult.trim()).url
     }
 

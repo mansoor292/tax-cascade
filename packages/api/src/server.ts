@@ -27,7 +27,7 @@ import cors from 'cors'
 import crypto from 'crypto'
 import { execSync, spawn } from 'child_process'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import { runPython } from './lib/run_python.js'
+import { runPythonAsync } from './lib/run_python.js'
 import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib'
 import { calc1120, calc1120S, calc1040, calcCascade } from './engine/tax_engine.js'
 import {
@@ -496,7 +496,7 @@ for kid, kb in key_map.items():
     if kt or vt: kvs.append({"key": kt, "value": vt})
 print(json.dumps(kvs))
 `
-    const result = runPython(script, { timeout: 120000 })
+    const result = await runPythonAsync(script, { timeout: 120000 })
     const kvs = JSON.parse(result.trim())
 
     // Compare against expected if provided

@@ -9,6 +9,16 @@ import { v4 as uuidv4 } from 'uuid'
 
 const execFileAsync = promisify(execFile)
 
+/**
+ * BLOCKING. Freezes the Node event loop for the whole run.
+ *
+ * Every caller in the server has been moved to runPythonAsync below — a
+ * Textract job here took a worker out of service for minutes, and with two
+ * workers that is half the fleet answering nothing. Kept only for the CLI
+ * scripts in scripts/, where blocking is the point.
+ *
+ * @deprecated in server code — use runPythonAsync.
+ */
 export function runPython(script: string, opts?: { timeout?: number; maxBuffer?: number }): string {
   const tmpFile = `/tmp/taxapi_${uuidv4().slice(0, 8)}.py`
   try {

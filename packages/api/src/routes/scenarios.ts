@@ -431,7 +431,7 @@ router.get('/:id/pdf', async (req, res) => {
     const pdfBytes = await pdf.save()
     const s3Key = `scenarios/${userId}/${scenario.id}.pdf`
 
-    const { runPython } = await import('../lib/run_python.js')
+    const { runPythonAsync } = await import('../lib/run_python.js')
     const { writeFileSync } = await import('fs')
     const tmpPath = `/tmp/scenario_${scenario.id}.pdf`
     writeFileSync(tmpPath, Buffer.from(pdfBytes))
@@ -445,7 +445,7 @@ url = s3.generate_presigned_url('get_object', Params={
 }, ExpiresIn=3600)
 print(json.dumps({'url': url}))
 `
-    const result = runPython(uploadScript, { timeout: 30000 })
+    const result = await runPythonAsync(uploadScript, { timeout: 30000 })
     const { url } = JSON.parse(result.trim())
 
     res.json({ url, filled, pages, forms, scenario_id: scenario.id, scenario_name: scenario.name })

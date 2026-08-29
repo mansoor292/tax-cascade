@@ -10,7 +10,7 @@
 import { PDFDocument, PDFTextField } from 'pdf-lib'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { createClient } from '@supabase/supabase-js'
-import { runPython } from '../lib/run_python.js'
+import { runPythonAsync } from '../lib/run_python.js'
 import { v4 as uuidv4 } from 'uuid'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
@@ -59,14 +59,14 @@ except urllib.error.HTTPError as e:
     print(f"ERROR:{e.code}")
     sys.exit(1)
 `
-  const result = runPython(script, { timeout: 30000 })
+  const result = await runPythonAsync(script, { timeout: 30000 })
   if (result.startsWith('ERROR:')) {
     throw new Error(`Failed to download ${url}: HTTP ${result.replace('ERROR:', '')}`)
   }
 
   // Also upload to S3
   const s3Key = `blank-forms/${formName}_${year}.pdf`
-  runPython(`
+  await runPythonAsync(`
 import boto3
 boto3.client('s3', region_name='us-east-1').upload_file("${localPath}", "${S3_BUCKET}", "${s3Key}")
 print("ok")
@@ -86,14 +86,14 @@ export async function ingestProvidedPdf(
   mkdirSync(FORMS_DIR, { recursive: true })
 
   if (source.base64) {
-    runPython(`
+    await runPythonAsync(`
 import base64
 with open("${localPath}", "wb") as f:
     f.write(base64.b64decode('${source.base64}'))
 print("ok")
 `, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })
   } else if (source.s3_key) {
-    runPython(`
+    await runPythonAsync(`
 import boto3
 boto3.client('s3', region_name='us-east-1').download_file("${S3_BUCKET}", "${source.s3_key}", "${localPath}")
 print("ok")
@@ -104,7 +104,7 @@ print("ok")
 
   // Mirror to S3 for downstream Textract (same convention as IRS path)
   const s3Key = `blank-forms/${formName}_${year}.pdf`
-  runPython(`
+  await runPythonAsync(`
 import boto3
 boto3.client('s3', region_name='us-east-1').upload_file("${localPath}", "${S3_BUCKET}", "${s3Key}")
 print("ok")
@@ -232,7 +232,7 @@ results.sort(key=lambda x: (x['page'], x['field_id']))
 print(json.dumps(results))
 `
 
-  const result = runPython(script, { timeout: 180000 })
+  const result = await runPythonAsync(script, { timeout: 180000 })
   return JSON.parse(result)
 }
 
@@ -330,7 +330,7 @@ for kid, kb in km.items():
     kvs.append({'key': gt(kb), 'value': gt(vb) if vb else ''})
 print(json.dumps(kvs))
 `
-  const kvResult = runPython(script, { timeout: 120000 })
+  const kvResult = await runPythonAsync(script, { timeout: 120000 })
   const kvs = JSON.parse(kvResult)
 
   // Compare

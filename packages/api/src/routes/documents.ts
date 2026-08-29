@@ -11,7 +11,7 @@ import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
-import { runPython, runPythonAsync } from '../lib/run_python.js'
+import { runPythonAsync } from '../lib/run_python.js'
 import { encryptedFields, hydrate, hydrateAll } from '../lib/row_crypto.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 
@@ -191,7 +191,7 @@ url = s3.generate_presigned_url('put_object', Params={
 }, ExpiresIn=300)
 print(json.dumps({'url': url, 'key': '${s3Key}'}))
 `
-    const result = runPython(script, { timeout: 10000 })
+    const result = await runPythonAsync(script, { timeout: 10000 })
     const { url, key } = JSON.parse(result.trim())
 
     res.json({
@@ -224,7 +224,7 @@ url = s3.generate_presigned_url('get_object', Params={
 }, ExpiresIn=3600)
 print(json.dumps({'url': url}))
 `
-    const result = runPython(script, { timeout: 10000 })
+    const result = await runPythonAsync(script, { timeout: 10000 })
     res.json(JSON.parse(result.trim()))
   } catch (e: any) {
     sendError(res, e)
@@ -271,7 +271,7 @@ s3.put_object(Bucket='${S3_BUCKET}', Key='${s3Key}', Body=data, ContentType='${c
 sha = hashlib.sha256(data).hexdigest()
 print(f"{len(data)}|{sha}")
 `
-    const out = runPython(uploadScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 }).trim()
+    const out = (await runPythonAsync(uploadScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })).trim()
     const [sizeStr, contentHash] = out.split('|')
     const size = parseInt(sizeStr) || 0
 
@@ -760,7 +760,7 @@ s3 = boto3.client('s3', region_name='us-east-1')
 obj = s3.get_object(Bucket='${S3_BUCKET}', Key='${doc.s3_path}')
 print(base64.b64encode(obj['Body'].read()).decode())
 `
-    const base64 = runPython(dlScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })
+    const base64 = await runPythonAsync(dlScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })
 
     const genAI = new GoogleGenerativeAI(GEMINI_KEY)
     const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
@@ -848,7 +848,7 @@ for k in keys:
         Params={'Bucket': '${S3_BUCKET}', 'Key': k}, ExpiresIn=3600)
 print(json.dumps(out))
 `
-      urlMap = JSON.parse(runPython(script, { timeout: 15000 }).trim())
+      urlMap = JSON.parse((await runPythonAsync(script, { timeout: 15000 })).trim())
     } catch (e: any) {
       console.error('list_documents presign batch failed:', e.message)
     }
@@ -1007,7 +1007,7 @@ for b in blocks:
 np = sum(1 for b in blocks if b['BlockType'] == 'PAGE')
 print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': len(blocks)}))
 `
-    const result = runPython(script, { timeout: 120000 })
+    const result = await runPythonAsync(script, { timeout: 120000 })
     const textractData = JSON.parse(result)
 
     const extractEnc = await encryptedFields(supabase, userId,
