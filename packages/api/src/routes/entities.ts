@@ -189,6 +189,13 @@ router.put('/:id', async (req, res) => {
     (meta_merge && Object.prototype.hasOwnProperty.call(meta_merge, 'accounting_method'))
   if (touchesMethod) accountingMethodCacheBust(req.params.id)
 
+  // Decrypt before answering, and never hand the ciphertext blob back. Without
+  // this the response reported ein as null on any edit that did not touch it —
+  // the stored value was intact, but a client trusting the response would have
+  // concluded the identifier had been cleared.
+  await hydrate(supabase, data, ENCRYPTED_ENTITY_FIELDS)
+  for (const k of Object.keys(data || {})) if (k.endsWith('_enc')) delete (data as any)[k]
+
   res.json({ entity: data })
 })
 
