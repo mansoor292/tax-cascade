@@ -9,7 +9,6 @@
  *   POST /api/fill/:form/:year — fill a PDF from canonical model
  *   GET  /api/forms           — list available forms
  *   GET  /api/field-map/:form/:year — get field map for a form
- *   POST /api/verify/:form/:year — verify filled PDF via Textract
  *
  * MCP tools:
  *   compute_1120, compute_1120s, compute_1040, compute_cascade
@@ -27,7 +26,6 @@ import cors from 'cors'
 import crypto from 'crypto'
 import { execSync, spawn } from 'child_process'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import { runPythonAsync } from './lib/run_python.js'
 import { PDFDocument, PDFTextField, PDFCheckBox } from 'pdf-lib'
 import { calc1120, calc1120S, calc1040, calcCascade } from './engine/tax_engine.js'
 import {
@@ -463,88 +461,12 @@ app.post('/api/label/:form/:year', async (req, res) => {
   }
 })
 
-// ─── Verify via Textract (sends PDF to Textract, extracts values) ───
-app.post('/api/verify', async (req, res) => {
-  try {
-    const { pdfPath, expected } = req.body  // pdfPath = local path, expected = {label: value}
-
-    const s3Key = `verify/${Date.now()}_${pdfPath.split('/').pop()}`
-    const script = `
-import boto3, json, time, re
-s3 = boto3.client("s3", region_name="us-east-1")
-textract = boto3.client("textract", region_name="us-east-1")
-BUCKET = "edgewater-textract-staging-2026"
-s3.upload_file("${pdfPath}", BUCKET, "${s3Key}")
-job = textract.start_document_analysis(DocumentLocation={"S3Object": {"Bucket": BUCKET, "Name": "${s3Key}"}}, FeatureTypes=["FORMS"])
-jid = job["JobId"]
-while True:
-    resp = textract.get_document_analysis(JobId=jid)
-    if resp["JobStatus"] == "SUCCEEDED":
-        blocks = resp.get("Blocks", []); nt = resp.get("NextToken")
-        while nt: resp = textract.get_document_analysis(JobId=jid, NextToken=nt); blocks.extend(resp.get("Blocks", [])); nt = resp.get("NextToken")
-        break
-    elif resp["JobStatus"] == "FAILED": print(json.dumps({"error":"FAILED"})); exit(0)
-    time.sleep(3)
-block_map = {b["Id"]: b for b in blocks}; key_map = {}; value_map = {}
-for b in blocks:
-    if b["BlockType"] == "KEY_VALUE_SET":
-        if "KEY" in b.get("EntityTypes", []): key_map[b["Id"]] = b
-        else: value_map[b["Id"]] = b
-def gt(block):
-    t = ""
-    for rel in block.get("Relationships", []):
-        if rel["Type"] == "CHILD":
-            for cid in rel["Ids"]:
-                c = block_map.get(cid, {})
-                if c.get("BlockType") == "WORD": t += c.get("Text","") + " "
-    return t.strip()
-kvs = []
-for kid, kb in key_map.items():
-    kt = gt(kb); vb = None
-    for rel in kb.get("Relationships", []):
-        if rel["Type"] == "VALUE":
-            for vid in rel["Ids"]:
-                if vid in value_map: vb = value_map[vid]; break
-    vt = gt(vb) if vb else ""
-    if kt or vt: kvs.append({"key": kt, "value": vt})
-print(json.dumps(kvs))
-`
-    const result = await runPythonAsync(script, { timeout: 120000 })
-    const kvs = JSON.parse(result.trim())
-
-    // Compare against expected if provided
-    let comparison = null
-    if (expected) {
-      comparison = { matches: 0, mismatches: 0, missing: 0, details: [] as any[] }
-      const parseDollar = (s: string) => {
-        const c = s.replace(/[\$,\s]/g, '').replace(/\((.+)\)/, '-$1').replace(/\.$/, '')
-        const n = parseFloat(c)
-        return isNaN(n) ? null : Math.round(n)
-      }
-      for (const [label, expVal] of Object.entries(expected)) {
-        const found = kvs.find((kv: any) => kv.key.includes(label))
-        if (found) {
-          const actual = parseDollar(found.value)
-          const exp = typeof expVal === 'number' ? expVal : parseDollar(String(expVal))
-          if (actual === exp) {
-            comparison.matches++
-            comparison.details.push({ label, expected: exp, actual, status: 'match' })
-          } else {
-            comparison.mismatches++
-            comparison.details.push({ label, expected: exp, actual, status: 'mismatch' })
-          }
-        } else {
-          comparison.missing++
-          comparison.details.push({ label, expected: expVal, actual: null, status: 'missing' })
-        }
-      }
-    }
-
-    res.json({ success: true, extracted: kvs.length, kvs, comparison })
-  } catch (e: any) {
-    res.status(500).json({ success: false, error: e.message })
-  }
-})
+// ─── /api/verify was removed ───
+// It took a LOCAL SERVER FILESYSTEM PATH from the request body (usable only
+// from a dev box, and an injection surface via the inline Python it ran),
+// had no callers in the MCP tools or the web app, and wrote to a bucket
+// nothing else used. The field-map verification workflow lives in
+// scripts/verify_pipeline.ts.
 
 // ─── Start server ───
 const PORT = parseInt(process.env.PORT || '3737')

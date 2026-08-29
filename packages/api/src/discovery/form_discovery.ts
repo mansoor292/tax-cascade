@@ -10,9 +10,13 @@
 import { PDFDocument, PDFTextField } from 'pdf-lib'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { runPythonAsync } from '../lib/run_python.js'
+import { s3PutObject, s3GetObject } from '../lib/s3.js'
 import { v4 as uuidv4 } from 'uuid'
 import { serviceClient } from '../lib/supabase.js'
 
+// Used only by the two bespoke Textract scripts below; everything else goes
+// through lib/s3. Porting those scripts to lib/textract is a roadmap item —
+// their reductions (field_id filtering with per-block pages) are custom.
 const S3_BUCKET = process.env.S3_BUCKET || 'tax-api-storage-2026'
 
 const FORMS_DIR = 'data/irs_forms'
@@ -47,27 +51,14 @@ async function downloadBlankPdf(formName: string, year: number): Promise<string>
   const localPath = `${FORMS_DIR}/${formName}_${year}.pdf`
   mkdirSync(FORMS_DIR, { recursive: true })
 
-  const script = `
-import urllib.request, sys
-try:
-    urllib.request.urlretrieve("${url}", "${localPath}")
-    print("ok")
-except urllib.error.HTTPError as e:
-    print(f"ERROR:{e.code}")
-    sys.exit(1)
-`
-  const result = await runPythonAsync(script, { timeout: 30000 })
-  if (result.startsWith('ERROR:')) {
-    throw new Error(`Failed to download ${url}: HTTP ${result.replace('ERROR:', '')}`)
-  }
+  const resp = await fetch(url)
+  if (!resp.ok) throw new Error(`Failed to download ${url}: HTTP ${resp.status}`)
+  const pdfBytes = Buffer.from(await resp.arrayBuffer())
+  writeFileSync(localPath, pdfBytes)
 
   // Also upload to S3
   const s3Key = `blank-forms/${formName}_${year}.pdf`
-  await runPythonAsync(`
-import boto3
-boto3.client('s3', region_name='us-east-1').upload_file("${localPath}", "${S3_BUCKET}", "${s3Key}")
-print("ok")
-`, { timeout: 15000 })
+  await s3PutObject(s3Key, pdfBytes, 'application/pdf')
 
   return localPath
 }
@@ -83,29 +74,16 @@ export async function ingestProvidedPdf(
   mkdirSync(FORMS_DIR, { recursive: true })
 
   if (source.base64) {
-    await runPythonAsync(`
-import base64
-with open("${localPath}", "wb") as f:
-    f.write(base64.b64decode('${source.base64}'))
-print("ok")
-`, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })
+    writeFileSync(localPath, Buffer.from(source.base64, 'base64'))
   } else if (source.s3_key) {
-    await runPythonAsync(`
-import boto3
-boto3.client('s3', region_name='us-east-1').download_file("${S3_BUCKET}", "${source.s3_key}", "${localPath}")
-print("ok")
-`, { timeout: 30000 })
+    writeFileSync(localPath, await s3GetObject(source.s3_key))
   } else {
     throw new Error('ingestProvidedPdf: base64 or s3_key required')
   }
 
   // Mirror to S3 for downstream Textract (same convention as IRS path)
   const s3Key = `blank-forms/${formName}_${year}.pdf`
-  await runPythonAsync(`
-import boto3
-boto3.client('s3', region_name='us-east-1').upload_file("${localPath}", "${S3_BUCKET}", "${s3Key}")
-print("ok")
-`, { timeout: 15000 })
+  await s3PutObject(s3Key, readFileSync(localPath), 'application/pdf')
 
   return localPath
 }

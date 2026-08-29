@@ -3,39 +3,17 @@
  * Avoids shell escaping issues with inline -c scripts.
  */
 import { writeFileSync, unlinkSync } from 'fs'
-import { execSync, execFile } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { v4 as uuidv4 } from 'uuid'
 
 const execFileAsync = promisify(execFile)
 
+// The BLOCKING runPython variant that used to live here is gone — it had
+// zero callers (the CLI scripts roll their own execSync) and its comment
+// explains why nothing should bring it back:
 /**
- * BLOCKING. Freezes the Node event loop for the whole run.
- *
- * Every caller in the server has been moved to runPythonAsync below — a
- * Textract job here took a worker out of service for minutes, and with two
- * workers that is half the fleet answering nothing. Kept only for the CLI
- * scripts in scripts/, where blocking is the point.
- *
- * @deprecated in server code — use runPythonAsync.
- */
-export function runPython(script: string, opts?: { timeout?: number; maxBuffer?: number }): string {
-  const tmpFile = `/tmp/taxapi_${uuidv4().slice(0, 8)}.py`
-  try {
-    writeFileSync(tmpFile, script)
-    const pythonBin = process.env.PYTHON_BIN || 'python3'
-    return execSync(`${pythonBin} ${tmpFile}`, {
-      timeout: opts?.timeout || 120000,
-      encoding: 'utf-8',
-      maxBuffer: opts?.maxBuffer || 50 * 1024 * 1024,
-    }).trim()
-  } finally {
-    try { unlinkSync(tmpFile) } catch {}
-  }
-}
-
-/**
- * Same, but without freezing the process.
+ * Async on purpose.
  *
  * execSync blocks the Node event loop for the whole run — and the Textract
  * path polls a job for up to three minutes. On a two-worker cluster that took

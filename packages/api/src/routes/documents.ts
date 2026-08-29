@@ -10,13 +10,13 @@
 import { Router, type Request } from 'express'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
-import { runPythonAsync } from '../lib/run_python.js'
+import { s3PresignPut, s3PresignGet, s3PresignGetMany, s3PutObject, s3GetObject } from '../lib/s3.js'
+import { analyzeDocument } from '../lib/textract.js'
 import { encryptedFields, hydrate, hydrateAll, ENCRYPTED_DOC_FIELDS, ENCRYPTED_RETURN_FIELDS, DOC_ENC_COLS } from '../lib/row_crypto.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
 
 
-const S3_BUCKET = process.env.S3_BUCKET || 'tax-api-storage-2026'
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
 
 const supabase = serviceClient()
@@ -166,22 +166,11 @@ router.get('/presign', async (req, res) => {
   }
 
   try {
-    const script = `
-import boto3, json
-s3 = boto3.client('s3', region_name='us-east-1')
-url = s3.generate_presigned_url('put_object', Params={
-    'Bucket': '${S3_BUCKET}',
-    'Key': '${s3Key}',
-    'ContentType': '${contentTypes[ext] || 'application/octet-stream'}',
-}, ExpiresIn=300)
-print(json.dumps({'url': url, 'key': '${s3Key}'}))
-`
-    const result = await runPythonAsync(script, { timeout: 10000 })
-    const { url, key } = JSON.parse(result.trim())
+    const url = await s3PresignPut(s3Key, contentTypes[ext] || 'application/octet-stream', 300)
 
     res.json({
       upload_url: url,
-      s3_key: key,
+      s3_key: s3Key,
       content_type: contentTypes[ext] || 'application/octet-stream',
       expires_in: 300,
     })
@@ -201,16 +190,7 @@ router.get('/:id/download', async (req, res) => {
   if (!doc) return res.status(404).json({ error: 'Not found' })
 
   try {
-    const script = `
-import boto3, json
-s3 = boto3.client('s3', region_name='us-east-1')
-url = s3.generate_presigned_url('get_object', Params={
-    'Bucket': '${S3_BUCKET}', 'Key': '${doc.s3_path}'
-}, ExpiresIn=3600)
-print(json.dumps({'url': url}))
-`
-    const result = await runPythonAsync(script, { timeout: 10000 })
-    res.json(JSON.parse(result.trim()))
+    res.json({ url: await s3PresignGet(doc.s3_path, 3600) })
   } catch (e: any) {
     sendError(res, e)
   }
@@ -241,24 +221,15 @@ router.post('/ingest', async (req, res) => {
     heic: 'image/heic', webp: 'image/webp',
   } as any)[ext] || 'application/octet-stream'
 
-  // Upload to S3 via boto3 (base64 decoded Python-side to avoid JS buffer
-  // bloat). Also computes the SHA-256 of the file content so we can
-  // dedupe against prior uploads — when the same PDF is uploaded twice
-  // (different filename, different s3_key, same bytes) the second
-  // upload reuses the cached textract_data and skips the AWS call
-  // entirely. Saves the full ~$0.065/page bill on repeated uploads.
+  // Upload to S3, computing the SHA-256 of the content so we can dedupe
+  // against prior uploads — when the same PDF is uploaded twice (different
+  // filename, different s3_key, same bytes) the second upload reuses the
+  // cached textract_data and skips the AWS call entirely. Saves the full
+  // ~$0.065/page bill on repeated uploads.
   try {
-    const uploadScript = `
-import boto3, base64, hashlib
-s3 = boto3.client('s3', region_name='us-east-1')
-data = base64.b64decode('${base64}')
-s3.put_object(Bucket='${S3_BUCKET}', Key='${s3Key}', Body=data, ContentType='${contentType}')
-sha = hashlib.sha256(data).hexdigest()
-print(f"{len(data)}|{sha}")
-`
-    const out = (await runPythonAsync(uploadScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })).trim()
-    const [sizeStr, contentHash] = out.split('|')
-    const size = parseInt(sizeStr) || 0
+    const { bytes: size, sha256: contentHash } = await s3PutObject(
+      s3Key, Buffer.from(base64, 'base64'), contentType,
+    )
 
     // Look for a prior document with the same content hash that already has
     // a successful Textract extraction. We can copy its textract_data and
@@ -380,14 +351,7 @@ async function extractAndArchive(args: {
   if (GEMINI_KEY && ['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
     try {
       // Download from S3 for Gemini
-      const dlScript = `
-import boto3, base64, json
-s3 = boto3.client('s3', region_name='us-east-1')
-obj = s3.get_object(Bucket='${S3_BUCKET}', Key='${s3_key}')
-data = obj['Body'].read()
-print(base64.b64encode(data).decode())
-`
-      const base64 = await runPythonAsync(dlScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })
+      const base64 = (await s3GetObject(s3_key)).toString('base64')
 
       const genAI = new GoogleGenerativeAI(GEMINI_KEY)
       const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
@@ -443,73 +407,8 @@ Fall back to "1099" only if the variant is unclear.` }
   if (!textractData && ['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
     const needsTables = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065']
       .includes(classification.doc_type || '')
-    const featureTypes = needsTables ? "['FORMS', 'TABLES']" : "['FORMS']"
     try {
-      const txScript = `
-import boto3, json, time
-textract = boto3.client('textract', region_name='us-east-1')
-job = textract.start_document_analysis(
-    DocumentLocation={'S3Object': {'Bucket': '${S3_BUCKET}', 'Name': '${s3_key}'}},
-    FeatureTypes=${featureTypes})
-jid = job['JobId']
-while True:
-    resp = textract.get_document_analysis(JobId=jid)
-    if resp['JobStatus'] == 'SUCCEEDED':
-        blocks = resp.get('Blocks', [])
-        nt = resp.get('NextToken')
-        while nt:
-            resp = textract.get_document_analysis(JobId=jid, NextToken=nt)
-            blocks.extend(resp.get('Blocks', []))
-            nt = resp.get('NextToken')
-        break
-    elif resp['JobStatus'] == 'FAILED':
-        print(json.dumps({'error': 'failed'}))
-        exit(0)
-    time.sleep(3)
-bm = {b['Id']: b for b in blocks}
-km, vm = {}, {}
-for b in blocks:
-    if b['BlockType'] == 'KEY_VALUE_SET':
-        if 'KEY' in b.get('EntityTypes', []): km[b['Id']] = b
-        else: vm[b['Id']] = b
-def gt(bl):
-    t = ''
-    for rel in bl.get('Relationships', []):
-        if rel['Type'] == 'CHILD':
-            for cid in rel['Ids']:
-                c = bm.get(cid, {})
-                if c.get('BlockType') == 'WORD': t += c.get('Text', '') + ' '
-    return t.strip()
-kvs = []
-for kid, kb in km.items():
-    kt = gt(kb); vb = None
-    for rel in kb.get('Relationships', []):
-        if rel['Type'] == 'VALUE':
-            for vid in rel['Ids']:
-                if vid in vm: vb = vm[vid]; break
-    vt = gt(vb) if vb else ''
-    if kt or vt: kvs.append({'key': kt, 'value': vt})
-tables = []
-for b in blocks:
-    if b['BlockType'] != 'TABLE': continue
-    cells = {}
-    for rel in b.get('Relationships', []):
-        if rel['Type'] == 'CHILD':
-            for cid in rel['Ids']:
-                cb = bm.get(cid, {})
-                if cb.get('BlockType') == 'CELL':
-                    r = cb.get('RowIndex', 0); c = cb.get('ColumnIndex', 0)
-                    cells[(r, c)] = gt(cb)
-    if not cells: continue
-    max_r = max(r for r, _ in cells)
-    max_c = max(c for _, c in cells)
-    rows = [[cells.get((r, c), '') for c in range(1, max_c + 1)] for r in range(1, max_r + 1)]
-    tables.append({'page': b.get('Page', 1), 'rows': rows, 'row_count': max_r, 'col_count': max_c})
-np = sum(1 for b in blocks if b['BlockType'] == 'PAGE')
-print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': len(blocks)}))
-`
-      const txResult = await runPythonAsync(txScript, { timeout: 180000 })
-      textractData = JSON.parse(txResult.trim())
+      textractData = await analyzeDocument(s3_key, { tables: needsTables, maxWaitMs: 180000 })
     } catch (e: any) {
       console.error('Textract failed:', e.message)
     }
@@ -744,13 +643,7 @@ router.post('/:id/categorize', async (req, res) => {
   }
 
   try {
-    const dlScript = `
-import boto3, base64
-s3 = boto3.client('s3', region_name='us-east-1')
-obj = s3.get_object(Bucket='${S3_BUCKET}', Key='${doc.s3_path}')
-print(base64.b64encode(obj['Body'].read()).decode())
-`
-    const base64 = await runPythonAsync(dlScript, { timeout: 30000, maxBuffer: 50 * 1024 * 1024 })
+    const base64 = (await s3GetObject(doc.s3_path)).toString('base64')
 
     const genAI = new GoogleGenerativeAI(GEMINI_KEY)
     const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
@@ -828,17 +721,7 @@ router.get('/', async (req, res) => {
   let urlMap: Record<string, string> = {}
   if (keys.length) {
     try {
-      const script = `
-import boto3, json
-s3 = boto3.client('s3', region_name='us-east-1')
-keys = ${JSON.stringify(keys)}
-out = {}
-for k in keys:
-    out[k] = s3.generate_presigned_url('get_object',
-        Params={'Bucket': '${S3_BUCKET}', 'Key': k}, ExpiresIn=3600)
-print(json.dumps(out))
-`
-      urlMap = JSON.parse((await runPythonAsync(script, { timeout: 15000 })).trim())
+      urlMap = await s3PresignGetMany(keys, 3600)
     } catch (e: any) {
       console.error('list_documents presign batch failed:', e.message)
     }
@@ -931,74 +814,9 @@ router.post('/:id/extract', async (req, res) => {
   // misclassified docs, so honor the doc_type that's now on the row.
   const needsTables = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065']
     .includes(doc.doc_type || '')
-  const featureTypes = needsTables ? "['FORMS', 'TABLES']" : "['FORMS']"
 
   try {
-    const script = `
-import boto3, json, time
-textract = boto3.client('textract', region_name='us-east-1')
-job = textract.start_document_analysis(
-    DocumentLocation={'S3Object': {'Bucket': '${S3_BUCKET}', 'Name': '${doc.s3_path}'}},
-    FeatureTypes=${featureTypes})
-jid = job['JobId']
-while True:
-    resp = textract.get_document_analysis(JobId=jid)
-    if resp['JobStatus'] == 'SUCCEEDED':
-        blocks = resp.get('Blocks', [])
-        nt = resp.get('NextToken')
-        while nt:
-            resp = textract.get_document_analysis(JobId=jid, NextToken=nt)
-            blocks.extend(resp.get('Blocks', []))
-            nt = resp.get('NextToken')
-        break
-    elif resp['JobStatus'] == 'FAILED':
-        print(json.dumps({'error': 'failed'}))
-        exit(0)
-    time.sleep(3)
-block_map = {b['Id']: b for b in blocks}
-km, vm = {}, {}
-for b in blocks:
-    if b['BlockType'] == 'KEY_VALUE_SET':
-        if 'KEY' in b.get('EntityTypes', []): km[b['Id']] = b
-        else: vm[b['Id']] = b
-def gt(bl):
-    t = ''
-    for rel in bl.get('Relationships', []):
-        if rel['Type'] == 'CHILD':
-            for cid in rel['Ids']:
-                c = block_map.get(cid, {})
-                if c.get('BlockType') == 'WORD': t += c.get('Text', '') + ' '
-    return t.strip()
-kvs = []
-for kid, kb in km.items():
-    kt = gt(kb); vb = None
-    for rel in kb.get('Relationships', []):
-        if rel['Type'] == 'VALUE':
-            for vid in rel['Ids']:
-                if vid in vm: vb = vm[vid]; break
-    vt = gt(vb) if vb else ''
-    if kt or vt: kvs.append({'key': kt, 'value': vt})
-tables = []
-for b in blocks:
-    if b['BlockType'] != 'TABLE': continue
-    cells = {}
-    for rel in b.get('Relationships', []):
-        if rel['Type'] == 'CHILD':
-            for cid in rel['Ids']:
-                cb = block_map.get(cid, {})
-                if cb.get('BlockType') == 'CELL':
-                    r = cb.get('RowIndex', 0); c = cb.get('ColumnIndex', 0)
-                    cells[(r, c)] = gt(cb)
-    if not cells: continue
-    max_r = max(r for r, _ in cells)
-    max_c = max(c for _, c in cells)
-    rows = [[cells.get((r, c), '') for c in range(1, max_c + 1)] for r in range(1, max_r + 1)]
-    tables.append({'page': b.get('Page', 1), 'rows': rows, 'row_count': max_r, 'col_count': max_c})
-np = sum(1 for b in blocks if b['BlockType'] == 'PAGE')
-print(json.dumps({'kvs': kvs, 'tables': tables, 'num_pages': np, 'num_blocks': len(blocks)}))
-`
-    const result = await runPythonAsync(script, { timeout: 120000 })
-    const textractData = JSON.parse(result)
+    const textractData = await analyzeDocument(doc.s3_path, { tables: needsTables, maxWaitMs: 120000 })
 
     const extractEnc = await encryptedFields(supabase, userId,
       { textract_data: textractData }, ENCRYPTED_DOC_FIELDS)

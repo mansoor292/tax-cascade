@@ -415,8 +415,6 @@ router.get('/:id/pdf', async (req, res) => {
 
   try {
     const { buildReturnPdf } = await import('../builders/build_return_pdf.js')
-    const S3_BUCKET = process.env.S3_BUCKET || 'tax-api-storage-2026'
-
     const { pdf, filled, pages, forms } = await buildReturnPdf({
       formType,
       taxYear: scenario.tax_year,
@@ -428,22 +426,9 @@ router.get('/:id/pdf', async (req, res) => {
     const pdfBytes = await pdf.save()
     const s3Key = `scenarios/${userId}/${scenario.id}.pdf`
 
-    const { runPythonAsync } = await import('../lib/run_python.js')
-    const { writeFileSync } = await import('fs')
-    const tmpPath = `/tmp/scenario_${scenario.id}.pdf`
-    writeFileSync(tmpPath, Buffer.from(pdfBytes))
-
-    const uploadScript = `
-import boto3, json
-s3 = boto3.client('s3', region_name='us-east-1')
-s3.upload_file('${tmpPath}', '${S3_BUCKET}', '${s3Key}', ExtraArgs={'ContentType': 'application/pdf'})
-url = s3.generate_presigned_url('get_object', Params={
-    'Bucket': '${S3_BUCKET}', 'Key': '${s3Key}'
-}, ExpiresIn=3600)
-print(json.dumps({'url': url}))
-`
-    const result = await runPythonAsync(uploadScript, { timeout: 30000 })
-    const { url } = JSON.parse(result.trim())
+    const { s3PutObject, s3PresignGet } = await import('../lib/s3.js')
+    await s3PutObject(s3Key, Buffer.from(pdfBytes), 'application/pdf')
+    const url = await s3PresignGet(s3Key, 3600)
 
     res.json({ url, filled, pages, forms, scenario_id: scenario.id, scenario_name: scenario.name })
   } catch (e: any) {

@@ -865,8 +865,6 @@ router.post('/use-prior-year', async (req, res) => {
 })
 
 // ─── Generate filled PDF and return download URL ───
-const S3_BUCKET = process.env.S3_BUCKET || 'tax-api-storage-2026'
-
 router.get('/:id/pdf', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
@@ -932,17 +930,8 @@ router.get('/:id/pdf', async (req, res) => {
   // If we already have a cached PDF, return presigned URL (skip with ?regenerate=true)
   if (taxReturn.pdf_s3_path && req.query.regenerate !== 'true') {
     try {
-      const { runPythonAsync } = await import('../lib/run_python.js')
-      const script = `
-import boto3, json
-s3 = boto3.client('s3', region_name='us-east-1')
-url = s3.generate_presigned_url('get_object', Params={
-    'Bucket': '${S3_BUCKET}', 'Key': '${taxReturn.pdf_s3_path}'
-}, ExpiresIn=3600)
-print(json.dumps({'url': url}))
-`
-      const result = await runPythonAsync(script, { timeout: 10000 })
-      return res.json(JSON.parse(result.trim()))
+      const { s3PresignGet } = await import('../lib/s3.js')
+      return res.json({ url: await s3PresignGet(taxReturn.pdf_s3_path, 3600) })
     } catch {}
   }
 
@@ -1023,22 +1012,10 @@ print(json.dumps({'url': url}))
     const pdfBytes = await pdf.save()
     const s3Key = `returns/${userId}/${taxReturn.id}.pdf`
 
-    const { runPythonAsync } = await import('../lib/run_python.js')
-    const { writeFileSync } = await import('fs')
-    const tmpPath = `/tmp/${taxReturn.id}.pdf`
-    writeFileSync(tmpPath, Buffer.from(pdfBytes))
-
-    const uploadScript = `
-import boto3, json
-s3 = boto3.client('s3', region_name='us-east-1')
-s3.upload_file('${tmpPath}', '${S3_BUCKET}', '${s3Key}', ExtraArgs={'ContentType': 'application/pdf'})
-url = s3.generate_presigned_url('get_object', Params={
-    'Bucket': '${S3_BUCKET}', 'Key': '${s3Key}'
-}, ExpiresIn=3600)
-print(json.dumps({'url': url}))
-`
-    const result = await runPythonAsync(uploadScript, { timeout: 30000 })
-    const { url } = JSON.parse(result.trim())
+    // Body upload — no more /tmp PDF that was never unlinked.
+    const { s3PutObject, s3PresignGet } = await import('../lib/s3.js')
+    await s3PutObject(s3Key, Buffer.from(pdfBytes), 'application/pdf')
+    const url = await s3PresignGet(s3Key, 3600)
 
     // Cache the S3 path on the return
     await supabase.from('tax_return').update({ pdf_s3_path: s3Key }).eq('id', req.params.id)
@@ -1142,23 +1119,10 @@ router.post('/extension', async (req, res) => {
       pdfFilled = filled
       const pdfBytes = await pdf.save()
 
-      const { writeFileSync } = await import('fs')
-      const tmpPath = `/tmp/ext_${extension_type}_${tax_year}_${Date.now()}.pdf`
-      writeFileSync(tmpPath, Buffer.from(pdfBytes))
-
       const s3Key = `extensions/${userId}/${extension_type}_${tax_year}_${Date.now()}.pdf`
-      const { runPythonAsync } = await import('../lib/run_python.js')
-      const uploadScript = `
-import boto3, json
-s3 = boto3.client('s3', region_name='us-east-1')
-s3.upload_file('${tmpPath}', '${S3_BUCKET}', '${s3Key}', ExtraArgs={'ContentType': 'application/pdf'})
-url = s3.generate_presigned_url('get_object', Params={
-    'Bucket': '${S3_BUCKET}', 'Key': '${s3Key}'
-}, ExpiresIn=3600)
-print(json.dumps({'url': url}))
-`
-      const uploadResult = await runPythonAsync(uploadScript, { timeout: 30000 })
-      pdfUrl = JSON.parse(uploadResult.trim()).url
+      const { s3PutObject, s3PresignGet } = await import('../lib/s3.js')
+      await s3PutObject(s3Key, Buffer.from(pdfBytes), 'application/pdf')
+      pdfUrl = await s3PresignGet(s3Key, 3600)
     }
 
     // Optionally save to database — find-or-insert the latest extension for
