@@ -39,11 +39,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from '@/lib/toast'
-
-function fmt(n: unknown): string {
-  if (typeof n !== 'number') return String(n ?? '')
-  return n < 0 ? `-$${Math.abs(n).toLocaleString()}` : `$${n.toLocaleString()}`
-}
+import { fmtMoney as fmt } from '@/lib/format'
 
 interface Props {
   entityId: string
@@ -442,11 +438,6 @@ function flattenQboRows(rows: unknown[], depth = 0, out: ReportRow[] = []): Repo
   return out
 }
 
-function fmtReport(v: number | string): string {
-  if (typeof v !== 'number') return String(v || '')
-  return v < 0 ? `-$${Math.abs(v).toLocaleString()}` : `$${v.toLocaleString()}`
-}
-
 function ReportDrilldownDialog({
   open,
   onOpenChange,
@@ -516,7 +507,7 @@ function ReportDrilldownDialog({
                     {r.label}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm">
-                    {r.value === '' ? '' : fmtReport(r.value)}
+                    {r.value === '' ? '' : fmt(r.value)}
                   </TableCell>
                 </TableRow>
               ))}
@@ -528,7 +519,7 @@ function ReportDrilldownDialog({
               {Object.entries(flat).map(([k, v]) => (
                 <TableRow key={k}>
                   <TableCell className="text-sm">{k}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{fmtReport(v)}</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(v)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -14,11 +14,7 @@ import {
 } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from '@/lib/toast'
-
-function fmt(n: unknown): string {
-  if (typeof n !== 'number') return String(n ?? '')
-  return n < 0 ? `-$${Math.abs(n).toLocaleString()}` : `$${n.toLocaleString()}`
-}
+import { fmtMoney as fmt, coerceNumericInputs } from '@/lib/format'
 
 const EXTENSION_TYPES = [
   { value: '4868', label: 'Form 4868 — Individual Extension', desc: 'Automatic 6-month extension for individuals' },
@@ -78,11 +74,7 @@ export default function Extensions() {
     setValidating(true)
     setErrors([])
     try {
-      const parsedInputs: Record<string, unknown> = {}
-      for (const [k, v] of Object.entries(inputs)) {
-        const num = Number(v)
-        parsedInputs[k] = isNaN(num) ? v : num
-      }
+      const parsedInputs = coerceNumericInputs(inputs)
       const data = await api<{ valid: boolean; errors?: string[] }>('/api/returns/extension/validate', {
         method: 'POST',
         body: JSON.stringify({ extension_type: extType, inputs: parsedInputs }),
@@ -102,11 +94,7 @@ export default function Extensions() {
     setFiling(true)
     setErrors([])
     try {
-      const parsedInputs: Record<string, unknown> = {}
-      for (const [k, v] of Object.entries(inputs)) {
-        const num = Number(v)
-        parsedInputs[k] = isNaN(num) ? v : num
-      }
+      const parsedInputs = coerceNumericInputs(inputs)
       const data = await api<Record<string, unknown>>('/api/returns/extension', {
         method: 'POST',
         body: JSON.stringify({

@@ -24,52 +24,10 @@ import {
 } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
 import { maskTaxId } from '@/lib/mask'
-
-const FORM_TYPES = [
-  { value: '1040', label: 'Individual (1040)' },
-  { value: '1120', label: 'C-Corporation (1120)' },
-  { value: '1120S', label: 'S-Corporation (1120-S)' },
-  // A partnership filing without this had to be recorded as an individual,
-  // which silently gave it the wrong filing deadline: a 1065 is due 15 March,
-  // a 1040 on 15 April. The entity and calendar handling already existed —
-  // only the choice was missing.
-  { value: '1065', label: 'Partnership (1065)' },
-]
-
-const FORM_TYPE_LABEL: Record<string, string> = {
-  '1040': 'Individual',
-  '1120': 'C-Corp',
-  '1120S': 'S-Corp',
-  '1120-S': 'S-Corp',
-  '1065': 'Partnership',
-}
-
-// What the entity legally IS, as distinct from how it is taxed. An LLC may
-// file a 1065 or, having elected on Form 2553, an 1120-S.
-const LEGAL_FORMS = [
-  { value: '',                 label: 'Not specified' },
-  { value: 'llc',              label: 'LLC' },
-  { value: 'corporation',      label: 'Corporation' },
-  { value: 'partnership',      label: 'Partnership' },
-  { value: 'sole_proprietor',  label: 'Sole proprietor' },
-  { value: 'trust',            label: 'Trust' },
-  { value: 'estate',           label: 'Estate' },
-  { value: 'individual',       label: 'Individual' },
-]
-
-export const LEGAL_FORM_LABEL: Record<string, string> = {
-  llc: 'LLC', corporation: 'Corporation', partnership: 'Partnership',
-  sole_proprietor: 'Sole proprietor', trust: 'Trust', estate: 'Estate',
-  individual: 'Individual',
-}
-
-const FORM_TYPE_COLOR: Record<string, string> = {
-  '1040': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  '1120': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  '1120S': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  '1120-S': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  '1065': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-}
+import {
+  FORM_TYPE_OPTIONS, FORM_TYPE_LABEL, FORM_TYPE_COLOR,
+  LEGAL_FORMS, LEGAL_FORM_LABEL,
+} from '@/lib/labels'
 
 export default function Entities() {
   const { entities, loading, create } = useEntities()
@@ -207,7 +165,7 @@ export default function Entities() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {FORM_TYPES.map(ft => (
+                  {FORM_TYPE_OPTIONS.map(ft => (
                     <SelectItem key={ft.value} value={ft.value}>{ft.label}</SelectItem>
                   ))}
                 </SelectContent>

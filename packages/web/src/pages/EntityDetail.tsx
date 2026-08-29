@@ -30,13 +30,13 @@ import ScenariosTab from '@/components/tabs/ScenariosTab'
 import DocumentsTab from '@/components/tabs/DocumentsTab'
 import QuickBooksTab from '@/components/tabs/QuickBooksTab'
 import { maskTaxId } from '@/lib/mask'
+import { FORM_TYPE_OPTIONS, LEGAL_FORMS } from '@/lib/labels'
 
-const FORM_TYPE_LABEL: Record<string, string> = {
-  '1040': 'Individual (1040)',
-  '1120': 'C-Corp (1120)',
-  '1120S': 'S-Corp (1120-S)',
-  '1120-S': 'S-Corp (1120-S)',
-}
+// This page's badge shows the label with the form number attached.
+const FORM_TYPE_LABEL: Record<string, string> = Object.fromEntries(
+  FORM_TYPE_OPTIONS.map(o => [o.value, o.label]),
+)
+FORM_TYPE_LABEL['1120-S'] = FORM_TYPE_LABEL['1120S']
 
 type Basis = 'accrual' | 'cash' | ''
 
@@ -207,10 +207,9 @@ export default function EntityDetail() {
               <Select value={editFormType} onValueChange={(v) => v && setEditFormType(v)}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1040">Individual (1040)</SelectItem>
-                  <SelectItem value="1120">C-Corporation (1120)</SelectItem>
-                  <SelectItem value="1120S">S-Corporation (1120-S)</SelectItem>
-                  <SelectItem value="1065">Partnership (1065)</SelectItem>
+                  {FORM_TYPE_OPTIONS.map(ft => (
+                    <SelectItem key={ft.value} value={ft.value}>{ft.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -219,14 +218,9 @@ export default function EntityDetail() {
               <Select value={editLegalForm || '__none__'} onValueChange={v => setEditLegalForm(v && v !== '__none__' ? v : '')}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">Not specified</SelectItem>
-                  <SelectItem value="llc">LLC</SelectItem>
-                  <SelectItem value="corporation">Corporation</SelectItem>
-                  <SelectItem value="partnership">Partnership</SelectItem>
-                  <SelectItem value="sole_proprietor">Sole proprietor</SelectItem>
-                  <SelectItem value="trust">Trust</SelectItem>
-                  <SelectItem value="estate">Estate</SelectItem>
-                  <SelectItem value="individual">Individual</SelectItem>
+                  {LEGAL_FORMS.map(lf => (
+                    <SelectItem key={lf.value || '__none__'} value={lf.value || '__none__'}>{lf.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">

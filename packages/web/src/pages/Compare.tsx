@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { fmtMoney, fmtDelta as fmtDeltaBase } from '@/lib/format'
 
 const METRICS = [
   { key: 'gross_profit',                label: 'Gross profit' },
@@ -77,16 +78,8 @@ const SECTION_LABELS: Record<string, string> = {
   other:       'Other',
 }
 
-function fmt(n: unknown): string {
-  if (typeof n !== 'number' || isNaN(n)) return '—'
-  return n < 0 ? `-$${Math.abs(n).toLocaleString()}` : `$${n.toLocaleString()}`
-}
-
-function fmtDelta(n: number): string {
-  if (n === 0) return '±$0'
-  const abs = Math.abs(n).toLocaleString()
-  return n > 0 ? `+$${abs}` : `-$${abs}`
-}
+const fmt = (n: unknown) => (typeof n === 'number' ? fmtMoney(n, '—') : '—')
+const fmtDelta = (n: number) => fmtDeltaBase(n, '±$0')
 
 /** Collect all numeric canonical key/value pairs from a return row.
  *  Line-by-line comparison is about WHAT'S ON THE FORM — every IRS line

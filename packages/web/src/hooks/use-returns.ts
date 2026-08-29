@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import type { ReturnSource } from '@/lib/labels'
 
-export type ReturnSource = 'filed_import' | 'amendment' | 'proforma' | 'extension'
+export type { ReturnSource }
 
 export interface TaxReturn {
   id: string

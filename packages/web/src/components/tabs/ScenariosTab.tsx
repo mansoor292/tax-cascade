@@ -37,11 +37,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
-
-function fmt(n: unknown): string {
-  if (typeof n !== 'number') return String(n ?? '')
-  return n < 0 ? `-$${Math.abs(n).toLocaleString()}` : `$${n.toLocaleString()}`
-}
+import { fmtMoney as fmt } from '@/lib/format'
 
 interface Props {
   entityId: string
@@ -120,7 +116,7 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
         case 'promote': await promote(id); toast.success('Scenario promoted to return'); onUpdate(); break
         case 'pdf': {
           const data = await getPdf(id)
-          if (data.pdf_url) window.open(data.pdf_url, '_blank')
+          if (data.url) window.open(data.url, '_blank')
           break
         }
       }

@@ -14,6 +14,7 @@ export interface Scenario {
   diff?: Record<string, unknown>
   ai_analysis?: string
   created_at?: string
+  tax_entity?: { name: string; form_type: string }
 }
 
 export function useScenarios(entityId?: string) {
@@ -69,8 +70,11 @@ export function useScenarios(entityId?: string) {
     return data
   }
 
+  // GET, and the response field is `url` — this endpoint once shipped as a
+  // POST reading `pdf_url` (copied from use-returns' different route) and the
+  // PDF button silently did nothing.
   const getPdf = async (id: string) => {
-    return api<{ pdf_url: string }>(`/api/scenarios/${id}/pdf`, { method: 'POST' })
+    return api<{ url: string }>(`/api/scenarios/${id}/pdf`)
   }
 
   const compareScenarios = async (ids: string[]) => {

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
+import { fmtDate } from '@/lib/format'
 
 const URGENCY_STYLE: Record<Urgency, { label: string; className: string }> = {
   overdue:   { label: 'Overdue',   className: 'bg-red-500/15 text-red-400 border-red-500/30' },
@@ -33,13 +34,6 @@ function whenText(o: Obligation): string {
   if (d === 0) return 'Due today'
   if (d < 0) return `${Math.abs(d)} ${Math.abs(d) === 1 ? 'day' : 'days'} overdue`
   return `in ${d} ${d === 1 ? 'day' : 'days'}`
-}
-
-function fmtDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {
-    month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
-  })
 }
 
 function ObligationRow({ o, onUpdate }: { o: Obligation; onUpdate: (id: string, patch: any) => Promise<void> }) {

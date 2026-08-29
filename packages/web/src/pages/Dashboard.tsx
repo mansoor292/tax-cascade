@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { CompareReturnsResponse } from '@/hooks/use-returns'
 import { maskTaxId } from '@/lib/mask'
+import { fmtMoneyCompact as fmtMoney } from '@/lib/format'
+import { FORM_TYPE_LABEL, SOURCE_LABEL, SOURCE_VARIANT, type ReturnSource } from '@/lib/labels'
 
 interface Entity {
   id: string; name: string; form_type: string; ein: string
@@ -24,30 +26,6 @@ interface Scenario {
   created_at: string
 }
 
-const FORM_LABEL: Record<string, string> = { '1040': 'Individual', '1120': 'C-Corp', '1120S': 'S-Corp' }
-
-const SOURCE_LABEL: Record<string, string> = {
-  filed_import: 'Filed',
-  amendment:    'Amendment',
-  proforma:     'Proforma',
-  extension:    'Extension',
-}
-
-const SOURCE_VARIANT: Record<string, string> = {
-  filed_import: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  amendment:    'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  proforma:     'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  extension:    'bg-purple-500/10 text-purple-400 border-purple-500/20',
-}
-
-function fmtMoney(n: number | undefined | null): string {
-  if (typeof n !== 'number' || isNaN(n)) return '—'
-  const abs = Math.abs(n)
-  const formatted = abs >= 1000
-    ? `$${(abs / 1000).toFixed(abs >= 100_000 ? 0 : 1)}k`
-    : `$${abs.toLocaleString()}`
-  return n < 0 ? `-${formatted}` : formatted
-}
 
 function fmtSigned(n: number): string {
   const s = fmtMoney(Math.abs(n))
@@ -267,7 +245,7 @@ export default function Dashboard() {
                     <div>
                       <div className="font-medium text-sm">{e.name}</div>
                       <div className="text-xs text-muted-foreground">
-                        {FORM_LABEL[e.form_type] || e.form_type}
+                        {FORM_TYPE_LABEL[e.form_type] || e.form_type}
                         {e.ein ? ` · ${maskTaxId(e.ein)}` : ''}
                       </div>
                     </div>
@@ -334,8 +312,8 @@ export default function Dashboard() {
                       <Badge variant="secondary" className="ml-1 text-xs">{r.tax_year}</Badge>
                     </div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                      <Badge variant="outline" className={`text-xs px-1.5 py-0 ${SOURCE_VARIANT[r.source] || ''}`}>
-                        {SOURCE_LABEL[r.source] || r.source}
+                      <Badge variant="outline" className={`text-xs px-1.5 py-0 ${SOURCE_VARIANT[r.source as ReturnSource] || ''}`}>
+                        {SOURCE_LABEL[r.source as ReturnSource] || r.source}
                       </Badge>
                       <span>{new Date(r.computed_at).toLocaleDateString()}</span>
                     </div>

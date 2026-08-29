@@ -19,11 +19,7 @@ import {
 } from '@/components/ui/table'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-
-function fmt(n: unknown): string {
-  if (typeof n !== 'number') return String(n ?? '')
-  return n < 0 ? `-$${Math.abs(n).toLocaleString()}` : `$${n.toLocaleString()}`
-}
+import { fmtMoney as fmt } from '@/lib/format'
 
 export default function TaxTables() {
   const [year, setYear] = useState(2024)

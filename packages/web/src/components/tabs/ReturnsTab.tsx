@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Download, FileText, Loader2, GitBranch, Sparkles, BarChart3, Trash2, ChevronRight, RefreshCw, Scale } from 'lucide-react'
 import { type Entity } from '@/hooks/use-entities'
-import { useReturns, type TaxReturn, type ReturnSource } from '@/hooks/use-returns'
+import { useReturns, type TaxReturn } from '@/hooks/use-returns'
 import { useSchema } from '@/hooks/use-schema'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -33,31 +33,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
+import { fmtMoney, fmtDelta, coerceNumericInputs } from '@/lib/format'
+import { SOURCE_LABEL, SOURCE_VARIANT, COMPUTABLE_FORM_OPTIONS } from '@/lib/labels'
 
-function fmt(n: unknown): string {
-  if (typeof n !== 'number') return String(n ?? '—')
-  return n < 0 ? `-$${Math.abs(n).toLocaleString()}` : `$${n.toLocaleString()}`
-}
-
-function fmtDelta(n: number | null | undefined): string {
-  if (typeof n !== 'number' || n === 0) return '—'
-  const abs = Math.abs(n).toLocaleString()
-  return n > 0 ? `+$${abs}` : `-$${abs}`
-}
-
-const SOURCE_LABEL: Record<ReturnSource, string> = {
-  filed_import: 'Filed',
-  amendment:    'Amendment',
-  proforma:     'Proforma',
-  extension:    'Extension',
-}
-
-const SOURCE_VARIANT: Record<ReturnSource, string> = {
-  filed_import: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  amendment:    'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  proforma:     'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  extension:    'bg-purple-500/10 text-purple-400 border-purple-500/20',
-}
+const fmt = (n: unknown) => fmtMoney(n, '—')
 
 interface Props {
   entityId: string
@@ -203,11 +182,7 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
   const handleCompute = async () => {
     setComputing(true)
     try {
-      const numericInputs: Record<string, unknown> = { tax_year: taxYear }
-      for (const [k, v] of Object.entries(inputs)) {
-        const num = Number(v)
-        numericInputs[k] = isNaN(num) ? v : num
-      }
+      const numericInputs = { tax_year: taxYear, ...coerceNumericInputs(inputs) }
 
       const valResult = await validate({ form_type: formType, tax_year: taxYear, inputs: numericInputs })
       if (valResult.errors && valResult.errors.length > 0) {
@@ -497,9 +472,9 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
                 <Select value={formType} onValueChange={(v) => v && setFormType(v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1040">1040 (Individual)</SelectItem>
-                    <SelectItem value="1120">1120 (C-Corp)</SelectItem>
-                    <SelectItem value="1120S">1120-S (S-Corp)</SelectItem>
+                    {COMPUTABLE_FORM_OPTIONS.map(f => (
+                      <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

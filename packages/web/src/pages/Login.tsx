@@ -22,7 +22,7 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-white mb-1">Tax Engine</h1>
+        <h1 className="text-2xl font-bold text-white mb-1">Catipult</h1>
         <p className="text-zinc-500 mb-6 text-sm">Compute, fill, and verify IRS returns</p>
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
           <div className="flex gap-4 mb-5 border-b border-zinc-800 pb-3">

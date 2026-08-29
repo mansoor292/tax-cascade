@@ -17,11 +17,8 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
-
-function fmt(n: unknown): string {
-  if (typeof n !== 'number') return String(n ?? '')
-  return n < 0 ? `-$${Math.abs(n).toLocaleString()}` : `$${n.toLocaleString()}`
-}
+import { fmtMoney as fmt, coerceNumericInputs } from '@/lib/format'
+import { COMPUTABLE_FORM_OPTIONS } from '@/lib/labels'
 
 interface ComputeResult {
   computed?: Record<string, number>
@@ -63,11 +60,7 @@ export default function Compute() {
     setComputing('manual')
     setResult(null)
     try {
-      const numericInputs: Record<string, unknown> = { tax_year: taxYear }
-      for (const [k, v] of Object.entries(inputs)) {
-        const num = Number(v)
-        numericInputs[k] = isNaN(num) ? v : num
-      }
+      const numericInputs = { tax_year: taxYear, ...coerceNumericInputs(inputs) }
       // If entity is selected, hit compute_return (saves). Otherwise hit raw engine.
       const path = entityId ? '/api/returns/compute' : `/api/compute/${formType}`
       const body = entityId
@@ -90,6 +83,9 @@ export default function Compute() {
     setComputing('qbo')
     setResult(null)
     try {
+      // Deliberately NOT coerceNumericInputs: these are QBO overrides, and
+      // only fields with an actual numeric value should override — empty or
+      // non-numeric entries must fall through to the QBO-derived figures.
       const numericInputs: Record<string, unknown> = { tax_year: taxYear }
       for (const [k, v] of Object.entries(inputs)) {
         const num = Number(v)
@@ -148,9 +144,9 @@ export default function Compute() {
               <Select value={formType} onValueChange={v => { if (v) { setFormType(v); setInputs({}); setResult(null) } }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1040">1040 (Individual)</SelectItem>
-                  <SelectItem value="1120">1120 (C-Corp)</SelectItem>
-                  <SelectItem value="1120S">1120-S (S-Corp)</SelectItem>
+                  {COMPUTABLE_FORM_OPTIONS.map(f => (
+                    <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

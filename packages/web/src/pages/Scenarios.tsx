@@ -1,42 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { FlaskConical, Loader2, FileText } from 'lucide-react'
-import { api } from '@/lib/api'
+import { useScenarios } from '@/hooks/use-scenarios'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
-interface Scenario {
-  id: string
-  name: string
-  description?: string
-  tax_year: number
-  status: string
-  entity_id: string
-  base_return_id?: string
-  computed_result?: any
-  ai_analysis?: string
-  created_at: string
-  tax_entity?: { name: string; form_type: string }
-}
-
 export default function Scenarios() {
-  const [scenarios, setScenarios] = useState<Scenario[]>([])
-  const [loading, setLoading] = useState(true)
+  const { scenarios, loading, getPdf } = useScenarios()
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null)
-
-  useEffect(() => {
-    api<{ scenarios: Scenario[] }>('/api/scenarios')
-      .then(d => setScenarios(d.scenarios || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
 
   async function getScenarioPdf(id: string) {
     setGeneratingPdf(id)
     try {
-      const data = await api<{ url: string }>(`/api/scenarios/${id}/pdf`)
-      window.open(data.url, '_blank')
+      const data = await getPdf(id)
+      if (data.url) window.open(data.url, '_blank')
     } catch { /* ignore */ }
     setGeneratingPdf(null)
   }
@@ -60,7 +38,7 @@ export default function Scenarios() {
       ) : (
         <div className="space-y-3">
           {scenarios.map(s => {
-            const computed = s.computed_result?.computed || {}
+            const computed = (s.computed_result?.computed || {}) as Record<string, number | undefined>
             return (
               <Card key={s.id}>
                 <CardContent className="py-4">

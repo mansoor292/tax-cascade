@@ -31,14 +31,7 @@ import {
 import { useEntities, type Entity } from '@/hooks/use-entities'
 import { Skeleton } from '@/components/ui/skeleton'
 import { maskTaxId } from '@/lib/mask'
-
-const FORM_TYPE_LABEL: Record<string, string> = {
-  '1040': 'Individual',
-  '1120': 'C-Corp',
-  '1120S': 'S-Corp',
-  '1120-S': 'S-Corp',
-  '1065': 'Partnership',
-}
+import { FORM_TYPE_LABEL } from '@/lib/labels'
 
 const tools = [
   { to: '/app/compute', label: 'Quick Compute', icon: Calculator },

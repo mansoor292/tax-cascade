@@ -7,11 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 import { toast } from '@/lib/toast'
-
-function fmt(n: unknown): string {
-  if (typeof n !== 'number') return String(n ?? '')
-  return n < 0 ? `-$${Math.abs(n).toLocaleString()}` : `$${n.toLocaleString()}`
-}
+import { fmtMoney as fmt, coerceNumericInputs } from '@/lib/format'
 
 const S_CORP_FIELDS = [
   { key: 'gross_receipts', label: 'Gross Receipts' },
@@ -51,16 +47,8 @@ export default function Cascade() {
     setComputing(true)
     setResult(null)
     try {
-      const sCorpParsed: Record<string, unknown> = {}
-      for (const [k, v] of Object.entries(sCorpInputs)) {
-        const num = Number(v)
-        sCorpParsed[k] = isNaN(num) ? v : num
-      }
-      const indParsed: Record<string, unknown> = {}
-      for (const [k, v] of Object.entries(individualInputs)) {
-        const num = Number(v)
-        indParsed[k] = isNaN(num) ? v : num
-      }
+      const sCorpParsed = coerceNumericInputs(sCorpInputs)
+      const indParsed = coerceNumericInputs(individualInputs)
 
       const data = await api('/api/compute/cascade', {
         method: 'POST',
