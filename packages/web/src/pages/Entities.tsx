@@ -203,7 +203,7 @@ export default function Entities() {
             <div className="space-y-2">
               <Label htmlFor="form_type">Tax treatment</Label>
               <Select value={formType} onValueChange={(v) => v && setFormType(v)}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -219,7 +219,7 @@ export default function Entities() {
             <div className="space-y-2">
               <Label htmlFor="legal_form">Legal form (optional)</Label>
               <Select value={legalForm || '__none__'} onValueChange={(v) => setLegalForm(v && v !== '__none__' ? v : '')}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

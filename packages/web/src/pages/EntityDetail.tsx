@@ -59,12 +59,14 @@ export default function EntityDetail() {
   const [editEin, setEditEin] = useState('')
   const [editFormType, setEditFormType] = useState('')
   const [editBasis, setEditBasis] = useState<Basis>('')
+  const [editLegalForm, setEditLegalForm] = useState('')
   const [saving, setSaving] = useState(false)
 
   const openEdit = () => {
     if (!entity) return
     setEditName(entity.name)
-    setEditEin(entity.ein || '')
+    setEditEin('')
+    setEditLegalForm(entity.legal_form || '')
     setEditFormType(entity.form_type)
     setEditBasis(readBasis(entity))
     setEditing(true)
@@ -79,6 +81,7 @@ export default function EntityDetail() {
         body: JSON.stringify({
           name: editName,
           ein: editEin || undefined,
+          legal_form: editLegalForm,
           form_type: editFormType,
           // meta_merge preserves any other keys on entity.meta and only
           // overwrites accounting_method. Empty string clears the override
@@ -202,7 +205,7 @@ export default function EntityDetail() {
             <div className="space-y-2">
               <Label>Entity Type</Label>
               <Select value={editFormType} onValueChange={(v) => v && setEditFormType(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1040">Individual (1040)</SelectItem>
                   <SelectItem value="1120">C-Corporation (1120)</SelectItem>
@@ -212,13 +215,44 @@ export default function EntityDetail() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label>Legal form</Label>
+              <Select value={editLegalForm || '__none__'} onValueChange={v => setEditLegalForm(v && v !== '__none__' ? v : '')}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Not specified</SelectItem>
+                  <SelectItem value="llc">LLC</SelectItem>
+                  <SelectItem value="corporation">Corporation</SelectItem>
+                  <SelectItem value="partnership">Partnership</SelectItem>
+                  <SelectItem value="sole_proprietor">Sole proprietor</SelectItem>
+                  <SelectItem value="trust">Trust</SelectItem>
+                  <SelectItem value="estate">Estate</SelectItem>
+                  <SelectItem value="individual">Individual</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                What the entity legally is. Separate from the return it files above.
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label>EIN / SSN</Label>
-              <Input value={editEin} onChange={e => setEditEin(e.target.value)} placeholder="XX-XXXXXXX" />
+              {/* Never prefill the real value: it would put the full number back
+                  on screen every time the form is opened. The placeholder shows
+                  the last four so you can tell WHICH identifier is stored. */}
+              <Input
+                value={editEin}
+                onChange={e => setEditEin(e.target.value)}
+                placeholder={entity.ein ? `Saved: ${maskTaxId(entity.ein)}` : 'XX-XXXXXXX'}
+              />
+              <p className="text-xs text-muted-foreground">
+                {entity.ein
+                  ? 'Leave blank to keep the saved number, or type a new one to replace it.'
+                  : 'Not set.'}
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Accounting basis</Label>
               <Select value={editBasis || '__qbo__'} onValueChange={v => setEditBasis(v === '__qbo__' ? '' : v as Basis)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__qbo__">Follow QBO company preference</SelectItem>
                   <SelectItem value="accrual">Accrual</SelectItem>
