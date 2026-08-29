@@ -27,3 +27,6 @@ packages/api/supabase/.temp/
 packages/web/test-results/
 packages/web/playwright-report/
 packages/web/blob-report/
+
+# packages/shared emits declarations only; runtime resolves src/ directly
+packages/shared/dist/

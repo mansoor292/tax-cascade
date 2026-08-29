@@ -1,23 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import type { Entity } from '@taxengine/shared'
 
-export interface Entity {
-  id: string
-  name: string
-  form_type: string
-  /** Legal form of organisation, independent of tax treatment. */
-  legal_form?: string | null
-  ein?: string
-  address?: string
-  city?: string
-  state?: string
-  zip?: string
-  entity_type?: string
-  meta?: Record<string, unknown>
-  return_count?: number
-  scenario_count?: number
-  created_at?: string
-}
+export type { Entity }
 
 export function useEntities() {
   const [entities, setEntities] = useState<Entity[]>([])

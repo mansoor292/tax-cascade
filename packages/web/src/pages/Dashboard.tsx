@@ -8,23 +8,21 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { CompareReturnsResponse } from '@/hooks/use-returns'
+import type { Entity as SharedEntity, TaxReturn, Scenario as SharedScenario } from '@taxengine/shared'
+import { metricKey } from '@taxengine/shared'
 import { maskTaxId } from '@/lib/mask'
 import { fmtMoneyCompact as fmtMoney } from '@/lib/format'
 import { FORM_TYPE_LABEL, SOURCE_LABEL, SOURCE_VARIANT, type ReturnSource } from '@/lib/labels'
 
-interface Entity {
-  id: string; name: string; form_type: string; ein: string
+// The list endpoints join tax_entity(name, form_type) onto returns and
+// scenarios, and nest each entity's returns; extend the shared types with
+// those join shapes rather than re-declaring the whole thing (the old
+// shadow interfaces here lacked field_values, forcing an `as any`).
+type Entity = SharedEntity & {
   returns?: Array<{ id: string; tax_year: number; form_type: string; status: string; source?: string }>
 }
-interface Return {
-  id: string; tax_year: number; form_type: string; status: string; source: string
-  computed_at: string; tax_entity?: { name: string; form_type: string }
-}
-interface Scenario {
-  id: string; name: string; tax_year: number; status: string
-  computed_result?: any; tax_entity?: { name: string; form_type: string }
-  created_at: string
-}
+type Return = TaxReturn & { tax_entity?: { name: string; form_type: string } }
+type Scenario = SharedScenario
 
 
 function fmtSigned(n: number): string {
@@ -74,7 +72,7 @@ export default function Dashboard() {
   const proforma    = returns.filter(r => r.source === 'proforma')
   const amendments  = returns.filter(r => r.source === 'amendment')
   const extensions  = returns.filter(r => r.source === 'extension')
-  const recent = [...returns].sort((a, b) => new Date(b.computed_at).getTime() - new Date(a.computed_at).getTime()).slice(0, 5)
+  const recent = [...returns].sort((a, b) => new Date(b.computed_at || 0).getTime() - new Date(a.computed_at || 0).getTime()).slice(0, 5)
 
   // Amendment refund delta: sum over all entities of (amendment.total_tax - filed.total_tax) per year.
   const refundDelta = (() => {
@@ -94,15 +92,11 @@ export default function Dashboard() {
       }
       for (const { filed, amend } of byYear.values()) {
         if (!filed || !amend) continue
-        // Read total_tax from field_values (golden model) per form. 1120 → tax.L31,
-        // 1120S → tax.L22, 1040 → tax.L24. Fall back to 0 if absent.
-        const totalTaxKey = (r: Return): string =>
-          r.form_type === '1120S' ? 'tax.L22_total_tax'
-          : r.form_type === '1040' ? 'tax.L24_total_tax'
-          : 'tax.L31_total_tax'
-        const fv = (r: Return) => ((r as any).field_values || {}) as Record<string, number>
-        const filedTax  = fv(filed)[totalTaxKey(filed)]   ?? 0
-        const amendTax  = fv(amend)[totalTaxKey(amend)]   ?? 0
+        // Read total_tax from field_values (golden model) via the shared
+        // metric map — this was the third hand-copied total_tax switch.
+        const fv = (r: Return) => (r.field_values || {}) as Record<string, number>
+        const filedTax  = fv(filed)[metricKey(filed.form_type, 'total_tax') || ''] ?? 0
+        const amendTax  = fv(amend)[metricKey(amend.form_type, 'total_tax') || ''] ?? 0
         totalDelta += (filedTax - amendTax)      // positive = amendment lowers tax = refund potential
         years += 1
       }
@@ -274,7 +268,7 @@ export default function Dashboard() {
             {scenarios.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">No scenarios. Use Claude to create what-if scenarios.</p>
             ) : scenarios.slice(0, 5).map(s => {
-              const tax = s.computed_result?.computed?.total_tax
+              const tax = (s.computed_result?.computed as Record<string, number> | undefined)?.total_tax
               return (
                 <div key={s.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/50 transition">
                   <div>
@@ -315,7 +309,7 @@ export default function Dashboard() {
                       <Badge variant="outline" className={`text-xs px-1.5 py-0 ${SOURCE_VARIANT[r.source as ReturnSource] || ''}`}>
                         {SOURCE_LABEL[r.source as ReturnSource] || r.source}
                       </Badge>
-                      <span>{new Date(r.computed_at).toLocaleDateString()}</span>
+                      <span>{new Date(r.computed_at || 0).toLocaleDateString()}</span>
                     </div>
                   </div>
                 </div>

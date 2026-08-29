@@ -1,21 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import type { Scenario } from '@taxengine/shared'
 
-export interface Scenario {
-  id: string
-  entity_id?: string
-  base_return_id?: string
-  name: string
-  description?: string
-  tax_year: number
-  status: string
-  adjustments?: Record<string, unknown>
-  computed_result?: Record<string, unknown>
-  diff?: Record<string, unknown>
-  ai_analysis?: string
-  created_at?: string
-  tax_entity?: { name: string; form_type: string }
-}
+export type { Scenario }
 
 export function useScenarios(entityId?: string) {
   const [scenarios, setScenarios] = useState<Scenario[]>([])

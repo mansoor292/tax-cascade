@@ -1,3 +1,7 @@
+import type { ReturnSource } from '@taxengine/shared'
+
+export type { ReturnSource }
+
 /**
  * Shared domain constants and labels. These were copied per page and had
  * already drifted — the Dashboard's copy was missing 1120-S and 1065, so
@@ -61,8 +65,6 @@ export const LEGAL_FORM_LABEL: Record<string, string> = {
   sole_proprietor: 'Sole proprietor', trust: 'Trust', estate: 'Estate',
   individual: 'Individual',
 }
-
-export type ReturnSource = 'filed_import' | 'amendment' | 'proforma' | 'extension'
 
 export const SOURCE_LABEL: Record<ReturnSource, string> = {
   filed_import: 'Filed',

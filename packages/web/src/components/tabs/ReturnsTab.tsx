@@ -35,6 +35,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
 import { fmtMoney, fmtDelta, coerceNumericInputs } from '@/lib/format'
 import { SOURCE_LABEL, SOURCE_VARIANT, COMPUTABLE_FORM_OPTIONS } from '@/lib/labels'
+import { metricsForForm, keyMetric as keyMetricShared } from '@taxengine/shared'
+
+const keyMetric = (r: TaxReturn | undefined) => keyMetricShared(r?.form_type, r?.field_values)
 
 const fmt = (n: unknown) => fmtMoney(n, '—')
 
@@ -82,78 +85,8 @@ function groupByYear(returns: TaxReturn[]): GroupedYear[] {
   return Array.from(byYear.values()).sort((a, b) => b.year - a.year)
 }
 
-// Canonical ordered metric list per form type. Always render these 8 rows
-// in this order for any Filed / Amendment / Proforma / Extension of that
-// form, so the reader can scan filed-vs-amended-vs-proforma without the
-// fields shuffling based on object key insertion order. Each metric maps
-// to a sectioned field_values key (golden model) — we never read from
-// computed_data here.
-const METRICS_BY_FORM: Record<string, Array<{ fv_key: string; label: string }>> = {
-  '1120': [
-    { fv_key: 'income.L1a_gross_receipts',         label: 'Gross receipts' },
-    { fv_key: 'income.L11_total_income',           label: 'Total income' },
-    { fv_key: 'deductions.L27_total_deductions',   label: 'Total deductions' },
-    { fv_key: 'tax.L30_taxable_income',            label: 'Taxable income' },
-    { fv_key: 'schedJ.J1a_income_tax',             label: 'Income tax' },
-    { fv_key: 'tax.L31_total_tax',                 label: 'Total tax' },
-    { fv_key: 'payments.L33_total_payments',       label: 'Total payments' },
-    { fv_key: 'payments.L36_overpayment',          label: 'Overpayment' },
-  ],
-  '1120S': [
-    { fv_key: 'income.L1a_gross_receipts',         label: 'Gross receipts' },
-    { fv_key: 'income.L3_gross_profit',            label: 'Gross profit' },
-    { fv_key: 'income.L6_total_income',            label: 'Total income' },
-    { fv_key: 'deductions.L20_total_deductions',   label: 'Total deductions' },
-    { fv_key: 'tax.L21_ordinary_income',           label: 'Ordinary income/loss' },
-    { fv_key: 'tax.L22_total_tax',                 label: 'Total tax' },
-    { fv_key: 'payments.L33_total_payments',       label: 'Total payments' },
-    { fv_key: 'payments.L36_overpayment',          label: 'Overpayment' },
-  ],
-  '1040': [
-    { fv_key: 'income.L9_total_income',            label: 'Total income' },
-    { fv_key: 'income.L11b_agi',                   label: 'AGI' },
-    { fv_key: 'tax.L15_taxable_income',            label: 'Taxable income' },
-    { fv_key: 'tax.L16_income_tax',                label: 'Income tax' },
-    { fv_key: 'tax.L24_total_tax',                 label: 'Total tax' },
-    { fv_key: 'payments.L33_total',                label: 'Total payments' },
-    { fv_key: 'refund.L35a_refunded',              label: 'Refund' },
-    { fv_key: 'result.L37_balance_due',            label: 'Balance due' },
-  ],
-  '7004': [
-    { fv_key: 'tentative_tax',                     label: 'Tentative tax' },
-    { fv_key: 'total_payments',                    label: 'Total payments' },
-    { fv_key: 'balance_due',                       label: 'Balance due' },
-    { fv_key: 'overpayment',                       label: 'Overpayment' },
-  ],
-  '4868': [
-    { fv_key: 'tentative_tax',                     label: 'Tentative tax' },
-    { fv_key: 'total_payments',                    label: 'Total payments' },
-    { fv_key: 'balance_due',                       label: 'Balance due' },
-    { fv_key: 'overpayment',                       label: 'Overpayment' },
-  ],
-}
-
-function metricsForForm(form_type: string): Array<{ fv_key: string; label: string }> {
-  return METRICS_BY_FORM[form_type] || METRICS_BY_FORM['1120']
-}
-
-// Column metric: what moves most on an amendment for this form. Read from
-// field_values (golden model) — never computed_data, which we no longer
-// persist as a flat-totals dict.
-//   1120  → corporate total_tax           (tax.L31_total_tax)
-//   1120S → ordinary income loss (L21)    (tax.L21_ordinary_income)
-//   1040  → total_tax                     (tax.L24_total_tax)
-function keyMetric(r: TaxReturn | undefined): { value: number | undefined; label: string } {
-  if (!r) return { value: undefined, label: 'Δ Tax' }
-  const fv = (r.field_values || {}) as Record<string, unknown>
-  const num = (k: string) => {
-    const v = fv[k]
-    return typeof v === 'number' && !isNaN(v) ? v : undefined
-  }
-  if (r.form_type === '1120S') return { value: num('tax.L21_ordinary_income'), label: 'Δ Ord. income' }
-  if (r.form_type === '1040')  return { value: num('tax.L24_total_tax'),       label: 'Δ Tax' }
-  return                              { value: num('tax.L31_total_tax'),       label: 'Δ Tax' }
-}
+// Metric ordering/labels and the keyMetric headline live in @taxengine/shared —
+// the sectioned canonical keys are the API's contract, not this component's.
 
 export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
   const nav = useNavigate()

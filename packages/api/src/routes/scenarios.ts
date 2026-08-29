@@ -108,7 +108,7 @@ router.post('/:id/compute', async (req, res) => {
         .select('field_values, form_type, field_values_enc').eq('id', scenario.base_return_id).single()
       await hydrate(supabase, baseReturn, { ...ENCRYPTED_RETURN_FIELDS, userId })
       if (baseReturn?.field_values && baseReturn.form_type) {
-        const { COMPARE_METRICS, readMetric } = await import('../maps/metric_to_field.js')
+        const { COMPARE_METRICS, readMetric } = await import('@taxengine/shared')
         const metrics: Record<string, number> = {}
         for (const m of COMPARE_METRICS) {
           const v = readMetric(baseReturn.field_values as any, baseReturn.form_type, m)

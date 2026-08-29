@@ -1,0 +1,17 @@
+{
+  "name": "@taxengine/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Canonical tax-domain constants and types shared by api and web",
+  "type": "module",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./src/index.ts" },
+    "./*": { "types": "./dist/*.d.ts", "default": "./src/*.ts" }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}

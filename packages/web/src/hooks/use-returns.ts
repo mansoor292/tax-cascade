@@ -1,36 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
-import type { ReturnSource } from '@/lib/labels'
+import type { ReturnSource, TaxReturn } from '@taxengine/shared'
 
 export type { ReturnSource }
 
-export interface TaxReturn {
-  id: string
-  entity_id: string
-  tax_year: number
-  form_type: string
-  status: string
-  source?: ReturnSource
-  supersedes_id?: string | null
-  is_amended?: boolean
-  input_data?: Record<string, unknown>
-  computed_data?: {
-    computed?: Record<string, number>
-    [k: string]: unknown
-  }
-  field_values?: Record<string, number | string | null>
-  verification?: {
-    mapper_stats?: { mapped?: number; total_input_keys?: number; high_confidence?: number; medium_confidence?: number; low_confidence?: number }
-    gemini_gap_fill?: { gaps_total?: number; gaps_filled?: number; model?: string; error?: string }
-    extracted_count?: number
-    unmapped_count?: number
-    [k: string]: unknown
-  }
-  pdf_s3_path?: string
-  pdf_generated_at?: string
-  computed_at?: string
-  created_at?: string
-}
+export type { TaxReturn }
 
 export interface CompareReturnsResponse {
   entity: { name: string }

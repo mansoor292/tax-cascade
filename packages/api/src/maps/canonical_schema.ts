@@ -7,7 +7,7 @@
  * `deductions.L16_advertising`, `tax.L31_total_tax`). Flat metric names
  * (`total_tax`, `taxable_income`, `agi`) are NOT a separate persisted slot —
  * they're per-form aliases for specific sectioned lines and live in code
- * (`maps/metric_to_field.ts`), not the DB.
+ * (`@taxengine/shared` metrics), not the DB.
  *
  * `input_data` carries the descriptive snapshot of what the caller passed.
  * `computed_data` retains structural engine output (citations, k1s array,

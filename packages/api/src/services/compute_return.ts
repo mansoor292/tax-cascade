@@ -21,7 +21,7 @@ import { serviceClient } from '../lib/supabase.js'
 import { getFinancials } from '../routes/qbo.js'
 import { validateInputArithmetic } from './compute_validation.js'
 import { entityIdentityFields } from '../builders/entity_identity.js'
-import { extractAggregates as extractAggregatesFromFv } from '../maps/metric_to_field.js'
+import { extractAggregates as extractAggregatesFromFv } from '@taxengine/shared'
 import { INPUT_SCHEMAS } from '../routes/schema.js'
 
 const supabase = serviceClient()
@@ -626,7 +626,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
 
       // Strip the redundant flat `computed` dict from the persisted shape —
       // every flat metric maps to a sectioned field_values line via
-      // maps/metric_to_field.ts. Keep citations / k1s / qbo_warnings for
+      // @taxengine/shared metrics. Keep citations / k1s / qbo_warnings for
       // debug + scenario structural data.
       const { computed: _computed, ...computedDataPayload } = (engineResult ?? {}) as any
       void _computed

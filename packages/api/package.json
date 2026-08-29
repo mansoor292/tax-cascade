@@ -9,7 +9,8 @@
     "start": "node dist/src/server.js",
     "verify": "tsx scripts/verify_pipeline.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prebuild": "tsc -p ../shared"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.1033.0",
@@ -19,6 +20,7 @@
     "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.6.0",
     "@supabase/supabase-js": "^2.103.0",
+    "@taxengine/shared": "*",
     "argon2": "^0.44.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

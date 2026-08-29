@@ -11,7 +11,7 @@ import { Router, type Request } from 'express'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
 import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
 import { encryptedFields, hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS, RETURN_ENC_COLS } from '../lib/row_crypto.js'
-import { extractAggregates as extractAggregatesFromFv, readMetric, COMPARE_METRICS } from '../maps/metric_to_field.js'
+import { extractAggregates as extractAggregatesFromFv, readMetric, COMPARE_METRICS } from '@taxengine/shared'
 
 /** Decrypt a tax_return row in place. Ownership runs through the entity, so
  *  the user id has to be passed — the row has no user_id of its own. */
@@ -243,7 +243,7 @@ router.post('/process/:document_id', async (req, res) => {
     // after corrections). Callers pick the authoritative one by computed_at.
     // Strip the redundant flat `computed` dict from the persisted shape —
     // every flat metric maps to a sectioned field_values line via
-    // maps/metric_to_field.ts, so storing it twice was a second source of
+    // @taxengine/shared metrics, so storing it twice was a second source of
     // truth. We keep citations / k1s / qbo_warnings for debug + scenario
     // structural data.
     const { computed: _processComputed, ...processComputedData } = (engineResult ?? {}) as any
@@ -505,7 +505,7 @@ router.get('/compare/:entity_id', async (req, res) => {
 
   // Read every metric from field_values (golden model) — never from
   // computed_data. The flat-metric → sectioned-key mapping is form-aware
-  // and lives in maps/metric_to_field.ts.
+  // and lives in @taxengine/shared (metrics.ts).
   for (const r of returns) {
     for (const m of metrics) {
       const v = readMetric(r.field_values, r.form_type, m)

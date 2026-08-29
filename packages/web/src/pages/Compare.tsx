@@ -30,53 +30,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { fmtMoney, fmtDelta as fmtDeltaBase } from '@/lib/format'
+import { COMPARE_METRICS, COMPARE_METRIC_LABELS, readMetric, SECTION_ORDER, SECTION_LABELS } from '@taxengine/shared'
 
-const METRICS = [
-  { key: 'gross_profit',                label: 'Gross profit' },
-  { key: 'total_income',                label: 'Total income' },
-  { key: 'total_deductions',            label: 'Total deductions' },
-  { key: 'taxable_income_before_nol',   label: 'Taxable (before NOL)' },
-  { key: 'taxable_income',              label: 'Taxable income' },
-  { key: 'income_tax',                  label: 'Income tax' },
-  { key: 'total_tax',                   label: 'Total tax' },
-  { key: 'total_payments',              label: 'Total payments' },
-  { key: 'overpayment',                 label: 'Overpayment' },
-  { key: 'refund',                      label: 'Refund' },
-  { key: 'balance_due',                 label: 'Balance due' },
-  { key: 'amount_owed',                 label: 'Amount owed' },
-  { key: 'ordinary_income_loss',        label: 'Ordinary income/loss (1120S)' },
-  { key: 'agi',                         label: 'AGI (1040)' },
-]
-
-const SECTION_ORDER = [
-  'income', 'cogs', 'deductions', 'tax', 'credits', 'payments',
-  'result', 'refund', 'owed', 'overpayment',
-  'schedJ', 'schedL', 'schedM1', 'schedM2', 'schedK', 'schedB', 'schedE',
-  'meta', 'preparer',
-]
-
-const SECTION_LABELS: Record<string, string> = {
-  income:      'Income (Page 1)',
-  cogs:        '1125-A COGS',
-  deductions:  'Deductions (Page 1)',
-  tax:         'Tax Computation',
-  credits:     'Credits',
-  payments:    'Payments',
-  result:      'Refund / Owed',
-  refund:      'Refund',
-  owed:        'Balance Due',
-  overpayment: 'Overpayment',
-  schedJ:      'Schedule J',
-  schedL:      'Schedule L (Balance Sheet)',
-  schedM1:     'Schedule M-1',
-  schedM2:     'Schedule M-2',
-  schedK:      'Schedule K',
-  schedB:      'Schedule B',
-  schedE:      'Schedule E',
-  meta:        'Entity Metadata',
-  preparer:    'Preparer',
-  other:       'Other',
-}
+// Derived from the API's own COMPARE_METRICS so a row can't exist that the
+// matrix endpoint never populates (a hand-kept copy here once carried a
+// taxable_income_before_nol row that silently never had data).
+const METRICS = COMPARE_METRICS.map(key => ({ key, label: COMPARE_METRIC_LABELS[key] }))
 
 const fmt = (n: unknown) => (typeof n === 'number' ? fmtMoney(n, '—') : '—')
 const fmtDelta = (n: number) => fmtDeltaBase(n, '±$0')
@@ -129,38 +88,19 @@ export default function Compare() {
   const { entity } = useEntity(entityId)
   const { data, loading, error } = useCompareReturns(entityId)
 
-  // Build Filed vs Amended pairings per year. Flat metrics (total_tax,
-  // taxable_income, overpayment) are derived from the row's sectioned
-  // field_values via per-form keys — computed_data.computed is no longer
-  // persisted (golden model: field_values).
-  const TOTAL_TAX_KEY: Record<string, string> = {
-    '1120':  'tax.L31_total_tax',
-    '1120S': 'tax.L22_total_tax',
-    '1040':  'tax.L24_total_tax',
-  }
-  const TAXABLE_INCOME_KEY: Record<string, string> = {
-    '1120':  'tax.L30_taxable_income',
-    '1120S': 'tax.L21_ordinary_income',
-    '1040':  'tax.L15_taxable_income',
-  }
-  const OVERPAYMENT_KEY: Record<string, string> = {
-    '1120':  'payments.L36_overpayment',
-    '1120S': 'payments.L36_overpayment',
-    '1040':  'result.L34_overpayment',
-  }
+  // Build Filed vs Amended pairings per year. Flat metrics are derived from
+  // the row's sectioned field_values through the shared metric map —
+  // computed_data.computed is no longer persisted (golden model:
+  // field_values). "Taxable income" deliberately falls back to ordinary
+  // income/loss on 1120S, which has no taxable-income line of its own.
   const metricsFromFieldValues = (r?: TaxReturn): { total_tax?: number; taxable_income?: number; overpayment?: number } => {
     if (!r?.field_values) return {}
     const fv = r.field_values as Record<string, unknown>
-    const fk = (m: Record<string, string>) => m[r.form_type]
-    const num = (k?: string) => {
-      if (!k) return undefined
-      const v = fv[k]
-      return typeof v === 'number' ? v : undefined
-    }
     return {
-      total_tax:      num(fk(TOTAL_TAX_KEY)),
-      taxable_income: num(fk(TAXABLE_INCOME_KEY)),
-      overpayment:    num(fk(OVERPAYMENT_KEY)),
+      total_tax:      readMetric(fv, r.form_type, 'total_tax') ?? undefined,
+      taxable_income: (readMetric(fv, r.form_type, 'taxable_income')
+                        ?? readMetric(fv, r.form_type, 'ordinary_income_loss')) ?? undefined,
+      overpayment:    readMetric(fv, r.form_type, 'overpayment') ?? undefined,
     }
   }
   const filedVsAmended = useMemo(() => {
