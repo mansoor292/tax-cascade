@@ -7,10 +7,10 @@
 import { Router,  } from 'express'
 import { getDek, encrypt, decryptString } from '../lib/crypto.js'
 import { encryptionEnabled } from '../lib/row_crypto.js'
-import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
+import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 
-const supabase = serviceClient()
+const supabase = lazyServiceClient()
 
 
 /**

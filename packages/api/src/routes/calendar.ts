@@ -14,9 +14,9 @@ import {
   type GeneratedObligation,
 } from '../engine/tax_calendar.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
-import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
+import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 
-const supabase = serviceClient()
+const supabase = lazyServiceClient()
 
 
 const router = Router()

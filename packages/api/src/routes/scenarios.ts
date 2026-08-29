@@ -7,7 +7,7 @@ import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
 import { encryptedFields } from '../lib/row_crypto.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 import { hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS } from '../lib/row_crypto.js'
-import { serviceClient } from '../lib/supabase.js'
+import { lazyServiceClient } from '../lib/supabase.js'
 
 /** Nested tax_entity(ein) is encrypted; hydrate() does not recurse. */
 async function hydrateNestedEntity(row: any, userId: string): Promise<void> {
@@ -15,7 +15,7 @@ async function hydrateNestedEntity(row: any, userId: string): Promise<void> {
 }
 
 
-const supabase = serviceClient()
+const supabase = lazyServiceClient()
 
 const router = Router()
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''

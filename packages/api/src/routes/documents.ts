@@ -14,12 +14,12 @@ import { s3PresignPut, s3PresignGet, s3PresignGetMany, s3PutObject, s3GetObject 
 import { analyzeDocument } from '../lib/textract.js'
 import { encryptedFields, hydrate, hydrateAll, ENCRYPTED_DOC_FIELDS, ENCRYPTED_RETURN_FIELDS, DOC_ENC_COLS } from '../lib/row_crypto.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
-import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
+import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
 
-const supabase = serviceClient()
+const supabase = lazyServiceClient()
 
 const router = Router()
 

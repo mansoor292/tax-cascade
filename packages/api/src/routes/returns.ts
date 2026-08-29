@@ -44,9 +44,9 @@ import { buildScheduleL } from '../maps/qbo_to_schedule_l.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 import { getFinancials } from './qbo.js'
 import { computeReturn } from '../services/compute_return.js'
-import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
+import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 
-const supabase = serviceClient()
+const supabase = lazyServiceClient()
 
 
 const FORM_TYPE_MAP: Record<string, string> = {

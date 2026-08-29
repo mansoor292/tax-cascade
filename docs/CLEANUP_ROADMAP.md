@@ -37,6 +37,17 @@ lint/gitignore/Playwright repairs, web format/label dedup, scenario-PDF fix.
       without it).
 - [ ] Set `OAUTH_CODE_SECRET` confirmed present in Netlify (the Express
       OAuth fallback no longer exists).
+- [ ] **Set `SUPABASE_ANON_KEY` for the API.** It is in neither SSM
+      (`/tax-api/*` has 7 params, not this one) nor the committed
+      `.env.production.template`'s live counterpart on every box. Removing
+      the hardcoded anon literals left the API with no source for it, and
+      `/auth/*` plus JWT auth on `/api/*` answer 503 without it (static
+      `TAX_API_KEYS` callers are unaffected). Add it as an SSM SecureString:
+      `aws ssm put-parameter --name /tax-api/SUPABASE_ANON_KEY --type SecureString --value <anon key>`
+      — SSM is skipped for vars already set, so a box that already has it in
+      `.env.production` keeps its value. Fetch the value with
+      `supabase projects api-keys --project-ref ophnjqjmxeohbyydxnlg`.
+      Rotate it as part of HISTORY_PURGE rather than treating it as secret.
 - [ ] First API deploy of this branch: one manual `npm install` at
       /opt/tax-api (deploy-reload.sh doesn't install; packages/shared needs
       its workspace symlink).

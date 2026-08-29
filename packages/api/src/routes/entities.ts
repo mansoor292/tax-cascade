@@ -6,12 +6,12 @@ import { encryptedFields, encryptionEnabled, hydrate, hydrateAll, ENCRYPTED_ENTI
 import { accountingMethodCacheBust } from './qbo.js'
 import { blindIndex } from '../lib/crypto.js'
 import { sendDbError } from '../lib/http_error.js'
-import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
+import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 
 const safeBlindIndex = (v: string | null | undefined) =>
   (v && encryptionEnabled() && process.env.TAX_API_BLIND_HMAC) ? blindIndex(v) : null
 
-const supabase = serviceClient()
+const supabase = lazyServiceClient()
 
 
 const router = Router()

@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/server.ts",
-    "start": "node dist/src/server.js",
+    "start": "node --import tsx --unhandled-rejections=warn src/server.ts",
     "verify": "tsx scripts/verify_pipeline.ts",
     "test": "vitest run",
     "test:watch": "vitest",

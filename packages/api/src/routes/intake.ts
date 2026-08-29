@@ -16,10 +16,10 @@ import { Router,  } from 'express'
 import { hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_DOC_FIELDS, RETURN_ENC_COLS, DOC_ENC_COLS } from '../lib/row_crypto.js'
 import { encryptedFields } from '../lib/row_crypto.js'
 import { gapFillWithGemini } from '../intake/gemini_gap_fill.js'
-import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
+import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 import { sendDbError } from '../lib/http_error.js'
 
-const supabase = serviceClient()
+const supabase = lazyServiceClient()
 
 
 const router = Router()

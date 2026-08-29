@@ -35,7 +35,9 @@ src/
 │                      Express OAuth stack here (see server.ts's comment)
 ├── discovery/         download IRS PDF → Textract → auto-build field map
 └── lib/               supabase.ts (serviceClient/anonClient/userClient/
-                       requestUserId — THE clients, three on purpose),
+                       requestUserId — THE clients, three on purpose;
+                       module scope must use lazyServiceClient/lazyAnonClient
+                       so a missing key fails one request, not boot),
                        crypto/row_crypto (encryption + the ENCRYPTED_*
                        field specs), http_error (sendError/errorOutcome),
                        s3.ts + textract.ts (flag-gated AWS dual path),

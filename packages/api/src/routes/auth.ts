@@ -3,14 +3,26 @@
  */
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
-import { anonClient, userClient } from '../lib/supabase.js'
+import { lazyAnonClient, userClient, anonKeyConfigured } from '../lib/supabase.js'
 import { sendDbError } from '../lib/http_error.js'
 
 // Anon client for auth operations (signup/signin); the per-request
 // RLS-scoped userClient comes from lib/supabase.
-const supabase = anonClient()
+const supabase = lazyAnonClient()
 
 const router = Router()
+
+// Every route here needs the anon key. Without this guard the proxy's throw
+// escapes an async handler and Express 4 answers nothing at all — the caller
+// hangs until it times out. Fail fast and say why instead.
+router.use((_req, res, next) => {
+  if (!anonKeyConfigured()) {
+    return res.status(503).json({
+      error: 'Auth is unavailable: SUPABASE_ANON_KEY is not configured on this server.',
+    })
+  }
+  next()
+})
 
 // Sign up
 router.post('/signup', async (req, res) => {

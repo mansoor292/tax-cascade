@@ -17,14 +17,14 @@ import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcS
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { encryptedFields, hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS, RETURN_ENC_COLS } from '../lib/row_crypto.js'
 import { errorOutcome, type HttpOutcome } from '../lib/http_error.js'
-import { serviceClient } from '../lib/supabase.js'
+import { lazyServiceClient } from '../lib/supabase.js'
 import { getFinancials } from '../routes/qbo.js'
 import { validateInputArithmetic } from './compute_validation.js'
 import { entityIdentityFields } from '../builders/entity_identity.js'
 import { extractAggregates as extractAggregatesFromFv } from '@taxengine/shared'
 import { INPUT_SCHEMAS } from '../routes/schema.js'
 
-const supabase = serviceClient()
+const supabase = lazyServiceClient()
 
 /** Decrypt a tax_return row in place. Ownership runs through the entity, so
  *  the user id has to be passed — the row has no user_id of its own. */

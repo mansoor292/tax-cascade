@@ -38,6 +38,16 @@ function anonKey(): string {
   return key
 }
 
+/**
+ * Whether the anon key is present. Callers that need it use this to answer
+ * with a clear 503 instead of letting anonKey()'s throw escape an async
+ * Express 4 handler — which has no error path for a rejected promise and
+ * leaves the request hanging with no response at all.
+ */
+export function anonKeyConfigured(): boolean {
+  return Boolean(process.env.SUPABASE_ANON_KEY)
+}
+
 let _service: SupabaseClient | null = null
 export function serviceClient(): SupabaseClient {
   if (!_service) {
@@ -74,3 +84,35 @@ export function userClient(req: Request): SupabaseClient {
 export function requestUserId(req: Request): string | null {
   return (req as any).userId || null
 }
+
+/**
+ * Lazy handles for module-scope use.
+ *
+ * The factories above read env at first CALL, which is only half the
+ * contract this file claims: ten route modules did `const supabase =
+ * serviceClient()` at module scope, so the call happened at import time
+ * anyway. That turned a missing SUPABASE_ANON_KEY into a boot failure of
+ * the whole server — server.ts imports auth.ts's eager anonClient() for its
+ * /api middleware, so the throw landed before listen(). Under pm2 cluster
+ * that is max_restarts crash-loops and then a fleet parked down, for a key
+ * that only /auth/signup and /auth/signin actually need.
+ *
+ * These return a proxy that constructs the real client on first property
+ * ACCESS, so `const supabase = lazyServiceClient()` at module scope costs
+ * nothing until a handler runs, and a misconfigured env fails the one
+ * request that needs it instead of the process.
+ */
+function lazy(factory: () => SupabaseClient): SupabaseClient {
+  return new Proxy({} as SupabaseClient, {
+    get(_target, prop) {
+      const client = factory() as unknown as Record<string | symbol, unknown>
+      const value = client[prop]
+      // Bind methods to the real client; `auth`/`storage` are plain objects
+      // that must keep their own `this`, so they pass through untouched.
+      return typeof value === 'function' ? value.bind(client) : value
+    },
+  })
+}
+
+export const lazyServiceClient = (): SupabaseClient => lazy(serviceClient)
+export const lazyAnonClient = (): SupabaseClient => lazy(anonClient)

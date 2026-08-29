@@ -14,10 +14,10 @@ import { Router,  } from 'express'
 import { buildTokenPayload, readTokensFromRow } from '../lib/qbo_tokens.js'
 import { flattenReport } from '../maps/flatten_report.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
-import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
+import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://tax-api.catalogshub.com'
-const supabase = serviceClient()
+const supabase = lazyServiceClient()
 
 // Lazy env accessors — bootstrap (dotenv + SSM fetch) runs AFTER ES imports
 // hoist and evaluate this module's top-level code. Reading env at call-time

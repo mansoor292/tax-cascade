@@ -33,6 +33,7 @@ import {
 } from './engine/tax_tables.js'
 import { FORM_INVENTORY, seedCacheFromSupabase } from './maps/field_maps.js'
 import authRoutes, { supabase } from './routes/auth.js'
+import { anonKeyConfigured } from './lib/supabase.js'
 import scenarioRoutes from './routes/scenarios.js'
 import documentRoutes from './routes/documents.js'
 import returnRoutes from './routes/returns.js'
@@ -182,6 +183,13 @@ app.use('/api', async (req, res, next) => {
   if (STATIC_KEYS.has(key)) {
     (req as any).userId = '00000000-0000-0000-0000-000000000000'
     return next()
+  }
+  // Everything below needs the anon client. Answer 503 rather than let the
+  // missing-key throw reject this async middleware, which Express 4 has no
+  // error path for — the request would hang with no response.
+  if (!anonKeyConfigured()) {
+    res.status(503).json({ error: 'Auth is unavailable: SUPABASE_ANON_KEY is not configured on this server.' })
+    return
   }
   // Check Supabase JWT
   const { data: { user } } = await supabase.auth.getUser(key)
