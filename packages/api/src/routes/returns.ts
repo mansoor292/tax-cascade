@@ -42,6 +42,7 @@ import { INPUT_SCHEMAS } from './schema.js'
 import { buildCanonicalModel, buildReturnPdf } from '../builders/build_return_pdf.js'
 import { buildScheduleL } from '../maps/qbo_to_schedule_l.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
+import { getFinancials } from './qbo.js'
 import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
 
 const supabase = serviceClient()
@@ -794,20 +795,8 @@ router.post('/compute', async (req, res) => {
           // Pull current + prior year balance sheets for Schedule L BOY/EOY,
           // plus the entity record to get business_code for SSTB warning.
           const [finResp, priorFinResp, entityRow] = await Promise.all([
-            fetch(
-              `${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year}`,
-              { headers: {
-                'Authorization': req.headers.authorization || '',
-                'x-api-key': (req.headers['x-api-key'] as string) || '',
-              }},
-            ).then(r => r.json()).catch(() => null),
-            fetch(
-              `${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year - 1}`,
-              { headers: {
-                'Authorization': req.headers.authorization || '',
-                'x-api-key': (req.headers['x-api-key'] as string) || '',
-              }},
-            ).then(r => r.json()).catch(() => null),
+            getFinancials(entity_id, tax_year, { userId }).catch(() => null),
+            getFinancials(entity_id, tax_year - 1, { userId }).catch(() => null),
             (async () => {
               try {
                 const r = await supabase.from('tax_entity').select('meta').eq('id', entity_id).eq('user_id', userId).single()
@@ -1031,18 +1020,8 @@ router.post('/compute', async (req, res) => {
           if (conn) {
             const { buildScheduleL } = await import('../maps/qbo_to_schedule_l.js')
             // Pull current year and prior year balance sheets
-            const eoyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year}`, {
-              headers: {
-                'Authorization': req.headers.authorization || '',
-                'x-api-key': (req.headers['x-api-key'] as string) || '',
-              },
-            }).then(r => r.json()).catch(() => null)
-            const boyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year - 1}`, {
-              headers: {
-                'Authorization': req.headers.authorization || '',
-                'x-api-key': (req.headers['x-api-key'] as string) || '',
-              },
-            }).then(r => r.json()).catch(() => null)
+            const eoyResp = await getFinancials(entity_id, tax_year, { userId }).catch(() => null)
+            const boyResp = await getFinancials(entity_id, tax_year - 1, { userId }).catch(() => null)
 
             if (eoyResp?.balance_sheet?.items) {
               const schedL = buildScheduleL(
@@ -1094,18 +1073,8 @@ router.post('/compute', async (req, res) => {
             .select('realm_id').eq('entity_id', entity_id).single()
           if (conn) {
             const { buildScheduleL } = await import('../maps/qbo_to_schedule_l.js')
-            const eoyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year}`, {
-              headers: {
-                'Authorization': req.headers.authorization || '',
-                'x-api-key': (req.headers['x-api-key'] as string) || '',
-              },
-            }).then(r => r.json()).catch(() => null)
-            const boyResp = await fetch(`${req.protocol}://${req.get('host')}/api/qbo/${entity_id}/financials?year=${tax_year - 1}`, {
-              headers: {
-                'Authorization': req.headers.authorization || '',
-                'x-api-key': (req.headers['x-api-key'] as string) || '',
-              },
-            }).then(r => r.json()).catch(() => null)
+            const eoyResp = await getFinancials(entity_id, tax_year, { userId }).catch(() => null)
+            const boyResp = await getFinancials(entity_id, tax_year - 1, { userId }).catch(() => null)
 
             if (eoyResp?.balance_sheet?.items) {
               const schedL = buildScheduleL(eoyResp.balance_sheet.items, boyResp?.balance_sheet?.items)
@@ -1678,16 +1647,9 @@ router.post('/compute_from_qbo', async (req, res) => {
 
   // Pull the mapper packet (same code path as GET /qbo-to-tax-inputs).
   try {
-    const base = `${req.protocol}://${req.get('host')}`
-    const hdrs = {
-      'Authorization': req.headers.authorization || '',
-      'x-api-key': (req.headers['x-api-key'] as string) || '',
-    }
     const [finResp, priorFinResp, entityRow] = await Promise.all([
-      fetch(`${base}/api/qbo/${entity_id}/financials?year=${tax_year}`, { headers: hdrs })
-        .then(r => r.json()).catch(() => null),
-      fetch(`${base}/api/qbo/${entity_id}/financials?year=${tax_year - 1}`, { headers: hdrs })
-        .then(r => r.json()).catch(() => null),
+      getFinancials(entity_id, tax_year, { userId }).catch(() => null),
+      getFinancials(entity_id, tax_year - 1, { userId }).catch(() => null),
       (async () => {
         try {
           // Was querying a nonexistent table 'entity' — always null, which
@@ -1717,7 +1679,13 @@ router.post('/compute_from_qbo', async (req, res) => {
     // Shallow-merge caller overrides onto mapper inputs.
     const mergedInputs = { ...packet.inputs, ...(overrides || {}) }
 
-    // Forward to /compute internally (loopback call).
+    // Forward to /compute internally (loopback call — the last one; it goes
+    // away when the compute handler body becomes a callable service).
+    const base = `${req.protocol}://${req.get('host')}`
+    const hdrs = {
+      'Authorization': req.headers.authorization || '',
+      'x-api-key': (req.headers['x-api-key'] as string) || '',
+    }
     const computeBody = {
       entity_id, tax_year, form_type,
       inputs: mergedInputs,
@@ -1800,7 +1768,9 @@ router.post('/compute_from_qbo', async (req, res) => {
         ),
         sources: {
           report: 'profit-and-loss',
-          basis: finResp?.profit_and_loss?.accounting_method || null,
+          // accounting_method is top-level on the financials result; the old
+          // code read it under profit_and_loss and always got null.
+          basis: finResp?.accounting_method || null,
           pnl_as_of: finResp?.profit_and_loss?.fetched_at || null,
           bs_as_of: finResp?.balance_sheet?.fetched_at || null,
           prior_bs_as_of: priorFinResp?.balance_sheet?.fetched_at || null,
@@ -2018,18 +1988,10 @@ print(json.dumps({'url': url}))
       const { data: qboConn } = await supabase.from('qbo_connection')
         .select('id').eq('entity_id', taxReturn.entity_id).eq('is_active', true).single()
       if (qboConn) {
-        const API_BASE = `http://localhost:${process.env.PORT || 3737}`
-        const apiKey = req.headers['x-api-key'] as string || req.headers.authorization?.replace('Bearer ', '') || ''
-        const [eoyResp, boyResp] = await Promise.all([
-          fetch(`${API_BASE}/api/qbo/${taxReturn.entity_id}/financials?year=${taxReturn.tax_year}`, {
-            headers: { 'x-api-key': apiKey },
-          }),
-          fetch(`${API_BASE}/api/qbo/${taxReturn.entity_id}/financials?year=${taxReturn.tax_year - 1}`, {
-            headers: { 'x-api-key': apiKey },
-          }),
-        ])
-        const eoyData = await eoyResp.json() as any
-        const boyData = await boyResp.json() as any
+        const [eoyData, boyData] = await Promise.all([
+          getFinancials(taxReturn.entity_id, taxReturn.tax_year, { userId }).catch(() => null),
+          getFinancials(taxReturn.entity_id, taxReturn.tax_year - 1, { userId }).catch(() => null),
+        ]) as any[]
         const eoyBs = eoyData?.balance_sheet?.items || {}
         const boyBs = boyData?.balance_sheet?.items || {}
         if (Object.keys(eoyBs).length > 0) {

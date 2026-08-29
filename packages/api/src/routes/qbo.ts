@@ -553,32 +553,60 @@ router.get('/:entity_id/reports', async (req, res) => {
 })
 
 // ─── Unified financial view (cached, refresh on demand) ───
-router.get('/:entity_id/financials', async (req, res) => {
-  const userId = await getUser(req)
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const refresh = req.query.refresh === 'true'
-  const year = (req.query.year as string) || new Date().getFullYear().toString()
+export interface FinancialsResult {
+  entity_id: string
+  year: number
+  period: { start: string; end: string }
+  accounting_method: string
+  source: 'cache' | 'qbo'
+  profit_and_loss: { title: string; currency: string; items: Record<string, number>; fetched_at: string }
+  balance_sheet: { title: string; currency: string; as_of: string; items: Record<string, number>; fetched_at: string }
+}
+
+/**
+ * The unified P&L + balance-sheet view, as a FUNCTION. This used to exist
+ * only as the route below, and everything that needed financials —
+ * returns.ts's compute paths, Schedule L rollovers, even the
+ * qbo-to-tax-inputs handler in this very file — HTTP-fetched the server
+ * from itself (12 call sites, three different URL-building styles, some
+ * round-tripping out through the Netlify CDN and back). Call this instead.
+ *
+ * `userId` is required and the entity is verified to belong to them —
+ * a check the HTTP handler historically omitted, meaning any
+ * authenticated caller could read any entity's financials by id.
+ * Throws on unknown/foreign entity and on QBO failures; callers that
+ * previously .catch(() => null)'d the fetch keep the same pattern.
+ */
+export async function getFinancials(
+  entityId: string,
+  year: number,
+  opts: { userId: string; refresh?: boolean },
+): Promise<FinancialsResult> {
+  const { data: owned } = await supabase.from('tax_entity')
+    .select('id').eq('id', entityId).eq('user_id', opts.userId).single()
+  if (!owned) throw new Error(`Entity ${entityId} not found for this user`)
+
   const startDate = `${year}-01-01`
   const endDate = `${year}-12-31`
 
   // Try cache first for both reports
   let pnlData: { summary: Record<string, number>; raw: any; fetched_at: string } | null = null
   let bsData: { summary: Record<string, number>; raw: any; fetched_at: string } | null = null
-  let source = 'cache'
+  let source: 'cache' | 'qbo' = 'cache'
 
-  if (!refresh) {
+  if (!opts.refresh) {
     const [{ data: pnlCached }, { data: bsCached }] = await Promise.all([
       supabase.from('qbo_report')
         .select('*')
-        .eq('entity_id', req.params.entity_id)
+        .eq('entity_id', entityId)
         .eq('report_type', 'profit-and-loss')
         .eq('period_start', startDate)
         .eq('period_end', endDate)
         .single(),
       supabase.from('qbo_report')
         .select('*')
-        .eq('entity_id', req.params.entity_id)
+        .eq('entity_id', entityId)
         .eq('report_type', 'balance-sheet')
         .eq('period_start', startDate)
         .eq('period_end', endDate)
@@ -593,49 +621,62 @@ router.get('/:entity_id/financials', async (req, res) => {
   }
 
   // Use entity's preferred accounting method
-  const acctMethod = await getAccountingMethod(req.params.entity_id)
+  const acctMethod = await getAccountingMethod(entityId)
 
   // Fetch missing reports from QBO
+  if (!pnlData) {
+    pnlData = await fetchAndStoreReport(
+      entityId, 'profit-and-loss', 'ProfitAndLoss', startDate, endDate, acctMethod,
+    )
+    source = 'qbo'
+  }
+  if (!bsData) {
+    bsData = await fetchAndStoreReport(
+      entityId, 'balance-sheet', 'BalanceSheet', startDate, endDate, acctMethod,
+    )
+    source = 'qbo'
+  }
+
+  const pnlHeader = pnlData.raw?.Header || {}
+  const bsHeader = bsData.raw?.Header || {}
+
+  return {
+    entity_id: entityId,
+    year,
+    period: { start: startDate, end: endDate },
+    accounting_method: acctMethod,
+    source,
+    profit_and_loss: {
+      title: pnlHeader.ReportName || 'Profit and Loss',
+      currency: pnlHeader.Currency || 'USD',
+      items: pnlData.summary,
+      fetched_at: pnlData.fetched_at,
+    },
+    balance_sheet: {
+      title: bsHeader.ReportName || 'Balance Sheet',
+      currency: bsHeader.Currency || 'USD',
+      as_of: endDate,
+      items: bsData.summary,
+      fetched_at: bsData.fetched_at,
+    },
+  }
+}
+
+router.get('/:entity_id/financials', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const year = parseInt((req.query.year as string) || '', 10) || new Date().getFullYear()
   try {
-    if (!pnlData) {
-      pnlData = await fetchAndStoreReport(
-        req.params.entity_id, 'profit-and-loss', 'ProfitAndLoss',
-        startDate, endDate, acctMethod,
-      )
-      source = 'qbo'
-    }
-    if (!bsData) {
-      bsData = await fetchAndStoreReport(
-        req.params.entity_id, 'balance-sheet', 'BalanceSheet',
-        startDate, endDate, acctMethod,
-      )
-      source = 'qbo'
-    }
-
-    const pnlHeader = pnlData.raw?.Header || {}
-    const bsHeader = bsData.raw?.Header || {}
-
-    res.json({
-      entity_id: req.params.entity_id,
-      year: parseInt(year),
-      period: { start: startDate, end: endDate },
-      accounting_method: acctMethod,
-      source,
-      profit_and_loss: {
-        title: pnlHeader.ReportName || 'Profit and Loss',
-        currency: pnlHeader.Currency || 'USD',
-        items: pnlData.summary,
-        fetched_at: pnlData.fetched_at,
-      },
-      balance_sheet: {
-        title: bsHeader.ReportName || 'Balance Sheet',
-        currency: bsHeader.Currency || 'USD',
-        as_of: endDate,
-        items: bsData.summary,
-        fetched_at: bsData.fetched_at,
-      },
+    const fin = await getFinancials(req.params.entity_id, year, {
+      userId,
+      refresh: req.query.refresh === 'true',
     })
+    res.json(fin)
   } catch (e: any) {
+    if (/not found for this user/.test(String(e?.message))) {
+      return res.status(404).json({ error: 'Entity not found' })
+    }
     sendError(res, e)
   }
 })
@@ -663,16 +704,9 @@ router.get('/:entity_id/qbo-to-tax-inputs', async (req, res) => {
 
   try {
     // Pull current + prior year financials in parallel, plus entity meta.
-    const base = `${req.protocol}://${req.get('host')}`
-    const hdrs = {
-      'Authorization': req.headers.authorization || '',
-      'x-api-key': (req.headers['x-api-key'] as string) || '',
-    }
     const [finResp, priorFinResp, entityRow] = await Promise.all([
-      fetch(`${base}/api/qbo/${entityId}/financials?year=${taxYear}`, { headers: hdrs })
-        .then(r => r.json()).catch(() => null),
-      fetch(`${base}/api/qbo/${entityId}/financials?year=${taxYear - 1}`, { headers: hdrs })
-        .then(r => r.json()).catch(() => null),
+      getFinancials(entityId, taxYear, { userId }).catch(() => null),
+      getFinancials(entityId, taxYear - 1, { userId }).catch(() => null),
       (async () => {
         try {
           const r = await supabase.from('tax_entity').select('meta').eq('id', entityId).eq('user_id', userId).single()
