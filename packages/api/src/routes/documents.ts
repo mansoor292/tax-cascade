@@ -12,11 +12,9 @@ import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
 import { runPythonAsync } from '../lib/run_python.js'
-import { encryptedFields, hydrate, hydrateAll } from '../lib/row_crypto.js'
+import { encryptedFields, hydrate, hydrateAll, ENCRYPTED_DOC_FIELDS, ENCRYPTED_RETURN_FIELDS, DOC_ENC_COLS } from '../lib/row_crypto.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 
-const ENCRYPTED_DOC_FIELDS = { json: ['meta', 'textract_data'] }
-const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
@@ -284,15 +282,20 @@ print(f"{len(data)}|{sha}")
     // already in hand.
     let dedupeTextract: any = null
     if (contentHash) {
+      // Limitation: the match runs on the PLAINTEXT meta->>content_hash, which
+      // rows written after the encryption cutover no longer carry — so dedupe
+      // only ever matches pre-cutover rows. Moving content_hash to its own
+      // column (or a blind index) is a roadmap item; until then a re-upload of
+      // a post-cutover document re-runs Textract.
       const { data: priorDoc } = await supabase.from('document')
-        .select('textract_data, doc_type, tax_year, meta')
+        .select(`user_id, textract_data, doc_type, tax_year, meta, ${DOC_ENC_COLS}`)
         .eq('user_id', userId)
         .eq('meta->>content_hash', contentHash)
         .not('textract_data', 'is', null)
         .order('extracted_at', { ascending: false })
         .limit(1).maybeSingle()
       if (priorDoc?.textract_data) {
-        await hydrate(supabase, priorDoc, ENCRYPTED_DOC_FIELDS)
+        await hydrate(supabase, priorDoc, { ...ENCRYPTED_DOC_FIELDS, userId })
         dedupeTextract = priorDoc.textract_data
       }
     }

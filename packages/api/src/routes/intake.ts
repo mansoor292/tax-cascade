@@ -14,15 +14,13 @@
  */
 import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
-import { hydrate } from '../lib/row_crypto.js'
+import { hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_DOC_FIELDS, RETURN_ENC_COLS, DOC_ENC_COLS } from '../lib/row_crypto.js'
 import { encryptedFields } from '../lib/row_crypto.js'
 import { gapFillWithGemini } from '../intake/gemini_gap_fill.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
-const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
-const ENCRYPTED_DOC_FIELDS = { json: ['textract_data', 'meta'] }
 
 async function getUser(req: Request): Promise<string | null> {
   if ((req as any).userId) return (req as any).userId
@@ -73,15 +71,17 @@ router.post('/gap-fill', async (req, res) => {
     // overwrote the column with a single key — losing source, mapper_stats,
     // unmapped_count and extracted_count on every gap-fill run.
     const { data: ret } = await supabase.from('tax_return')
-      .select('id, entity_id, tax_year, form_type, source, input_data, field_values, verification, input_data_enc, computed_data_enc, field_values_enc, verification_enc')
+      .select(`id, entity_id, tax_year, form_type, source, input_data, field_values, verification, ${RETURN_ENC_COLS}`)
       .eq('id', return_id).single()
     if (!ret) return res.status(404).json({ error: `return ${return_id} not found` })
-    await hydrate(supabase, ret, ENCRYPTED_RETURN_FIELDS)
 
-    // Verify user owns the entity
+    // Verify user owns the entity (before hydrate — the DEK is per-user, and
+    // tax_return rows carry no user_id of their own, so hydrate needs the
+    // userId passed explicitly or it silently no-ops).
     const { data: ent } = await supabase.from('tax_entity')
       .select('id').eq('id', ret.entity_id).eq('user_id', userId).single()
     if (!ent) return res.status(403).json({ error: 'Forbidden' })
+    await hydrate(supabase, ret, { ...ENCRYPTED_RETURN_FIELDS, userId })
 
     const docId = (ret.input_data as any)?.source_document_id
     if (!docId) {
@@ -91,9 +91,9 @@ router.post('/gap-fill', async (req, res) => {
     }
 
     const { data: doc } = await supabase.from('document')
-      .select('id, textract_data').eq('id', docId).single()
+      .select(`id, user_id, textract_data, meta, ${DOC_ENC_COLS}`).eq('id', docId).single()
     if (!doc) return res.status(404).json({ error: `source document ${docId} not found` })
-    await hydrate(supabase, doc, ENCRYPTED_DOC_FIELDS)
+    await hydrate(supabase, doc, { ...ENCRYPTED_DOC_FIELDS, userId })
 
     const kvs = (doc.textract_data as any)?.kvs || []
     if (!kvs.length) {

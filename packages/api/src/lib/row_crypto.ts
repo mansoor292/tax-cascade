@@ -60,6 +60,34 @@ export interface FieldSpec {
 }
 
 /**
+ * The per-table field specs, defined ONCE. These used to be re-declared in
+ * every route file (returns, scenarios, documents, intake, entities — the
+ * doc spec even existed in two different orders), which is exactly how a
+ * fifth encrypted column gets added to one copy and not another.
+ */
+export const ENCRYPTED_RETURN_FIELDS: FieldSpec = {
+  json: ['input_data', 'computed_data', 'field_values', 'verification'],
+}
+export const ENCRYPTED_DOC_FIELDS: FieldSpec = { json: ['meta', 'textract_data'] }
+export const ENCRYPTED_ENTITY_FIELDS: FieldSpec = { text: ['ein'] }
+
+/**
+ * Ciphertext sibling columns for selects that name columns explicitly.
+ * hydrate() only acts when it can SEE a `*_enc` column on the row, so a
+ * select that lists `field_values` without `field_values_enc` silently
+ * returns the (now null) plaintext copy. Derived from the spec so the two
+ * can never drift.
+ */
+export function encCols(spec: FieldSpec): string {
+  return [...(spec.json || []), ...(spec.text || [])].map(f => `${f}_enc`).join(', ')
+}
+// Written out as literals (not encCols(...) calls) so supabase-js's select()
+// template-literal type parser still sees a string literal; the test suite
+// asserts these equal encCols(spec), so they cannot drift from the specs.
+export const RETURN_ENC_COLS = 'input_data_enc, computed_data_enc, field_values_enc, verification_enc'
+export const DOC_ENC_COLS = 'meta_enc, textract_data_enc'
+
+/**
  * Produce `*_enc` columns for any fields in `payload` that are set. Caller
  * is expected to include the plaintext column in their payload too (dual-
  * write). Returns an object safe to spread into an insert/update payload.

@@ -11,21 +11,8 @@ import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
 import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
-import { encryptedFields, hydrate } from '../lib/row_crypto.js'
+import { encryptedFields, hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS, RETURN_ENC_COLS } from '../lib/row_crypto.js'
 import { extractAggregates as extractAggregatesFromFv, readMetric, COMPARE_METRICS } from '../maps/metric_to_field.js'
-
-const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
-
-/**
- * The ciphertext siblings, for selects that name columns explicitly.
- *
- * hydrate() only acts when it can SEE a `*_enc` column on the row, so a select
- * that lists `field_values` without `field_values_enc` silently returns the
- * plaintext copy. This router had 15 such reads and never called hydrate at
- * all — so it served the plaintext column while intake wrote only ciphertext,
- * and the two drifted apart on real returns.
- */
-const RETURN_ENC_COLS = 'input_data_enc, computed_data_enc, field_values_enc, verification_enc'
 
 /** Decrypt a tax_return row in place. Ownership runs through the entity, so
  *  the user id has to be passed — the row has no user_id of its own. */
@@ -44,7 +31,7 @@ function stripEnc<T extends Record<string, any>>(row: T): T {
 /** The nested tax_entity(ein) on a joined select is encrypted too, and
  *  hydrate() does not reach into nested objects. */
 async function hydrateNestedEntity(row: any, userId: string): Promise<void> {
-  if (row?.tax_entity) await hydrate(supabase, row.tax_entity, { text: ['ein'], userId })
+  if (row?.tax_entity) await hydrate(supabase, row.tax_entity, { ...ENCRYPTED_ENTITY_FIELDS, userId })
 }
 
 /** Same for a list of rows. */
@@ -1711,7 +1698,10 @@ router.post('/compute_from_qbo', async (req, res) => {
         .then(r => r.json()).catch(() => null),
       (async () => {
         try {
-          const r = await supabase.from('entity').select('meta').eq('id', entity_id).single()
+          // Was querying a nonexistent table 'entity' — always null, which
+          // silently disabled the business_code/SSTB handling on this path.
+          const r = await supabase.from('tax_entity')
+            .select('meta').eq('id', entity_id).eq('user_id', userId).single()
           return r.data
         } catch { return null }
       })(),
@@ -1939,6 +1929,10 @@ router.get('/:id/pdf', async (req, res) => {
   const { data: entity } = await supabase.from('tax_entity')
     .select('user_id').eq('id', taxReturn.entity_id).single()
   if (!entity || entity.user_id !== userId) return res.status(403).json({ error: 'Forbidden' })
+
+  // Post-cutover the plaintext columns are null — without this the PDF builder
+  // below reads empty input_data/computed_data/field_values and fills nothing.
+  await hydrateReturn(taxReturn, userId)
 
   // ─── Completeness gate ─────────────────────────────────────
   // Block PDF generation only when there's STRONG evidence something is wrong:

@@ -8,14 +8,13 @@ import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
 import { ordinaryTax, qbiDeduction, niitTax, standardDeduction } from '../engine/tax_tables.js'
 import { encryptedFields } from '../lib/row_crypto.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
-import { hydrate } from '../lib/row_crypto.js'
+import { hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS } from '../lib/row_crypto.js'
 
 /** Nested tax_entity(ein) is encrypted; hydrate() does not recurse. */
 async function hydrateNestedEntity(row: any, userId: string): Promise<void> {
-  if (row?.tax_entity) await hydrate(supabase, row.tax_entity, { text: ['ein'], userId })
+  if (row?.tax_entity) await hydrate(supabase, row.tax_entity, { ...ENCRYPTED_ENTITY_FIELDS, userId })
 }
 
-const ENCRYPTED_RETURN_FIELDS = { json: ['input_data', 'computed_data', 'field_values', 'verification'] }
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'

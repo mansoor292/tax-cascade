@@ -3,12 +3,11 @@
  */
 import { Router, type Request } from 'express'
 import { createClient } from '@supabase/supabase-js'
-import { encryptedFields, encryptionEnabled, hydrate, hydrateAll } from '../lib/row_crypto.js'
+import { encryptedFields, encryptionEnabled, hydrate, hydrateAll, ENCRYPTED_ENTITY_FIELDS } from '../lib/row_crypto.js'
 import { accountingMethodCacheBust } from './qbo.js'
 import { blindIndex } from '../lib/crypto.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 
-const ENCRYPTED_ENTITY_FIELDS = { text: ['ein'] }
 const safeBlindIndex = (v: string | null | undefined) =>
   (v && encryptionEnabled() && process.env.TAX_API_BLIND_HMAC) ? blindIndex(v) : null
 
