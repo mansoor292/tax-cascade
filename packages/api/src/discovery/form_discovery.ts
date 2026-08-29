@@ -9,14 +9,11 @@
 
 import { PDFDocument, PDFTextField } from 'pdf-lib'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import { createClient } from '@supabase/supabase-js'
 import { runPythonAsync } from '../lib/run_python.js'
 import { v4 as uuidv4 } from 'uuid'
+import { serviceClient } from '../lib/supabase.js'
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
 const S3_BUCKET = process.env.S3_BUCKET || 'tax-api-storage-2026'
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 const FORMS_DIR = 'data/irs_forms'
 const MAPS_DIR = 'data/field_maps'
@@ -30,7 +27,7 @@ interface DiscoveryResult {
 }
 
 async function updateStatus(formName: string, year: number, status: string, extra: Record<string, any> = {}) {
-  await supabase.from('form_discovery').upsert({
+  await serviceClient().from('form_discovery').upsert({
     form_name: formName, tax_year: year, status, updated_at: new Date().toISOString(), ...extra
   }, { onConflict: 'form_name,tax_year' })
 }
@@ -353,7 +350,7 @@ async function saveFieldMap(formName: string, year: number, fieldMap: FieldEntry
 
   // Supabase field_map table
   for (const entry of fieldMap) {
-    await supabase.from('field_map').upsert({
+    await serviceClient().from('field_map').upsert({
       form_name: formName, tax_year: year,
       page: entry.page, field_id: entry.field_id, label: entry.label,
       acro_name: entry.acro_name ?? null,
@@ -466,7 +463,7 @@ export async function discoverForm(
 }
 
 export async function getDiscoveryStatus(formName: string, year: number) {
-  const { data } = await supabase.from('form_discovery')
+  const { data } = await serviceClient().from('form_discovery')
     .select('*').eq('form_name', formName).eq('tax_year', year).single()
   return data
 }

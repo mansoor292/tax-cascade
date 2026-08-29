@@ -2,13 +2,13 @@
  * Scenario routes — Create, compute, and AI-analyze tax scenarios
  */
 import { Router, type Request } from 'express'
-import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { calc1120, calc1120S, calc1040 } from '../engine/tax_engine.js'
 import { ordinaryTax, qbiDeduction, niitTax, standardDeduction } from '../engine/tax_tables.js'
 import { encryptedFields } from '../lib/row_crypto.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 import { hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS } from '../lib/row_crypto.js'
+import { serviceClient } from '../lib/supabase.js'
 
 /** Nested tax_entity(ein) is encrypted; hydrate() does not recurse. */
 async function hydrateNestedEntity(row: any, userId: string): Promise<void> {
@@ -16,9 +16,7 @@ async function hydrateNestedEntity(row: any, userId: string): Promise<void> {
 }
 
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+const supabase = serviceClient()
 
 const router = Router()
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''

@@ -11,15 +11,13 @@
  *   GET /api/qbo/:entity_id/financials — unified view for Claude
  */
 import { Router, type Request } from 'express'
-import { createClient } from '@supabase/supabase-js'
 import { buildTokenPayload, readTokensFromRow } from '../lib/qbo_tokens.js'
 import { flattenReport } from '../maps/flatten_report.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
+import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://tax-api.catalogshub.com'
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+const supabase = serviceClient()
 
 // Lazy env accessors — bootstrap (dotenv + SSM fetch) runs AFTER ES imports
 // hoist and evaluate this module's top-level code. Reading env at call-time
@@ -31,15 +29,6 @@ const qboBase         = () => qboEnvironment() === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
   : 'https://quickbooks.api.intuit.com'
 
-async function getUser(req: Request): Promise<string | null> {
-  if ((req as any).userId) return (req as any).userId
-  const token = req.headers.authorization?.replace('Bearer ', '')
-  if (token) {
-    const { data: { user } } = await supabase.auth.getUser(token)
-    return user?.id || null
-  }
-  return null
-}
 
 // ─── Token management ───
 

@@ -1,5 +1,11 @@
 import type { Page } from '@playwright/test'
 
+function requireAnonKey(): string {
+  const key = process.env.VITE_SUPABASE_ANON_KEY
+  if (!key) throw new Error('VITE_SUPABASE_ANON_KEY must be set to run the API-signup e2e helpers')
+  return key
+}
+
 export const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 
@@ -52,8 +58,7 @@ export async function deleteUserByEmail(email: string): Promise<'deleted' | 'ski
  * Used by the MCP tests, where the subject is the protocol rather than the UI.
  */
 export async function createUserWithApiKey(email: string): Promise<{ apiKey: string }> {
-  const ANON = process.env.VITE_SUPABASE_ANON_KEY
-    || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
+  const ANON = requireAnonKey()
   const base = process.env.BASE_URL || 'https://fin.catipult.ai'
 
   const signup = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
@@ -79,8 +84,7 @@ export async function createUserWithApiKey(email: string): Promise<{ apiKey: str
  * specs, where driving a browser adds nothing but time.
  */
 export async function signUpViaApi(email: string): Promise<string> {
-  const ANON = process.env.VITE_SUPABASE_ANON_KEY
-    || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
+  const ANON = requireAnonKey()
   const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
     method: 'POST',
     headers: { apikey: ANON, 'Content-Type': 'application/json' },

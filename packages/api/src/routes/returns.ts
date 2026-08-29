@@ -8,7 +8,6 @@
  *   4. Save as tax_return record
  */
 import { Router, type Request } from 'express'
-import { createClient } from '@supabase/supabase-js'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
 import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionInputs, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
 import { encryptedFields, hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS, RETURN_ENC_COLS } from '../lib/row_crypto.js'
@@ -43,17 +42,10 @@ import { INPUT_SCHEMAS } from './schema.js'
 import { buildCanonicalModel, buildReturnPdf } from '../builders/build_return_pdf.js'
 import { buildScheduleL } from '../maps/qbo_to_schedule_l.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
+import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+const supabase = serviceClient()
 
-async function getUser(req: any): Promise<string | null> {
-  if ((req as any).userId) return (req as any).userId
-  const t = req.headers.authorization?.replace('Bearer ', '')
-  if (t) { const { data: { user } } = await supabase.auth.getUser(t); return user?.id || null }
-  return null
-}
 
 const FORM_TYPE_MAP: Record<string, string> = {
   prior_return_1040: '1040', prior_return_1120: '1120', prior_return_1120s: '1120S',
@@ -280,7 +272,7 @@ router.post('/process/:document_id', async (req, res) => {
       pdf_s3_path: null,
     }).select().single()
 
-    if (error) return res.status(500).json({ error: error.message })
+    if (error) return sendDbError(res, error)
 
     // Link document to entity
     if (entityId && !doc.entity_id) {
@@ -1441,7 +1433,7 @@ router.post('/compute', async (req, res) => {
         }
       }
 
-      if (error) return res.status(500).json({ error: error.message })
+      if (error) return sendDbError(res, error)
       taxReturn = data
     }
 
@@ -2257,7 +2249,7 @@ print(json.dumps({'url': url}))
         ? supabase.from('tax_return').update(rowPayload).eq('id', existing.id)
         : supabase.from('tax_return').insert(rowPayload)
       const { data, error } = await q.select().single()
-      if (error) return res.status(500).json({ error: error.message })
+      if (error) return sendDbError(res, error)
       taxReturn = data
     }
 
@@ -2292,7 +2284,7 @@ router.post('/:id/review', async (req, res) => {
   const { error } = await supabase.from('tax_return')
     .update({ reviewed_at: new Date().toISOString() })
     .eq('id', req.params.id)
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
   res.json({ success: true, reviewed_at: new Date().toISOString() })
 })
 
@@ -2316,7 +2308,7 @@ router.delete('/:id', async (req, res) => {
 
   // Delete the return itself
   const { error } = await supabase.from('tax_return').delete().eq('id', req.params.id)
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
 
   res.json({
     success: true,

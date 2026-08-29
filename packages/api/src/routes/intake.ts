@@ -13,24 +13,14 @@
  * returns without a full re-archive.
  */
 import { Router, type Request } from 'express'
-import { createClient } from '@supabase/supabase-js'
 import { hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_DOC_FIELDS, RETURN_ENC_COLS, DOC_ENC_COLS } from '../lib/row_crypto.js'
 import { encryptedFields } from '../lib/row_crypto.js'
 import { gapFillWithGemini } from '../intake/gemini_gap_fill.js'
+import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
+import { sendDbError } from '../lib/http_error.js'
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+const supabase = serviceClient()
 
-async function getUser(req: Request): Promise<string | null> {
-  if ((req as any).userId) return (req as any).userId
-  const token = req.headers.authorization?.replace('Bearer ', '')
-  if (token) {
-    const { data: { user } } = await supabase.auth.getUser(token)
-    return user?.id || null
-  }
-  return null
-}
 
 const router = Router()
 
@@ -135,7 +125,7 @@ router.post('/gap-fill', async (req, res) => {
       const enc = await encryptedFields(supabase, userId, updates, ENCRYPTED_RETURN_FIELDS)
       const { error } = await supabase.from('tax_return')
         .update({ ...updates, ...enc }).eq('id', return_id)
-      if (error) return res.status(500).json({ error: error.message })
+      if (error) return sendDbError(res, error)
       persisted = true
     }
 

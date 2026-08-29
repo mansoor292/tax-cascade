@@ -5,9 +5,11 @@
   functions = "netlify/functions"
 
 [build.environment]
-  VITE_API_URL           = "https://fin.catipult.ai"
-  VITE_SUPABASE_URL      = "https://ophnjqjmxeohbyydxnlg.supabase.co"
-  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c"
+  VITE_API_URL      = "https://fin.catipult.ai"
+  VITE_SUPABASE_URL = "https://ophnjqjmxeohbyydxnlg.supabase.co"
+  # VITE_SUPABASE_ANON_KEY is set in the Netlify dashboard (Site settings →
+  # Environment variables), NOT here: this file is committed, and the key
+  # that used to sit on this line had to be rotated for exactly that reason.
 
 # ─── OAuth endpoints map to Netlify Functions ───
 # Keep the user-visible URLs clean (/oauth/token instead of /.netlify/functions/oauth-token).

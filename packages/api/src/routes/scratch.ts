@@ -9,6 +9,7 @@
  */
 import { Router, type Request } from 'express'
 import { supabase as admin } from './auth.js'
+import { sendError, sendDbError } from '../lib/http_error.js'
 // Bucket has permissive RLS policies (anon allowed); app layer enforces {user_id}/ scoping.
 // If SUPABASE_SERVICE_ROLE_KEY is later added to env, swap this import for a service-role client.
 
@@ -49,7 +50,7 @@ router.put('/:key', async (req, res) => {
     contentType: 'application/json',
     upsert: true,
   })
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
 
   res.json({ key, size_bytes: body.byteLength, saved_at: new Date().toISOString() })
 })
@@ -83,7 +84,7 @@ router.get('/', async (req, res) => {
     limit: 1000,
     search: prefix || undefined,
   })
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
 
   const blobs = (data || [])
     .filter(o => o.name.endsWith('.json'))
@@ -105,7 +106,7 @@ router.delete('/:key', async (req, res) => {
   if (!KEY_RE.test(key)) return res.status(400).json({ error: 'Invalid key' })
 
   const { error } = await admin.storage.from(BUCKET).remove([objectPath(uid, key)])
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
 
   res.json({ deleted: key })
 })

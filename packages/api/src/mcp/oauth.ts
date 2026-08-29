@@ -12,12 +12,10 @@
  *   8. Token = the user's API key (passed through on all MCP requests)
  */
 import crypto from 'crypto'
-import { createClient } from '@supabase/supabase-js'
 import type { Express, Request, Response } from 'express'
+import { anonClient } from '../lib/supabase.js'
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
-const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
+const supabase = anonClient()
 
 // In-memory store for auth codes (short-lived)
 const authCodes = new Map<string, {

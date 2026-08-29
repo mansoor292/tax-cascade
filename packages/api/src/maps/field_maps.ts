@@ -16,14 +16,11 @@
 import { readFileSync, readdirSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { createClient } from '@supabase/supabase-js'
+import { serviceClient } from '../lib/supabase.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = join(__dirname, '../../data/field_maps')
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 interface FieldEntry {
   page: number
@@ -47,7 +44,7 @@ export function invalidateCache(formYear: string) {
  */
 export async function seedCacheFromSupabase() {
   try {
-    const { data } = await supabase.from('field_map')
+    const { data } = await serviceClient().from('field_map')
       .select('form_name, tax_year, page, field_id, label')
       .eq('verified', true)
       .order('form_name').order('tax_year').order('page').order('field_id')
@@ -77,7 +74,7 @@ export async function seedCacheFromSupabase() {
 }
 
 async function loadMapFromSupabase(formName: string, year: number): Promise<FieldEntry[]> {
-  const { data } = await supabase.from('field_map')
+  const { data } = await serviceClient().from('field_map')
     .select('page, field_id, label')
     .eq('form_name', formName)
     .eq('tax_year', year)

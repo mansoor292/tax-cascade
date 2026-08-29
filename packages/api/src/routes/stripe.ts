@@ -5,23 +5,13 @@
  * The key is stored per-entity and used to make Stripe API calls.
  */
 import { Router, type Request } from 'express'
-import { createClient } from '@supabase/supabase-js'
 import { getDek, encrypt, decryptString } from '../lib/crypto.js'
 import { encryptionEnabled } from '../lib/row_crypto.js'
+import { serviceClient, requestUserId as getUser } from '../lib/supabase.js'
+import { sendError, sendDbError } from '../lib/http_error.js'
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+const supabase = serviceClient()
 
-async function getUser(req: Request): Promise<string | null> {
-  if ((req as any).userId) return (req as any).userId
-  const token = req.headers.authorization?.replace('Bearer ', '')
-  if (token) {
-    const { data: { user } } = await supabase.auth.getUser(token)
-    return user?.id || null
-  }
-  return null
-}
 
 /**
  * The stripe_key_encrypted column is text (no *_enc bytea twin), so the
@@ -103,7 +93,7 @@ router.post('/:entity_id/connect', async (req, res) => {
     is_active: true,
   }, { onConflict: 'entity_id' })
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
 
   res.json({ connected: true, account_name: accountName, account_id: accountId })
 })
@@ -169,7 +159,7 @@ router.get('/:entity_id/invoices', async (req, res) => {
       })),
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -203,7 +193,7 @@ router.get('/:entity_id/payments', async (req, res) => {
       })),
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -239,7 +229,7 @@ router.get('/:entity_id/balance-transactions', async (req, res) => {
       })),
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -270,7 +260,7 @@ router.get('/:entity_id/payouts', async (req, res) => {
       })),
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -301,7 +291,7 @@ router.get('/:entity_id/customers', async (req, res) => {
       })),
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 
@@ -369,7 +359,7 @@ router.get('/:entity_id/revenue', async (req, res) => {
       by_type: summary,
     })
   } catch (e: any) {
-    res.status(500).json({ error: e.message })
+    sendError(res, e)
   }
 })
 

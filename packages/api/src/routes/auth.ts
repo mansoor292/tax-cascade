@@ -1,23 +1,14 @@
 /**
  * Auth routes — Supabase-backed user management + API key provisioning
  */
-import { Router, type Request } from 'express'
-import { createClient } from '@supabase/supabase-js'
+import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
+import { anonClient, userClient } from '../lib/supabase.js'
+import { sendError, sendDbError } from '../lib/http_error.js'
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ophnjqjmxeohbyydxnlg.supabase.co'
-const SUPABASE_ANON = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waG5qcWpteGVvaGJ5eWR4bmxnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2MzYyMDIsImV4cCI6MjA3ODIxMjIwMn0.ShmVLhmnCYuUBL6f6i1-TnMlpy_3MK4kezetcimA62c'
-
-// Shared anon client for auth operations (signup/signin)
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON)
-
-// Per-request client that carries the user's JWT for RLS
-function userClient(req: Request) {
-  const token = req.headers.authorization?.replace('Bearer ', '') || ''
-  return createClient(SUPABASE_URL, SUPABASE_ANON, {
-    global: { headers: { Authorization: `Bearer ${token}` } }
-  })
-}
+// Anon client for auth operations (signup/signin); the per-request
+// RLS-scoped userClient comes from lib/supabase.
+const supabase = anonClient()
 
 const router = Router()
 
@@ -72,7 +63,7 @@ router.post('/api-keys', async (req, res) => {
     name: req.body.name || 'API Key',
   }).select().single()
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return sendDbError(res, error)
   // The plaintext key is returned to the user ONCE here — they copy it and
   // we never store it again in plaintext after the cutover.
   res.json({ api_key: { ...data, key_value: apiKey } })
