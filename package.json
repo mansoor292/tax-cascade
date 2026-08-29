@@ -11,7 +11,7 @@
     "web:dev": "npm run dev -w packages/web",
     "web:build": "npm run build -w packages/web",
     "dev": "concurrently \"npm run api:dev\" \"npm run web:dev\"",
-    "test": "npm run test -w packages/api",
+    "test": "npm run test --workspaces --if-present",
     "test:e2e": "npm run test:e2e -w packages/web",
     "postinstall": "npm run build -w packages/shared --if-present"
   },
