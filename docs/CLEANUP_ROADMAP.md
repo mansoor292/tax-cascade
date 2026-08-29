@@ -48,9 +48,14 @@ lint/gitignore/Playwright repairs, web format/label dedup, scenario-PDF fix.
       `.env.production` keeps its value. Fetch the value with
       `supabase projects api-keys --project-ref ophnjqjmxeohbyydxnlg`.
       Rotate it as part of HISTORY_PURGE rather than treating it as secret.
-- [ ] First API deploy of this branch: one manual `npm install` at
-      /opt/tax-api (deploy-reload.sh doesn't install; packages/shared needs
-      its workspace symlink).
+- [x] ~~First API deploy: manual `npm install` at /opt/tax-api.~~ NOT
+      needed. The claim read only deploy-reload.sh; the install is in
+      server.ts's deploy webhook, which runs
+      `npm install --include=dev` from packages/api after the reset.
+      Verified locally: deleting node_modules/@taxengine and running that
+      exact command from packages/api recreates the shared symlink, and the
+      API boots with packages/shared/dist absent (it is gitignored, and
+      only tsc needs it — prod runs tsx off src).
 - [ ] Run the two encryption backfills with SSM env (dry-run first).
 - [ ] When ready, set `TAX_API_AWS_SDK=1` in SSM and watch one
       upload→extract cycle; roll back by unsetting.
