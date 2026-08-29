@@ -48,11 +48,11 @@ dev server proxies `/api` and `/auth` to `localhost:3737`.
 
 3. **The API runs in pm2 CLUSTER mode — no in-process shared state.**
    One worker per core (`ecosystem.config.cjs`). The DEK cache in
-   `lib/crypto.ts` is per-worker (fine). The in-memory OAuth code store in
-   `mcp/oauth.ts` is NOT fine (a code issued by worker 0 is invisible to
-   worker 1 — roadmap item; the Netlify Functions implementation went
-   stateless with JWTs for exactly this reason). Any new cache or session
-   map must survive N processes.
+   `lib/crypto.ts` is per-worker (fine). An in-memory OAuth code store once
+   lived in `mcp/oauth.ts` and was broken for exactly this reason (a code
+   issued by worker 0 was invisible to worker 1); it has been deleted — the
+   stateless-JWT Netlify Functions are the only OAuth implementation. Any
+   new cache or session map must survive N processes.
 
 4. **pm2 runs `node --import tsx`, never the tsx bin shim.** The shim spawns
    a child that isn't a cluster worker → EADDRINUSE respawn loop (4.2M

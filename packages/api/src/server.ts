@@ -47,7 +47,6 @@ import intakeRoutes from './routes/intake.js'
 import calendarRoutes from './routes/calendar.js'
 import discoveryRoutes from './discovery/discovery_routes.js'
 import { mountMCP } from './mcp/tax-mcp.js'
-import { mountOAuth } from './mcp/oauth.js'
 
 const STARTED_AT = new Date().toISOString()
 
@@ -144,8 +143,16 @@ app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(express.static('public'))
 
-// ─── OAuth + MCP (public — user authenticates via OAuth, tools use their key) ───
-mountOAuth(app)
+// ─── MCP (public — clients authenticate via OAuth on fin.catipult.ai) ───
+// There is deliberately NO OAuth implementation on this origin any more.
+// The Express one that lived in mcp/oauth.ts was dead in production —
+// every endpoint shadowed by netlify.toml's redirects — and broken by
+// design under pm2 cluster (in-memory auth codes don't survive worker
+// round-robin). The stateless-JWT Netlify Functions in
+// packages/web/netlify/functions are THE implementation, and the static
+// JSON in packages/web/public/.well-known is THE discovery metadata.
+// tax-mcp.ts's WWW-Authenticate challenge already points clients there.
+// Direct callers of this EC2 origin's /oauth/* (none known) get 404s.
 mountMCP(app)
 
 // ─── Auth routes (public — no API key needed) ───

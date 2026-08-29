@@ -27,7 +27,9 @@ src/
 ├── builders/          PDF fill; build_return_pdf.ts is the live package
 │                      builder, pdf_filler.ts has the shared helpers
 ├── mcp/               tax-mcp.ts (43 tools; calls this server's own REST
-│                      over localhost — by design) + oauth.ts
+│                      over localhost — by design). OAuth lives ONLY in the
+│                      web package's Netlify Functions; do not add an
+│                      Express OAuth stack here (see server.ts's comment)
 ├── discovery/         download IRS PDF → Textract → auto-build field map
 └── lib/               crypto/row_crypto (encryption), http_error
                        (sendError/sendDbError), run_python, ssm, …
