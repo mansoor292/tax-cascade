@@ -30,3 +30,7 @@ packages/web/blob-report/
 
 # packages/shared emits declarations only; runtime resolves src/ directly
 packages/shared/dist/
+
+# extraction worker build artifacts
+packages/api/dist-worker/
+packages/api/dist-worker.zip

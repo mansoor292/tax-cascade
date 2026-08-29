@@ -11,10 +11,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prebuild": "tsc -p ../shared",
-    "lint": "eslint src scripts"
+    "lint": "eslint src scripts",
+    "build:worker": "bash scripts/build_worker.sh"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.1033.0",
+    "@aws-sdk/client-lambda": "^3.1121.0",
     "@aws-sdk/client-s3": "^3.1121.0",
     "@aws-sdk/client-textract": "^3.1121.0",
     "@aws-sdk/s3-request-presigner": "^3.1121.0",
