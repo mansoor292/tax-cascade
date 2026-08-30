@@ -37,17 +37,18 @@ lint/gitignore/Playwright repairs, web format/label dedup, scenario-PDF fix.
       without it).
 - [ ] Set `OAUTH_CODE_SECRET` confirmed present in Netlify (the Express
       OAuth fallback no longer exists).
-- [ ] **Set `SUPABASE_ANON_KEY` for the API.** It is in neither SSM
-      (`/tax-api/*` has 7 params, not this one) nor the committed
-      `.env.production.template`'s live counterpart on every box. Removing
-      the hardcoded anon literals left the API with no source for it, and
-      `/auth/*` plus JWT auth on `/api/*` answer 503 without it (static
-      `TAX_API_KEYS` callers are unaffected). Add it as an SSM SecureString:
-      `aws ssm put-parameter --name /tax-api/SUPABASE_ANON_KEY --type SecureString --value <anon key>`
-      — SSM is skipped for vars already set, so a box that already has it in
-      `.env.production` keeps its value. Fetch the value with
-      `supabase projects api-keys --project-ref ophnjqjmxeohbyydxnlg`.
-      Rotate it as part of HISTORY_PURGE rather than treating it as secret.
+- [x] **`SUPABASE_ANON_KEY` set for the API** (2026-08-29). Removing the
+      hardcoded anon literals left the API with no source for it — it was in
+      neither SSM nor `.env.production` — so `/auth/*` and JWT auth on
+      `/api/*` would have answered 503 on the next deploy (static
+      `TAX_API_KEYS` callers were unaffected). Now `/tax-api/SUPABASE_ANON_KEY`,
+      a SecureString like the other seven. Verified end to end: with no local
+      env var the server loads it from SSM and `/auth/signin` answers 401
+      rather than the 503 guard.
+      **Still to do at rotation:** the value planted is the CURRENT key —
+      the same one HISTORY_PURGE lists for purging. HISTORY_PURGE step 1
+      already names this parameter as one of the three places to update when
+      the key is rolled; that is where this gets a fresh value.
 - [x] ~~First API deploy: manual `npm install` at /opt/tax-api.~~ NOT
       needed. The claim read only deploy-reload.sh; the install is in
       server.ts's deploy webhook, which runs
@@ -57,8 +58,12 @@ lint/gitignore/Playwright repairs, web format/label dedup, scenario-PDF fix.
       API boots with packages/shared/dist absent (it is gitignored, and
       only tsc needs it — prod runs tsx off src).
 - [ ] Run the two encryption backfills with SSM env (dry-run first).
-- [ ] When ready, set `TAX_API_AWS_SDK=1` in SSM and watch one
-      upload→extract cycle; roll back by unsetting.
+- [x] ~~Set `TAX_API_AWS_SDK=1` in SSM.~~ OBSOLETE — the flag no longer
+      exists. Both implementations were run against the same S3 object and
+      returned byte-identical reads and deep-equal Textract output, so the
+      Python branches and the flag that gated them were deleted rather than
+      left as a second implementation nobody exercises. Extraction now runs
+      in a Node Lambda, which cannot shell out to python3/boto3 at all.
 - [ ] Audit `api_key` rows for the all-zeros user id.
 
 ## Remaining — future code work (nice-to-have)

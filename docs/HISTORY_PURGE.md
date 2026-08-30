@@ -49,8 +49,15 @@ history is still cloneable, so treat the secrets as burned regardless.
 
 ## Notes
 
-- The deploy webhook pulls `main` by commit — after the force-push, the
-  EC2 checkout needs one `git fetch && git reset --hard origin/main`
-  (deploy-reload.sh's normal pull may refuse the rewritten history).
+- The deploy webhook already survives a rewritten history — no manual step
+  is needed. This previously said the EC2 checkout would need one
+  `git fetch && git reset --hard origin/main` because deploy-reload.sh's
+  pull would refuse the new objects. deploy-reload.sh does not pull at all:
+  the fetch lives in server.ts's `/deploy` handler, which runs
+  `git fetch origin main && git reset --hard origin/main` (server.ts ~:98)
+  precisely because, as the comment above it records, `git pull` "fails
+  outright once history is rewritten upstream, which silently stopped every
+  deploy after one force-push". The first deploy after the purge lands like
+  any other.
 - Commit hashes change repo-wide; any external references to old hashes
   (links in docs, issue comments) go stale. Acceptable cost.
