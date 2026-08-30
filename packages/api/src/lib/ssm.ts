@@ -50,3 +50,54 @@ export function loadSsmParametersSync(): LoadResult {
   }
   return { loaded, skipped }
 }
+
+/**
+ * Async SSM loader for entrypoints that can await before importing anything
+ * env-dependent.
+ *
+ * loadSsmParametersSync above shells out to the `aws` CLI. That is fine on
+ * EC2, where the CLI is installed, and it is what lets server.ts stay a
+ * single-phase bootstrap — the reason it was written that way. It is NOT
+ * fine in Lambda: the runtime image has no aws CLI, so the execSync throws,
+ * the error is swallowed, and every secret silently stays unset. The
+ * failure surfaces far away as "SUPABASE_ANON_KEY is not set", because
+ * serviceClient() falls back to the anon key when the service role key is
+ * missing.
+ *
+ * A worker has an async entrypoint, so it can do the two-phase bootstrap
+ * server.ts cannot: await this, THEN dynamically import the modules that
+ * read env at module scope.
+ *
+ * Same precedence as the sync loader — only fills vars not already set, so
+ * Lambda environment variables and dotenv still win.
+ */
+export async function loadSsmParametersAsync(): Promise<LoadResult> {
+  const loaded: string[] = []
+  const skipped: string[] = []
+  const region = process.env.AWS_REGION || 'us-east-1'
+  try {
+    const { SSMClient, GetParametersByPathCommand } = await import('@aws-sdk/client-ssm')
+    const client = new SSMClient({ region })
+    let NextToken: string | undefined
+    do {
+      const resp: any = await client.send(new GetParametersByPathCommand({
+        Path: PATH_PREFIX, WithDecryption: true, Recursive: true, NextToken,
+      }))
+      for (const p of resp.Parameters || []) {
+        const name: string = p.Name || ''
+        const key = name.startsWith(PATH_PREFIX) ? name.slice(PATH_PREFIX.length) : name
+        if (!key) continue
+        if (process.env[key] !== undefined && process.env[key] !== '') {
+          skipped.push(key)
+          continue
+        }
+        process.env[key] = p.Value
+        loaded.push(key)
+      }
+      NextToken = resp.NextToken
+    } while (NextToken)
+  } catch (e: any) {
+    return { loaded, skipped, error: e.message?.slice(0, 200) || String(e).slice(0, 200) }
+  }
+  return { loaded, skipped }
+}

@@ -18,6 +18,7 @@
     "@aws-sdk/client-kms": "^3.1033.0",
     "@aws-sdk/client-lambda": "^3.1121.0",
     "@aws-sdk/client-s3": "^3.1121.0",
+    "@aws-sdk/client-ssm": "^3.1121.0",
     "@aws-sdk/client-textract": "^3.1121.0",
     "@aws-sdk/s3-request-presigner": "^3.1121.0",
     "@google/generative-ai": "^0.24.1",

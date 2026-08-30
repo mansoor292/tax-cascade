@@ -31,6 +31,11 @@ BUCKET="$(sed -n 's/^S3_BUCKET=//p' .env.production)"
 KMS_KEY="$(sed -n 's/^TAX_API_KMS_KEY=//p' .env.production)"
 SUPABASE_URL="$(sed -n 's/^SUPABASE_URL=//p' .env.production)"
 
+# TAX_API_KMS_KEY is an alias (alias/tax-api-master) — fine for the SDK, but an
+# IAM policy Resource must be an ARN or "*". Resolve it rather than widening
+# the policy to every key in the account.
+KMS_ARN="$(aws kms describe-key --key-id "$KMS_KEY" --query 'KeyMetadata.Arn' --output text)"
+
 [ -n "$BUCKET" ] && [ -n "$KMS_KEY" ] && [ -n "$SUPABASE_URL" ] \
   || { echo "missing S3_BUCKET / TAX_API_KMS_KEY / SUPABASE_URL in .env.production"; exit 1; }
 
@@ -82,7 +87,7 @@ aws iam put-role-policy --role-name "$ROLE" --policy-name extraction-access \
        \"Resource\":\"*\"},
       {\"Sid\":\"UnwrapPerUserDEK\",\"Effect\":\"Allow\",
        \"Action\":[\"kms:Decrypt\",\"kms:GenerateDataKey\"],
-       \"Resource\":\"${KMS_KEY}\"},
+       \"Resource\":\"${KMS_ARN}\"},
       {\"Sid\":\"ReadConfig\",\"Effect\":\"Allow\",
        \"Action\":[\"ssm:GetParametersByPath\",\"ssm:GetParameters\",\"ssm:GetParameter\"],
        \"Resource\":\"arn:aws:ssm:${REGION}:${ACCOUNT}:parameter/tax-api/*\"},

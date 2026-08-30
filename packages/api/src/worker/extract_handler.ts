@@ -16,12 +16,20 @@
  * fraction of a cent and holds nothing open, so an SNS completion callback
  * would add a topic and a second function to save almost nothing.
  *
- * bootstrap_env MUST stay the first import, exactly as in server.ts: route
- * and service modules read process.env at module scope, and ESM evaluates
- * imports before anything else runs.
+ * TWO-PHASE BOOTSTRAP, and it has to stay that way. bootstrap_env's SSM
+ * loader shells out to the `aws` CLI, which exists on EC2 and does NOT exist
+ * in the Lambda runtime image — there the execSync throws, the error is
+ * swallowed, and every secret silently stays unset. That surfaces far from
+ * its cause as "SUPABASE_ANON_KEY is not set", because serviceClient() falls
+ * back to the anon key when the service role key is missing.
+ *
+ * So: await loadSsmParametersAsync() FIRST, then dynamically import
+ * services/document_extraction — it reads GEMINI_API_KEY at module scope, and
+ * a static import would be hoisted above the await and capture nothing.
+ * Do not turn that dynamic import into a top-level one.
  */
 import '../bootstrap_env.js'
-import { extractAndArchive, reextractDocument } from '../services/document_extraction.js'
+import { loadSsmParametersAsync } from '../lib/ssm.js'
 
 /** Ingest: classify + extract + archive a freshly uploaded document. */
 export interface IngestEvent {
@@ -55,6 +63,23 @@ export async function handler(event: ExtractionEvent): Promise<{ ok: true; docId
 
   const started = Date.now()
   console.log(`[worker] ${event.kind} ${event.docId} starting`)
+
+  // Phase 1: secrets. Idempotent and only fills what is unset, so warm
+  // invocations re-enter it cheaply and Lambda env vars still win.
+  const ssm = await loadSsmParametersAsync()
+  if (ssm.error) console.warn(`[worker] ssm load failed: ${ssm.error}`)
+  else if (ssm.loaded.length) console.log(`[worker] ssm loaded ${ssm.loaded.length} params`)
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      'SUPABASE_SERVICE_ROLE_KEY is unset after the SSM load. Refusing to run: ' +
+      'serviceClient() would fall back to the anon key and every RLS-protected ' +
+      'query would return nothing, marking the document done with no data.',
+    )
+  }
+
+  // Phase 2: only now import the module that reads env at load.
+  const { extractAndArchive, reextractDocument } =
+    await import('../services/document_extraction.js')
 
   // Both callees already record their own outcome on the document row
   // (processing_status done | failed, processing_error). Rethrow so the
