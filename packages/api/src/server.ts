@@ -174,15 +174,55 @@ app.use('/mcp', (req, res, next) => {
       : 'none',
     ip: String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0],
   }
+  // Which JSON-RPC call this was — the difference between "a request failed"
+  // and "tools/call list_documents failed". Body is already parsed for POSTs
+  // behind express.json()? No — /mcp gets the raw stream; sniff the first
+  // bytes non-destructively is not worth it, so capture from the parsed body
+  // if a later middleware attaches it, else leave the method unknown and
+  // record the response instead.
+  const chunks: Buffer[] = []
+  const origWrite = res.write.bind(res)
+  const origEnd = res.end.bind(res)
+  // Capture the first 300 bytes of the RESPONSE for non-2xx diagnosis.
+  res.write = ((chunk: any, ...args: any[]) => {
+    if (chunks.reduce((n, c) => n + c.length, 0) < 300 && chunk) chunks.push(Buffer.from(chunk))
+    return origWrite(chunk, ...args)
+  }) as typeof res.write
+  res.end = ((chunk: any, ...args: any[]) => {
+    if (chunk && chunks.reduce((n, c) => n + c.length, 0) < 300) chunks.push(Buffer.from(chunk))
+    return origEnd(chunk, ...args)
+  }) as typeof res.end
   res.on('finish', () => {
     entry.status = res.statusCode
     entry.ms = Date.now() - started
+    if (res.statusCode >= 300) {
+      entry.resp = Buffer.concat(chunks).toString('utf8').slice(0, 300)
+    }
   })
   res.on('close', () => {
     if (entry.status === undefined) { entry.status = 'CLOSED_BEFORE_FINISH'; entry.ms = Date.now() - started }
   })
   MCP_RECENT.push(entry)
   if (MCP_RECENT.length > 200) MCP_RECENT.shift()
+  next()
+})
+
+// Body sniffer for /mcp POSTs: tee the request stream to extract the JSON-RPC
+// method + tool name into the newest MCP_RECENT entry without consuming the
+// stream the MCP transport needs.
+app.use('/mcp', (req, _res, next) => {
+  if (req.method !== 'POST') return next()
+  const entry = MCP_RECENT[MCP_RECENT.length - 1]
+  let buf = ''
+  req.on('data', (c: Buffer) => { if (buf.length < 2000) buf += c.toString('utf8') })
+  req.on('end', () => {
+    try {
+      const j = JSON.parse(buf)
+      const first = Array.isArray(j) ? j[0] : j
+      entry.rpc = first?.method || null
+      if (first?.params?.name) entry.tool = first.params.name
+    } catch { entry.rpc = 'unparsed' }
+  })
   next()
 })
 
