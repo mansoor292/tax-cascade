@@ -8,7 +8,6 @@
  *   4. POST /:id/extract — run Textract
  */
 import { Router,  } from 'express'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { v4 as uuidv4 } from 'uuid'
 import { s3PresignPut, s3PresignGet, s3PresignGetMany, s3PutObject, s3GetObject } from '../lib/s3.js'
 import { encryptedFields, hydrate, hydrateAll, ENCRYPTED_DOC_FIELDS, DOC_ENC_COLS } from '../lib/row_crypto.js'
@@ -16,6 +15,7 @@ import { sendError, sendDbError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 import {
   archiveDocumentAsReturn, extractAndArchive, reextractDocument,
+  classifyTaxDocument, CLASSIFIABLE_EXTENSIONS,
 } from '../services/document_extraction.js'
 import { dispatchExtraction } from '../lib/extraction_dispatch.js'
 
@@ -365,32 +365,17 @@ router.post('/:id/categorize', async (req, res) => {
   if (!GEMINI_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' })
 
   const ext = doc.file_type || doc.filename?.split('.').pop()?.toLowerCase() || ''
-  if (!['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
+  if (!CLASSIFIABLE_EXTENSIONS.includes(ext)) {
     return res.status(400).json({ error: 'Only PDF and image files can be categorized' })
   }
 
   try {
+    // Same prompt and call as ingest — classifyTaxDocument. This route used
+    // to carry its own inline copy, which drifted: it never learned
+    // prior_return_1065 (or the specific 1099 variants), so re-categorizing
+    // an already-uploaded 1065 kept answering "other".
     const base64 = (await s3GetObject(doc.s3_path)).toString('base64')
-
-    const genAI = new GoogleGenerativeAI(GEMINI_KEY)
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
-    const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`
-
-    const result = await model.generateContent([
-      { inlineData: { data: base64, mimeType } },
-      { text: `Analyze this tax document. Respond ONLY with valid JSON (no markdown):
-{
-  "doc_type": one of "w2" | "1099" | "k1" | "prior_return_1040" | "prior_return_1120" | "prior_return_1120s" | "bank_statement" | "invoice" | "receipt" | "tax_transcript" | "other",
-  "tax_year": integer or null,
-  "entity_name": string or "",
-  "ein_or_ssn": string or "",
-  "summary": one-line description,
-  "key_values": { up to 10 key financial values }
-}` }
-    ])
-
-    const text = result.response.text().trim().replace(/^```json?\s*/i, '').replace(/\s*```$/i, '')
-    const classification = JSON.parse(text)
+    const classification = await classifyTaxDocument(base64, ext)
 
     const newMeta = {
       ...doc.meta,

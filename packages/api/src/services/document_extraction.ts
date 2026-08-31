@@ -144,30 +144,19 @@ export async function archiveDocumentAsReturn(
 }
 
 
-/** Everything that used to happen inline on ingest. Updates the row it is given. */
-export async function extractAndArchive(args: {
-  docId: string; userId: string; s3_key: string; filename: string
-  file_size?: number; ext: string; entity_id: string | null
-  content_hash?: string; _deduped_textract?: any
-}): Promise<any> {
-  const { docId, userId, s3_key, filename, file_size, ext, entity_id, content_hash, _deduped_textract } = args
-  try {
+/**
+ * THE document-classification prompt and call — one copy.
+ *
+ * It used to exist twice: here (ingest) and inline in POST /:id/categorize.
+ * The copies drifted: when 1065 support landed, only this one gained
+ * prior_return_1065 (and the specific 1099 variants), so re-categorizing an
+ * already-uploaded 1065 kept answering "other" — found when a partnership
+ * return uploaded the day BEFORE 1065 support could not be re-read into a
+ * 1065 afterwards. The route now calls this function.
+ */
+export const CLASSIFIABLE_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg']
 
-  // Categorize with Gemini
-  let classification: any = { doc_type: 'other' }
-
-  if (GEMINI_KEY && ['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
-    try {
-      // Download from S3 for Gemini
-      const base64 = (await s3GetObject(s3_key)).toString('base64')
-
-      const genAI = new GoogleGenerativeAI(GEMINI_KEY)
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
-      const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`
-
-      const result = await model.generateContent([
-        { inlineData: { data: base64, mimeType } },
-        { text: `Analyze this tax document. Respond ONLY with valid JSON (no markdown):
+export const CLASSIFICATION_PROMPT = `Analyze this tax document. Respond ONLY with valid JSON (no markdown):
 {
   "doc_type": one of
     "w2" | "1099_int" | "1099_div" | "1099_b" | "1099_r" | "1099_misc" | "1099_nec" | "1099_k" | "1099_g" | "1099_sa" | "1099_oid" | "1099"
@@ -191,11 +180,36 @@ export async function extractAndArchive(args: {
 }
 
 Use the specific 1099 variant (1099_int, 1099_div, etc.) when identifiable.
-Fall back to "1099" only if the variant is unclear.` }
-      ])
+Fall back to "1099" only if the variant is unclear.`
 
-      const text = result.response.text().trim().replace(/^```json?\s*/i, '').replace(/\s*```$/i, '')
-      classification = JSON.parse(text)
+export async function classifyTaxDocument(base64: string, ext: string): Promise<any> {
+  const genAI = new GoogleGenerativeAI(GEMINI_KEY)
+  const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
+  const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`
+  const result = await model.generateContent([
+    { inlineData: { data: base64, mimeType } },
+    { text: CLASSIFICATION_PROMPT },
+  ])
+  const text = result.response.text().trim().replace(/^```json?\s*/i, '').replace(/\s*```$/i, '')
+  return JSON.parse(text)
+}
+
+/** Everything that used to happen inline on ingest. Updates the row it is given. */
+export async function extractAndArchive(args: {
+  docId: string; userId: string; s3_key: string; filename: string
+  file_size?: number; ext: string; entity_id: string | null
+  content_hash?: string; _deduped_textract?: any
+}): Promise<any> {
+  const { docId, userId, s3_key, filename, file_size, ext, entity_id, content_hash, _deduped_textract } = args
+  try {
+
+  // Categorize with Gemini
+  let classification: any = { doc_type: 'other' }
+
+  if (GEMINI_KEY && CLASSIFIABLE_EXTENSIONS.includes(ext)) {
+    try {
+      const base64 = (await s3GetObject(s3_key)).toString('base64')
+      classification = await classifyTaxDocument(base64, ext)
     } catch (e: any) {
       console.error('Gemini classification failed:', e.message)
     }
