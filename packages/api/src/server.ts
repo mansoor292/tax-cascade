@@ -152,6 +152,40 @@ app.use(express.static('public'))
 // JSON in packages/web/public/.well-known is THE discovery metadata.
 // tax-mcp.ts's WWW-Authenticate challenge already points clients there.
 // Direct callers of this EC2 origin's /oauth/* (none known) get 404s.
+// ─── /mcp request visibility ─────────────────────────────────────────
+// The EC2 box has no shell access and pm2 logs are unreachable, so when a
+// remote MCP client (the Claude connector) reports 502s that no direct
+// probe can reproduce, there is no way to tell whether its requests even
+// reach this process. This ring buffer records a redacted summary of the
+// last 200 /mcp requests — timestamp, method, client identity headers,
+// response status, duration. NO auth tokens, NO bodies. Read it via
+// GET /api/mcp-recent (behind the normal /api auth gate).
+const MCP_RECENT: Array<Record<string, unknown>> = []
+app.use('/mcp', (req, res, next) => {
+  const started = Date.now()
+  const entry: Record<string, unknown> = {
+    ts: new Date().toISOString(),
+    method: req.method,
+    ua: String(req.headers['user-agent'] || '').slice(0, 80),
+    proto_ver: req.headers['mcp-protocol-version'] || null,
+    session: req.headers['mcp-session-id'] ? 'present' : null,
+    auth: req.headers.authorization
+      ? String(req.headers.authorization).replace('Bearer ', '').slice(0, 8) + '…'
+      : 'none',
+    ip: String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0],
+  }
+  res.on('finish', () => {
+    entry.status = res.statusCode
+    entry.ms = Date.now() - started
+  })
+  res.on('close', () => {
+    if (entry.status === undefined) { entry.status = 'CLOSED_BEFORE_FINISH'; entry.ms = Date.now() - started }
+  })
+  MCP_RECENT.push(entry)
+  if (MCP_RECENT.length > 200) MCP_RECENT.shift()
+  next()
+})
+
 mountMCP(app)
 
 // ─── Auth routes (public — no API key needed) ───
@@ -251,6 +285,12 @@ const BUILD_COMMIT = (() => {
     return 'unknown'
   }
 })()
+
+// NOTE: per-worker buffer (pm2 cluster) — call repeatedly to sample both
+// workers. Auth: any /api credential (static key included).
+app.get('/api/mcp-recent', (_req, res) => {
+  res.json({ pid: process.pid, recent: MCP_RECENT.slice(-100) })
+})
 
 app.get('/api/health', (_req, res) => {
   // commit and pid are here because a half-deployed fleet is otherwise
