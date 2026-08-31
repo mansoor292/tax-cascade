@@ -188,7 +188,11 @@ function createServer(apiKey: string): McpServer {
     if (!resp?.entities) return text(resp)
     return text({
       entities: resp.entities.map((e: any) => {
-        const { _ein_enc, _ein_hash, _user_id, meta, ...rest } = e
+        // Rename syntax matters: `{ ein_enc: _x }` extracts the real key.
+        // The `{ _ein_enc }` spelling a lint sweep introduced extracted a
+        // nonexistent key and LEAKED ein_enc ciphertext, ein_hash and
+        // user_id to every MCP client.
+        const { ein_enc: _ee, ein_hash: _eh, user_id: _uid, meta, ...rest } = e
         const { sched_k, ...metaRest } = meta || {}
         return {
           ...rest,

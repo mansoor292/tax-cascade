@@ -448,8 +448,15 @@ router.get('/', async (req, res) => {
 
     // Replace the Textract blob with the three counts the UI actually renders,
     // and drop the ciphertext columns — they're never read client-side.
+    //
+    // NOTE the rename syntax: `{ textract_data: _td }` extracts the REAL key
+    // into a lint-quiet binding. A lint sweep once rewrote these to
+    // `{ _textract_data }` — which extracts a key named "_textract_data"
+    // (nonexistent) and strips NOTHING. Every list response then carried the
+    // full Textract blobs again: 1.1 MB for 7 documents, and the MCP
+    // connector's gateway answered 502 on the oversized tool result.
     const t = d.textract_data
-    const { _textract_data, _textract_data_enc, _meta_enc, ...rest } = base
+    const { textract_data: _td, textract_data_enc: _tde, meta_enc: _me, ...rest } = base
     return {
       ...rest,
       textract_summary: t

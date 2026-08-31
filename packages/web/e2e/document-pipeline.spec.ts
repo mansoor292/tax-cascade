@@ -89,6 +89,26 @@ test.describe('document pipeline @spend', () => {
     expect(c.doc_type, 're-reading the same document must not answer "other"').toBe('prior_return_1065')
   })
 
+  test('the document list strips Textract blobs and ciphertext (MCP-size contract)', async ({ request, baseURL }) => {
+    // list_documents through the Claude connector 502'd when this strip
+    // silently regressed (a lint sweep rewrote `{ textract_data: _td }` into
+    // `{ _textract_data }`, which strips a nonexistent key): 1.1 MB for 7
+    // documents instead of ~30 KB, and the connector gateway refused the
+    // oversized tool result. The contract: summaries in, blobs and
+    // ciphertext out, unless ?full=1 is asked for.
+    expect(docId, 'depends on the ingest test').toBeTruthy()
+    const res = await request.get(`${baseURL}/api/documents`, { headers: authed(token) })
+    expect(res.status()).toBe(200)
+    const body = await res.text()
+    const docs = JSON.parse(body).documents
+    const mine = docs.find((d: any) => d.id === docId)
+    expect(mine.textract_summary, 'the summary must replace the blob').toBeTruthy()
+    expect(mine.textract_summary.kv_count).toBeGreaterThan(0)
+    expect(body, 'no raw Textract payloads in the list').not.toContain('"textract_data"')
+    expect(body, 'no ciphertext columns in the list').not.toContain('_enc"')
+    expect(body.length, 'a stripped list stays connector-sized').toBeLessThan(200_000)
+  })
+
   test('rearchive from stored extraction succeeds without new AWS spend', async ({ request, baseURL }) => {
     expect(docId, 'depends on the ingest test').toBeTruthy()
     const res = await request.post(`${baseURL}/api/documents/${docId}/rearchive`, {
