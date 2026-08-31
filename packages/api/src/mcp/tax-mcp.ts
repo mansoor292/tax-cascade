@@ -932,6 +932,15 @@ export function mountMCP(app: Express) {
     if (typeof hdrVer === 'string' && !SUPPORTED_PROTOCOL_VERSIONS.includes(hdrVer)) {
       console.warn(`[mcp] downgrading unknown protocol version ${hdrVer} -> ${LATEST_PROTOCOL_VERSION}`)
       req.headers['mcp-protocol-version'] = LATEST_PROTOCOL_VERSION
+      // SDK 1.30's Node wrapper converts to a web Request via Hono's
+      // getRequestListener, which builds headers from rawHeaders — so the
+      // parsed-headers rewrite above is invisible to it. Rewrite the raw
+      // pair too ([k, v, k, v, ...], case-insensitive keys).
+      for (let i = 0; i < req.rawHeaders.length - 1; i += 2) {
+        if (req.rawHeaders[i].toLowerCase() === 'mcp-protocol-version') {
+          req.rawHeaders[i + 1] = LATEST_PROTOCOL_VERSION
+        }
+      }
     }
 
     const apiKey = extractApiKey(req)
