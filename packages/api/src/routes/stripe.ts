@@ -62,6 +62,18 @@ async function stripeFetch(
 
 const router = Router()
 
+// Ownership gate for every :entity_id route — same hole, same fix as qbo.ts:
+// connection status and Stripe data were readable by any authenticated user
+// who knew an entity UUID. Found by the cross-tenant e2e matrix.
+router.param('entity_id', async (req, res, next, entityId) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+  const { data } = await supabase.from('tax_entity')
+    .select('id').eq('id', entityId).eq('user_id', userId).single()
+  if (!data) return res.status(404).json({ error: 'Entity not found' })
+  next()
+})
+
 // ─── Connect Stripe ───
 router.post('/:entity_id/connect', async (req, res) => {
   const userId = await getUser(req)

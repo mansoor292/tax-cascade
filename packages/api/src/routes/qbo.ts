@@ -188,6 +188,23 @@ async function qboPost(entityId: string, path: string, body: any, query?: Record
 
 const router = Router()
 
+// Ownership gate for EVERY route with an :entity_id param. Before this,
+// qboFetch(entityId) went straight to the entity's stored tokens with no
+// check that the caller owns the entity — any authenticated user who knew
+// (or guessed) an entity UUID could pull another tenant's connection status,
+// reports, and transactions. Found by the cross-tenant e2e matrix.
+// /callback is unaffected (no :entity_id param); /connect keeps its own
+// check, which is now redundant but harmless.
+router.param('entity_id', async (req, res, next, entityId) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+  const { data } = await supabase.from('tax_entity')
+    .select('id').eq('id', entityId).eq('user_id', userId).single()
+  // 404, not 403: confirming the entity exists is itself a leak.
+  if (!data) return res.status(404).json({ error: 'Entity not found' })
+  next()
+})
+
 // ─── OAuth: Start connection ───
 router.get('/connect/:entity_id', async (req, res) => {
   const userId = await getUser(req)

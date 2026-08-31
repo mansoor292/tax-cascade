@@ -131,6 +131,14 @@ router.put('/:id', async (req, res) => {
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
   const { name, form_type, ein, address, city, state, zip, date_incorporated, meta, meta_merge, legal_form } = req.body
+
+  // Ownership first. Without this, updating an entity you don't own reached
+  // .single() on a zero-row update, which surfaced as a 500 carrying
+  // PostgREST internals ("Cannot coerce the result to a single JSON object")
+  // instead of a 404. Found by the cross-tenant e2e matrix.
+  const { data: owned } = await supabase.from('tax_entity')
+    .select('id').eq('id', req.params.id).eq('user_id', userId).single()
+  if (!owned) return res.status(404).json({ error: 'Entity not found' })
   const updates: any = {}
   if (name !== undefined) updates.name = name
   if (form_type !== undefined) {

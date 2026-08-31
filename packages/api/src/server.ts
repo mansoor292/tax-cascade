@@ -275,6 +275,12 @@ app.get('/api/forms', (_req, res) => {
 // ─── Compute 1120 ───
 app.post('/api/compute/1120', (req, res) => {
   try {
+    // The engine only carries tables for the supported range. A year outside
+    // it must be refused: the C-corp flat rate is year-independent, so an
+    // unsupported year used to "compute" plausibly instead of failing.
+    if (req.body?.tax_year && !TAX_TABLES[req.body.tax_year]) {
+      return res.status(400).json({ success: false, error: `No tax tables for year ${req.body.tax_year}` })
+    }
     const result = calc1120(req.body)
     res.json({ success: true, result })
   } catch (e: any) {
@@ -285,6 +291,12 @@ app.post('/api/compute/1120', (req, res) => {
 // ─── Compute 1120-S ───
 app.post('/api/compute/1120s', (req, res) => {
   try {
+    // The engine only carries tables for the supported range. A year outside
+    // it must be refused: the C-corp flat rate is year-independent, so an
+    // unsupported year used to "compute" plausibly instead of failing.
+    if (req.body?.tax_year && !TAX_TABLES[req.body.tax_year]) {
+      return res.status(400).json({ success: false, error: `No tax tables for year ${req.body.tax_year}` })
+    }
     const result = calc1120S(req.body)
     res.json({ success: true, result })
   } catch (e: any) {
@@ -295,6 +307,12 @@ app.post('/api/compute/1120s', (req, res) => {
 // ─── Compute 1040 ───
 app.post('/api/compute/1040', (req, res) => {
   try {
+    // The engine only carries tables for the supported range. A year outside
+    // it must be refused: the C-corp flat rate is year-independent, so an
+    // unsupported year used to "compute" plausibly instead of failing.
+    if (req.body?.tax_year && !TAX_TABLES[req.body.tax_year]) {
+      return res.status(400).json({ success: false, error: `No tax tables for year ${req.body.tax_year}` })
+    }
     const result = calc1040(req.body)
     res.json({ success: true, result })
   } catch (e: any) {
@@ -306,6 +324,15 @@ app.post('/api/compute/1040', (req, res) => {
 app.post('/api/compute/cascade', (req, res) => {
   try {
     const { s_corp_inputs, individual_base } = req.body
+    // Validate the two halves before the engine dereferences them — a flat
+    // body (the shape an LLM plausibly sends) used to surface as
+    // "Cannot read properties of undefined (reading 'is_sstb')".
+    if (!s_corp_inputs || typeof s_corp_inputs !== 'object' || !individual_base || typeof individual_base !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'cascade requires { s_corp_inputs: {...}, individual_base: {...} } — two objects, not a flat body',
+      })
+    }
     const result = calcCascade(s_corp_inputs, individual_base)
     res.json({ success: true, result })
   } catch (e: any) {

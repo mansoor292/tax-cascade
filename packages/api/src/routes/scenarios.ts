@@ -369,7 +369,13 @@ router.post('/:id/promote', async (req, res) => {
   const scRaw = { input_data: scenario.adjustments, computed_data: scenario.computed_result }
   const scEnc = await encryptedFields(supabase, userId, scRaw, ENCRYPTED_RETURN_FIELDS)
   const c = scenario.computed_result?.computed || {}
-  const { data: taxReturn, error } = await supabase.from('tax_return').upsert({
+  // Find-or-insert by hand. This was an upsert with
+  // onConflict 'entity_id,tax_year,form_type,is_amended' — but tax_return has
+  // no unique constraint on those columns, so PostgREST rejected EVERY
+  // promote with "no unique or exclusion constraint matching the ON CONFLICT
+  // specification" as a 500. Found by the scenarios-lifecycle e2e; promote
+  // had been broken outright.
+  const row = {
     entity_id: scenario.entity_id,
     tax_year: scenario.tax_year,
     form_type: formType,
@@ -385,7 +391,15 @@ router.post('/:id/promote', async (req, res) => {
     agg_agi:            c.agi            ?? null,
     computed_at: new Date().toISOString(),
     pdf_s3_path: null,
-  }, { onConflict: 'entity_id,tax_year,form_type,is_amended' }).select().single()
+  }
+  const { data: existing } = await supabase.from('tax_return')
+    .select('id')
+    .eq('entity_id', scenario.entity_id).eq('tax_year', scenario.tax_year)
+    .eq('form_type', formType).eq('is_amended', false).eq('source', 'proforma')
+    .limit(1).maybeSingle()
+  const { data: taxReturn, error } = existing
+    ? await supabase.from('tax_return').update(row).eq('id', existing.id).select().single()
+    : await supabase.from('tax_return').insert(row).select().single()
 
   if (error) return sendDbError(res, error)
 
