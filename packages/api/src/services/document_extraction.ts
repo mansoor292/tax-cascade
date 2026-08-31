@@ -112,7 +112,7 @@ export async function archiveDocumentAsReturn(
         extracted_count: mapped.fields.length,
         unmapped_count: mapped.unmapped.length,
         gemini_gap_fill: gapFillReport,
-        source: 'filed_import',
+        source: isAmendment ? 'amendment' : 'filed_import',
       },
     }
     const archiveEnc = await encryptedFields(supabase, userId, archiveRaw, ENCRYPTED_RETURN_FIELDS)
@@ -151,7 +151,11 @@ export async function archiveDocumentAsReturn(
     return {
       id: taxReturn?.id,
       form_type: formType, tax_year: txYear,
-      source: 'filed_import',
+      // Echo what was actually written — this said 'filed_import'
+      // unconditionally, so a caller archiving a 1040-X was told the row was
+      // a plain filed import while the row itself was a linked amendment.
+      source: isAmendment ? 'amendment' : 'filed_import',
+      supersedes_id: supersedesId,
       totals: archive.totals,
       mapped_fields: mapped.fields.length,
       unmapped_count: mapped.unmapped.length,
