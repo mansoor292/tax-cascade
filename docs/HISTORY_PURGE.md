@@ -19,6 +19,12 @@ history is still cloneable, so treat the secrets as burned regardless.
    - Static API keys: remove `test-key-2026` and `txk_prod_edgewater_2026`
      from SSM `/tax-api/TAX_API_KEYS`; issue fresh keys via /auth/api-keys.
    - Audit `api_key` rows: `select * from api_key where user_id = '00000000-0000-0000-0000-000000000000'`.
+   - Also rotate `GEMINI_API_KEY`, `GITHUB_WEBHOOK_SECRET`,
+     `QUICKBOOKS_CLIENT_ID`/`QUICKBOOKS_CLIENT_SECRET` (all in SSM
+     `/tax-api/*`): their values were echoed into an AI-session transcript
+     on 2026-08-31 (transcripts sync to claude.ai), so treat them as burned
+     the same way as the git-history secrets. Not in git history — rotation
+     only, no purge entry needed.
 2. **Freeze pushes.** Merge/close every open PR; tell anyone with a clone
    that history is about to rewrite.
 3. **Purge** on a fresh mirror clone:
