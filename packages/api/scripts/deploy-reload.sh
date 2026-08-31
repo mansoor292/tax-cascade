@@ -46,15 +46,23 @@ echo "[reload] pm2 reload exited $?"
 # a stale worker is invisible from /api/health.
 if [ -n "${TAX_API_EXTRACTION_FUNCTION:-}" ]; then
   echo "[reload] rebuilding extraction worker bundle"
-  if bash scripts/build_worker.sh >/dev/null 2>&1 \
-     && aws lambda update-function-code \
-          --function-name "$TAX_API_EXTRACTION_FUNCTION" \
-          --zip-file fileb://dist-worker.zip >/dev/null 2>&1 \
-     && aws lambda wait function-updated --function-name "$TAX_API_EXTRACTION_FUNCTION"; then
+  WLOG="$(mktemp)"
+  if { bash scripts/build_worker.sh \
+       && aws lambda update-function-code \
+            --function-name "$TAX_API_EXTRACTION_FUNCTION" \
+            --zip-file fileb://dist-worker.zip \
+       && aws lambda wait function-updated --function-name "$TAX_API_EXTRACTION_FUNCTION"; } >"$WLOG" 2>&1; then
     echo "[reload] worker code updated"
+    printf 'OK %s %s\n' "$(date -u +%FT%TZ)" "$(git -C /opt/tax-api rev-parse --short HEAD)" >"$WLOG.status"
   else
     echo "[reload] WARNING: worker update FAILED — Lambda is running STALE code (API falls back in-process only on invoke errors, so ingests still run the old bundle)"
+    printf 'FAILED %s %s\n' "$(date -u +%FT%TZ)" "$(git -C /opt/tax-api rev-parse --short HEAD)" >"$WLOG.status"
   fi
+  # This box has no shell access, so the reload log is unreadable from the
+  # outside. Park the outcome (and the full output on failure) in S3, where
+  # an operator or agent CAN read it. Best-effort — never fails the deploy.
+  { cat "$WLOG.status" "$WLOG"; } 2>/dev/null | aws s3 cp - "s3://${S3_BUCKET:-tax-api-storage-2026}/deploy-logs/worker-update-latest.txt" >/dev/null 2>&1 || true
+  rm -f "$WLOG" "$WLOG.status"
 else
   echo "[reload] TAX_API_EXTRACTION_FUNCTION unset — no worker to update"
 fi
