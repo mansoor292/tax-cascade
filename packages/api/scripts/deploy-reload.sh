@@ -34,6 +34,31 @@ eval "$(./scripts/load-ssm-env.sh)" || echo "[reload] WARNING: SSM load failed"
 pm2 reload tax-api --update-env
 echo "[reload] pm2 reload exited $?"
 
+# ── Extraction worker ──────────────────────────────────────────────────
+# The Lambda runs the SAME code (services/document_extraction) as a second
+# entrypoint, but `git push` only used to redeploy the API — the worker kept
+# whatever bundle it was provisioned with. That skew shipped a prompt fix to
+# the API while prod ingests kept classifying with the old prompt in the
+# stale worker. So the deploy updates both, always.
+#
+# Failure here must not fail the API deploy — the dispatcher falls back to
+# in-process extraction (which IS the fresh code) — but it has to be loud:
+# a stale worker is invisible from /api/health.
+if [ -n "${TAX_API_EXTRACTION_FUNCTION:-}" ]; then
+  echo "[reload] rebuilding extraction worker bundle"
+  if bash scripts/build_worker.sh >/dev/null 2>&1 \
+     && aws lambda update-function-code \
+          --function-name "$TAX_API_EXTRACTION_FUNCTION" \
+          --zip-file fileb://dist-worker.zip >/dev/null 2>&1 \
+     && aws lambda wait function-updated --function-name "$TAX_API_EXTRACTION_FUNCTION"; then
+    echo "[reload] worker code updated"
+  else
+    echo "[reload] WARNING: worker update FAILED — Lambda is running STALE code (API falls back in-process only on invoke errors, so ingests still run the old bundle)"
+  fi
+else
+  echo "[reload] TAX_API_EXTRACTION_FUNCTION unset — no worker to update"
+fi
+
 # Confirm rather than assume: every worker must report the same commit.
 sleep 8
 EXPECTED="$(git -C /opt/tax-api rev-parse --short HEAD)"
