@@ -22,7 +22,7 @@
     "@aws-sdk/client-textract": "^3.1121.0",
     "@aws-sdk/s3-request-presigner": "^3.1121.0",
     "@google/generative-ai": "^0.24.1",
-    "@modelcontextprotocol/sdk": "^1.6.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@supabase/supabase-js": "^2.103.0",
     "@taxengine/shared": "*",
     "argon2": "^0.44.0",

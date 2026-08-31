@@ -197,3 +197,29 @@ test.describe('MCP discovery, as a real client performs it', () => {
     })
   })
 })
+
+/**
+ * Forward-compat: Anthropic's gateway stamps requests with the newest MCP
+ * protocol version IT speaks, which can outrun the newest published SDK.
+ * Seen live 2026-08-31: header 2026-07-28 -> SDK hard-400 -> the gateway
+ * told Claude the connector "failed to connect (502 Bad Gateway)", breaking
+ * every fresh connection while established sessions kept working. The
+ * server must negotiate down, not reject.
+ */
+test.describe('protocol version forward-compat', () => {
+  test('a future MCP-Protocol-Version header is negotiated down, not 400ed', async ({ request, baseURL }) => {
+    const res = await request.post(`${baseURL}/mcp`, {
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: 'Bearer txk_version_probe',
+        'MCP-Protocol-Version': '2099-01-01',
+      },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+    })
+    expect(res.status(), 'unknown future version must not be rejected').toBe(200)
+    const body = await res.text()
+    expect(body).toContain('list_documents')
+    expect(body).not.toContain('Unsupported protocol version')
+  })
+})

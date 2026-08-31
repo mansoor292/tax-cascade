@@ -6,6 +6,7 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { SUPPORTED_PROTOCOL_VERSIONS, LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import type { Express, Request, Response } from 'express'
 
@@ -915,6 +916,24 @@ Form-specific extras:
 // ─── Mount on Express (stateless — no sessions to lose on restart) ───
 export function mountMCP(app: Express) {
   app.post('/mcp', async (req: Request, res: Response) => {
+    // ── Protocol-version forward-compat shim ──────────────────────────
+    // Anthropic's connector gateway stamps follow-up requests with the
+    // NEWEST MCP protocol version it speaks (seen live: 2026-07-28), which
+    // can be newer than any published SDK. The SDK transport hard-400s an
+    // unknown MCP-Protocol-Version header, and the gateway surfaces that to
+    // Claude as "failed to connect (502)" — which broke every fresh
+    // connector connection while established sessions kept working.
+    //
+    // Per spec the server negotiates DOWN at initialize anyway, so treating
+    // an unknown header version as our newest supported one is the graceful
+    // reading. Pinned to the SDK's own list: the moment the SDK learns the
+    // new version, this becomes a no-op.
+    const hdrVer = req.headers['mcp-protocol-version']
+    if (typeof hdrVer === 'string' && !SUPPORTED_PROTOCOL_VERSIONS.includes(hdrVer)) {
+      console.warn(`[mcp] downgrading unknown protocol version ${hdrVer} -> ${LATEST_PROTOCOL_VERSION}`)
+      req.headers['mcp-protocol-version'] = LATEST_PROTOCOL_VERSION
+    }
+
     const apiKey = extractApiKey(req)
     if (!apiKey) {
       // RFC 9728: point the client at our protected-resource metadata so it
