@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
  */
 describe('document classification vocabulary', () => {
   it('the shared prompt knows every prior-return form the archiver handles', () => {
-    for (const t of ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065']) {
+    for (const t of ['prior_return_1040', 'prior_return_1040x', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065']) {
       expect(CLASSIFICATION_PROMPT, `prompt must list ${t}`).toContain(`"${t}"`)
     }
   })

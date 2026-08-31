@@ -236,7 +236,7 @@ router.post('/:id/rearchive', async (req, res) => {
   if (!doc) return res.status(404).json({ error: 'Not found' })
   await hydrate(supabase, doc, ENCRYPTED_DOC_FIELDS)
 
-  const isReturn = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065'].includes(doc.doc_type)
+  const isReturn = ['prior_return_1040', 'prior_return_1040x', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065'].includes(doc.doc_type)
   if (!isReturn) return res.status(400).json({ error: `doc_type ${doc.doc_type} is not a prior return` })
   if (!doc.textract_data?.kvs?.length) {
     return res.status(400).json({ error: 'Document has no textract data — run /extract first' })
@@ -524,7 +524,7 @@ router.post('/:id/extract', async (req, res) => {
   // Same TABLES gating as /ingest — only prior returns benefit; everything
   // else uses FORMS-only. /extract is also called manually for re-runs of
   // misclassified docs, so honor the doc_type that's now on the row.
-  const needsTables = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065']
+  const needsTables = ['prior_return_1040', 'prior_return_1040x', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065']
     .includes(doc.doc_type || '')
 
   // Same shape as /ingest: mark the row in flight, answer 202, finish in the

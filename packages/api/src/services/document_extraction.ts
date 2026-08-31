@@ -34,8 +34,14 @@ export async function archiveDocumentAsReturn(
 
     const formTypeMap: Record<string, string> = {
       prior_return_1040: '1040', prior_return_1120: '1120', prior_return_1120s: '1120S',
-      prior_return_1065: '1065',
+      prior_return_1065: '1065', prior_return_1040x: '1040',
     }
+    // A 1040-X is an amendment OF a 1040, not its own form family: it keeps
+    // form_type '1040' so year grouping and metrics line up, and is marked by
+    // source='amendment' + is_amended + supersedes_id instead. Before this,
+    // a 1040-X classified as a plain 1040 and archived as a DUPLICATE
+    // filed_import for the same year — two "filed" 2023 returns, no link.
+    const isAmendment = classification.doc_type === 'prior_return_1040x'
     // No silent default. Archiving an unrecognised return as an 1120 would
     // file a partnership's figures onto a C-corporation form — wrong in a way
     // nobody would notice until it mattered.
@@ -116,13 +122,26 @@ export async function archiveDocumentAsReturn(
       agg_total_tax:      archive.totals.total_tax      ?? null,
       agg_agi:            (archive.totals as any).agi   ?? null,
     }
+    // An amendment supersedes the originally filed return of the same
+    // entity/year/form, when one exists. Absent an original it still archives
+    // as an amendment — the link is best-effort, the labeling is not.
+    let supersedesId: string | null = null
+    if (isAmendment) {
+      const { data: original } = await supabase.from('tax_return')
+        .select('id').eq('entity_id', entityId).eq('tax_year', txYear)
+        .eq('form_type', formType).eq('source', 'filed_import').eq('is_amended', false)
+        .order('created_at', { ascending: true }).limit(1).maybeSingle()
+      supersedesId = original?.id || null
+    }
+
     const { data: taxReturn } = await supabase.from('tax_return').insert({
       entity_id: entityId,
       tax_year: txYear,
       form_type: formType,
       status: 'filed',
-      source: 'filed_import',
-      is_amended: false,
+      source: isAmendment ? 'amendment' : 'filed_import',
+      is_amended: isAmendment,
+      supersedes_id: supersedesId,
       ...archiveRaw,
       ...archiveEnc,
       ...archiveAggs,
@@ -160,7 +179,7 @@ export const CLASSIFICATION_PROMPT = `Analyze this tax document. Respond ONLY wi
 {
   "doc_type": one of
     "w2" | "1099_int" | "1099_div" | "1099_b" | "1099_r" | "1099_misc" | "1099_nec" | "1099_k" | "1099_g" | "1099_sa" | "1099_oid" | "1099"
-    | "k1" | "prior_return_1040" | "prior_return_1120" | "prior_return_1120s" | "prior_return_1065"
+    | "k1" | "prior_return_1040" | "prior_return_1040x" | "prior_return_1120" | "prior_return_1120s" | "prior_return_1065"
     | "bank_statement" | "invoice" | "receipt" | "tax_transcript" | "other",
   "tax_year": integer or null,
   "entity_name": string or "",
@@ -179,6 +198,8 @@ export const CLASSIFICATION_PROMPT = `Analyze this tax document. Respond ONLY wi
   }
 }
 
+A Form 1040-X (Amended U.S. Individual Income Tax Return) is "prior_return_1040x",
+NOT "prior_return_1040" — for its key_values use the CORRECTED amounts (column C).
 Use the specific 1099 variant (1099_int, 1099_div, etc.) when identifiable.
 Fall back to "1099" only if the variant is unclear.`
 
@@ -227,7 +248,7 @@ export async function extractAndArchive(args: {
     console.log(`[ingest] reused cached textract_data via content_hash for ${filename}`)
   }
   if (!textractData && ['pdf', 'png', 'jpg', 'jpeg'].includes(ext)) {
-    const needsTables = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065']
+    const needsTables = ['prior_return_1040', 'prior_return_1040x', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065']
       .includes(classification.doc_type || '')
     try {
       textractData = await analyzeDocument(s3_key, { tables: needsTables, maxWaitMs: 180000 })
@@ -267,7 +288,7 @@ export async function extractAndArchive(args: {
 
   // Auto-archive if it's a recognized prior-year return. Inserts a filed_import
   // tax_return row with every extracted canonical field in field_values, verbatim.
-  const isReturn = ['prior_return_1040', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065'].includes(classification.doc_type || '')
+  const isReturn = ['prior_return_1040', 'prior_return_1040x', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065'].includes(classification.doc_type || '')
   const processedReturn = isReturn && textractData?.kvs?.length && doc
     ? await archiveDocumentAsReturn(doc, classification, userId, entity_id || null, textractData)
     : null

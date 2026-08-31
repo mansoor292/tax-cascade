@@ -97,3 +97,66 @@ test.describe('document pipeline @spend', () => {
     expect(res.status(), await res.text()).toBe(200)
   })
 })
+
+/**
+ * The amendment flow @spend — pins the 1040-X bug: an amended return used to
+ * classify as a plain 1040 and archive as a DUPLICATE filed_import for the
+ * same year (two "filed" returns, no supersedes link, Amendment column stuck
+ * on "Create"). Reported on SOP 02 with a real 1040-X.
+ */
+test.describe('amendment pipeline @spend', () => {
+  test.describe.configure({ mode: 'serial', timeout: 420_000 })
+
+  const email = testEmail('amend')
+  let token = ''
+  let entityId = ''
+
+  test.beforeAll(async () => {
+    token = await signUpViaApi(email)
+    entityId = (await createEntityViaApi(token, {
+      name: 'E2E Amendment Sample', form_type: '1040',
+    })).id
+  })
+  test.afterAll(async ({ request, baseURL }) => {
+    if (entityId) await request.delete(`${baseURL}/api/entities/${entityId}`, { headers: authed(token) }).catch(() => {})
+    await deleteUserByEmail(email)
+  })
+
+  async function upload(request: any, baseURL: string, file: string): Promise<string> {
+    const pdf = readFileSync(join(__dirname, 'fixtures', file))
+    const presign = await request.get(`${baseURL}/api/documents/presign?filename=${file}`, { headers: authed(token) })
+    const { upload_url, s3_key, content_type } = await presign.json()
+    const put = await request.put(upload_url, { data: pdf, headers: { 'Content-Type': content_type } })
+    expect(put.status()).toBe(200)
+    const ingest = await request.post(`${baseURL}/api/documents/ingest`, {
+      headers: authed(token), data: { s3_key, filename: file, entity_id: entityId },
+    })
+    expect(ingest.status(), await ingest.text()).toBe(202)
+    return (await ingest.json()).document.id
+  }
+
+  test('the original 1040 archives as a filed import', async ({ request, baseURL }) => {
+    const docId = await upload(request, baseURL as string, 'sample-1040-2023.pdf')
+    const doc = await pollDocumentUntilDone(token, docId)
+    expect(doc.doc_type).toBe('prior_return_1040')
+    expect(doc.tax_year).toBe(2023)
+  })
+
+  test('the 1040-X classifies as an amendment and links to the original', async ({ request, baseURL }) => {
+    const docId = await upload(request, baseURL as string, 'sample-1040x-2023.pdf')
+    const doc = await pollDocumentUntilDone(token, docId)
+    expect(doc.doc_type, 'a 1040-X must not classify as a plain 1040').toBe('prior_return_1040x')
+    expect(doc.tax_year).toBe(2023)
+
+    const list = await request.get(`${baseURL}/api/returns`, { headers: authed(token) })
+    const rows: any[] = (await list.json()).returns || []
+    const y2023 = rows.filter(r => r.tax_year === 2023 && r.form_type === '1040')
+    const filed = y2023.filter(r => r.source === 'filed_import')
+    const amendments = y2023.filter(r => r.source === 'amendment')
+
+    expect(filed, 'exactly ONE originally-filed 2023 return — no duplicate').toHaveLength(1)
+    expect(amendments, 'the 1040-X must archive as an amendment').toHaveLength(1)
+    expect(amendments[0].is_amended).toBe(true)
+    expect(amendments[0].supersedes_id, 'the amendment must supersede the original').toBe(filed[0].id)
+  })
+})
