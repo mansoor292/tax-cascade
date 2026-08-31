@@ -30,3 +30,29 @@ describe('sectionOf / sortKey', () => {
     expect([...keys].sort(sortKey)).toEqual(['income.L1', 'income.L2', 'schedL.L1', 'mystery.L9'])
   })
 })
+
+import { diffLine } from './helpers'
+
+/**
+ * Pins the false-amendment bug: a 1040-X restates only totals and changed
+ * lines, so a line absent from the amendment means "not restated" — it must
+ * never render as a change to zero. Reported with $259,008 of W-2 wages the
+ * amendment never mentioned showing as a -$259,008 "change".
+ */
+describe('diffLine — absent from the amendment is not a change to zero', () => {
+  it('filed value with no amendment value → not restated, no delta', () => {
+    expect(diffLine(259_008, undefined)).toEqual({ delta: null, notRestated: true })
+  })
+
+  it('a line the amendment states that the original lacked IS a change', () => {
+    expect(diffLine(undefined, 5_000)).toEqual({ delta: 5_000, notRestated: false })
+  })
+
+  it('an explicit zero on the amendment IS a change to zero', () => {
+    expect(diffLine(10_000, 0)).toEqual({ delta: -10_000, notRestated: false })
+  })
+
+  it('both stated → plain delta', () => {
+    expect(diffLine(250_110, 252_110)).toEqual({ delta: 2_000, notRestated: false })
+  })
+})

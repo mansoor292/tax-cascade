@@ -17,7 +17,7 @@ import {
 import { fmtMoney, fmtDelta as fmtDeltaBase } from '@/lib/format'
 import { SECTION_ORDER, SECTION_LABELS } from '@taxengine/shared'
 import type { TaxReturn } from '@taxengine/shared'
-import { collectValues, humanize, sectionOf, sortKey } from './helpers'
+import { collectValues, diffLine, humanize, sectionOf, sortKey } from './helpers'
 
 const fmt = (n: unknown) => (typeof n === 'number' ? fmtMoney(n, '—') : '—')
 const fmtDelta = (n: number) => fmtDeltaBase(n, '±$0')
@@ -52,18 +52,16 @@ export default function LineByLineMatrix({ filedId, amendId, year }: { filedId: 
     const keys = new Set([...Object.keys(filedVals), ...Object.keys(amendVals)])
     const sorted = Array.from(keys).sort(sortKey)
 
-    const bySection = new Map<string, Array<{ key: string; fv?: number; av?: number; delta: number }>>()
+    const bySection = new Map<string, Array<{ key: string; fv?: number; av?: number; delta: number | null; notRestated: boolean }>>()
     for (const k of sorted) {
       const fv = filedVals[k]
       const av = amendVals[k]
-      const fvN = typeof fv === 'number' ? fv : 0
-      const avN = typeof av === 'number' ? av : 0
-      const delta = avN - fvN
+      const { delta, notRestated } = diffLine(fv, av)
       // Skip if both sides are zero/undefined AND showZeros is off.
-      if (!showZeros && fvN === 0 && avN === 0) continue
+      if (!showZeros && (fv ?? 0) === 0 && (av ?? 0) === 0) continue
       const sect = sectionOf(k)
       if (!bySection.has(sect)) bySection.set(sect, [])
-      bySection.get(sect)!.push({ key: k, fv, av, delta })
+      bySection.get(sect)!.push({ key: k, fv, av, delta, notRestated })
     }
     return Array.from(bySection.entries())
       .sort(([a], [b]) => {
@@ -103,6 +101,12 @@ export default function LineByLineMatrix({ filedId, amendId, year }: { filedId: 
           Show zero-valued lines
         </label>
       </div>
+      <div>
+        <p className="text-xs text-muted-foreground italic">
+          Lines the amendment does not restate are shown as "not restated" — an
+          amended form reports totals and changes, not the whole return.
+        </p>
+      </div>
       <div className="border rounded-md overflow-hidden bg-background">
         <Table>
           <TableHeader>
@@ -121,16 +125,20 @@ export default function LineByLineMatrix({ filedId, amendId, year }: { filedId: 
                     {SECTION_LABELS[section] || section}
                   </TableCell>
                 </TableRow>
-                {rows.map(({ key, fv, av, delta }) => (
-                  <TableRow key={key}>
+                {rows.map(({ key, fv, av, delta, notRestated }) => (
+                  <TableRow key={key} className={notRestated ? 'opacity-60' : undefined}>
                     <TableCell className="py-1">
                       <div className="text-sm">{humanize(key)}</div>
                       <code className="text-xs text-muted-foreground">{key}</code>
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm py-1">{fmt(fv)}</TableCell>
-                    <TableCell className="text-right font-mono text-sm py-1">{fmt(av)}</TableCell>
                     <TableCell className="text-right font-mono text-sm py-1">
-                      {delta === 0 ? <span className="text-muted-foreground">—</span> : (
+                      {notRestated ? <span className="text-muted-foreground italic">not restated</span> : fmt(av)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm py-1">
+                      {notRestated || delta === null ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : delta === 0 ? <span className="text-muted-foreground">—</span> : (
                         <span className={delta < 0 ? 'text-emerald-400' : 'text-red-400'}>
                           {fmtDelta(delta)}
                         </span>

@@ -42,3 +42,26 @@ export function sortKey(a: string, b: string): number {
   if (idxA !== idxB) return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB)
   return a.localeCompare(b)
 }
+
+/**
+ * One comparison line, filed vs amendment.
+ *
+ * The rule this encodes, from a real report: a 1040-X deliberately restates
+ * only totals and changed lines — it is an abbreviated form, not a re-filing
+ * of the whole return. A line ABSENT from the amendment therefore means
+ * "not restated", and must never render as a change to zero. Before this,
+ * $259k of W-2 wages the amendment simply didn't mention showed as a
+ * -$259,008 "change" — a false amendment a reader could act on.
+ *
+ * Absent on the FILED side is different: a line the amendment states that
+ * the original lacked is a genuine change from nothing, and keeps its delta.
+ */
+export function diffLine(fv: number | undefined, av: number | undefined): {
+  delta: number | null
+  notRestated: boolean
+} {
+  if (av === undefined && fv !== undefined) return { delta: null, notRestated: true }
+  const fvN = fv ?? 0
+  const avN = av ?? 0
+  return { delta: avN - fvN, notRestated: false }
+}

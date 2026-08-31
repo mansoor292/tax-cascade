@@ -3,7 +3,7 @@ import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import {
-  testEmail, deleteUserByEmail, signUpViaApi, authed, createEntityViaApi, pollDocumentUntilDone,
+  testEmail, deleteUserByEmail, signUpViaApi, signInThroughUi, authed, createEntityViaApi, pollDocumentUntilDone,
 } from './helpers'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -158,5 +158,19 @@ test.describe('amendment pipeline @spend', () => {
     expect(amendments, 'the 1040-X must archive as an amendment').toHaveLength(1)
     expect(amendments[0].is_amended).toBe(true)
     expect(amendments[0].supersedes_id, 'the amendment must supersede the original').toBe(filed[0].id)
+  })
+
+  test('Compare vs Filed shows unrestated lines as "not restated", not changes to zero', async ({ page }) => {
+    // The 1040-X fixture restates AGI/taxable/total tax but NOT wages. The
+    // filed return's wages must not appear as a -$50,000 "change" — that is
+    // the false-amendment bug reported on a real 1040-X ($259k of W-2 wages
+    // shown as removed).
+    await signInThroughUi(page, email)
+    await expect(page).toHaveURL(/\/app/, { timeout: 20_000 })
+    await page.goto(`/app/compare/${entityId}?year=2023`)
+
+    await expect(page.getByText(/not restated/i).first(), 'unrestated lines must be labeled').toBeVisible({ timeout: 30_000 })
+    const body = await page.locator('table').first().innerText()
+    expect(body, 'no fabricated -$50,000 wages change').not.toMatch(/-\$50,000/)
   })
 })
