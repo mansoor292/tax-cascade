@@ -32,11 +32,21 @@ lint/gitignore/Playwright repairs, web format/label dedup, scenario-PDF fix.
 
 - [ ] Run `docs/HISTORY_PURGE.md`: rotate the anon key + static API keys,
       then git-filter-repo + force-push (SSN/EINs/keys live in history).
-- [ ] Set `VITE_SUPABASE_ANON_KEY` in the Netlify dashboard BEFORE the next
-      web deploy (removed from netlify.toml; the app now fails loudly
-      without it).
-- [ ] Set `OAUTH_CODE_SECRET` confirmed present in Netlify (the Express
-      OAuth fallback no longer exists).
+- [x] ~~Set `VITE_SUPABASE_ANON_KEY` in Netlify BEFORE the next web
+      deploy.~~ Done 2026-08-31 — but the "BEFORE" was already missed: the
+      pushes to main after the cleanup merge each triggered a Netlify
+      rebuild, and from ~2026-08-29 evening the deployed bundle carried no
+      key and threw at module load. Every page was blank for about two days;
+      the API kept passing its checks throughout, which is why nothing
+      noticed. Caught by finally running the Playwright e2e suite against
+      prod (12 UI tests failed, all one cause). Var set, site rebuilt,
+      79/79 e2e green against fin.catipult.ai.
+- [x] `OAUTH_CODE_SECRET` was NOT present in Netlify — nor were
+      `SUPABASE_URL` / `SUPABASE_ANON_KEY`, which the OAuth functions also
+      read at runtime; the site had only the two VITE_ build vars. All set
+      2026-08-31. The secret is freshly generated (it only signs the
+      short-lived authorize->token codes, so no standing state was
+      invalidated).
 - [x] **`SUPABASE_ANON_KEY` set for the API** (2026-08-29). Removing the
       hardcoded anon literals left the API with no source for it — it was in
       neither SSM nor `.env.production` — so `/auth/*` and JWT auth on
