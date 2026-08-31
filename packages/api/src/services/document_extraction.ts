@@ -207,10 +207,17 @@ export async function classifyTaxDocument(base64: string, ext: string): Promise<
   const genAI = new GoogleGenerativeAI(GEMINI_KEY)
   const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' })
   const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`
-  const result = await model.generateContent([
-    { inlineData: { data: base64, mimeType } },
-    { text: CLASSIFICATION_PROMPT },
-  ])
+  // temperature 0: classification is a deterministic judgment, and at the
+  // default temperature the same document sampled different doc_types run to
+  // run — a 1040-X answered prior_return_1040x on one call and "other" on
+  // the next. responseMimeType pins the output to bare JSON.
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: [
+      { inlineData: { data: base64, mimeType } },
+      { text: CLASSIFICATION_PROMPT },
+    ] }],
+    generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+  })
   const text = result.response.text().trim().replace(/^```json?\s*/i, '').replace(/\s*```$/i, '')
   return JSON.parse(text)
 }
