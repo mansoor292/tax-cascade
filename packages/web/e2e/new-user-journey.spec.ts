@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { signUpThroughUi, testEmail, deleteUserByEmail, TEST_PASSWORD } from './helpers'
+import { signUpThroughUi, signInViaApi, testEmail, deleteUserByEmail, TEST_PASSWORD, authed } from './helpers'
 
 /**
  * The complete path a new person walks on SOP 01 — in ONE session, in order,
@@ -105,5 +105,39 @@ test.describe('full new-user journey', () => {
 
     await page.goto('/app/settings')
     await expect(page.getByText('Claude Cowork')).toBeVisible({ timeout: 20_000 })
+  })
+
+  test('a computed return shows up on the entity, in the browser', async ({ page, request, baseURL }) => {
+    // The journey so far stops at "entity exists". The product's point is
+    // computing a return and SEEING it — so compute one through the API (the
+    // same call the Compute page makes) and verify the entity detail screen
+    // actually renders it.
+    const token = await signInViaApi(email)
+    const list = await request.get(`${baseURL}/api/entities`, { headers: authed(token) })
+    const entity = (await list.json()).entities.find((e: any) => e.name === ENTITY)
+    expect(entity, 'the entity from the journey must be listed').toBeTruthy()
+
+    const computed = await request.post(`${baseURL}/api/returns/compute`, {
+      headers: authed(token),
+      data: {
+        entity_id: entity.id, tax_year: 2025, form_type: entity.form_type || '1040',
+        inputs: entity.form_type === '1120S'
+          ? { gross_receipts: 500_000, salaries_wages: 100_000, shareholders: [{ name: 'Owner', pct: 100 }] }
+          : { filing_status: 'single', wages: 90_000 },
+      },
+    })
+    expect(computed.status(), await computed.text()).toBe(200)
+
+    await page.goto('/login')
+    await page.getByPlaceholder('Email').fill(email)
+    await page.getByPlaceholder('Password').fill(TEST_PASSWORD)
+    await page.getByRole('button', { name: 'Sign In' }).last().click()
+    await expect(page).toHaveURL(/\/app/, { timeout: 20_000 })
+
+    await page.goto(`/app/entities/${entity.id}`)
+    await expect(page.getByText(ENTITY).first()).toBeVisible({ timeout: 20_000 })
+    // The Returns tab is the default; the freshly computed 2025 return must
+    // be visible, not an empty state.
+    await expect(page.getByText(/2025/).first(), 'the computed return must render').toBeVisible({ timeout: 20_000 })
   })
 })

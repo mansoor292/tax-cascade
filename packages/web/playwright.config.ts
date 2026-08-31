@@ -29,7 +29,35 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     actionTimeout: 15_000,
   },
+  // Two projects, split by what they drive. The api project is pure
+  // request-context (no browser page) — `--project api` is the fast pass.
+  // Both stay on one worker: every spec talks to the real prod backend, and
+  // parallel signups against live Supabase trade a few minutes for flake.
+  //
+  // Money note: specs tagged @spend call Textract/Gemini (~$0.10/run).
+  // `--grep-invert @spend` skips them.
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'api',
+      testMatch: [
+        '**/api-robustness.spec.ts', '**/cross-tenant.spec.ts',
+        '**/auth-matrix.spec.ts', '**/compute-golden.spec.ts',
+        '**/calendar-and-misc.spec.ts', '**/returns-lifecycle.spec.ts',
+        '**/scenarios-lifecycle.spec.ts', '**/document-pipeline.spec.ts',
+        '**/mcp-client-discovery.spec.ts',
+      ],
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'ui',
+      testIgnore: [
+        '**/api-robustness.spec.ts', '**/cross-tenant.spec.ts',
+        '**/auth-matrix.spec.ts', '**/compute-golden.spec.ts',
+        '**/calendar-and-misc.spec.ts', '**/returns-lifecycle.spec.ts',
+        '**/scenarios-lifecycle.spec.ts', '**/document-pipeline.spec.ts',
+        '**/mcp-client-discovery.spec.ts',
+      ],
+      use: { ...devices['Desktop Chrome'] },
+    },
   ],
 })

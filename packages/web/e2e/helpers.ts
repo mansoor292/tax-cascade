@@ -108,3 +108,63 @@ export async function signInThroughUi(page: Page, email: string, password = TEST
   await page.getByPlaceholder('Password').fill(password)
   await page.locator('form button[type="submit"]').click()
 }
+
+/** Authorization headers for the API-context specs. */
+export function authed(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` }
+}
+
+/**
+ * Sign IN an existing account via the API (signUpViaApi's counterpart) —
+ * for tests that created the account through the UI but need a token to
+ * arrange state without driving more screens.
+ */
+export async function signInViaApi(email: string, password = TEST_PASSWORD): Promise<string> {
+  const ANON = requireAnonKey()
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: ANON, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  const session: any = await res.json()
+  if (!session?.access_token) throw new Error(`signin failed: ${JSON.stringify(session).slice(0, 200)}`)
+  return session.access_token
+}
+
+/** Create an entity through the API; several specs need one as scaffolding. */
+export async function createEntityViaApi(
+  token: string,
+  overrides: Record<string, any> = {},
+): Promise<{ id: string; [k: string]: any }> {
+  const base = process.env.BASE_URL || 'https://fin.catipult.ai'
+  const res = await fetch(`${base}/api/entities`, {
+    method: 'POST',
+    headers: { ...authed(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'E2E Entity', form_type: '1040', ...overrides }),
+  })
+  const body: any = await res.json()
+  if (!body?.entity?.id) throw new Error(`entity creation failed: ${JSON.stringify(body).slice(0, 200)}`)
+  return body.entity
+}
+
+/**
+ * Poll a document until background extraction settles. The ingest contract
+ * is 202 + processing_status, so any test that needs the extracted result
+ * has to wait for the row, not the response.
+ */
+export async function pollDocumentUntilDone(
+  token: string, docId: string, timeoutMs = 240_000,
+): Promise<any> {
+  const base = process.env.BASE_URL || 'https://fin.catipult.ai'
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const res = await fetch(`${base}/api/documents/${docId}`, { headers: authed(token) })
+    const doc: any = ((await res.json().catch(() => null)) as any)?.document ?? null
+    if (doc?.processing_status === 'done') return doc
+    if (doc?.processing_status === 'failed') {
+      throw new Error(`extraction failed: ${doc.processing_error || '(no detail)'}`)
+    }
+    if (Date.now() > deadline) throw new Error(`document ${docId} still processing after ${timeoutMs}ms`)
+    await new Promise(r => setTimeout(r, 5_000))
+  }
+}

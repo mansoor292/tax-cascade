@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Building2, Plus } from 'lucide-react'
 import { useEntities } from '@/hooks/use-entities'
+import LoadError from '@/components/LoadError'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -30,7 +31,7 @@ import {
 } from '@/lib/labels'
 
 export default function Entities() {
-  const { entities, loading, create } = useEntities()
+  const { entities, loading, error, reload, create } = useEntities()
   const nav = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const showNew = searchParams.get('new') === '1'
@@ -72,7 +73,12 @@ export default function Entities() {
         </Button>
       </div>
 
-      {loading ? (
+      {/* A failed load must never look like "No entities yet" — this page is
+          the front door, and an outage that renders as an empty account is
+          the exact bug the e2e error-visibility suite hunts. */}
+      {error && !loading ? (
+        <LoadError message={`Couldn't load your entities: ${error}`} onRetry={reload} />
+      ) : loading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Card key={i}>

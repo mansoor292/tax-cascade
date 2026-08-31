@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { signUpThroughUi, testEmail, deleteUserByEmail } from './helpers'
+import { signUpThroughUi, signUpViaApi, signInThroughUi, testEmail, deleteUserByEmail, createEntityViaApi } from './helpers'
 
 /**
  * An error message has to outlive the glance that misses it.
@@ -58,4 +58,47 @@ test.describe('errors stay readable', () => {
       await expect(toast).toBeHidden({ timeout: 5_000 })
     }
   })
+})
+
+/**
+ * The same rule on the other failure surfaces: hooks return `error`, pages
+ * render <LoadError onRetry> — a load failure must never look like an empty
+ * state. Each test forces the load to fail and expects a visible error with
+ * a retry, not a page that quietly shows nothing.
+ */
+test.describe('load failures are visible, not empty states', () => {
+  const email = testEmail('errload')
+  test.beforeAll(async () => {
+    const token = await signUpViaApi(email)
+    await createEntityViaApi(token, { name: 'Error Surface Corp', form_type: '1120S' })
+  })
+  test.afterAll(() => deleteUserByEmail(email))
+
+  const SURFACES: Array<[string, string, string]> = [
+    ['entities list', '**/api/entities', '/app/entities'],
+    ['calendar',      '**/api/calendar**', '/app/calendar'],
+    ['scenarios',     '**/api/scenarios**', '/app/scenarios'],
+  ]
+
+  for (const [label, pattern, path] of SURFACES) {
+    test(`a failed ${label} load shows an error with retry, not a blank page`, async ({ page }) => {
+      test.setTimeout(120_000)
+      await signInThroughUi(page, email)
+      await expect(page).toHaveURL(/\/app/, { timeout: 20_000 })
+
+      await page.route(pattern, route => {
+        if (route.request().method() === 'GET') {
+          return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Forced load failure' }) })
+        }
+        return route.fallback()
+      })
+      await page.goto(path)
+      // Either the LoadError component or an error toast — but SOMETHING,
+      // with a path back. "Loads and quietly shows nothing" is the bug.
+      await expect(
+        page.getByText(/failed|error|couldn.t|retry|try again/i).first(),
+        'the failure must be visible on screen',
+      ).toBeVisible({ timeout: 15_000 })
+    })
+  }
 })
