@@ -312,10 +312,25 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: get_entity ───
+  // The entity routes return the raw hydrated row — including ein_enc
+  // ciphertext, the ein_hash blind index, and user_id. list_entities stripped
+  // those from day one; get_entity/create_entity/update_entity relayed them
+  // to every MCP client until a live connector call surfaced it (2026-09-01,
+  // while verifying the tool a client was being asked to authorize). Same
+  // leak class as the list_documents user_id incident: internal identifiers
+  // handed to a model end up cited as "evidence".
+  const stripEntityInternals = (resp: any) => {
+    if (resp?.entity && typeof resp.entity === 'object') {
+      const { user_id: _uid, ein_enc: _ee, ein_hash: _eh, ...rest } = resp.entity
+      return { ...resp, entity: rest }
+    }
+    return resp
+  }
+
   server.tool('get_entity', 'Get ONE entity\'s full detail (all tax_return rows, scenarios, Schedule K questionnaire). For account-wide or multi-entity overviews use list_entities instead of calling this once per entity — every call is a separate permission prompt for the user. Each return has a `source` field — see list_entities for the filed_import vs. proforma distinction. Filed PDFs live in list_documents, not here.', {
     entity_id: z.string().describe('Entity UUID'),
   }, async ({ entity_id }) => {
-    return text(await call('GET', `/api/entities/${entity_id}`))
+    return text(stripEntityInternals(await call('GET', `/api/entities/${entity_id}`)))
   })
 
   // ─── Tool: create_entity ───
@@ -327,7 +342,7 @@ function createServer(apiKey: string): McpServer {
     ein: z.string().optional().describe('EIN (business) or SSN (individual)'),
     address: z.string().optional().describe('Street address'),
   }, async (params) => {
-    return text(await call('POST', '/api/entities', params))
+    return text(stripEntityInternals(await call('POST', '/api/entities', params)))
   })
 
   // ─── Tool: qbo_report ───
@@ -779,7 +794,7 @@ Present in plain English using the \`description\` field, grouped by category. E
     date_incorporated: z.string().optional().describe('Date incorporated / S-election date (YYYY-MM-DD)'),
     meta_merge: z.record(z.any()).optional().describe('Shallow-merge into meta. Use for preparer info ({preparer: {name, ptin, firm_name, firm_ein, firm_address, phone}}), title, business_code, etc. Preserves existing meta keys.'),
   }, async ({ entity_id, ...updates }) => {
-    return text(await call('PUT', `/api/entities/${entity_id}`, updates))
+    return text(stripEntityInternals(await call('PUT', `/api/entities/${entity_id}`, updates)))
   })
 
   // ─── Tool: delete_entity ───

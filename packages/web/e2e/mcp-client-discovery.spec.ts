@@ -263,6 +263,32 @@ test.describe('MCP discovery, as a real client performs it', () => {
       expect(inner, 'id-citation rule must ride with the document list').toContain('never cite one to the user')
     })
 
+    test('get_entity strips crypto and tenancy internals', async ({ request, baseURL }) => {
+      // list_entities stripped ein_enc/ein_hash/user_id from day one, but
+      // get_entity relayed the raw hydrated row — found 2026-09-01 by calling
+      // the live connector on the exact tool a client was being asked to
+      // authorize. Ciphertext and tenancy ids must never reach a model on
+      // ANY of the entity tools.
+      const { apiKey } = await createUserWithApiKey(testEmail('mcpgetent'))
+      const auth = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+      const ent = await request.post(`${baseURL}/api/entities`, {
+        headers: auth, data: { name: 'E2E GetEntity Strip', form_type: '1120S', ein: '12-3456789' },
+      })
+      expect(ent.status(), await ent.text()).toBe(200)
+      const entityId = (await ent.json()).entity.id
+
+      const res = await request.post(`${baseURL}/mcp`, {
+        headers: { ...auth, Accept: 'application/json, text/event-stream' },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_entity', arguments: { entity_id: entityId } } },
+      })
+      expect(res.status()).toBe(200)
+      const inner: string = parseMcp(await res.text()).result?.content?.[0]?.text || ''
+      expect(inner, 'the entity must actually come back').toContain('E2E GetEntity Strip')
+      expect(inner, 'no ciphertext in get_entity').not.toContain('"ein_enc"')
+      expect(inner, 'no blind index in get_entity').not.toContain('"ein_hash"')
+      expect(inner, 'no tenancy id in get_entity').not.toContain('"user_id"')
+    })
+
 
     test('initialize declares the tools capability', async ({ request, baseURL }) => {
       // If a server does not advertise tools, a client has no reason to
