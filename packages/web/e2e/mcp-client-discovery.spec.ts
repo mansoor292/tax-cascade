@@ -218,6 +218,42 @@ test.describe('MCP discovery, as a real client performs it', () => {
       expect(body).toContain('not present here')
     })
 
+    test('the document list strips internal identifiers like the entity list does', async ({ request, baseURL }) => {
+      // list_entities stripped user_id from day one; list_documents leaked it,
+      // and a client's Claude cited the raw UUID as "evidence" that entities
+      // sharing it were related — an internal id doing reasoning work. The
+      // strip contract must hold on BOTH list tools.
+      const { apiKey } = await createUserWithApiKey(testEmail('mcpstrip'))
+      const auth = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+
+      // A fresh account lists zero documents, which passes any strip check
+      // vacuously — so put a real row there first (a tax fact creates a
+      // virtual document with no Textract spend).
+      const ent = await request.post(`${baseURL}/api/entities`, {
+        headers: auth, data: { name: 'E2E Strip Check', form_type: '1040' },
+      })
+      expect(ent.status(), await ent.text()).toBe(200)
+      const entityId = (await ent.json()).entity.id
+      const fact = await request.post(`${baseURL}/api/documents/fact`, {
+        headers: auth,
+        data: { entity_id: entityId, tax_year: 2024, category: '1099_int', values: { box1_interest: 1 }, source_note: 'e2e strip check' },
+      })
+      expect(fact.status(), await fact.text()).toBe(200)
+
+      const res = await request.post(`${baseURL}/mcp`, {
+        headers: { ...auth, Accept: 'application/json, text/event-stream' },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'list_documents', arguments: {} } },
+      })
+      expect(res.status()).toBe(200)
+      // The tool result is a JSON string inside content[0].text — assert on
+      // THAT, not on the stringified envelope, where every quote is escaped
+      // and a `"user_id"` check passes vacuously.
+      const inner: string = parseMcp(await res.text()).result?.content?.[0]?.text || ''
+      expect(inner, 'the seeded document must actually be in the list').toContain('e2e strip check')
+      expect(inner, 'no user_id in the MCP document list').not.toContain('"user_id"')
+      expect(inner, 'no storage paths in the MCP document list').not.toContain('"s3_path"')
+    })
+
 
     test('initialize declares the tools capability', async ({ request, baseURL }) => {
       // If a server does not advertise tools, a client has no reason to

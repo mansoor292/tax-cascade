@@ -684,7 +684,19 @@ Present in plain English using the \`description\` field, grouped by category. E
   server.tool('list_documents', 'List all uploaded documents (authoritative source for filed/signed PDFs). Documents with doc_type starting with `prior_return_` (prior_return_1040/1120/1120s) ARE the filed returns the user uploaded. Each doc carries a `textract_summary` (page/KV/table counts); the raw Textract key-values are NOT included because they are far too large — use fill_extraction_gaps, which reads them server-side. Presigned download links are omitted by default (they were the majority of the response); pass include_download_urls when the user actually needs a link. For the parsed line-by-line data from those filed returns, see the matching tax_return row via list_entities (source=filed_import).', {
     include_download_urls: z.boolean().optional().describe('Include a presigned download_url per document (1-hour expiry). Off by default — only ask for it when the user wants to open or download a file.'),
   }, async ({ include_download_urls }) => {
-    return text(await call('GET', `/api/documents${include_download_urls ? '?urls=1' : ''}`))
+    const resp = await call('GET', `/api/documents${include_download_urls ? '?urls=1' : ''}`)
+    if (!resp?.documents) return text(resp)
+    // Strip internal identifiers, mirroring list_entities. user_id leaked here
+    // while list_entities stripped it, and a client's Claude promptly cited the
+    // raw UUID as "evidence" the entities were related — an internal id doing
+    // reasoning work it should never have been available for. s3_path is
+    // storage layout, useless to a model.
+    return text({
+      documents: resp.documents.map((d: any) => {
+        const { user_id: _uid, s3_path: _s3, ...rest } = d
+        return rest
+      }),
+    })
   })
 
   // ─── Tool: fill_extraction_gaps ───
