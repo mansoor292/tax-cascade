@@ -136,6 +136,64 @@ test.describe('MCP discovery, as a real client performs it', () => {
       expect(tools.map((t: any) => t.name)).toContain('list_entities')
     })
 
+    test('every tool carries a human-readable title and honest behavior hints', async ({ request, baseURL }) => {
+      // A client audit found claude.ai's approval prompts showing only raw
+      // tool names and UUID arguments — the user had no way to know what
+      // they were consenting to. Titles + read-only/destructive hints are
+      // the metadata the connector CAN provide; this pins that every tool
+      // has them and that the hints stay honest for the tools that matter.
+      const { apiKey } = await createUserWithApiKey(testEmail('mcpann'))
+      const res = await request.post(`${baseURL}/mcp`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+        },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      })
+      expect(res.status()).toBe(200)
+      const tools: any[] = parseMcp(await res.text()).result?.tools || []
+      expect(tools.length).toBeGreaterThan(10)
+
+      const untitled = tools.filter(t => !t.annotations?.title)
+      expect(untitled.map(t => t.name), 'every tool must carry a title').toEqual([])
+
+      const byName = Object.fromEntries(tools.map(t => [t.name, t.annotations]))
+      expect(byName.list_entities?.readOnlyHint, 'reads must say so').toBe(true)
+      expect(byName.get_entity?.readOnlyHint).toBe(true)
+      expect(byName.list_documents?.readOnlyHint).toBe(true)
+      expect(byName.delete_entity?.readOnlyHint, 'a delete must never claim read-only').toBe(false)
+      expect(byName.delete_entity?.destructiveHint).toBe(true)
+      expect(byName.delete_return?.destructiveHint).toBe(true)
+      expect(byName.compute_return?.readOnlyHint, 'compute persists — not read-only').toBe(false)
+    })
+
+    test('server instructions demand evidence discipline in the first answer', async ({ request, baseURL }) => {
+      // Audit finding SPO-02: Claude presented inferences (ownership,
+      // pass-through activity) in the same voice as documented facts, and
+      // only distinguished them when challenged. The server instructions
+      // are the connector-side lever; this pins that they ship.
+      const { apiKey } = await createUserWithApiKey(testEmail('mcpinstr'))
+      const res = await request.post(`${baseURL}/mcp`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+        },
+        data: {
+          jsonrpc: '2.0', id: 1, method: 'initialize',
+          params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } },
+        },
+      })
+      expect(res.status()).toBe(200)
+      const instructions: string = parseMcp(await res.text()).result?.instructions || ''
+      expect(instructions, 'evidence-discipline section must ship').toContain('Evidence discipline')
+      expect(instructions).toContain('Documented fact')
+      expect(instructions).toContain('Absence of evidence')
+      expect(instructions).toContain('labeled as inference')
+      expect(instructions, 'family-level questions answered from the list, not per-entity').toContain('Do NOT call get_entity once per entity')
+    })
+
 
     test('initialize declares the tools capability', async ({ request, baseURL }) => {
       // If a server does not advertise tools, a client has no reason to

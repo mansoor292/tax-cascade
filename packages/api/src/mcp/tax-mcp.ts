@@ -7,6 +7,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { SUPPORTED_PROTOCOL_VERSIONS, LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js'
+import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import type { Express, Request, Response } from 'express'
 
@@ -108,6 +109,16 @@ For multi-step workflows on genuinely big datasets (full general ledger reconcil
 
 Call list_entities first. Figure out what the user needs from context — don't present a menu. Entities carry a \`source\` field on each return (filed_import / proforma / amendment / extension); filed PDFs live in list_documents (doc_type: prior_return_*), parsed line values live in tax_return. One filed return becomes one filed_import row when ingested — you'll see both.
 
+Answer account-level and family-level questions ("what's on file?", "what's missing for 2024?") from list_entities + list_documents alone — they already carry every entity's returns, years, sources, and document types. Do NOT call get_entity once per entity for an overview; each call is a separate permission prompt for the user. get_entity is for drilling into ONE entity when you need what the summary omits (the Schedule K questionnaire, scenarios, full field detail).
+
+## Evidence discipline — fact vs. absence vs. inference
+
+This system holds financial records; users act on what you say. Before stating any material financial or tax conclusion, check the underlying records (list_documents, compare_returns, get_entity — the extracted field values), and keep three categories distinct in your OWN voice, in the FIRST answer, not only when challenged:
+
+1. **Documented fact** — directly supported by a document or extracted field here. State it plainly and cite the support in human terms: the form, year, and entity ("per the filed 2023 Form 1040"), not a bare internal ID (append the ID in parentheses if useful).
+2. **Absence of evidence** — the system does not contain the document or data needed to establish something. Say exactly that. A missing return is not evidence of activity or of inactivity; an extracted \`0\` is a documented zero, which is different from a field that was never extracted.
+3. **Inference** — a reasonable conclusion the records do not establish (e.g. ownership assumed because entities share an account, pass-through activity assumed from an entity's existence). Inference is allowed ONLY when labeled as inference. Never present an inference in the same voice as something the records actually show.
+
 Use record_tax_fact for values stated in conversation ("my W-2 wages were $150K"). Use ingest_document for uploaded PDFs. Both flow into compute_return's auto-merge.
 
 ## Filed returns vs. computed returns — STRICT SEPARATION
@@ -163,6 +174,69 @@ If yes, update_entity(form_type: '1120S') — entity_type auto-syncs. LLCs have 
 - For "use prior year" requests, pull via use_prior_year or compare_returns.
 - For "leave blank" on a critical line, echo back the line in confirmation before moving on.`
 
+/**
+ * Tool annotations — human-readable titles + behavior hints, one table.
+ *
+ * Added after a client audit: claude.ai's approval prompts showed only raw
+ * tool names and UUID arguments, so a user approving get_entity had no idea
+ * what they were consenting to. Titles are what the claude.ai UI can display;
+ * readOnlyHint lets it treat harmless reads differently from writes. The MCP
+ * spec's DEFAULTS are worst-case (destructive, open-world), so benign write
+ * tools carry an explicit destructiveHint: false. Tools whose spill_to merely
+ * caches their own response in the user's scratch space still count as
+ * read-only. Every tool operates on the user's own tax data or their
+ * connected QBO/Stripe accounts: openWorldHint is false across the board.
+ */
+const RO = { readOnlyHint: true, openWorldHint: false } as const
+const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true, openWorldHint: false } as const
+
+const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
+  list_entities:              { title: 'List entities & returns', ...RO },
+  get_schema:                 { title: 'Get form schema', ...RO },
+  get_entity:                 { title: 'Get one entity (full detail)', ...RO },
+  create_entity:              { title: 'Create entity', ...WRITE },
+  qbo_report:                 { title: 'QuickBooks report (read)', ...RO },
+  validate_return:            { title: 'Validate return inputs', ...RO },
+  compute_return:             { title: 'Compute & save return', ...WRITE },
+  qbo_to_tax_inputs:          { title: 'Map QBO to tax inputs (read)', ...RO },
+  compute_return_from_qbo:    { title: 'Compute return from QBO', ...WRITE },
+  recategorize_uncategorized: { title: 'Suggest recategorizations (dry-run)', ...RO },
+  apply_recategorizations:    { title: 'Apply recategorizations to QBO', ...DESTRUCTIVE },
+  reconcile_bank_import:      { title: 'Reconcile bank CSV (suggestions)', ...RO },
+  post_transactions_batch:    { title: 'Post QBO transactions', ...WRITE },
+  loan_amortization_schedule: { title: 'Loan amortization schedule', ...RO },
+  run_scenario:               { title: 'Run what-if scenario', ...WRITE },
+  compare_scenarios:          { title: 'Compare scenarios', ...RO },
+  get_pdf:                    { title: 'Get return PDF', ...RO },
+  mark_reviewed:              { title: 'Mark return reviewed', ...WRITE },
+  delete_return:              { title: 'Delete return', ...DESTRUCTIVE },
+  review_return:              { title: 'Review return (QC)', ...WRITE },
+  use_prior_year:             { title: 'Pull prior-year values', ...RO },
+  compare_returns:            { title: 'Compare returns across years', ...RO },
+  record_tax_fact:            { title: 'Record tax fact', ...WRITE },
+  ingest_document:            { title: 'Upload document', ...WRITE },
+  list_documents:             { title: 'List documents', ...RO },
+  fill_extraction_gaps:       { title: 'Fill extraction gaps', ...WRITE },
+  scratch:                    { title: 'Scratch storage', ...WRITE },
+  promote_scenario:           { title: 'Promote scenario to return', ...WRITE },
+  compute_cascade:            { title: 'Compute S-corp cascade (stateless)', ...RO },
+  update_entity:              { title: 'Update entity', ...WRITE },
+  delete_entity:              { title: 'Delete entity & all its data', ...DESTRUCTIVE },
+  connect_qbo:                { title: 'Connect QuickBooks', ...WRITE },
+  qbo_query:                  { title: 'QuickBooks query (read)', ...RO },
+  get_accounts:               { title: 'QuickBooks chart of accounts', ...RO },
+  qbo_resource:               { title: 'QuickBooks resource CRUD', ...DESTRUCTIVE },
+  tax_calendar:               { title: 'Tax calendar', ...RO },
+  update_obligation:          { title: 'Update calendar obligation', ...WRITE },
+  add_obligation:             { title: 'Add calendar obligation', ...WRITE },
+  request_form:               { title: 'Request form support', ...WRITE },
+  connect_stripe:             { title: 'Connect Stripe', ...WRITE },
+  stripe_data:                { title: 'Stripe data (read)', ...RO },
+  file_extension:             { title: 'File extension', ...WRITE },
+  validate_extension:         { title: 'Validate extension inputs', ...RO },
+}
+
 function extractApiKey(req: Request): string | null {
   const auth = req.headers.authorization
   if (auth?.startsWith('Bearer ')) return auth.slice(7)
@@ -178,6 +252,17 @@ function createServer(apiKey: string): McpServer {
   )
 
   const call = (method: string, path: string, body?: any) => api(apiKey, method, path, body)
+
+  // Every registration below uses the 4-arg form (name, description, schema,
+  // handler); this wrap threads in each tool's annotations from the one table
+  // above instead of growing a fifth argument at 43 call sites. A tool missing
+  // from the table is a registration-time error — annotations are not optional.
+  const rawTool = server.tool.bind(server)
+  ;(server as any).tool = (name: string, description: string, schema: any, cb: any) => {
+    const annotations = TOOL_ANNOTATIONS[name]
+    if (!annotations) throw new Error(`tool ${name} has no entry in TOOL_ANNOTATIONS`)
+    return (rawTool as any)(name, description, schema, annotations, cb)
+  }
 
   // ─── Tool: list_entities ───
   // Trimmed at this layer, not in the route — the web app reads the full shape
@@ -214,7 +299,7 @@ function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: get_entity ───
-  server.tool('get_entity', 'Get entity details with all tax_return rows and scenarios. Each return has a `source` field — see list_entities for the filed_import vs. proforma distinction. Filed PDFs live in list_documents, not here.', {
+  server.tool('get_entity', 'Get ONE entity\'s full detail (all tax_return rows, scenarios, Schedule K questionnaire). For account-wide or multi-entity overviews use list_entities instead of calling this once per entity — every call is a separate permission prompt for the user. Each return has a `source` field — see list_entities for the filed_import vs. proforma distinction. Filed PDFs live in list_documents, not here.', {
     entity_id: z.string().describe('Entity UUID'),
   }, async ({ entity_id }) => {
     return text(await call('GET', `/api/entities/${entity_id}`))
