@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# model-harness run artifacts (answers/transcripts from live probe runs)
+e2e/model-harness/runs/
