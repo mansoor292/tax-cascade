@@ -197,6 +197,9 @@ test.describe('MCP discovery, as a real client performs it', () => {
       // hard rules that answer those exact failures must ship too.
       expect(instructions, 'co-location rule must ship').toContain('Co-location is not a relationship')
       expect(instructions, 'vault-scope rule must ship').toContain('vault is not the world')
+      // The model-harness run of 2026-09-01 caught a truncated tax_return
+      // UUID cited to the user — the instructions must forbid id citations.
+      expect(instructions, 'id-citation rule must ship').toContain('Internal ids are plumbing')
     })
 
     test('the entity list itself carries the evidence note', async ({ request, baseURL }) => {
