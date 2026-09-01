@@ -31,8 +31,60 @@ async function api(token: string, method: string, path: string, body?: any): Pro
   return resp.json()
 }
 
+/**
+ * Mask tax identifiers before ANY tool response reaches a model.
+ *
+ * Client finding, 2026-09-01 (SOP-02 retest): the first answer displayed the
+ * individual's full SSN and both entities' full EINs in plain text. The web
+ * UI has masked these since the original full-SSN report (web/src/lib/mask.ts)
+ * — but the MCP fed models the raw values and relied on the model choosing
+ * not to repeat them. Her requirement, verbatim in spirit: mask at the data
+ * boundary, before the value reaches the model, not after. A model never
+ * needs a full SSN/EIN — last-4 identifies; the server fills PDFs from the
+ * database, not from what the model sends back.
+ *
+ * Same shape-preserving mask as the web UI: 123-45-6789 → •••-••-6789.
+ * Two layers: known key names (ein, ssn, spouse_ssn, ein_or_ssn, *_ein,
+ * *_ssn) are masked outright; SSN/EIN-shaped digit runs inside free text
+ * (summaries, source notes, filenames) are masked by pattern.
+ */
+function maskTaxId(value: string): string {
+  const digits = value.replace(/\D/g, '')
+  if (digits.length < 4) return '•'.repeat(value.length)
+  const last4 = digits.slice(-4)
+  let seen = 0
+  const total = digits.length
+  return value
+    .split('')
+    .map((ch) => {
+      if (!/\d/.test(ch)) return ch
+      seen++
+      return seen > total - 4 ? last4[4 - (total - seen) - 1] : '•'
+    })
+    .join('')
+}
+
+const TAX_ID_KEY = /^(ein|ssn|spouse_ssn|ein_or_ssn)$|_(ein|ssn)$/
+const SSN_SHAPE = /\b\d{3}-\d{2}-\d{4}\b/g
+const EIN_SHAPE = /\b\d{2}-\d{7}\b/g
+
+function maskTaxIdsDeep(node: any, key?: string): any {
+  if (typeof node === 'string') {
+    if (key && TAX_ID_KEY.test(key)) return maskTaxId(node)
+    return node.replace(SSN_SHAPE, maskTaxId).replace(EIN_SHAPE, maskTaxId)
+  }
+  if (Array.isArray(node)) return node.map((v) => maskTaxIdsDeep(v))
+  if (node && typeof node === 'object') {
+    const out: Record<string, any> = {}
+    for (const [k, v] of Object.entries(node)) out[k] = maskTaxIdsDeep(v, k)
+    return out
+  }
+  return node
+}
+
 function text(data: any): { content: Array<{ type: 'text'; text: string }> } {
-  return { content: [{ type: 'text' as const, text: typeof data === 'string' ? data : JSON.stringify(data, null, 2) }] }
+  const masked = maskTaxIdsDeep(data)
+  return { content: [{ type: 'text' as const, text: typeof masked === 'string' ? masked : JSON.stringify(masked, null, 2) }] }
 }
 
 // Describe a JSON value compactly — enough to orient the model without the raw bytes.

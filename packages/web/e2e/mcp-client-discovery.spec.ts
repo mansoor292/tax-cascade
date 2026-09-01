@@ -289,6 +289,51 @@ test.describe('MCP discovery, as a real client performs it', () => {
       expect(inner, 'no tenancy id in get_entity').not.toContain('"user_id"')
     })
 
+    test('tax identifiers are masked before they reach a model', async ({ request, baseURL }) => {
+      // Client finding on the SOP-02 clean retest (2026-09-01): the first
+      // answer printed a full SSN and two full EINs — fed to the model raw by
+      // the MCP while the web UI has masked them since the original full-SSN
+      // report. Masking must happen at the data boundary (every tool response
+      // funnels through one masker), not by trusting the model to not repeat
+      // what it was shown. Values here are synthetic.
+      const { apiKey } = await createUserWithApiKey(testEmail('mcpmask'))
+      const auth = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+      const ent = await request.post(`${baseURL}/api/entities`, {
+        headers: auth, data: { name: 'E2E Mask Check', form_type: '1120S', ein: '12-3456789' },
+      })
+      expect(ent.status(), await ent.text()).toBe(200)
+      const entityId = (await ent.json()).entity.id
+      // An SSN-shaped value inside free text (a source note) must be caught
+      // by the pattern layer, not just the known-key layer.
+      const fact = await request.post(`${baseURL}/api/documents/fact`, {
+        headers: auth,
+        data: { entity_id: entityId, tax_year: 2024, category: '1099_int', values: { box1_interest: 1 }, source_note: 'issued to holder 123-45-6789' },
+      })
+      expect(fact.status(), await fact.text()).toBe(200)
+
+      const mcpCall = async (name: string, args: Record<string, unknown> = {}) => {
+        const res = await request.post(`${baseURL}/mcp`, {
+          headers: { ...auth, Accept: 'application/json, text/event-stream' },
+          data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+        })
+        expect(res.status()).toBe(200)
+        return parseMcp(await res.text()).result?.content?.[0]?.text || ''
+      }
+
+      const entityDetail = await mcpCall('get_entity', { entity_id: entityId })
+      expect(entityDetail, 'get_entity must return the entity').toContain('E2E Mask Check')
+      expect(entityDetail, 'full EIN must not reach the model').not.toContain('12-3456789')
+      expect(entityDetail, 'EIN must be masked to last-4').toContain('••-•••6789')
+
+      const entityList = await mcpCall('list_entities')
+      expect(entityList, 'full EIN must not appear in the entity list').not.toContain('12-3456789')
+
+      const documentList = await mcpCall('list_documents')
+      expect(documentList, 'the seeded fact must be listed').toContain('issued to holder')
+      expect(documentList, 'SSN-shaped text in notes must be masked').not.toContain('123-45-6789')
+      expect(documentList, 'the masked SSN shape must survive').toContain('•••-••-6789')
+    })
+
 
     test('initialize declares the tools capability', async ({ request, baseURL }) => {
       // If a server does not advertise tools, a client has no reason to
