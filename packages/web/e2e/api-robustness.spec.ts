@@ -185,3 +185,20 @@ test.describe('API robustness against malformed input', () => {
     expect(body.error).toMatch(/wages/i)
   })
 })
+
+test.describe('infrastructure contract', () => {
+  test('server keepalive outlives the load balancer idle timeout', async ({ request }) => {
+    // The ALB (idle_timeout 300s) reuses backend connections; Node's default
+    // keepAliveTimeout is 5s. When the ALB reused a connection Node had just
+    // closed, the caller got a 502 that no app log ever saw — CloudWatch
+    // recorded real HTTPCode_ELB_502s while every health check was green.
+    // AWS's rule: target keepalive MUST exceed the LB idle timeout. The
+    // server exposes its live value on /api/health precisely so this can be
+    // pinned; a Node upgrade or listen() refactor that loses the setting
+    // fails here instead of resurfacing as intermittent client 502s.
+    const res = await request.get('https://tax-api.catalogshub.com/api/health')
+    expect(res.status()).toBe(200)
+    const { keepalive_timeout_ms } = await res.json()
+    expect(keepalive_timeout_ms, 'keepAliveTimeout must exceed the ALB idle timeout (300s)').toBeGreaterThan(300_000)
+  })
+})

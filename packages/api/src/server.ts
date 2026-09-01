@@ -344,6 +344,8 @@ app.get('/api/health', (_req, res) => {
     commit: BUILD_COMMIT,
     pid: process.pid,
     started_at: STARTED_AT,
+    // Exposed so the e2e suite can pin the keepalive contract (see listen()).
+    keepalive_timeout_ms: httpServer?.keepAliveTimeout ?? null,
   })
 })
 
@@ -585,7 +587,7 @@ app.post('/api/label/:form/:year', async (req, res) => {
 
 // ─── Start server ───
 const PORT = parseInt(process.env.PORT || '3737')
-app.listen(PORT, async () => {
+const httpServer = app.listen(PORT, async () => {
   console.log(`Tax API running on http://localhost:${PORT}`)
   // Seed field maps from Supabase for forms discovered at runtime (not in git)
   await seedCacheFromSupabase()
@@ -597,5 +599,16 @@ app.listen(PORT, async () => {
   console.log(`  GET  /api/tax-tables/:year`)
   console.log(`  GET  /api/field-map/:form/:year`)
 })
+
+// The ALB in front (Dynalogs, idle_timeout 300s) reuses backend connections.
+// Node's DEFAULT keepAliveTimeout is 5s — shorter than the ALB's window — so
+// the ALB would occasionally send a request into a connection this server had
+// just closed and answer the caller with a 502 that never appears in any log
+// here (CloudWatch showed real HTTPCode_ELB_502s while the app was healthy).
+// AWS's rule: the target's keepalive MUST exceed the LB's idle timeout.
+// headersTimeout must in turn exceed keepAliveTimeout or Node kills idle
+// keepalive sockets waiting for headers.
+httpServer.keepAliveTimeout = 310_000
+httpServer.headersTimeout = 315_000
 
 export default app
