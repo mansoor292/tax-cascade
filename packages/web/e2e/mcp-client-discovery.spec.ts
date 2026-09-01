@@ -192,6 +192,30 @@ test.describe('MCP discovery, as a real client performs it', () => {
       expect(instructions).toContain('Absence of evidence')
       expect(instructions).toContain('labeled as inference')
       expect(instructions, 'family-level questions answered from the list, not per-entity').toContain('Do NOT call get_entity once per entity')
+      // The audit's RETEST still saw ownership inferred from account
+      // co-location and vault-absence stated as filing-absence, so the two
+      // hard rules that answer those exact failures must ship too.
+      expect(instructions, 'co-location rule must ship').toContain('Co-location is not a relationship')
+      expect(instructions, 'vault-scope rule must ship').toContain('vault is not the world')
+    })
+
+    test('the entity list itself carries the evidence note', async ({ request, baseURL }) => {
+      // Initialize-time instructions did not stop the inference at the
+      // moment of reasoning (the audit retest failed), so the reminder now
+      // rides in-band with the entity list — this pins that it does.
+      const { apiKey } = await createUserWithApiKey(testEmail('mcpnote'))
+      const res = await request.post(`${baseURL}/mcp`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+        },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'list_entities', arguments: {} } },
+      })
+      expect(res.status()).toBe(200)
+      const body = JSON.stringify(parseMcp(await res.text()))
+      expect(body, 'evidence_note must ride with the entity list').toContain('documents NO ownership')
+      expect(body).toContain('not present here')
     })
 
 

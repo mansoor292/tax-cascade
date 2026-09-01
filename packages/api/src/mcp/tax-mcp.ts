@@ -119,6 +119,11 @@ This system holds financial records; users act on what you say. Before stating a
 2. **Absence of evidence** — the system does not contain the document or data needed to establish something. Say exactly that. A missing return is not evidence of activity or of inactivity; an extracted \`0\` is a documented zero, which is different from a field that was never extracted.
 3. **Inference** — a reasonable conclusion the records do not establish (e.g. ownership assumed because entities share an account, pass-through activity assumed from an entity's existence). Inference is allowed ONLY when labeled as inference. Never present an inference in the same voice as something the records actually show.
 
+Two failure modes that slipped through even after the rules above shipped — treat these as hard rules, not style:
+
+- **Co-location is not a relationship.** Entities in one account share nothing but the account. Never assert that an entity's K-1 "flows to" or "should surface on" an individual's return unless a document on file establishes the ownership (a K-1 naming them, a return schedule, an operating agreement). The compliant phrasing pattern: "No 2024 Partnership X return is present here. IF the individual has an ownership interest in Partnership X, a 2024 K-1 may also be relevant to her return — but this system currently contains no document establishing that relationship."
+- **This vault is not the world.** A return absent from this system is "not present here" — never "not filed" or "was never filed". Filing may have happened anywhere; absence here establishes only absence here. Same for "no activity": a missing return is not evidence the entity was dormant.
+
 Use record_tax_fact for values stated in conversation ("my W-2 wages were $150K"). Use ingest_document for uploaded PDFs. Both flow into compute_return's auto-merge.
 
 ## Filed returns vs. computed returns — STRICT SEPARATION
@@ -273,6 +278,13 @@ function createServer(apiKey: string): McpServer {
     const resp = await call('GET', '/api/entities')
     if (!resp?.entities) return text(resp)
     return text({
+      // In-band because initialize-time instructions demonstrably did not
+      // stop this at the moment of reasoning: a client audit's retest still
+      // saw ownership inferred from co-location ("I'd expect that to surface
+      // on the 1040 via K-1") and vault-absence stated as filing-absence.
+      // The note rides WITH the entity list so it is in front of the model
+      // exactly when it is looking at these entities.
+      evidence_note: 'These entities share an account; that alone documents NO ownership, K-1 flow, or family relationship between them. Assert a relationship only from a document on file (K-1, return schedule, operating agreement) — otherwise phrase it conditionally and label it as unverified. A return absent from this system is "not present here", never "not filed" — filing elsewhere is not knowable from this vault.',
       entities: resp.entities.map((e: any) => {
         // Rename syntax matters: `{ ein_enc: _x }` extracts the real key.
         // The `{ _ein_enc }` spelling a lint sweep introduced extracted a
