@@ -219,6 +219,9 @@ test.describe('MCP discovery, as a real client performs it', () => {
       const body = JSON.stringify(parseMcp(await res.text()))
       expect(body, 'evidence_note must ride with the entity list').toContain('documents NO ownership')
       expect(body).toContain('not present here')
+      // Model-harness run 2 (2026-09-01) cited truncated return ids even with
+      // the instructions-level rule deployed — the id rule has to be in-band.
+      expect(body, 'id-citation rule must ride with the entity list').toContain('never cite one to the user')
     })
 
     test('the document list strips internal identifiers like the entity list does', async ({ request, baseURL }) => {
@@ -255,6 +258,9 @@ test.describe('MCP discovery, as a real client performs it', () => {
       expect(inner, 'the seeded document must actually be in the list').toContain('e2e strip check')
       expect(inner, 'no user_id in the MCP document list').not.toContain('"user_id"')
       expect(inner, 'no storage paths in the MCP document list').not.toContain('"s3_path"')
+      // Document ids stay (tools need them) but the in-band note telling the
+      // model not to cite them must ride along — see the entity-list twin.
+      expect(inner, 'id-citation rule must ride with the document list').toContain('never cite one to the user')
     })
 
 

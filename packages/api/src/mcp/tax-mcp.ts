@@ -285,7 +285,7 @@ function createServer(apiKey: string): McpServer {
       // on the 1040 via K-1") and vault-absence stated as filing-absence.
       // The note rides WITH the entity list so it is in front of the model
       // exactly when it is looking at these entities.
-      evidence_note: 'These entities share an account; that alone documents NO ownership, K-1 flow, or family relationship between them. Assert a relationship only from a document on file (K-1, return schedule, operating agreement) — otherwise phrase it conditionally and label it as unverified. A return absent from this system is "not present here", never "not filed" — filing elsewhere is not knowable from this vault.',
+      evidence_note: 'These entities share an account; that alone documents NO ownership, K-1 flow, or family relationship between them. Assert a relationship only from a document on file (K-1, return schedule, operating agreement) — otherwise phrase it conditionally and label it as unverified. A return absent from this system is "not present here", never "not filed" — filing elsewhere is not knowable from this vault. The UUID ids in these records exist to chain tool calls — never cite one to the user, even truncated; cite by entity name, form, and tax year.',
       entities: resp.entities.map((e: any) => {
         // Rename syntax matters: `{ ein_enc: _x }` extracts the real key.
         // The `{ _ein_enc }` spelling a lint sweep introduced extracted a
@@ -693,6 +693,11 @@ Present in plain English using the \`description\` field, grouped by category. E
     // reasoning work it should never have been available for. s3_path is
     // storage layout, useless to a model.
     return text({
+      // In-band like list_entities' evidence_note: the model-harness run of
+      // 2026-09-01 cited truncated document ids to the user even after the
+      // initialize-time instructions forbade it — the reminder has to sit
+      // next to the ids at the moment the model is reading them.
+      evidence_note: 'The UUID ids below exist to chain tool calls — never cite one to the user, even truncated; cite by document type, entity, and tax year.',
       documents: resp.documents.map((d: any) => {
         const { user_id: _uid, s3_path: _s3, ...rest } = d
         return rest
