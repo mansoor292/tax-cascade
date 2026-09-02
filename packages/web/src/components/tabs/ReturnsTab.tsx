@@ -60,7 +60,7 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
     setDownloading(returnId)
     try {
       const data = await getPdf(returnId)
-      if (data.pdf_url) window.open(data.pdf_url, '_blank')
+      if (data.url) window.open(data.url, '_blank')
       else toast.info('PDF generated — check return details')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'PDF generation failed')

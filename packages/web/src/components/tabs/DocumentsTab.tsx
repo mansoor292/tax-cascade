@@ -109,7 +109,8 @@ export default function DocumentsTab({ entityId }: Props) {
   const handleDownload = async (docId: string) => {
     try {
       const data = await download(docId)
-      if (data.download_url) window.open(data.download_url, '_blank')
+      if (data.url) window.open(data.url, '_blank')
+      else toast.error('Download failed — no URL returned')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Download failed')
     }

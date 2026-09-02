@@ -100,7 +100,12 @@ export function useReturns(entityId?: string) {
   }
 
   const getPdf = async (returnId: string) => {
-    return api<{ pdf_url: string }>(`/api/returns/${returnId}/pdf?regenerate=true`)
+    // The response field is `url` (routes/returns.ts:934,1023) — this hook
+    // shipped typed as `pdf_url`, so the URL was dropped and the button only
+    // ever toasted "PDF generated — check return details". Same bug class as
+    // use-scenarios' PDF route (see its comment); only the extension-filing
+    // route really returns `pdf_url`.
+    return api<{ url: string }>(`/api/returns/${returnId}/pdf?regenerate=true`)
   }
 
   const compare = async (entityId: string) => {

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import {
   testEmail, deleteUserByEmail, signUpViaApi, signInThroughUi,
-  createEntityViaApi, seedFiledReturn, HAS_SERVICE_KEY,
+  createEntityViaApi, seedFiledReturn, HAS_SERVICE_KEY, authed,
 } from './helpers'
 
 /**
@@ -83,6 +83,28 @@ test.describe('filed return — line-level view and amendment guardrails', () =>
     await expect(page.getByText('Amended')).toHaveCount(0)
   })
 
+  test('the PDF button actually delivers a PDF, not just a toast', async ({ page }) => {
+    // SOP-03: "Cati displayed a message indicating that the PDF had been
+    // generated, but no PDF downloaded". Cause: the API returns {url}, the
+    // hook read {pdf_url} — every URL was dropped.
+    await signInThroughUi(page, email)
+    await expect(page).toHaveURL(/\/app/, { timeout: 20_000 })
+    await page.goto(`/app/entities/${entityId}`)
+    await page.getByRole('cell', { name: /2023/ }).first().click()
+
+    // The popup EVENT is the regression signal: with the bug, window.open was
+    // never called (the URL arrived under `url` and the code read `pdf_url`),
+    // so no popup exists. Asserting the popup's final URL is flaky in
+    // headless Chromium (a PDF navigation can convert to a download), so we
+    // assert the API handed back a real URL and that the app opened a tab.
+    const respP = page.waitForResponse(r => r.url().includes('/pdf'), { timeout: 30_000 })
+    const popupP = page.waitForEvent('popup', { timeout: 30_000 })
+    await page.getByRole('button', { name: 'Generate / download PDF' }).first().click()
+    const body = await (await respP).json()
+    expect(body.url, 'the PDF endpoint must return a presigned url').toMatch(/^https?:\/\//)
+    await popupP
+  })
+
   test('an accepted blank amendment reads as a draft, not a tax change', async ({ page }) => {
     await signInThroughUi(page, email)
     await expect(page).toHaveURL(/\/app/, { timeout: 20_000 })
@@ -95,5 +117,58 @@ test.describe('filed return — line-level view and amendment guardrails', () =>
     await expect(page.getByText('blank — not yet computed')).toBeVisible({ timeout: 20_000 })
     // …and the year row must not show a large negative delta.
     await expect(page.getByText('-$55,264')).toHaveCount(0)
+  })
+})
+
+test.describe('year-over-year refund card sums only amended years', () => {
+  test.skip(!HAS_SERVICE_KEY, 'needs SUPABASE_SERVICE_ROLE_KEY to seed filed_import rows')
+
+  // Christy's exact numbers: three filed years, ONE amendment. The card once
+  // summed all three filed years ($134,909) against the lone amendment and
+  // presented +$79,645 as a "potential refund" — a comparison of three years
+  // of filed tax against one year's amendment.
+  const email = testEmail('yoycard')
+  let entityId = ''
+
+  test.beforeAll(async () => {
+    const token = await signUpViaApi(email)
+    entityId = (await createEntityViaApi(token, { name: 'YoY Person', form_type: '1040' })).id
+    const filed2023 = await seedFiledReturn(entityId, {
+      tax_year: 2023, form_type: '1040',
+      field_values: { 'tax.L24_total_tax': 55264, 'income.L11_agi': 250110 },
+    })
+    await seedFiledReturn(entityId, {
+      tax_year: 2022, form_type: '1040',
+      field_values: { 'tax.L24_total_tax': 45664 },
+    })
+    await seedFiledReturn(entityId, {
+      tax_year: 2024, form_type: '1040',
+      field_values: { 'tax.L24_total_tax': 33981 },
+    })
+    // Amend ONLY 2023.
+    const base = process.env.BASE_URL || 'https://fin.catipult.ai'
+    const res = await fetch(`${base}/api/returns/compute`, {
+      method: 'POST',
+      headers: { ...authed(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entity_id: entityId, tax_year: 2023, form_type: '1040',
+        amend_of: filed2023, inputs: { tax_year: 2023 },
+      }),
+    })
+    if (!res.ok) throw new Error(`amendment compute failed: ${await res.text()}`)
+  })
+  test.afterAll(() => deleteUserByEmail(email))
+
+  test('filed total covers only years that have an amendment', async ({ page }) => {
+    await signInThroughUi(page, email)
+    await expect(page).toHaveURL(/\/app/, { timeout: 20_000 })
+    await page.goto(`/app/compare/${entityId}`)
+
+    const card = page.getByText('Filed vs Amended tax summary').locator('..').locator('..')
+    await expect(card).toBeVisible({ timeout: 20_000 })
+    // The amended year's filed tax — yes; the three-year sum — never.
+    await expect(card.getByText('$55,264').first()).toBeVisible()
+    await expect(page.getByText('$134,909')).toHaveCount(0)
+    await expect(page.getByText('$79,645')).toHaveCount(0)
   })
 })

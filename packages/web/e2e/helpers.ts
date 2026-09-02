@@ -183,6 +183,9 @@ export async function seedFiledReturn(
       computed_data: { computed: {} },
       input_data: {},
       verification: opts.verification ?? {},
+      // A filed import represents a return a human already reviewed and
+      // filed; without this the PDF route's completeness gate can 400.
+      reviewed_at: new Date().toISOString(),
     }),
   })
   const body: any = await res.json().catch(() => null)

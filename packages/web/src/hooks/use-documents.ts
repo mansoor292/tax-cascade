@@ -107,7 +107,10 @@ export function useDocuments(entityId?: string) {
   }
 
   const download = async (documentId: string) => {
-    return api<{ download_url: string }>(`/api/documents/${documentId}/download`)
+    // Response field is `url` (routes/documents.ts:74). The LIST endpoint
+    // returns `download_url` per row, which is how this drifted — typed
+    // wrong here, the download button silently no-oped.
+    return api<{ url: string }>(`/api/documents/${documentId}/download`)
   }
 
   const remove = async (documentId: string) => {

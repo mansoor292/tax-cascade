@@ -91,7 +91,14 @@ export default function Compare() {
   const refundSummary = useMemo(() => {
     let filedTax = 0, amendTax = 0, years = 0
     for (const row of filedVsAmended) {
-      if (!row.filed || !row.amendment) continue
+      // Guard on the ROWS, not the metrics objects — metricsFromFieldValues
+      // returns a truthy {} for a missing side, so the old `!row.filed`
+      // check never fired and every filed year was summed against
+      // amendments that mostly didn't exist. A tester saw three years of
+      // filed tax ($134,909) "compared" against one year's amendment
+      // ($55,264) and a phantom +$79,645 refund. Only years that actually
+      // HAVE both a filed return and an amendment belong in this total.
+      if (!row.filedRow || !row.amendRow) continue
       filedTax += row.filed.total_tax || 0
       amendTax += row.amendment.total_tax || 0
       years += 1

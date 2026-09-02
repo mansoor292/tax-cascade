@@ -370,7 +370,12 @@ const FUZZY_RULES_1040: FuzzyRule[] = [
   { pattern: /adjusted\s+gross\s+income|11\s+.*adjusted\s+gross|11a\s+.*adjusted\s+gross|11b\s+adjusted/, canonical_key: 'income.L11b_agi',     confidence: 0.97 },
   // Deductions
   { pattern: /standard\s+deduction.*(?:schedule\s+a|12)|12\s+standard\s+deduction|12e\s+standard/, canonical_key: 'deductions.L12e_standard', confidence: 0.97 },
-  { pattern: /qualified\s+business\s+income\s+deduction|13\s+qualified\s+business|13a\s+qualified/, canonical_key: 'deductions.L13a_qbi',      confidence: 0.97 },
+  // Anchored to the LINE, not the phrase: Form 8995 has four other lines
+  // containing "qualified business income deduction" ("33 Taxable income
+  // before...", "32 ... before the income limitation", ...) — the unanchored
+  // pattern once mapped 8995's line 33 ($236,260 of taxable income) onto
+  // 1040 line 13 whose real value was 0 (SOP-03, 2026-09-02).
+  { pattern: /^13a?\s+qualified\s+business\s+income|qualified\s+business\s+income\s+deduction\s+from\s+form\s+8995/, canonical_key: 'deductions.L13a_qbi',      confidence: 0.97 },
   { pattern: /add\s+lines\s+12.*and\s+13|14\s+add\s+lines\s+12/,                             canonical_key: 'deductions.L14_total',       confidence: 0.95 },
   { pattern: /this\s+is\s+your\s+taxable\s+income|15\s+.*taxable\s+income|subtract\s+line\s+14.*11/, canonical_key: 'tax.L15_taxable_income', confidence: 0.97 },
   // Tax
@@ -661,7 +666,10 @@ function mapFromTextract(input: TextractOutput): MappingResult {
         const textractConf = (rawConf ?? 95) / 100
         const finalConf = rule.confidence * textractConf
 
-        if (!model[rule.canonical_key] || finalConf > (fields.find(f => f.canonical_key === rule.canonical_key)?.confidence ?? 0)) {
+        // `in`, not truthiness: a mapped 0 is a DOCUMENTED zero (blank IRS
+        // line), and treating it as "unset" let any later same-rule match
+        // overwrite it — how a real line-13 zero became $236,260 (SOP-03).
+        if (!(rule.canonical_key in model) || finalConf > (fields.find(f => f.canonical_key === rule.canonical_key)?.confidence ?? 0)) {
           model[rule.canonical_key] = finalValue
           const existing = fields.findIndex(f => f.canonical_key === rule.canonical_key)
           const entry: FieldMapping = {
