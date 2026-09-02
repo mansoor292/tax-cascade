@@ -5,13 +5,18 @@ monorepo, three packages.
 
 | Package | What | Where it runs |
 |---|---|---|
-| `packages/api` | Express 4 (ESM) tax engine, REST API, MCP server (43 tools) | EC2 behind pm2 cluster, origin `tax-api.catalogshub.com` |
-| `packages/web` | Vite + React 19 SPA + OAuth Netlify Functions | Netlify at `fin.catipult.ai` |
+| `packages/api` | Express 4 (ESM): tax engine, REST API, MCP server (43 tools), OAuth, discovery metadata, AND the built SPA | EC2 behind pm2 cluster + ALB |
+| `packages/web` | Vite + React 19 SPA (built by the deploy script, served by Express) | same origin as the API |
 | `packages/shared` | Canonical metric maps, section vocabulary, response types | Imported by both (its CLAUDE.md explains the wiring — read before touching) |
 
-The public hostname is **fin.catipult.ai**; Netlify rewrites `/api/*`,
-`/auth/*`, and `/mcp` to the EC2 origin. `tax-engine-app.netlify.app` is a
-retired legacy domain.
+The public hostname is **fin.catipult.ai** — since 2026-09-02 a CNAME
+straight to the Dynalogs ALB; ONE origin serves everything. Netlify was cut
+out of the request path after its edge was caught corrupting
+first-request-after-idle responses (HTTP/2 INTERNAL_ERROR), which Anthropic's
+connector proxy surfaced as intermittent 502s that never reached AWS. The
+Netlify site (`tax-engine-app.netlify.app`) still exists solely as a DNS
+rollback target; `netlify.toml` is inert. `tax-api.catalogshub.com` is the
+same origin under its legacy name.
 Per-package details: `packages/api/CLAUDE.md`, `packages/web/CLAUDE.md`.
 
 ## Run / test
@@ -37,15 +42,17 @@ dev server proxies `/api` and `/auth` to `localhost:3737`.
    looked healthy. Nothing imported by bootstrap_env may itself read env at
    module load.
 
-2. **`netlify.toml` redirect ORDER is semantic.** Rules match top-down:
-   OAuth function routes, then `/mcp` + `/api/*` + `/auth/*` proxies, then
-   the `.well-known` discovery rewrites, then the `.well-known` 404
-   catch-alls, then the SPA fallback LAST. Two separate production incidents
+2. **Route ORDER is semantic — the SPA fallback must lose to everything.**
+   Two production incidents (on Netlify, whose redirect rules encoded this)
    came from the SPA fallback swallowing `/auth/*` (API-key list silently
    empty) and discovery URLs (an HTML page served with 200 parses as broken
-   metadata → "Couldn't reach server"). Never append a redirect without
-   placing it deliberately; anything that must 404 must do so explicitly
-   above the fallback.
+   metadata → "Couldn't reach server"). The rules now live in code:
+   `routes/wellknown.ts` serves every RFC spelling of the discovery docs and
+   404s every OTHER `.well-known` path as JSON; `server.ts` mounts
+   wellknown+oauth BEFORE `/mcp` (or `/mcp/.well-known/*` is swallowed by
+   the MCP handler) and mounts the SPA static+fallback LAST, with the
+   fallback refusing backend prefixes. Anything that must 404 must do so
+   explicitly before the fallback can answer.
 
 3. **The API runs in pm2 CLUSTER mode — no in-process shared state.**
    One worker per core (`ecosystem.config.cjs`). The DEK cache in

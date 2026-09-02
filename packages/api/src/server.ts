@@ -599,6 +599,14 @@ app.post('/api/label/:form/:year', async (req, res) => {
 const WEB_DIST = process.env.WEB_DIST_DIR
   || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist')
 app.use(express.static(WEB_DIST))
+// /oauth/authorize is the React consent screen (OAuthAuthorize.tsx) — the
+// ONE /oauth path that is a page, not an endpoint. It must reach the SPA
+// even though the fallback below refuses the /oauth prefix. (Caught by
+// mcp-connector.spec "the authorize page loads rather than erroring" on the
+// first post-cutover prod run.)
+app.get('/oauth/authorize', (_req, res, next) => {
+  res.sendFile(path.join(WEB_DIST, 'index.html'), err => { if (err) next() })
+})
 app.get('*', (req, res, next) => {
   if (/^\/(api|auth|mcp|oauth|deploy|\.netlify|\.well-known)(\/|$)/.test(req.path)) return next()
   res.sendFile(path.join(WEB_DIST, 'index.html'), err => { if (err) next() })
