@@ -200,6 +200,10 @@ test.describe('MCP discovery, as a real client performs it', () => {
       // The model-harness run of 2026-09-01 caught a truncated tax_return
       // UUID cited to the user — the instructions must forbid id citations.
       expect(instructions, 'id-citation rule must ship').toContain('Internal ids are plumbing')
+      // Client finding 2026-09-02: the guardrails leaked into unrelated
+      // answers (unsolicited ownership disclaimers on a plain listing). The
+      // rules must scope themselves to claims actually being made.
+      expect(instructions, 'constrain-don\'t-volunteer rule must ship').toContain('not content to volunteer')
     })
 
     test('the entity list itself carries the evidence note', async ({ request, baseURL }) => {
@@ -222,6 +226,9 @@ test.describe('MCP discovery, as a real client performs it', () => {
       // Model-harness run 2 (2026-09-01) cited truncated return ids even with
       // the instructions-level rule deployed — the id rule has to be in-band.
       expect(body, 'id-citation rule must ride with the entity list').toContain('never cite one to the user')
+      // And the note must scope itself: apply to claims, never be recited
+      // into answers that didn't ask (client finding 2026-09-02).
+      expect(body, 'the note must tell the model not to volunteer it').toContain('do not recite or volunteer')
     })
 
     test('the document list strips internal identifiers like the entity list does', async ({ request, baseURL }) => {

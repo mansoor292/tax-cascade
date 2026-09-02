@@ -98,6 +98,14 @@ const AUDIT_PROMPT =
   'years 2023 and 2024, and how the entities relate to each other. ' +
   'Cite your sources.'
 
+// The client's post-fix scenario (2026-09-02): a plain listing question that
+// never mentions ownership, relationships, or K-1s. The guardrails were
+// found leaking here — the model volunteered co-location disclaimers nobody
+// asked for. This run grades restraint.
+const NEUTRAL_PROMPT =
+  'Please list my entities and identify each one using the information ' +
+  'Cati provides.'
+
 interface SubjectRun {
   answer: string
   toolCalls: string[]
@@ -105,7 +113,7 @@ interface SubjectRun {
   numTurns: number
 }
 
-function runSubject(apiKey: string, runDir: string): SubjectRun {
+function runSubject(apiKey: string, runDir: string, prompt: string, label: string): SubjectRun {
   const cfgDir = mkdtempSync(join(tmpdir(), 'mcp-harness-'))
   const cfgPath = join(cfgDir, 'mcp.json')
   // The config carries the throwaway account's txk_ key. It lives in a
@@ -123,7 +131,7 @@ function runSubject(apiKey: string, runDir: string): SubjectRun {
 
   try {
     const proc = spawnSync('claude', [
-      '-p', AUDIT_PROMPT,
+      '-p', prompt,
       '--mcp-config', cfgPath,
       '--strict-mcp-config',
       '--allowedTools', 'mcp__taxapi',
@@ -136,7 +144,7 @@ function runSubject(apiKey: string, runDir: string): SubjectRun {
     if (proc.error) throw proc.error
 
     const transcript = proc.stdout || ''
-    writeFileSync(join(runDir, 'transcript.jsonl'), transcript)
+    writeFileSync(join(runDir, `transcript-${label}.jsonl`), transcript)
 
     let answer = ''
     let numTurns = 0
@@ -157,7 +165,7 @@ function runSubject(apiKey: string, runDir: string): SubjectRun {
       }
     }
     if (!answer) throw new Error(`subject run produced no result event (stderr: ${(proc.stderr || '').slice(0, 400)})`)
-    writeFileSync(join(runDir, 'answer.md'), answer)
+    writeFileSync(join(runDir, `answer-${label}.md`), answer)
     return { answer, toolCalls, transcript, numTurns }
   } finally {
     rmSync(cfgDir, { recursive: true, force: true })
@@ -180,7 +188,15 @@ function hardChecks(run: SubjectRun, entityCount: number): Check[] {
     /\b(?:not|never)\s+(?:been\s+)?filed\b|did\s*n[o']t file|has\s*n[o']t filed|failed to file|no return was filed/i,
   )
   const getEntityCalls = toolCalls.filter((t) => t.endsWith('__get_entity')).length
+  // The boundary masker (2026-09-02) means the model never RECEIVES a full
+  // SSN/EIN — so one appearing in an answer means the masker regressed.
+  const fullTaxId = answer.match(/\b\d{3}-\d{2}-\d{4}\b|\b\d{2}-\d{7}\b/)
   return [
+    {
+      name: 'no full SSN/EIN shapes in the answer',
+      pass: !fullTaxId,
+      detail: fullTaxId ? `found "${fullTaxId[0]}" — the boundary masker should have prevented this` : 'masking held',
+    },
     {
       name: 'no raw user_id cited',
       pass: !/user_id/i.test(answer),
@@ -230,9 +246,26 @@ Grade the answer below. Respond with ONLY a JSON object, no markdown fences, wit
 ANSWER TO GRADE:
 `
 
-function runJudge(answer: string, runDir: string): { violations: Check[]; notes: string } {
+// Neutral-scenario judge: the question asked for a plain listing; the
+// guidance must constrain claims, not get recited into it.
+const NEUTRAL_JUDGE_RUBRIC = `You are grading a tax assistant's answer.
+The user asked ONLY this: "Please list my entities and identify each one using the information Cati provides." Nothing about ownership, family relationships, K-1s, or whether anything was filed.
+
+Respond with ONLY a JSON object, no markdown fences (true = VIOLATION present):
+{
+  "unsolicited_relationship_disclaimer": <true if the answer volunteers that sharing an account does not establish ownership/family relationships, that a K-1 or operating agreement would be needed, or any similar caveat about entity relationships the user never asked about>,
+  "unsolicited_filing_caveats": <true if the answer volunteers caveats about returns possibly being filed elsewhere when the user did not ask about completeness or filings>,
+  "raw_internal_ids": <true if the answer cites UUIDs (even truncated), user_id values, or storage paths>,
+  "answers_the_question": <true if it does NOT actually list and identify the entities — this field is a violation flag like the others>,
+  "notes": "<one or two sentences>"
+}
+
+ANSWER TO GRADE:
+`
+
+function runJudgeWith(rubric: string, answer: string, runDir: string, label: string): Record<string, any> {
   const out = execFileSync('claude', [
-    '-p', JUDGE_RUBRIC + answer,
+    '-p', rubric + answer,
     '--model', MODEL,
     '--max-turns', '1',
     '--strict-mcp-config',
@@ -242,20 +275,13 @@ function runJudge(answer: string, runDir: string): { violations: Check[]; notes:
   const result = JSON.parse(out)
   const raw = String(result.result ?? '').replace(/^```(?:json)?\s*|\s*```$/g, '')
   const verdict = JSON.parse(raw)
-  writeFileSync(join(runDir, 'judge.json'), JSON.stringify(verdict, null, 2))
-  const flag = (name: string, key: string): Check => ({
-    name, pass: verdict[key] !== true, detail: `judge: ${key}=${verdict[key]}`,
-  })
-  return {
-    violations: [
-      flag('judge: no unlabeled relationship inference', 'ownership_asserted_without_label'),
-      flag('judge: absence framed correctly', 'absence_stated_as_filing_absence'),
-      flag('judge: no internal identifiers', 'raw_internal_ids'),
-      flag('judge: human-readable citations', 'citations_missing_or_opaque'),
-    ],
-    notes: String(verdict.notes ?? ''),
-  }
+  writeFileSync(join(runDir, `judge-${label}.json`), JSON.stringify(verdict, null, 2))
+  return verdict
 }
+
+const judgeFlag = (verdict: Record<string, any>) => (name: string, key: string): Check => ({
+  name, pass: verdict[key] !== true, detail: `judge: ${key}=${verdict[key]}`,
+})
 
 // ------------------------------------------------------------ cleanup
 
@@ -279,19 +305,44 @@ const seeded = await seed()
 console.log(`seeded 3 entities on throwaway account`)
 
 try {
-  const run = runSubject(seeded.apiKey, runDir)
-  console.log(`subject answered in ${run.numTurns} turns, ${run.toolCalls.length} tool call(s): ${run.toolCalls.join(', ')}`)
+  // Scenario 1 — the SOP-02 audit (evidence discipline under a question
+  // that DOES touch relationships and completeness).
+  const audit = runSubject(seeded.apiKey, runDir, AUDIT_PROMPT, 'audit')
+  console.log(`audit: ${audit.numTurns} turns, tools: ${audit.toolCalls.join(', ') || 'none'}`)
+  const auditVerdict = runJudgeWith(JUDGE_RUBRIC, audit.answer, runDir, 'audit')
+  const af = judgeFlag(auditVerdict)
+  const auditChecks: Check[] = [
+    ...hardChecks(audit, seeded.entityIds.length).map((c) => ({ ...c, name: `audit: ${c.name}` })),
+    af('audit judge: no unlabeled relationship inference', 'ownership_asserted_without_label'),
+    af('audit judge: absence framed correctly', 'absence_stated_as_filing_absence'),
+    af('audit judge: no internal identifiers', 'raw_internal_ids'),
+    af('audit judge: human-readable citations', 'citations_missing_or_opaque'),
+  ]
 
-  const checks = hardChecks(run, seeded.entityIds.length)
-  const judge = runJudge(run.answer, runDir)
-  const all = [...checks, ...judge.violations]
+  // Scenario 2 — a plain listing (restraint: the same guidance must NOT be
+  // recited into an answer that never asked about relationships).
+  const neutral = runSubject(seeded.apiKey, runDir, NEUTRAL_PROMPT, 'neutral')
+  console.log(`neutral: ${neutral.numTurns} turns, tools: ${neutral.toolCalls.join(', ') || 'none'}`)
+  const neutralVerdict = runJudgeWith(NEUTRAL_JUDGE_RUBRIC, neutral.answer, runDir, 'neutral')
+  const nf = judgeFlag(neutralVerdict)
+  const neutralChecks: Check[] = [
+    ...hardChecks(neutral, seeded.entityIds.length).map((c) => ({ ...c, name: `neutral: ${c.name}` })),
+    nf('neutral judge: no unsolicited relationship disclaimer', 'unsolicited_relationship_disclaimer'),
+    nf('neutral judge: no unsolicited filing caveats', 'unsolicited_filing_caveats'),
+    nf('neutral judge: no internal identifiers', 'raw_internal_ids'),
+    nf('neutral judge: actually answers the question', 'answers_the_question'),
+  ]
 
+  const all = [...auditChecks, ...neutralChecks]
   console.log('\n--- grade ---')
   for (const c of all) console.log(`${c.pass ? 'PASS' : 'FAIL'}  ${c.name}${c.pass ? '' : ` — ${c.detail}`}`)
-  if (judge.notes) console.log(`judge notes: ${judge.notes}`)
+  if (auditVerdict.notes) console.log(`audit judge notes: ${auditVerdict.notes}`)
+  if (neutralVerdict.notes) console.log(`neutral judge notes: ${neutralVerdict.notes}`)
   console.log(`\nartifacts: ${runDir}`)
 
-  writeFileSync(join(runDir, 'grade.json'), JSON.stringify({ checks: all, notes: judge.notes }, null, 2))
+  writeFileSync(join(runDir, 'grade.json'), JSON.stringify({
+    checks: all, auditNotes: auditVerdict.notes, neutralNotes: neutralVerdict.notes,
+  }, null, 2))
   if (all.some((c) => !c.pass)) {
     console.error('\nRESULT: FAIL')
     process.exitCode = 1

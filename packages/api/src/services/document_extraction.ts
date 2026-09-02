@@ -15,7 +15,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { s3GetObject } from '../lib/s3.js'
 import { analyzeDocument } from '../lib/textract.js'
-import { encryptedFields, hydrate, ENCRYPTED_DOC_FIELDS, ENCRYPTED_RETURN_FIELDS } from '../lib/row_crypto.js'
+import { encryptedFields, hydrate, encryptionEnabled, ENCRYPTED_DOC_FIELDS, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS } from '../lib/row_crypto.js'
+import { blindIndex } from '../lib/crypto.js'
 import { lazyServiceClient } from '../lib/supabase.js'
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
@@ -300,6 +301,36 @@ export async function extractAndArchive(args: {
   // Auto-archive if it's a recognized prior-year return. Inserts a filed_import
   // tax_return row with every extracted canonical field in field_values, verbatim.
   const isReturn = ['prior_return_1040', 'prior_return_1040x', 'prior_return_1120', 'prior_return_1120s', 'prior_return_1065'].includes(classification.doc_type || '')
+
+  // Backfill the entity's EIN/SSN from a filed return's extraction when the
+  // entity record has none. Client finding (SOP-02 retest, 2026-09-02):
+  // entities created during connector ingest carried no EIN even though
+  // every uploaded return's extraction had captured it — so a model looking
+  // at the entity list truthfully told the client "no EIN on file" about
+  // records whose identifier sat in the vault all along. Backfill ONLY into
+  // an empty field: an operator-entered EIN always wins over OCR. Best-effort
+  // — a failure here must never fail the ingest.
+  if (isReturn && entity_id && classification.ein_or_ssn) {
+    try {
+      const { data: ent } = await supabase.from('tax_entity')
+        .select('*').eq('id', entity_id).eq('user_id', userId).single()
+      if (ent) {
+        await hydrate(supabase, ent, ENCRYPTED_ENTITY_FIELDS)
+        if (!ent.ein) {
+          const einVal = String(classification.ein_or_ssn)
+          const einEnc = await encryptedFields(supabase, userId, { ein: einVal }, ENCRYPTED_ENTITY_FIELDS)
+          await supabase.from('tax_entity').update({
+            ein: einVal,
+            ein_hash: (encryptionEnabled() && process.env.TAX_API_BLIND_HMAC) ? blindIndex(einVal) : null,
+            ...einEnc,
+          }).eq('id', entity_id)
+          console.log(`[ingest] backfilled EIN (…${einVal.replace(/\D/g, '').slice(-4)}) onto entity ${entity_id} from ${classification.doc_type}`)
+        }
+      }
+    } catch (e: any) {
+      console.error('EIN backfill failed:', e.message)
+    }
+  }
   const processedReturn = isReturn && textractData?.kvs?.length && doc
     ? await archiveDocumentAsReturn(doc, classification, userId, entity_id || null, textractData)
     : null
