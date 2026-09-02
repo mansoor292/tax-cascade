@@ -43,7 +43,17 @@ export interface TaxReturn {
   field_values?: Record<string, number | string | null>
   verification?: {
     mapper_stats?: { mapped?: number; total_input_keys?: number; high_confidence?: number; medium_confidence?: number; low_confidence?: number }
-    gemini_gap_fill?: { gaps_total?: number; gaps_filled?: number; model?: string; error?: string }
+    gemini_gap_fill?: {
+      gaps_total?: number
+      gaps_filled?: number
+      /** Keys placed by gap-fill rather than the mapper — AI-assisted provenance. */
+      filled_keys?: string[]
+      /** Suggestions dropped by the grounding check (value absent from the document). */
+      gaps_rejected?: number
+      rejected?: Record<string, number>
+      model?: string
+      error?: string
+    }
     extracted_count?: number
     unmapped_count?: number
     [k: string]: unknown
