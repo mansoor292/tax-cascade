@@ -69,6 +69,9 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
   }
 
   const handleCreateAmendment = async (filed: TaxReturn) => {
+    // SOP-03 finding: one accidental click created a blank amendment and the
+    // year row read as a −$34k tax change. Creation now confirms, like delete.
+    if (!confirm(`Create an amendment for the filed ${filed.tax_year} ${filed.form_type}? It starts blank — the year row will show it alongside the filed return until you compute it.`)) return
     setCreatingAmendment(filed.id)
     try {
       await createAmendment(filed)
@@ -194,7 +197,15 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
                 const amendMetric = keyMetric(latestAmendment)
                 const filedTax = filedMetric.value
                 const amendTax = amendMetric.value
-                const deltaTax = (amendTax !== undefined && filedTax !== undefined) ? amendTax - filedTax : null
+                // SOP-03: a freshly created amendment has no real inputs yet.
+                // Showing its $0 headline against the filed return read as a
+                // −$34k tax change to a tester. field_values can't signal
+                // blankness (an empty compute still writes the standard
+                // deduction), so blank = nothing in input_data but tax_year.
+                const amendInputs = (latestAmendment?.input_data || {}) as Record<string, unknown>
+                const amendIsBlank = !!latestAmendment &&
+                  Object.keys(amendInputs).filter(k => k !== 'tax_year').length === 0
+                const deltaTax = (!amendIsBlank && amendTax !== undefined && filedTax !== undefined) ? amendTax - filedTax : null
                 const gapStats = g.filed?.verification?.gemini_gap_fill
                 const otherCount = g.extensions.length + g.others.length + (g.proforma ? 1 : 0)
                 const isExpanded = expandedYear === g.year
@@ -232,7 +243,13 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
                         {latestAmendment ? (
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.amendment}`}>Amended</Badge>
-                            <span className="text-sm font-mono">{fmt(amendTax)}</span>
+                            {amendIsBlank ? (
+                              <span className="text-xs text-muted-foreground italic" title="This amendment has no values yet — expand the year to compute or delete it.">
+                                blank — not yet computed
+                              </span>
+                            ) : (
+                              <span className="text-sm font-mono">{fmt(amendTax)}</span>
+                            )}
                             {extraAmendmentCount > 0 && (
                               <Badge
                                 variant="outline"

@@ -26,13 +26,58 @@ export interface GapFillInput {
 
 export interface GapFillResult {
   filled:       Record<string, number>
+  /** Values Gemini returned that do NOT appear anywhere in the Textract KVs.
+   *  Never merged into field_values — kept only so callers can log/report. */
+  rejected:     Record<string, number>
   gaps_total:   number
   gaps_filled:  number
+  gaps_rejected: number
   model:        string
   error?:       string
 }
 
 const EXPECTED_KEY_CACHE: Record<string, string[]> = {}
+
+/**
+ * Grounding check — the hard rule Gemini's prompt only asks for.
+ *
+ * Postmortem (2026-09-02, SOP-03): asked to fill 1040 line 16, Gemini
+ * "derived" $53,908 by subtracting Schedule 2's OTHER-taxes total from
+ * line 18 — a number that appears nowhere on the filed PDF, persisted
+ * into the filed-return archive looking exactly like a parsed value.
+ * Filed imports are archives of what the document says; a gap-filled
+ * value is only acceptable when the document actually contains it.
+ *
+ * So: collect every number Textract read off the form, and drop any
+ * filled value whose magnitude isn't among them. Zero stays allowed —
+ * the prompt's blank-line→0 convention means legitimate zeros are
+ * usually not printed on the form at all.
+ */
+export function groundingSet(kvs: Array<{ key: string; value: string }>): Set<number> {
+  const set = new Set<number>()
+  for (const kv of kvs) {
+    const tokens = String(kv?.value ?? '').match(/\d[\d,]*(?:\.\d+)?/g) || []
+    for (const t of tokens) {
+      const n = parseFloat(t.replace(/,/g, ''))
+      if (!isNaN(n)) set.add(Math.round(Math.abs(n)))
+    }
+  }
+  return set
+}
+
+export function groundFilled(
+  filled: Record<string, number>,
+  kvs: Array<{ key: string; value: string }>,
+): { grounded: Record<string, number>; rejected: Record<string, number> } {
+  const set = groundingSet(kvs)
+  const grounded: Record<string, number> = {}
+  const rejected: Record<string, number> = {}
+  for (const [k, v] of Object.entries(filled)) {
+    if (v === 0 || set.has(Math.abs(Math.round(v)))) grounded[k] = v
+    else rejected[k] = v
+  }
+  return { grounded, rejected }
+}
 
 /**
  * Union of canonical keys we consider "expected" for a given form+year.
@@ -114,7 +159,7 @@ function describeCanonicalKey(key: string): string {
 export async function gapFillWithGemini(input: GapFillInput): Promise<GapFillResult> {
   const GEMINI_KEY = process.env.GEMINI_API_KEY
   if (!GEMINI_KEY) {
-    return { filled: {}, gaps_total: 0, gaps_filled: 0, model: '', error: 'GEMINI_API_KEY not set' }
+    return { filled: {}, rejected: {}, gaps_total: 0, gaps_filled: 0, gaps_rejected: 0, model: '', error: 'GEMINI_API_KEY not set' }
   }
 
   const expected = getExpectedCanonicalKeys(input.formType, input.taxYear)
@@ -126,7 +171,7 @@ export async function gapFillWithGemini(input: GapFillInput): Promise<GapFillRes
   const gaps = expected.filter(k => !have.has(k))
 
   if (gaps.length === 0) {
-    return { filled: {}, gaps_total: 0, gaps_filled: 0, model: '' }
+    return { filled: {}, rejected: {}, gaps_total: 0, gaps_filled: 0, gaps_rejected: 0, model: '' }
   }
 
   // Keep only numeric-ish KVs (values with at least one digit) to keep the
@@ -184,13 +229,16 @@ Output format:
       }
     }
 
+    const { grounded, rejected } = groundFilled(filled, input.textractKvs)
     return {
-      filled,
-      gaps_total:  gaps.length,
-      gaps_filled: Object.keys(filled).length,
-      model:       modelName,
+      filled:        grounded,
+      rejected,
+      gaps_total:    gaps.length,
+      gaps_filled:   Object.keys(grounded).length,
+      gaps_rejected: Object.keys(rejected).length,
+      model:         modelName,
     }
   } catch (e: any) {
-    return { filled: {}, gaps_total: gaps.length, gaps_filled: 0, model: modelName, error: e.message }
+    return { filled: {}, rejected: {}, gaps_total: gaps.length, gaps_filled: 0, gaps_rejected: 0, model: modelName, error: e.message }
   }
 }

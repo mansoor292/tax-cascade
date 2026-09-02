@@ -93,6 +93,12 @@ export async function archiveDocumentAsReturn(
       gapFillReport = {
         gaps_total:  result.gaps_total,
         gaps_filled: result.gaps_filled,
+        // Per-key provenance: which field_values entries are AI-assisted
+        // rather than mapper-parsed, and which suggestions the grounding
+        // check refused (values absent from the document's own numbers).
+        filled_keys:   Object.keys(result.filled),
+        gaps_rejected: result.gaps_rejected,
+        rejected:      result.rejected,
         model:       result.model,
         error:       result.error,
       }

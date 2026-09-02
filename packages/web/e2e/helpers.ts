@@ -148,6 +148,53 @@ export async function createEntityViaApi(
 }
 
 /**
+ * Seed a filed_import tax_return row directly (service role). Filed imports
+ * normally only exist via PDF ingest — Textract + Gemini, slow and
+ * non-deterministic — so specs that need one as SCAFFOLDING (line-level view,
+ * amendment flows) insert the row instead. Plaintext-only write: hydrate()
+ * only overrides when an _enc twin exists, so reads serve these values as-is.
+ * Requires SUPABASE_SERVICE_ROLE_KEY; callers should test.skip() without it.
+ */
+export async function seedFiledReturn(
+  entityId: string,
+  opts: {
+    tax_year: number
+    form_type: string
+    field_values: Record<string, number>
+    verification?: Record<string, any>
+  },
+): Promise<string> {
+  if (!SERVICE) throw new Error('seedFiledReturn needs SUPABASE_SERVICE_ROLE_KEY')
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/tax_return`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE,
+      Authorization: `Bearer ${SERVICE}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify({
+      entity_id: entityId,
+      tax_year: opts.tax_year,
+      form_type: opts.form_type,
+      source: 'filed_import',
+      status: 'filed',
+      field_values: opts.field_values,
+      computed_data: { computed: {} },
+      input_data: {},
+      verification: opts.verification ?? {},
+    }),
+  })
+  const body: any = await res.json().catch(() => null)
+  if (!res.ok || !body?.[0]?.id) {
+    throw new Error(`seedFiledReturn failed (${res.status}): ${JSON.stringify(body).slice(0, 300)}`)
+  }
+  return body[0].id
+}
+
+export const HAS_SERVICE_KEY = Boolean(SERVICE)
+
+/**
  * Poll a document until background extraction settles. The ingest contract
  * is 202 + processing_status, so any test that needs the extracted result
  * has to wait for the row, not the response.

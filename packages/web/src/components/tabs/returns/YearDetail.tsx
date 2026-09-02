@@ -2,7 +2,8 @@
  * Expanded per-year detail rows for the Returns tab — the canonical
  * metricsForForm ordering keeps Filed / Amendment / Proforma scannable.
  */
-import { Download, Loader2, Sparkles, Trash2, RefreshCw, Scale } from 'lucide-react'
+import { useState } from 'react'
+import { Download, ListOrdered, Loader2, Sparkles, Trash2, RefreshCw, Scale } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { fmtMoney } from '@/lib/format'
@@ -10,6 +11,7 @@ import { SOURCE_LABEL, SOURCE_VARIANT } from '@/lib/labels'
 import { metricsForForm } from '@taxengine/shared'
 import type { TaxReturn } from '@taxengine/shared'
 import type { GroupedYear } from './helpers'
+import LineDetail from './LineDetail'
 
 const fmt = (n: unknown) => fmtMoney(n, '—')
 
@@ -41,6 +43,15 @@ export default function YearDetail({
     ...group.extensions,
     ...group.others,
   ].filter((r): r is TaxReturn => !!r)
+
+  // SOP-03: a filed return needs its own line-level view — before this, only
+  // an amendment's "Compare vs filed" could show canonical lines at all.
+  const [openLines, setOpenLines] = useState<Set<string>>(new Set())
+  const toggleLines = (id: string) => setOpenLines(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
 
   // Read the filed return's accounting method (Schedule K line 1: cash/accrual/other)
   const readMethod = (r?: TaxReturn): string | null => {
@@ -108,6 +119,16 @@ export default function YearDetail({
                 )}
               </div>
               <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleLines(r.id)}
+                  className="gap-1 text-xs h-7"
+                  title="Show every IRS line recorded on this return"
+                >
+                  <ListOrdered className="h-3 w-3" />
+                  {openLines.has(r.id) ? 'Hide lines' : 'View lines'}
+                </Button>
                 {r.source === 'filed_import' && (
                   <Button
                     variant="ghost"
@@ -202,10 +223,13 @@ export default function YearDetail({
             {gap && (typeof gap.gaps_total === 'number' || gap.model) && (
               <div className="mt-2 pt-2 border-t text-xs text-muted-foreground">
                 Gap-fill: {gap.gaps_filled ?? 0} of {gap.gaps_total ?? 0} filled
+                {typeof gap.gaps_rejected === 'number' && gap.gaps_rejected > 0
+                  ? ` · ${gap.gaps_rejected} rejected (not present in document)` : ''}
                 {gap.model ? ` · ${gap.model}` : ''}
                 {gap.error ? ` · error: ${gap.error}` : ''}
               </div>
             )}
+            {openLines.has(r.id) && <LineDetail ret={r} />}
           </div>
         )
       })}
