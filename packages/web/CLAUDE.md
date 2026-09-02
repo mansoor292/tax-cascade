@@ -61,6 +61,11 @@ npm run test:e2e:prod          # vs fin.catipult.ai — creates REAL accounts;
 
 ```bash
 npm test -w packages/web      # vitest — format/mask/groupByYear/compare helpers
+npm run build -w packages/web # tsc -b + vite build — WHAT NETLIFY RUNS.
+                              # vitest and eslint do NOT typecheck; a green
+                              # test+lint run has shipped a broken deploy
+                              # (43e74cc). Run this before every push that
+                              # touches web or shared.
 ```
 
 The e2e suite is incident-regression
