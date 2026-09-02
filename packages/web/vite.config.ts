@@ -15,6 +15,12 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3737',
       '/auth': 'http://localhost:3737',
+      // OAuth + discovery moved into Express with the Netlify cut; the
+      // consent screen calls /oauth/issue-code same-origin.
+      '/oauth': 'http://localhost:3737',
+      '/.netlify': 'http://localhost:3737',
+      '/.well-known': 'http://localhost:3737',
+      '/mcp': 'http://localhost:3737',
     }
   }
 })

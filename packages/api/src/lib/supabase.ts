@@ -66,6 +66,16 @@ export function anonClient(): SupabaseClient {
   return _anon
 }
 
+/** Client for a bare Supabase JWT (no Request) — the OAuth consent flow
+ *  receives the session token in a JSON body, not a header. RLS runs as
+ *  that user, same as userClient. */
+export function jwtClient(token: string): SupabaseClient {
+  return createClient(supabaseUrl(), anonKey(), {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth:   { persistSession: false, autoRefreshToken: false },
+  })
+}
+
 /** Per-request client that carries the caller's JWT for RLS. */
 export function userClient(req: Request): SupabaseClient {
   const token = req.headers.authorization?.replace('Bearer ', '') || ''

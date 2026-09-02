@@ -31,6 +31,23 @@ set -a
 set +a
 eval "$(./scripts/load-ssm-env.sh)" || echo "[reload] WARNING: SSM load failed"
 
+# ── Web SPA build (served by Express since the 2026-09-02 Netlify cut) ──
+# Build into a scratch dir and swap only on success: vite empties its outDir
+# before writing, so an in-place build that FAILS would leave a broken dist
+# and take the site down; this way a failed build keeps the previous bundle
+# serving and only logs loudly.
+echo "[reload] building web SPA"
+export VITE_API_URL="${VITE_API_URL:-https://fin.catipult.ai}"
+export VITE_SUPABASE_URL="${SUPABASE_URL:-https://ophnjqjmxeohbyydxnlg.supabase.co}"
+export VITE_SUPABASE_ANON_KEY="${VITE_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-}}"
+if (cd /opt/tax-api && npm run build -w packages/web -- --outDir dist-next --emptyOutDir); then
+  rm -rf /opt/tax-api/packages/web/dist
+  mv /opt/tax-api/packages/web/dist-next /opt/tax-api/packages/web/dist
+  echo "[reload] web build OK"
+else
+  echo "[reload] WARNING: web build FAILED — previous dist keeps serving"
+fi
+
 pm2 reload tax-api --update-env
 echo "[reload] pm2 reload exited $?"
 

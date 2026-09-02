@@ -45,7 +45,11 @@ import scratchRoutes from './routes/scratch.js'
 import intakeRoutes from './routes/intake.js'
 import calendarRoutes from './routes/calendar.js'
 import discoveryRoutes from './discovery/discovery_routes.js'
+import oauthRoutes from './routes/oauth.js'
+import wellknownRoutes from './routes/wellknown.js'
 import { mountMCP } from './mcp/tax-mcp.js'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const STARTED_AT = new Date().toISOString()
 
@@ -142,16 +146,16 @@ app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(express.static('public'))
 
-// ─── MCP (public — clients authenticate via OAuth on fin.catipult.ai) ───
-// There is deliberately NO OAuth implementation on this origin any more.
-// The Express one that lived in mcp/oauth.ts was dead in production —
-// every endpoint shadowed by netlify.toml's redirects — and broken by
-// design under pm2 cluster (in-memory auth codes don't survive worker
-// round-robin). The stateless-JWT Netlify Functions in
-// packages/web/netlify/functions are THE implementation, and the static
-// JSON in packages/web/public/.well-known is THE discovery metadata.
-// tax-mcp.ts's WWW-Authenticate challenge already points clients there.
-// Direct callers of this EC2 origin's /oauth/* (none known) get 404s.
+// ─── OAuth + discovery (public; MUST mount before the /mcp middleware —
+// /mcp/.well-known/* would otherwise be swallowed by the MCP handler) ───
+// Since the 2026-09-02 Netlify cut this origin serves the whole surface:
+// the stateless-JWT OAuth endpoints (routes/oauth.ts — see its header for
+// why stateless is load-bearing under pm2 cluster) and every RFC spelling
+// of the discovery metadata (routes/wellknown.ts). netlify.toml still
+// mirrors these for as long as the Netlify site exists as a DNS rollback
+// target, but THIS is the implementation.
+app.use(wellknownRoutes)
+app.use(oauthRoutes)
 // ─── /mcp request visibility ─────────────────────────────────────────
 // The EC2 box has no shell access and pm2 logs are unreachable, so when a
 // remote MCP client (the Claude connector) reports 502s that no direct
@@ -584,6 +588,21 @@ app.post('/api/label/:form/:year', async (req, res) => {
 // had no callers in the MCP tools or the web app, and wrote to a bucket
 // nothing else used. The field-map verification workflow lives in
 // scripts/verify_pipeline.ts.
+
+// ─── SPA (served from this origin since the 2026-09-02 Netlify cut) ───
+// The deploy script builds packages/web into dist/ before pm2 reloads, so
+// the same origin now serves app + API + MCP + OAuth — one vendor, one hop.
+// Mounted LAST: every API/auth/MCP/OAuth route above wins first, and the
+// fallback explicitly refuses backend prefixes so an unknown /api path 404s
+// as JSON instead of returning index.html with a 200 (the exact bug class
+// netlify.toml's ordering rules existed to prevent).
+const WEB_DIST = process.env.WEB_DIST_DIR
+  || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/dist')
+app.use(express.static(WEB_DIST))
+app.get('*', (req, res, next) => {
+  if (/^\/(api|auth|mcp|oauth|deploy|\.netlify|\.well-known)(\/|$)/.test(req.path)) return next()
+  res.sendFile(path.join(WEB_DIST, 'index.html'), err => { if (err) next() })
+})
 
 // ─── Start server ───
 const PORT = parseInt(process.env.PORT || '3737')

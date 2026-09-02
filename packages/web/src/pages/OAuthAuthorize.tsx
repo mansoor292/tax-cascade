@@ -100,7 +100,10 @@ export default function OAuthAuthorize() {
     if (!session) { setApproveError('No active session'); return }
     setApproveBusy(true); setApproveError('')
     try {
-      const resp = await fetch('/.netlify/functions/oauth-issue-code', {
+      // Express serves this since the Netlify cut; the old
+      // /.netlify/functions/oauth-issue-code path stays aliased for any
+      // cached pre-cutover bundle.
+      const resp = await fetch('/oauth/issue-code', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
