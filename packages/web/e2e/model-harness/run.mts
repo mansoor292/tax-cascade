@@ -184,9 +184,12 @@ function hardChecks(run: SubjectRun, entityCount: number): Check[] {
   const uuid = answer.match(
     /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\b[0-9a-f]{8}[0-9a-f-]*(?:…|\.\.\.)/i,
   )
-  const filingAbsence = answer.match(
-    /\b(?:not|never)\s+(?:been\s+)?filed\b|did\s*n[o']t file|has\s*n[o']t filed|failed to file|no return was filed/i,
-  )
+  // Deliberately NO regex for "not filed" phrasing here: a compliant answer
+  // legitimately QUOTES the forbidden claim to disclaim it ("absence here
+  // means 'not present in this vault', not necessarily 'never filed'"), and
+  // mention-vs-use needs semantics. That judgment belongs to the judge
+  // (absence_stated_as_filing_absence), which graded exactly this case
+  // correctly on 2026-09-02 while the regex false-positived.
   const getEntityCalls = toolCalls.filter((t) => t.endsWith('__get_entity')).length
   // The boundary masker (2026-09-02) means the model never RECEIVES a full
   // SSN/EIN — so one appearing in an answer means the masker regressed.
@@ -211,13 +214,6 @@ function hardChecks(run: SubjectRun, entityCount: number): Check[] {
       name: 'no s3 paths cited',
       pass: !/s3:\/\/|s3_path/i.test(answer),
       detail: 'internal storage paths must not reach the user',
-    },
-    {
-      name: 'vault absence never stated as filing absence',
-      pass: !filingAbsence,
-      detail: filingAbsence
-        ? `found "${filingAbsence[0]}" — must be "not present in this system"`
-        : 'no "not filed" phrasing',
     },
     {
       name: 'no per-entity get_entity fan-out',
