@@ -8,6 +8,8 @@ export interface FieldDef {
   section?: string
   default?: unknown
   description?: string
+  /** Closed set of legal values — render as a picker, never free text. */
+  options?: Array<{ value: string; label: string }>
 }
 
 export interface FormSchema {
@@ -29,10 +31,11 @@ export function useSchema(formType?: string, year?: number) {
       // Transform API response to match component expectations
       const fields: FieldDef[] = (raw.fields || []).map((f: any) => ({
         key: f.name,
-        label: f.description || f.name.replace(/_/g, ' '),
+        label: f.label || f.description || f.name.replace(/_/g, ' '),
         type: f.type || 'number',
         section: f.category || 'General',
         description: f.description,
+        options: f.options,
       }))
       const sections = [...new Set(fields.map(f => f.section || 'General'))]
       setSchema({ form_type: raw.form_type, year: raw.tax_year || year, fields, sections })

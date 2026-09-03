@@ -21,9 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import SchemaFieldInput from '@/components/SchemaFieldInput'
 import { useSchema } from '@/hooks/use-schema'
 import { toast } from '@/lib/toast'
 import { coerceNumericInputs } from '@/lib/format'
@@ -128,16 +128,12 @@ export default function ComputeDialog({ open, onOpenChange, entityId, defaultFor
             <h4 className="text-sm font-medium text-muted-foreground mb-2 uppercase tracking-wide">{section}</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {fields.map(field => (
-                <div key={field.key} className="space-y-1">
-                  <Label className="text-xs">{field.label || field.key.replace(/_/g, ' ')}</Label>
-                  <Input
-                    type={field.type === 'number' ? 'number' : 'text'}
-                    placeholder={field.default !== undefined ? String(field.default) : '0'}
-                    value={inputs[field.key] || ''}
-                    onChange={e => updateInput(field.key, e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
+                <SchemaFieldInput
+                  key={field.key}
+                  field={field}
+                  value={inputs[field.key] || ''}
+                  onChange={v => updateInput(field.key, v)}
+                />
               ))}
             </div>
           </div>

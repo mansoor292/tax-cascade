@@ -5,7 +5,6 @@ import { useEntities } from '@/hooks/use-entities'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -16,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import SchemaFieldInput from '@/components/SchemaFieldInput'
 import { toast } from '@/lib/toast'
 import { fmtMoney as fmt, coerceNumericInputs } from '@/lib/format'
 import { COMPUTABLE_FORM_OPTIONS } from '@/lib/labels'
@@ -188,16 +188,12 @@ export default function Compute() {
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0">
                   {fields.map(field => (
-                    <div key={field.key} className="space-y-1">
-                      <Label className="text-xs">{field.label || field.key.replace(/_/g, ' ')}</Label>
-                      <Input
-                        type={field.type === 'number' ? 'number' : 'text'}
-                        placeholder={field.default !== undefined ? String(field.default) : '0'}
-                        value={inputs[field.key] || ''}
-                        onChange={e => updateInput(field.key, e.target.value)}
-                        className="h-8 text-sm"
-                      />
-                    </div>
+                    <SchemaFieldInput
+                      key={field.key}
+                      field={field}
+                      value={inputs[field.key] || ''}
+                      onChange={v => updateInput(field.key, v)}
+                    />
                   ))}
                 </CardContent>
               </Card>

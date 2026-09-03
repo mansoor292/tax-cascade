@@ -19,6 +19,15 @@ interface FieldDef {
   description: string
   category: string
   irs_line?: string
+  /** Short human label for form UIs (description stays the long contract). */
+  label?: string
+  /**
+   * Closed set of legal values. UIs must render these as a picker — an
+   * SOP-04 tester was handed filing_status as a free-text box hinting "0"
+   * and had to ask what to type. Additive: API consumers that ignore it
+   * keep working.
+   */
+  options?: Array<{ value: string; label: string }>
 }
 
 interface FormSchema {
@@ -34,7 +43,13 @@ export const INPUT_SCHEMAS: Record<string, FormSchema> = {
     display_name: 'Form 1040 — U.S. Individual Income Tax Return',
     description: 'Individual income tax return. Supports standard/itemized deductions, QBI, K-1 pass-through, and multi-year brackets.',
     fields: [
-      { name: 'filing_status', type: 'string', required: true, description: 'Filing status: single, mfj (married filing jointly), mfs (married filing separately), hoh (head of household), qw (qualifying widow/er)', category: 'filing' },
+      { name: 'filing_status', type: 'string', required: true, label: 'Filing status', description: 'Filing status: single, mfj (married filing jointly), mfs (married filing separately), hoh (head of household), qw (qualifying widow/er)', category: 'filing', options: [
+        { value: 'single', label: 'Single' },
+        { value: 'mfj', label: 'Married filing jointly' },
+        { value: 'mfs', label: 'Married filing separately' },
+        { value: 'hoh', label: 'Head of household' },
+        { value: 'qw', label: 'Qualifying widow(er)' },
+      ] },
       { name: 'tax_year', type: 'number', required: true, description: 'Tax year (2018-2025)', category: 'filing' },
       { name: 'wages', type: 'number', required: true, description: 'Total wages, salaries, tips (W-2 box 1)', category: 'income', irs_line: '1z' },
       { name: 'taxable_interest', type: 'number', required: false, description: 'Taxable interest income', category: 'income', irs_line: '2b' },
