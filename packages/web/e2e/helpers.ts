@@ -162,6 +162,9 @@ export async function seedFiledReturn(
     form_type: string
     field_values: Record<string, number>
     verification?: Record<string, any>
+    /** Seed an imported amendment (e.g. a 1040-X) instead of a filed_import. */
+    source?: 'filed_import' | 'amendment'
+    supersedes_id?: string
   },
 ): Promise<string> {
   if (!SERVICE) throw new Error('seedFiledReturn needs SUPABASE_SERVICE_ROLE_KEY')
@@ -177,8 +180,9 @@ export async function seedFiledReturn(
       entity_id: entityId,
       tax_year: opts.tax_year,
       form_type: opts.form_type,
-      source: 'filed_import',
+      source: opts.source ?? 'filed_import',
       status: 'filed',
+      ...(opts.supersedes_id ? { supersedes_id: opts.supersedes_id } : {}),
       field_values: opts.field_values,
       computed_data: { computed: {} },
       input_data: {},

@@ -30,10 +30,16 @@ export default function YearRow({ row, autoExpand = false }: { row: YearRowData;
   const atax = row.amendment?.total_tax
   const ftaxable = row.filed?.taxable_income
   const ataxable = row.amendment?.taxable_income
-  const fref = row.filed?.overpayment ?? 0
-  const aref = row.amendment?.overpayment ?? 0
+  // Δ refund must follow the same both-sides-present rule as Δ tax. A 1040-X
+  // restates the lines it changes — it does NOT restate the original refund,
+  // so an imported amendment usually has no overpayment key at all. The old
+  // `?? 0` here read that absence as "refund became $0" and a tester saw
+  // Δ refund = −$15,202 on a year whose Δ tax was ±$0. Absent means "not
+  // restated" and renders as —, never as a delta against zero.
+  const fref = row.filed?.overpayment
+  const aref = row.amendment?.overpayment
   const dtax = (typeof ftax === 'number' && typeof atax === 'number') ? atax - ftax : null
-  const dref = (row.filedRow && row.amendRow) ? aref - fref : null
+  const dref = (typeof fref === 'number' && typeof aref === 'number') ? aref - fref : null
 
   return (
     <Fragment>

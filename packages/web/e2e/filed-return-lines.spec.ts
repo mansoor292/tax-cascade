@@ -172,3 +172,52 @@ test.describe('year-over-year refund card sums only amended years', () => {
     await expect(page.getByText('$79,645')).toHaveCount(0)
   })
 })
+
+test.describe('Δ refund with an amendment that does not restate the refund', () => {
+  test.skip(!HAS_SERVICE_KEY, 'needs SUPABASE_SERVICE_ROLE_KEY to seed returns')
+
+  // SOP-03 (Christy, 2026-09-03): a year row showed Δ refund = −$15,202 with
+  // Δ tax ±$0. Her filed 1040 carried result.L34_overpayment = 15202; the
+  // imported 1040-X restated the tax but — as 1040-Xs do — not the refund
+  // line, and the missing key was read as $0. Absent must render as —.
+  const email = testEmail('drefund')
+  let entityId = ''
+
+  test.beforeAll(async () => {
+    const token = await signUpViaApi(email)
+    entityId = (await createEntityViaApi(token, { name: 'Refund Delta Person', form_type: '1040' })).id
+    const filedId = await seedFiledReturn(entityId, {
+      tax_year: 2023, form_type: '1040',
+      field_values: {
+        'tax.L24_total_tax': 55264,
+        'result.L34_overpayment': 15202,
+        'refund.L35a_refunded': 15202,
+      },
+    })
+    // The 1040-X: same total tax, NO overpayment key — the refund is simply
+    // not restated.
+    await seedFiledReturn(entityId, {
+      tax_year: 2023, form_type: '1040',
+      source: 'amendment', supersedes_id: filedId,
+      field_values: { 'tax.L24_total_tax': 55264 },
+    })
+  })
+  test.afterAll(() => deleteUserByEmail(email))
+
+  test('an unrestated refund shows as —, never as a delta to zero', async ({ page }) => {
+    await signInThroughUi(page, email)
+    await expect(page).toHaveURL(/\/app/, { timeout: 20_000 })
+    await page.goto(`/app/compare/${entityId}`)
+
+    await expect(page.getByText('Filed vs Amendment by year')).toBeVisible({ timeout: 20_000 })
+    const table = page.getByRole('table')
+      .filter({ has: page.getByRole('columnheader', { name: 'Δ refund' }) })
+    const yearRow = table.getByRole('row').filter({ hasText: '2023' }).first()
+    await expect(yearRow).toBeVisible()
+    // Same tax both sides → Δ tax ±$0…
+    await expect(yearRow.getByText('±$0')).toBeVisible()
+    // …and the unrestated refund must NOT present as a −$15,202 change.
+    await expect(page.getByText('-$15,202')).toHaveCount(0)
+    await expect(yearRow.getByText('—').first()).toBeVisible()
+  })
+})
