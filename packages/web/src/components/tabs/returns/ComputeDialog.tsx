@@ -55,7 +55,11 @@ export default function ComputeDialog({ open, onOpenChange, entityId, defaultFor
     setInputs(prev => ({ ...prev, [key]: value }))
   }
 
-  const sections = schema?.fields?.reduce((acc, field) => {
+  // tax_year is a real schema field (MCP callers pass it in inputs), but
+  // this form already has an authoritative Tax Year dropdown — rendering
+  // the field too let a typed year silently override the dropdown (inputs
+  // spread after tax_year in handleCompute). SOP-04 tester finding.
+  const sections = schema?.fields?.filter(f => f.key !== 'tax_year').reduce((acc, field) => {
     const section = field.section || 'General'
     if (!acc[section]) acc[section] = []
     acc[section].push(field)

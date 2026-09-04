@@ -113,7 +113,10 @@ export default function Compute() {
     setInputs(prev => ({ ...prev, [key]: value }))
   }
 
-  const sections = schema?.fields?.reduce((acc, field) => {
+  // Same rule as ComputeDialog: the Tax Year dropdown is authoritative, so
+  // the schema's tax_year field must not render as a second, contradictable
+  // input (a typed year would win the spread in handleCompute).
+  const sections = schema?.fields?.filter(f => f.key !== 'tax_year').reduce((acc, field) => {
     const section = field.section || 'General'
     if (!acc[section]) acc[section] = []
     acc[section].push(field)

@@ -43,6 +43,15 @@ test.describe('Compute dialog — filing status is a dropdown, not a numeric-loo
     }
     await page.getByRole('option', { name: 'Married filing jointly' }).click()
 
+    // SOP-04 finding #2 (2026-09-04): fields must name their source document
+    // and box — users hold W-2s and 1099s, not return-line concepts…
+    await expect(page.getByText('Form 1099-DIV box 1a')).toBeVisible()
+    await expect(page.getByText('Form 1098-E box 1')).toBeVisible()
+    // …and tax_year must not render as a second, contradictable input:
+    // the dropdown at the top is authoritative, and a typed year silently
+    // overrode it.
+    await expect(page.getByTestId('field-tax_year')).toHaveCount(0)
+
     // Numeric fields stay numeric inputs.
     await page.getByTestId('field-wages').locator('input').fill('150000')
 
