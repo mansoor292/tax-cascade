@@ -292,6 +292,10 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   request_form:               { title: 'Request form support', ...WRITE },
   connect_stripe:             { title: 'Connect Stripe', ...WRITE },
   stripe_data:                { title: 'Stripe data (read)', ...RO },
+  // DESTRUCTIVE because the worst member governs: pay moves real money and
+  // void is not undoable, and one tool gets one annotation (same reasoning
+  // as qbo_resource).
+  stripe_invoice:             { title: 'Stripe invoice actions (create/finalize/pay/void)', ...DESTRUCTIVE },
   file_extension:             { title: 'File extension', ...WRITE },
   validate_extension:         { title: 'Validate extension inputs', ...RO },
 }
@@ -1063,6 +1067,39 @@ Year-long invoice/payment pulls can be huge — pass spill_to to park the payloa
       response = await call('GET', `/api/stripe/${entity_id}/${data_type}?${qs}`)
     }
     return text(await maybeSpill(call, response, spill_to))
+  })
+
+  // ─── Tool: stripe_invoice ───
+  // Write-side sibling of stripe_data. The confirmation rule rides in-band
+  // in the description because instructions-only rules don't hold (see the
+  // id-citation postmortem): pay moves real money and void is terminal.
+  server.tool('stripe_invoice', `Create and act on Stripe invoices for an entity. This is the LIVE Stripe account — real invoices, real charges.
+
+- action='create' → make a DRAFT invoice from explicit line items (amounts in DOLLARS, e.g. 349.5 = $349.50). Nothing is emailed or charged; report the draft back for review.
+- action='finalize' → lock the draft: assigns the invoice number and mints hosted_invoice_url / invoice_pdf. Does not email or charge by itself.
+- action='pay' → immediately charges the customer's default payment method for the full amount due.
+- action='void' → permanently cancels a finalized invoice. Cannot be undone (delete drafts in the Stripe dashboard instead).
+
+RULE — no exceptions: before 'pay' or 'void', state the invoice number, customer, and amount to the user and get an explicit yes in THIS conversation. Never chain create→finalize→pay in one turn on your own judgment. Find customer ids via stripe_data data_type='customers'.`, {
+    entity_id: z.string().describe('Entity UUID'),
+    action: z.enum(['create', 'finalize', 'pay', 'void']).describe('Invoice lifecycle action'),
+    invoice_id: z.string().optional().describe('Stripe invoice id (in_...) — required for finalize/pay/void'),
+    customer: z.string().optional().describe('Stripe customer id (cus_...) — required for create'),
+    lines: z.array(z.object({
+      description: z.string(),
+      amount: z.number().describe('Line amount in DOLLARS'),
+    })).optional().describe('Line items — required for create'),
+    currency: z.string().optional().describe("ISO currency (default 'usd')"),
+    description: z.string().optional().describe('Invoice memo shown to the customer (create only)'),
+    footer: z.string().optional().describe('Invoice footer text (create only)'),
+    collection_method: z.enum(['send_invoice', 'charge_automatically']).optional().describe("How the finalized invoice collects (default 'send_invoice')"),
+    days_until_due: z.number().optional().describe('Payment terms for send_invoice (default 30)'),
+  }, async ({ entity_id, action, invoice_id, ...body }) => {
+    if (action === 'create') {
+      return text(await call('POST', `/api/stripe/${entity_id}/invoices`, body))
+    }
+    if (!invoice_id) throw new Error(`invoice_id is required for action='${action}'`)
+    return text(await call('POST', `/api/stripe/${entity_id}/invoices/${encodeURIComponent(invoice_id)}/${action}`))
   })
 
   // ─── Tool: file_extension ───

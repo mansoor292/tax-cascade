@@ -29,7 +29,7 @@ src/
 │                      sectioned-key map moved to @taxengine/shared
 ├── builders/          PDF fill; build_return_pdf.ts is the live package
 │                      builder, pdf_filler.ts has the shared helpers
-├── mcp/               tax-mcp.ts (43 tools; calls this server's own REST
+├── mcp/               tax-mcp.ts (44 tools; calls this server's own REST
 │                      over localhost — by design). OAuth lives ONLY in the
 │                      web package's Netlify Functions; do not add an
 │                      Express OAuth stack here (see server.ts's comment)

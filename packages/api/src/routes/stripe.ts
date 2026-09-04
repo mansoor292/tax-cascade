@@ -46,18 +46,34 @@ async function getStripeKey(entityId: string): Promise<string | null> {
 
 async function stripeFetch(
   stripeKey: string, path: string, params?: Record<string, string>,
+  method: 'GET' | 'POST' | 'DELETE' = 'GET',
 ): Promise<any> {
-  const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+  const encoded = params ? new URLSearchParams(params) : undefined
+  const qs = method === 'GET' && encoded ? '?' + encoded.toString() : ''
   const resp = await fetch(`https://api.stripe.com/v1${path}${qs}`, {
+    method,
     headers: {
       'Authorization': `Bearer ${stripeKey}`,
+      ...(method !== 'GET' && encoded ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
     },
+    ...(method !== 'GET' && encoded ? { body: encoded.toString() } : {}),
   })
   if (!resp.ok) {
     const err = await resp.json() as any
     throw new Error(err?.error?.message || `Stripe API ${resp.status}`)
   }
   return resp.json()
+}
+
+/**
+ * Stripe's created[gte]/[lte] accept Unix seconds ONLY, but the MCP tool
+ * doc always promised "Unix ts or YYYY-MM-DD" — a date string sailed
+ * through to Stripe and bounced with a cryptic parameter error. Coerce
+ * here so both spellings work for every caller.
+ */
+export function toStripeTs(v: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return String(Math.floor(Date.parse(v + 'T00:00:00Z') / 1000))
+  return v
 }
 
 const router = Router()
@@ -145,8 +161,8 @@ router.get('/:entity_id/invoices', async (req, res) => {
   if (req.query.status) params.status = req.query.status as string
   if (req.query.customer) params.customer = req.query.customer as string
   if (req.query.starting_after) params.starting_after = req.query.starting_after as string
-  if (req.query.created_gte) params['created[gte]'] = req.query.created_gte as string
-  if (req.query.created_lte) params['created[lte]'] = req.query.created_lte as string
+  if (req.query.created_gte) params['created[gte]'] = toStripeTs(req.query.created_gte as string)
+  if (req.query.created_lte) params['created[lte]'] = toStripeTs(req.query.created_lte as string)
 
   try {
     const data = await stripeFetch(stripeKey, '/invoices', params)
@@ -185,8 +201,8 @@ router.get('/:entity_id/payments', async (req, res) => {
 
   const params: Record<string, string> = { limit: req.query.limit as string || '25' }
   if (req.query.starting_after) params.starting_after = req.query.starting_after as string
-  if (req.query.created_gte) params['created[gte]'] = req.query.created_gte as string
-  if (req.query.created_lte) params['created[lte]'] = req.query.created_lte as string
+  if (req.query.created_gte) params['created[gte]'] = toStripeTs(req.query.created_gte as string)
+  if (req.query.created_lte) params['created[lte]'] = toStripeTs(req.query.created_lte as string)
 
   try {
     const data = await stripeFetch(stripeKey, '/charges', params)
@@ -220,8 +236,8 @@ router.get('/:entity_id/balance-transactions', async (req, res) => {
   const params: Record<string, string> = { limit: req.query.limit as string || '25' }
   if (req.query.type) params.type = req.query.type as string
   if (req.query.starting_after) params.starting_after = req.query.starting_after as string
-  if (req.query.created_gte) params['created[gte]'] = req.query.created_gte as string
-  if (req.query.created_lte) params['created[lte]'] = req.query.created_lte as string
+  if (req.query.created_gte) params['created[gte]'] = toStripeTs(req.query.created_gte as string)
+  if (req.query.created_lte) params['created[lte]'] = toStripeTs(req.query.created_lte as string)
 
   try {
     const data = await stripeFetch(stripeKey, '/balance_transactions', params)
@@ -374,5 +390,130 @@ router.get('/:entity_id/revenue', async (req, res) => {
     sendError(res, e)
   }
 })
+
+// ─── Invoice writes: create / finalize / pay / void ───
+// Real-money surface. Amounts cross this boundary in DOLLARS (matching the
+// read routes, which divide Stripe's cents by 100) and convert to cents
+// exactly once, here. `pay` charges the customer's default payment method
+// immediately — the MCP tool carries the confirm-with-the-user rule
+// in-band; this layer only guarantees ownership, shape, and honest errors.
+
+const INVOICE_ID_RE = /^in_[A-Za-z0-9]+$/
+
+function invoiceSummary(inv: any) {
+  return {
+    id: inv.id,
+    number: inv.number,
+    status: inv.status,
+    customer: inv.customer,
+    customer_name: inv.customer_name,
+    customer_email: inv.customer_email,
+    amount_due: inv.amount_due / 100,
+    amount_paid: inv.amount_paid / 100,
+    currency: inv.currency,
+    collection_method: inv.collection_method,
+    due_date: inv.due_date ? new Date(inv.due_date * 1000).toISOString().split('T')[0] : null,
+    hosted_invoice_url: inv.hosted_invoice_url ?? null,
+    invoice_pdf: inv.invoice_pdf ?? null,
+    description: inv.description,
+  }
+}
+
+// Create a DRAFT invoice from explicit line items. Nothing is sent or
+// charged at this stage; the draft must be finalized to become payable.
+router.post('/:entity_id/invoices', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const stripeKey = await getStripeKey(req.params.entity_id)
+  if (!stripeKey) return res.status(400).json({ error: 'No Stripe connection for this entity' })
+
+  const {
+    customer, lines, currency = 'usd', description, footer,
+    collection_method = 'send_invoice', days_until_due,
+  } = req.body || {}
+  if (typeof customer !== 'string' || !/^cus_[A-Za-z0-9]+$/.test(customer)) {
+    return res.status(400).json({ error: 'customer must be a Stripe customer id (cus_...)' })
+  }
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return res.status(400).json({ error: 'lines must be a non-empty array of { description, amount } (amount in dollars)' })
+  }
+  for (const line of lines) {
+    if (typeof line?.description !== 'string' || !line.description.trim()
+      || typeof line?.amount !== 'number' || !isFinite(line.amount) || line.amount <= 0) {
+      return res.status(400).json({ error: 'each line needs a description and a positive dollar amount' })
+    }
+  }
+  if (collection_method !== 'send_invoice' && collection_method !== 'charge_automatically') {
+    return res.status(400).json({ error: "collection_method must be 'send_invoice' or 'charge_automatically'" })
+  }
+
+  try {
+    // pending_invoice_items_behavior=exclude: only the lines passed here may
+    // land on this invoice — never whatever pending items happen to exist.
+    const invoice = await stripeFetch(stripeKey, '/invoices', {
+      customer,
+      currency,
+      collection_method,
+      auto_advance: 'false',
+      pending_invoice_items_behavior: 'exclude',
+      ...(collection_method === 'send_invoice'
+        ? { days_until_due: String(Math.max(0, Math.round(Number(days_until_due ?? 30)))) } : {}),
+      ...(description ? { description: String(description) } : {}),
+      ...(footer ? { footer: String(footer) } : {}),
+    }, 'POST')
+
+    for (const line of lines) {
+      await stripeFetch(stripeKey, '/invoiceitems', {
+        customer,
+        invoice: invoice.id,
+        currency,
+        amount: String(Math.round(line.amount * 100)),
+        description: line.description,
+      }, 'POST')
+    }
+
+    const withLines = await stripeFetch(stripeKey, `/invoices/${invoice.id}`)
+    res.json({ created: true, invoice: invoiceSummary(withLines) })
+  } catch (e: any) {
+    sendError(res, e)
+  }
+})
+
+// Shared handler shape for the three id-addressed actions.
+function invoiceAction(action: 'finalize' | 'pay' | 'void') {
+  return async (req: any, res: any) => {
+    const userId = await getUser(req)
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+    const stripeKey = await getStripeKey(req.params.entity_id)
+    if (!stripeKey) return res.status(400).json({ error: 'No Stripe connection for this entity' })
+
+    const invoiceId = req.params.invoice_id
+    if (!INVOICE_ID_RE.test(invoiceId)) {
+      return res.status(400).json({ error: 'invoice_id must be a Stripe invoice id (in_...)' })
+    }
+
+    try {
+      const inv = await stripeFetch(
+        stripeKey, `/invoices/${invoiceId}/${action}`,
+        action === 'finalize' ? { auto_advance: 'false' } : {},
+        'POST',
+      )
+      const doneFlag = { finalize: 'finalized', pay: 'paid', void: 'voided' }[action]
+      res.json({ [doneFlag]: true, invoice: invoiceSummary(inv) })
+    } catch (e: any) {
+      sendError(res, e)
+    }
+  }
+}
+
+// Finalize: locks the draft, assigns a number, mints hosted_invoice_url.
+// auto_advance stays false — finalizing here never emails or auto-charges.
+router.post('/:entity_id/invoices/:invoice_id/finalize', invoiceAction('finalize'))
+// Pay: charges the customer's default payment method for the amount due, NOW.
+router.post('/:entity_id/invoices/:invoice_id/pay', invoiceAction('pay'))
+// Void: permanently cancels a finalized invoice. Not undoable.
+router.post('/:entity_id/invoices/:invoice_id/void', invoiceAction('void'))
 
 export default router

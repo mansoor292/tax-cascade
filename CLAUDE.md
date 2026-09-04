@@ -5,7 +5,7 @@ monorepo, three packages.
 
 | Package | What | Where it runs |
 |---|---|---|
-| `packages/api` | Express 4 (ESM): tax engine, REST API, MCP server (43 tools), OAuth, discovery metadata, AND the built SPA | EC2 behind pm2 cluster + ALB |
+| `packages/api` | Express 4 (ESM): tax engine, REST API, MCP server (44 tools), OAuth, discovery metadata, AND the built SPA | EC2 behind pm2 cluster + ALB |
 | `packages/web` | Vite + React 19 SPA (built by the deploy script, served by Express) | same origin as the API |
 | `packages/shared` | Canonical metric maps, section vocabulary, response types | Imported by both (its CLAUDE.md explains the wiring — read before touching) |
 
