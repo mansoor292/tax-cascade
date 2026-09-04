@@ -21,15 +21,17 @@ src/
 ├── engine/            deterministic tax computation + tax tables 2018–2025
 │                      + calendar rules. calc1120 / calc1120S / calc1040 /
 │                      calcCascade / calcExtension / calc4562 / calc8594 /
-│                      calcScheduleE / calcForm8582. NO calc1065 — 1065s
-│                      only enter as filed imports.
+│                      calcScheduleE / calcForm8582 / calc1065K1s (K-1
+│                      ISSUER allocator — splits caller-supplied Schedule K
+│                      totals; still NO calc1065 return engine: 1065
+│                      returns only enter as filed imports).
 ├── intake/            Textract / Gemini / QBO → canonical model
 ├── maps/              canonical_schema.ts (THE data contract), PDF field
 │                      maps per form/year, qbo_to_inputs. The flat-metric ↔
 │                      sectioned-key map moved to @taxengine/shared
 ├── builders/          PDF fill; build_return_pdf.ts is the live package
 │                      builder, pdf_filler.ts has the shared helpers
-├── mcp/               tax-mcp.ts (44 tools; calls this server's own REST
+├── mcp/               tax-mcp.ts (45 tools; calls this server's own REST
 │                      over localhost — by design). OAuth lives ONLY in the
 │                      web package's Netlify Functions; do not add an
 │                      Express OAuth stack here (see server.ts's comment)

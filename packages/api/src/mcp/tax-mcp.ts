@@ -297,6 +297,7 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   // as qbo_resource).
   stripe_invoice:             { title: 'Stripe invoice actions (create/finalize/pay/void)', ...DESTRUCTIVE },
   file_extension:             { title: 'File extension', ...WRITE },
+  generate_k1s:               { title: 'Generate Schedule K-1s (issuer side)', ...WRITE },
   validate_extension:         { title: 'Validate extension inputs', ...RO },
 }
 
@@ -1100,6 +1101,34 @@ RULE — no exceptions: before 'pay' or 'void', state the invoice number, custom
     }
     if (!invoice_id) throw new Error(`invoice_id is required for action='${action}'`)
     return text(await call('POST', `/api/stripe/${entity_id}/invoices/${encodeURIComponent(invoice_id)}/${action}`))
+  })
+
+  // ─── Tool: generate_k1s ───
+  server.tool('generate_k1s', `Generate distributable Schedule K-1 PDFs — the ISSUER side of pass-throughs. Two modes:
+
+- S-corp: pass return_id of a computed/filed 1120S return whose inputs carry shareholders [{name, pct}] — one K-1 per shareholder from the engine's pro-rata allocation. Shareholder TIN/address fill in from the entity's meta.owners when names match; otherwise those boxes stay blank for hand completion.
+- Partnership: pass p1065 with the partnership header, Schedule K totals, and partners — Cati has NO 1065 return engine, so totals are the caller's numbers; the allocator splits pro-rata (profit_pct for income, capital_pct for distributions; guaranteed payments are per-partner; SE earnings computed for general partners only). Special allocations are NOT supported — say so instead of forcing them through.
+
+Coded boxes (1120-S 10/12/16/17; 1065 13/14/19/20), including the Section 199A Statement A (QBI, W-2 wages, UBIA), are carried on an attached supplemental statement page. Returned URLs expire in 1 hour. These are filing documents: show the user the allocation summary and remind them to verify before distributing.`, {
+    return_id: z.string().optional().describe('1120S return UUID (S-corp mode)'),
+    p1065: z.object({
+      tax_year: z.number(),
+      partnership: z.object({
+        name: z.string(), ein: z.string().optional(), address: z.string().optional(),
+        city: z.string().optional(), state: z.string().optional(), zip: z.string().optional(),
+      }),
+      totals: z.record(z.number()).optional().describe('Schedule K totals: ordinary_business_income, rental_real_estate, other_rental, interest_income, dividends_ordinary, dividends_qualified, royalties, st_cap_gain, lt_cap_gain, net_1231_gain, section_179, charitable, distributions, w2_wages, ubia'),
+      partners: z.array(z.object({
+        name: z.string(), tin: z.string().optional(), address: z.string().optional(),
+        entity_type: z.string().optional(), is_general: z.boolean().optional(),
+        profit_pct: z.number(), loss_pct: z.number().optional(), capital_pct: z.number().optional(),
+        guaranteed_payments_services: z.number().optional(), guaranteed_payments_capital: z.number().optional(),
+      })),
+    }).optional().describe('Partnership mode payload'),
+  }, async ({ return_id, p1065 }) => {
+    if (!!return_id === !!p1065) throw new Error('Pass exactly one of return_id (1120S) or p1065 (partnership)')
+    if (return_id) return text(await call('POST', `/api/returns/${return_id}/k1s`))
+    return text(await call('POST', '/api/returns/k1s/1065', p1065))
   })
 
   // ─── Tool: file_extension ───

@@ -1,0 +1,132 @@
+[
+  {
+    "page": 1,
+    "field_id": "f1_1/f1_2/2025",
+    "label": "beginning"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_3/f1_4/",
+    "label": "ending"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_6",
+    "label": "A Partnership's employer identification number"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_7",
+    "label": "B Partnership's name, address, city, state, and ZIP code"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_10",
+    "label": "F Name, address, city, state, and ZIP code for partner entered in E. See instructions."
+  },
+  {
+    "page": 1,
+    "field_id": "f1_13",
+    "label": "I1 What type of entity is this partner?"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_14",
+    "label": "Profit"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_16",
+    "label": "Loss"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_18",
+    "label": "Capital"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_34",
+    "label": "1 Ordinary business income (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_35",
+    "label": "2 Net rental real estate income (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_36",
+    "label": "3 Other net rental income (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_37",
+    "label": "4a Guaranteed payments for services"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_38",
+    "label": "4b Guaranteed payments for capital"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_39",
+    "label": "4c Total guaranteed payments"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_40",
+    "label": "5 Interest income"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_41",
+    "label": "6a Ordinary dividends"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_42",
+    "label": "6b Qualified dividends"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_43",
+    "label": "6c Dividend equivalents"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_44",
+    "label": "7 Royalties"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_45",
+    "label": "8 Net short-term capital gain (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_46",
+    "label": "9a Net long-term capital gain (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_47",
+    "label": "9b Collectibles (28%) gain (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_48",
+    "label": "9c Unrecaptured section 1250 gain"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_49",
+    "label": "10 Net section 1231 gain (loss)"
+  },
+  {
+    "page": 1,
+    "field_id": "f1_54",
+    "label": "12 Section 179 deduction"
+  }
+]

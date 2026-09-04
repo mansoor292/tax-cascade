@@ -9,7 +9,7 @@
  */
 import { Router,  } from 'express'
 import { mapToCanonical, type TextractOutput } from '../intake/json_model_mapper.js'
-import { calc1120, calc1120S, calc1040, calcExtension, type ExtensionInputs, type ExtensionType } from '../engine/tax_engine.js'
+import { calc1120, calc1120S, calc1040, calcExtension, calc1065K1s, type ExtensionInputs, type ExtensionType, type K1Totals1065, type Partner1065 } from '../engine/tax_engine.js'
 import { encryptedFields, hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS, RETURN_ENC_COLS } from '../lib/row_crypto.js'
 import { extractAggregates as extractAggregatesFromFv, readMetric, COMPARE_METRICS } from '@taxengine/shared'
 
@@ -862,6 +862,106 @@ router.post('/use-prior-year', async (req, res) => {
       ? `Copied ${Object.keys(copied).length} fields from ${priorRet.tax_year}. Pass merged_inputs to compute_return to update the ${tax_year} return.`
       : 'No fields copied — either all requested fields were already set, or prior year had $0 for them too',
   })
+})
+
+// ─── Schedule K-1 generation (issuer side) ───
+// Shared tail: build per-recipient PDFs, upload, hand back presigned URLs.
+// TINs are accepted for the PDFs but never echoed in responses.
+async function uploadK1s(
+  userId: string, tag: string,
+  built: Array<{ recipient: string; pct: number; pdf: any; filled: number }>,
+): Promise<Array<{ recipient: string; pct: number; filled: number; url: string }>> {
+  const { s3PutObject, s3PresignGet } = await import('../lib/s3.js')
+  const out = []
+  for (let i = 0; i < built.length; i++) {
+    const b = built[i]
+    const key = `k1s/${userId}/${tag}/${i + 1}_${b.recipient.replace(/[^A-Za-z0-9]+/g, '_').slice(0, 40)}.pdf`
+    await s3PutObject(key, Buffer.from(await b.pdf.save()), 'application/pdf')
+    out.push({ recipient: b.recipient, pct: b.pct, filled: b.filled, url: await s3PresignGet(key, 3600) })
+  }
+  return out
+}
+
+// 1065 partner K-1s — STATELESS issuer path. Cati has no 1065 engine
+// (rule stands: 1065 returns enter only as filed imports), so the caller
+// supplies the partnership header, Schedule K totals, and partners; the
+// engine allocator splits pro-rata. Registered before the /:id routes on
+// principle (route ORDER is semantic in this repo), though the paths
+// cannot collide today.
+router.post('/k1s/1065', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+  const { tax_year, partnership, totals, partners } = req.body || {}
+  const year = Number(tax_year)
+  if (!year || year < 2018 || year > 2030) return res.status(400).json({ error: 'tax_year required (2018-2030)' })
+  if (!partnership?.name) return res.status(400).json({ error: 'partnership.name required (plus ein/address/city/state/zip as available)' })
+  if (!Array.isArray(partners) || partners.length === 0) {
+    return res.status(400).json({ error: 'partners required: [{ name, profit_pct, tin?, address?, is_general?, loss_pct?, capital_pct?, guaranteed_payments_services?, guaranteed_payments_capital? }]' })
+  }
+  try {
+    const allocs = calc1065K1s((totals || {}) as K1Totals1065, partners as Partner1065[])
+    const { build1065K1 } = await import('../builders/build_k1_pdfs.js')
+    const built = []
+    for (const a of allocs) {
+      built.push(await build1065K1(year, partnership, { name: a.name, tin: a.tin, address: a.address }, a))
+    }
+    const k1s = await uploadK1s(userId, `1065_${year}_${Date.now()}`, built)
+    res.json({
+      form: '1065', tax_year: year, partnership: partnership.name, count: k1s.length, k1s,
+      note: 'Coded boxes (13/14/19/20, incl. the Section 199A Statement A) are carried on the attached supplemental statement page. URLs expire in 1 hour.',
+    })
+  } catch (e: any) {
+    sendError(res, e)
+  }
+})
+
+// 1120-S shareholder K-1s from a computed/filed return. Per-shareholder
+// splits aren't persisted (field_values is the golden model and it's
+// corporation-level), so the engine re-runs from input_data here.
+router.post('/:id/k1s', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const { data: taxReturn } = await supabase.from('tax_return')
+    .select('*').eq('id', req.params.id).single()
+  if (!taxReturn) return res.status(404).json({ error: 'Return not found' })
+  const { data: entity } = await supabase.from('tax_entity')
+    .select('user_id, name, ein, address, city, state, zip, meta').eq('id', taxReturn.entity_id).single()
+  if (!entity || entity.user_id !== userId) return res.status(403).json({ error: 'Forbidden' })
+  if (taxReturn.form_type !== '1120S') {
+    return res.status(400).json({ error: `K-1 generation from a return supports 1120S only (this is ${taxReturn.form_type}). For partnership K-1s use POST /api/returns/k1s/1065 with explicit totals and partners.` })
+  }
+  await hydrateReturn(taxReturn, userId)
+  const inputs = (taxReturn.input_data || {}) as Record<string, any>
+  if (!Array.isArray(inputs.shareholders) || inputs.shareholders.length === 0) {
+    return res.status(400).json({ error: 'Return has no shareholders in input_data — recompute with shareholders: [{name, pct}]' })
+  }
+  try {
+    const result = calc1120S(inputs as any)
+    // Owner detail (TIN/address) comes from entity.meta.owners, matched by
+    // name case-insensitively; unmatched shareholders get a K-1 with the
+    // identifying number left blank for hand completion.
+    const owners: Array<{ name?: string; ssn?: string; tin?: string; address?: string }> = entity.meta?.owners || []
+    const ownerFor = (name: string) => owners.find(o => (o.name || '').trim().toLowerCase() === name.trim().toLowerCase())
+    const { build1120SK1 } = await import('../builders/build_k1_pdfs.js')
+    const built = []
+    for (const k1 of result.computed.k1s) {
+      const o = ownerFor(k1.name)
+      built.push(await build1120SK1(
+        taxReturn.tax_year,
+        { name: entity.name, ein: entity.ein, address: entity.address, city: entity.city, state: entity.state, zip: entity.zip },
+        { name: k1.name, tin: o?.ssn || o?.tin, address: o?.address },
+        k1,
+      ))
+    }
+    const k1s = await uploadK1s(userId, taxReturn.id, built)
+    res.json({
+      form: '1120S', tax_year: taxReturn.tax_year, return_id: taxReturn.id, count: k1s.length, k1s,
+      note: 'Boxes 10/12/16/17 (incl. Section 199A Statement A) are carried on the attached supplemental statement page. URLs expire in 1 hour.',
+    })
+  } catch (e: any) {
+    sendError(res, e)
+  }
 })
 
 // ─── Generate filled PDF and return download URL ───

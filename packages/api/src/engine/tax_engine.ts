@@ -163,6 +163,10 @@ export interface Form1120S_Inputs {
   schedule_k_tax_exempt_interest?:    number  // K line 16a — tax-exempt interest
   // §199A — flows to shareholders on K-1
   is_sstb?:             boolean
+  // UBIA of qualified property (K-1 box 17 code V / Statement A) — the
+  // corporation-level total, allocated pro-rata to each shareholder for
+  // their QBI wage/UBIA limitation. Optional; 0 means "not provided".
+  schedule_k_ubia?:     number
   // Shareholders
   shareholders:         Array<{ name: string; pct: number }>
 }
@@ -182,6 +186,8 @@ export interface Form1120S_Result {
       charitable:      number
       section_179:     number
       w2_wages:        number
+      qbi_income:      number
+      ubia:            number
       // Schedule K portfolio items (pro-rata allocation)
       interest_income?:       number
       dividends_ordinary?:    number
@@ -323,6 +329,7 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     schedule_k_dividends_qualified: 0, schedule_k_royalties: 0,
     schedule_k_st_cap_gain: 0, schedule_k_lt_cap_gain: 0,
     schedule_k_other_portfolio_income: 0, schedule_k_tax_exempt_interest: 0,
+    schedule_k_ubia: 0,
     shareholders: [{ name: 'Shareholder', pct: 100 }],
   }, raw)
   const balance_1c = inp.gross_receipts - inp.returns_allowances
@@ -347,6 +354,10 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     charitable:      Math.round(inp.charitable_contrib * s.pct / 100),
     section_179:     Math.round(inp.section_179 * s.pct / 100),
     w2_wages:        Math.round((inp.salaries_wages + inp.officer_compensation) * s.pct / 100),
+    // §199A Statement A items: QBI is the shareholder's ordinary-income
+    // share (v1 — no separately-stated QBI adjustments); UBIA pro-rata.
+    qbi_income:      Math.round(ordinary_income_loss * s.pct / 100),
+    ubia:            prorata(inp.schedule_k_ubia, s.pct),
     // Schedule K portfolio items (pro-rata)
     interest_income:      prorata(inp.schedule_k_interest, s.pct),
     dividends_ordinary:   prorata(inp.schedule_k_dividends_ordinary, s.pct),
@@ -1477,4 +1488,120 @@ export function calcCascade(
     },
     warnings,
   }
+}
+
+// ─── Schedule K-1 (Form 1065) allocation ───
+// NOT a 1065 return engine — that rule stands (1065s enter Cati only as
+// filed imports). This allocates caller-supplied Schedule K totals across
+// partners pro-rata so the ISSUER side can generate distributable K-1s
+// (SOP-04 tester: "as managing partner I had to send out the K-1s").
+// Special allocations are out of scope: income items follow profit_pct,
+// losses loss_pct, distributions capital_pct; guaranteed payments are
+// per-partner facts, never allocated. SE earnings (box 14A) apply to
+// general partners only: ordinary share + own guaranteed payments.
+
+export interface K1Totals1065 {
+  ordinary_business_income?: number
+  rental_real_estate?:       number
+  other_rental?:             number
+  interest_income?:          number
+  dividends_ordinary?:       number
+  dividends_qualified?:      number
+  royalties?:                number
+  st_cap_gain?:              number
+  lt_cap_gain?:              number
+  net_1231_gain?:            number
+  section_179?:              number
+  charitable?:               number
+  distributions?:            number
+  w2_wages?:                 number  // §199A Statement A
+  ubia?:                     number  // §199A Statement A
+}
+
+export interface Partner1065 {
+  name: string
+  tin?: string
+  address?: string
+  entity_type?: string        // Part II box I1, default 'Individual'
+  is_general?: boolean        // box G; drives SE earnings
+  profit_pct: number
+  loss_pct?: number           // default profit_pct
+  capital_pct?: number        // default profit_pct
+  guaranteed_payments_services?: number
+  guaranteed_payments_capital?:  number
+}
+
+export interface K1Allocation1065 {
+  name: string
+  tin?: string
+  address?: string
+  entity_type: string
+  is_general: boolean
+  profit_pct: number
+  loss_pct: number
+  capital_pct: number
+  ordinary_income: number
+  rental_real_estate: number
+  other_rental: number
+  guaranteed_payments_services: number
+  guaranteed_payments_capital: number
+  interest_income: number
+  dividends_ordinary: number
+  dividends_qualified: number
+  royalties: number
+  st_cap_gain: number
+  lt_cap_gain: number
+  net_1231_gain: number
+  section_179: number
+  charitable: number
+  distributions: number
+  se_earnings: number
+  qbi_income: number
+  w2_wages: number
+  ubia: number
+}
+
+export function calc1065K1s(totals: K1Totals1065, partners: Partner1065[]): K1Allocation1065[] {
+  if (!partners.length) throw new Error('at least one partner is required')
+  const profitSum = partners.reduce((s, p) => s + p.profit_pct, 0)
+  if (Math.abs(profitSum - 100) > 0.01) {
+    throw new Error(`profit percentages must sum to 100 (got ${profitSum})`)
+  }
+  const share = (v: number | undefined, pct: number) => Math.round((v || 0) * pct / 100)
+  return partners.map(p => {
+    const loss_pct = p.loss_pct ?? p.profit_pct
+    const capital_pct = p.capital_pct ?? p.profit_pct
+    const ordinary_income = share(totals.ordinary_business_income, p.profit_pct)
+    const gpS = Math.round(p.guaranteed_payments_services || 0)
+    const gpC = Math.round(p.guaranteed_payments_capital || 0)
+    return {
+      name: p.name,
+      tin: p.tin,
+      address: p.address,
+      entity_type: p.entity_type || 'Individual',
+      is_general: p.is_general ?? false,
+      profit_pct: p.profit_pct,
+      loss_pct,
+      capital_pct,
+      ordinary_income,
+      rental_real_estate: share(totals.rental_real_estate, p.profit_pct),
+      other_rental: share(totals.other_rental, p.profit_pct),
+      guaranteed_payments_services: gpS,
+      guaranteed_payments_capital: gpC,
+      interest_income: share(totals.interest_income, p.profit_pct),
+      dividends_ordinary: share(totals.dividends_ordinary, p.profit_pct),
+      dividends_qualified: share(totals.dividends_qualified, p.profit_pct),
+      royalties: share(totals.royalties, p.profit_pct),
+      st_cap_gain: share(totals.st_cap_gain, p.profit_pct),
+      lt_cap_gain: share(totals.lt_cap_gain, p.profit_pct),
+      net_1231_gain: share(totals.net_1231_gain, p.profit_pct),
+      section_179: share(totals.section_179, p.profit_pct),
+      charitable: share(totals.charitable, p.profit_pct),
+      distributions: share(totals.distributions, capital_pct),
+      se_earnings: p.is_general ? ordinary_income + gpS + gpC : 0,
+      qbi_income: ordinary_income,
+      w2_wages: share(totals.w2_wages, p.profit_pct),
+      ubia: share(totals.ubia, p.profit_pct),
+    }
+  })
 }
