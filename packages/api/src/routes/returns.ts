@@ -1043,16 +1043,23 @@ router.get('/:id/pdf', async (req, res) => {
       .eq('id', taxReturn.entity_id).single()
     if (!entityData) return res.status(404).json({ error: 'Entity not found' })
 
-    // Try to get raw textract KVs from the source document
+    // Try to get raw textract KVs from the source document. Select the _enc
+    // twin and hydrate: post-cutover the plaintext column is null, so the
+    // old `.not('textract_data', 'is', null)` filter matched nothing on
+    // encrypted rows (same class as the compute auto-merge hydrate bug).
     let textractKvs: Array<{ key: string; value: string }> | undefined
     const { data: docs } = await supabase.from('document')
-      .select('textract_data')
+      .select('textract_data, textract_data_enc')
       .eq('entity_id', taxReturn.entity_id)
       .eq('tax_year', taxReturn.tax_year)
-      .not('textract_data', 'is', null)
-      .limit(1)
-    if (docs?.[0]?.textract_data?.kvs) {
-      textractKvs = docs[0].textract_data.kvs
+      .or('textract_data.not.is.null,textract_data_enc.not.is.null')
+      .limit(3)
+    for (const d of docs || []) {
+      await hydrate(supabase, d, { json: ['textract_data'], userId })
+      if ((d as any).textract_data?.kvs) {
+        textractKvs = (d as any).textract_data.kvs
+        break
+      }
     }
 
     // Pull Schedule L from QBO if connected (BOY = prior year EOY, EOY = current year)

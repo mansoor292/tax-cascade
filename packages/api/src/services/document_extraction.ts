@@ -190,6 +190,7 @@ export const CLASSIFICATION_PROMPT = `Analyze this tax document. Respond ONLY wi
 {
   "doc_type": one of
     "w2" | "1099_int" | "1099_div" | "1099_b" | "1099_r" | "1099_misc" | "1099_nec" | "1099_k" | "1099_g" | "1099_sa" | "1099_oid" | "1099"
+    | "1098" | "1098_e"
     | "k1" | "prior_return_1040" | "prior_return_1040x" | "prior_return_1120" | "prior_return_1120s" | "prior_return_1065"
     | "bank_statement" | "invoice" | "receipt" | "tax_transcript" | "other",
   "tax_year": integer or null,
@@ -204,6 +205,8 @@ export const CLASSIFICATION_PROMPT = `Analyze this tax document. Respond ONLY wi
     //   1099-MISC: rents (box 1), royalties (box 2), other_income (box 3), fishing (box 5)
     //   1099-NEC: nonemployee_comp (box 1), federal_tax_withheld (box 4)
     //   1099-K: gross_amount (box 1a)
+    //   1098 (Mortgage Interest Statement): mortgage_interest (box 1), outstanding_principal (box 2), mortgage_insurance (box 5), property_taxes (box 10)
+    //   1098-E (Student Loan Interest): student_loan_interest (box 1)
     //   K-1: ordinary_income (box 1), w2_wages, rental_income (box 2)
     // Up to ~15 key financial values. Strip $ and commas from numeric values.
   }

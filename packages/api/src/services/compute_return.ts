@@ -15,7 +15,7 @@
  */
 import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
 import { TAX_TABLES } from '../engine/tax_tables.js'
-import { encryptedFields, hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS, RETURN_ENC_COLS } from '../lib/row_crypto.js'
+import { encryptedFields, hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS, ENCRYPTED_DOC_FIELDS, RETURN_ENC_COLS, DOC_ENC_COLS } from '../lib/row_crypto.js'
 import { errorOutcome, type HttpOutcome } from '../lib/http_error.js'
 import { lazyServiceClient } from '../lib/supabase.js'
 import { getFinancials } from '../routes/qbo.js'
@@ -209,12 +209,22 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         'w2', 'k1',
         '1099', '1099_int', '1099_div', '1099_b', '1099_r',
         '1099_misc', '1099_nec', '1099_k', '1099_g', '1099_sa', '1099_oid',
+        '1098', '1098_e',
       ]
+      // The _enc twins + hydrate are LOAD-BEARING: post-cutover the
+      // plaintext meta/textract_data columns are null, and this query read
+      // them bare — auto-merge silently saw zero key_values on every
+      // encrypted document. A tester uploaded a full 2024 source package
+      // (W-2, 1099-INTs, 1099-K) and computed $0 fills; the values were
+      // sitting in meta_enc the whole time.
       const { data: docs } = await supabase.from('document')
-        .select('id, doc_type, meta, textract_data, filename')
+        .select(`id, doc_type, meta, textract_data, filename, ${DOC_ENC_COLS}`)
         .eq('entity_id', entity_id)
         .eq('tax_year', tax_year)
         .in('doc_type', supportedTypes)
+      for (const d of docs || []) {
+        await hydrate(supabase, d, { ...ENCRYPTED_DOC_FIELDS, userId })
+      }
       if (docs?.length) {
         supportingDocs = docs
         const byType = (t: string) => docs.filter(d => d.doc_type === t)
@@ -226,9 +236,34 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
           setIfUnset('wages',       sum(w2s, 'wages', 'box_1'),      'W-2', w2s.length)
           setIfUnset('withholding', sum(w2s, 'federal_tax', 'box_2'), 'W-2', w2s.length)
 
-          // 1099-INT → interest
-          const int99 = [...byType('1099_int'), ...byType('1099')]
-          setIfUnset('taxable_interest', sum(int99, 'interest', 'box_1'), '1099-INT', int99.length)
+          // 1099-INT → interest. Generic '1099' docs contribute only via an
+          // explicit 'interest' key, never 'box_1': before the classifier
+          // knew 1098s, a mortgage-interest 1098 landed as generic '1099'
+          // and its box 1 ($22k of mortgage interest PAID) would have been
+          // summed into taxable interest INCOME.
+          const int99 = byType('1099_int')
+          const gen99 = byType('1099')
+          setIfUnset('taxable_interest',
+            sum(int99, 'interest', 'box_1') + sum(gen99, 'interest'),
+            '1099-INT', int99.length + gen99.length)
+
+          // 1098-E → student loan interest deduction
+          const e1098 = byType('1098_e')
+          setIfUnset('student_loan_interest',
+            sum(e1098, 'student_loan_interest', 'student_loan_interest_received', 'box_1'),
+            '1098-E', e1098.length)
+          // 1098 (mortgage interest) is deliberately NOT auto-placed: whether
+          // it belongs on Schedule A (home) or Schedule E (rental) is a human
+          // decision, so it only surfaces in the log as unplaced context.
+          const m1098 = byType('1098')
+          const mortgageInt = sum(m1098, 'mortgage_interest', 'box_1')
+          if (mortgageInt) {
+            autoMergeLog.push({
+              field: 'itemized_deductions',
+              value: 0,
+              sources: [`${m1098.length} × 1098 NOT auto-placed — $${mortgageInt.toLocaleString()} mortgage interest needs a human call (Schedule A home vs Schedule E rental)`],
+            })
+          }
 
           // 1099-DIV → dividends
           const div99 = [...byType('1099_div'), ...byType('1099')]
