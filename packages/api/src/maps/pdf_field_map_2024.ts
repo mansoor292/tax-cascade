@@ -127,7 +127,13 @@ export const PDF_FIELD_MAP_1120: Record<string, string> = {
   'schedL.L10b_dep_eoy_c':           'f6_47',
   'schedL.L10b_dep_eoy_d':           'f6_48',
   // L11a Depletable assets: f6_49..f6_52
+  'schedL.L11_depletable_boy_a':     'f6_49',
+  'schedL.L11_depletable_eoy_c':     'f6_51',
   // L11b Accum depletion: f6_53..f6_56
+  'schedL.L11_depletable_dep_boy_a': 'f6_53',
+  'schedL.L11_depletable_dep_boy_b': 'f6_54',
+  'schedL.L11_depletable_dep_eoy_c': 'f6_55',
+  'schedL.L11_depletable_dep_eoy_d': 'f6_56',
   // L12 Land: f6_57..f6_60
   'schedL.L12_land_boy_b':           'f6_58',
   'schedL.L12_land_eoy_d':           'f6_60',

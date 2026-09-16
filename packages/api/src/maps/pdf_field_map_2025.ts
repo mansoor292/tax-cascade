@@ -185,16 +185,40 @@ export const F1120_2025: Record<string, string> = {
   // gross - allowance). Only cols a/c (gross) are fillable.
   // 'schedL.L2a_trade_boy_b': 'f6_6',   ← shaded, don't map
   // 'schedL.L2a_trade_eoy_d': 'f6_8',   ← shaded, don't map
+  'schedL.L2a_trade_boy_a':          'f6_5',
+  'schedL.L2a_trade_eoy_c':          'f6_7',
+  'schedL.L2b_baddebt_boy_a':        'f6_9',
+  'schedL.L2b_baddebt_boy_b':        'f6_10',
+  'schedL.L2b_baddebt_eoy_c':        'f6_11',
+  'schedL.L2b_baddebt_eoy_d':        'f6_12',
+  'schedL.L3_inv_boy_b':             'f6_14',
+  'schedL.L3_inv_eoy_d':             'f6_16',
+  'schedL.L4_usgov_boy_b':           'f6_18',
+  'schedL.L4_usgov_eoy_d':           'f6_20',
+  'schedL.L5_taxexempt_boy_b':       'f6_22',
+  'schedL.L5_taxexempt_eoy_d':       'f6_24',
   'schedL.L6_othercurr_boy_b':       'f6_26',
   'schedL.L6_othercurr_eoy_d':       'f6_28',
   'schedL.L7_loans_boy_b':           'f6_30',
   'schedL.L7_loans_eoy_d':           'f6_32',
+  'schedL.L8_mortgage_boy_b':        'f6_34',
+  'schedL.L8_mortgage_eoy_d':        'f6_36',
+  'schedL.L9_otherinv_boy_b':        'f6_38',
+  'schedL.L9_otherinv_eoy_d':        'f6_40',
   'schedL.L10a_bldg_boy_a':          'f6_41',
   'schedL.L10a_bldg_eoy_c':          'f6_43',
   'schedL.L10b_dep_boy_a':           'f6_45',
   'schedL.L10b_dep_boy_b':           'f6_46',
   'schedL.L10b_dep_eoy_c':           'f6_47',
   'schedL.L10b_dep_eoy_d':           'f6_48',
+  'schedL.L11_depletable_boy_a':     'f6_49',
+  'schedL.L11_depletable_eoy_c':     'f6_51',
+  'schedL.L11_depletable_dep_boy_a': 'f6_53',
+  'schedL.L11_depletable_dep_boy_b': 'f6_54',
+  'schedL.L11_depletable_dep_eoy_c': 'f6_55',
+  'schedL.L11_depletable_dep_eoy_d': 'f6_56',
+  'schedL.L12_land_boy_b':           'f6_58',
+  'schedL.L12_land_eoy_d':           'f6_60',
   'schedL.L13a_intang_boy_a':        'f6_61',
   'schedL.L13a_intang_eoy_c':        'f6_63',
   'schedL.L13b_amort_boy_a':         'f6_65',
@@ -211,16 +235,31 @@ export const F1120_2025: Record<string, string> = {
   'schedL.L17_mortshort_eoy_d':      'f6_84',
   'schedL.L18_othercurrliab_boy_b':  'f6_86',
   'schedL.L18_othercurrliab_eoy_d':  'f6_88',
+  'schedL.L19_loansfrom_boy_b':      'f6_90',
+  'schedL.L19_loansfrom_eoy_d':      'f6_92',
   'schedL.L20_mortlong_boy_b':       'f6_94',
   'schedL.L20_mortlong_eoy_d':       'f6_96',
+  'schedL.L21_otherliab_boy_b':      'f6_98',
+  'schedL.L21_otherliab_eoy_d':      'f6_100',
+  'schedL.L22a_pref_boy_b':          'f6_102',
+  'schedL.L22a_pref_eoy_d':          'f6_104',
+  'schedL.L22b_common_boy_b':        'f6_106',
+  'schedL.L22b_common_eoy_d':        'f6_108',
   'schedL.L23_paidin_boy_b':         'f6_110',
   'schedL.L23_paidin_eoy_d':         'f6_112',
+  'schedL.L24_retapp_boy_b':         'f6_114',
+  'schedL.L24_retapp_eoy_d':         'f6_116',
   'schedL.L25_retained_boy_b':       'f6_118',
   'schedL.L25_retained_eoy_d':       'f6_120',
   'schedL.L26_adj_boy_b':            'f6_122',
   'schedL.L26_adj_eoy_d':            'f6_124',
-  'schedL.L28_total_boy_b':          'f6_126',
-  'schedL.L28_total_eoy_d':          'f6_128',
+  'schedL.L27_treasury_boy_b':       'f6_126',
+  'schedL.L27_treasury_eoy_d':       'f6_128',
+  // Line 28 is f6_129..132. It used to point at f6_126/f6_128 — line 27 —
+  // so every 1120 printed its balance-sheet total inside the "Less cost of
+  // treasury stock" parentheses, as a deduction, and left line 28 blank.
+  'schedL.L28_total_boy_b':          'f6_130',
+  'schedL.L28_total_eoy_d':          'f6_132',
 
   // Page 6: Schedule M-1 (Reconciliation)
   'schedM1.L1_net_income_books':     'f6_133',
@@ -296,41 +335,102 @@ export const F1120S_2025: Record<string, string> = {
   'overpayment.L27':            'f1_51',
   'meta.title':                 'f1_54',
 
-  // Schedule L (Balance Sheet — Page 4)
-  // Layout: 4 cols per row (a=gross BOY, b=net BOY, c=gross EOY, d=net EOY)
-  // Field IDs f4_1..f4_128, mapped to match 1120 canonical keys
-  'schedL.L1_cash_boy_b':            'f4_2',
-  'schedL.L1_cash_eoy_d':            'f4_4',
-  'schedL.L2a_trade_boy_b':          'f4_6',
-  'schedL.L2a_trade_eoy_d':          'f4_8',
-  'schedL.L6_othercurr_boy_b':       'f4_26',
-  'schedL.L6_othercurr_eoy_d':       'f4_28',
-  'schedL.L7_loans_boy_b':           'f4_30',
-  'schedL.L7_loans_eoy_d':           'f4_32',
-  'schedL.L10a_bldg_boy_a':          'f4_41',
-  'schedL.L10a_bldg_eoy_c':          'f4_43',
-  'schedL.L10b_dep_boy_a':           'f4_45',
-  'schedL.L10b_dep_boy_b':           'f4_46',
-  'schedL.L10b_dep_eoy_c':           'f4_47',
-  'schedL.L10b_dep_eoy_d':           'f4_48',
-  'schedL.L14_other_boy_b':          'f4_70',
-  'schedL.L14_other_eoy_d':          'f4_72',
-  'schedL.L15_total_boy_b':          'f4_74',
-  'schedL.L15_total_eoy_d':          'f4_76',
-  'schedL.L16_ap_boy_b':             'f4_78',
-  'schedL.L16_ap_eoy_d':             'f4_80',
-  'schedL.L17_mortshort_boy_b':      'f4_82',
-  'schedL.L17_mortshort_eoy_d':      'f4_84',
-  'schedL.L18_othercurrliab_boy_b':  'f4_86',
-  'schedL.L18_othercurrliab_eoy_d':  'f4_88',
-  'schedL.L20_mortlong_boy_b':       'f4_94',
-  'schedL.L20_mortlong_eoy_d':       'f4_96',
+  // ── Schedule L (Balance Sheet — Page 4) ──
+  //
+  // Derived from the blank form's own widget positions, matched against the
+  // printed line labels. The previous map was written by copying the 1120's
+  // f6_* sequence onto f4_*, which is wrong twice over:
+  //
+  //  1. Every row was off by one (four field ids). Cash landed above line 1,
+  //     other current assets printed on line 5 "Tax-exempt securities", and
+  //     total assets printed on line 14 — leaving line 15 blank, so a filed
+  //     1120-S showed total assets of 0 against a real liabilities total.
+  //  2. The two Schedule Ls are not the same shape. The 1120 splits capital
+  //     stock into 22a/22b and retained earnings into appropriated (24) and
+  //     unappropriated (25); the 1120-S has one of each, so everything from
+  //     the 1120's line 25 down sits one line HIGHER here. Canonical keys
+  //     keep the 1120 names (they are the shared vocabulary) and are remapped
+  //     to the 1120-S row that carries the same meaning.
+  //
+  // Rows run f4_5..f4_128, four columns each — (a) gross BOY, (b) net BOY,
+  // (c) gross EOY, (d) net EOY. Line 1 is f4_5..f4_8, and each subsequent
+  // line is the next four. If this ever needs redoing, read the widget
+  // rectangles off the PDF rather than counting from another form.
+  'schedL.L1_cash_boy_b':            'f4_6',
+  'schedL.L1_cash_eoy_d':            'f4_8',
+  'schedL.L2a_trade_boy_a':          'f4_9',    // gross — cols a/c on the 2a row
+  'schedL.L2a_trade_eoy_c':          'f4_11',
+  'schedL.L2b_baddebt_boy_a':        'f4_13',   // allowance, shown in parens
+  'schedL.L2b_baddebt_boy_b':        'f4_14',   // net receivable
+  'schedL.L2b_baddebt_eoy_c':        'f4_15',
+  'schedL.L2b_baddebt_eoy_d':        'f4_16',
+  'schedL.L3_inv_boy_b':             'f4_18',
+  'schedL.L3_inv_eoy_d':             'f4_20',
+  'schedL.L4_usgov_boy_b':           'f4_22',
+  'schedL.L4_usgov_eoy_d':           'f4_24',
+  'schedL.L5_taxexempt_boy_b':       'f4_26',
+  'schedL.L5_taxexempt_eoy_d':       'f4_28',
+  'schedL.L6_othercurr_boy_b':       'f4_30',
+  'schedL.L6_othercurr_eoy_d':       'f4_32',
+  'schedL.L7_loans_boy_b':           'f4_34',
+  'schedL.L7_loans_eoy_d':           'f4_36',
+  'schedL.L8_mortgage_boy_b':        'f4_38',
+  'schedL.L8_mortgage_eoy_d':        'f4_40',
+  'schedL.L9_otherinv_boy_b':        'f4_42',
+  'schedL.L9_otherinv_eoy_d':        'f4_44',
+  'schedL.L10a_bldg_boy_a':          'f4_45',
+  'schedL.L10a_bldg_eoy_c':          'f4_47',
+  'schedL.L10b_dep_boy_a':           'f4_49',
+  'schedL.L10b_dep_boy_b':           'f4_50',
+  'schedL.L10b_dep_eoy_c':           'f4_51',
+  'schedL.L10b_dep_eoy_d':           'f4_52',
+  'schedL.L11_depletable_boy_a':     'f4_53',
+  'schedL.L11_depletable_eoy_c':     'f4_55',
+  'schedL.L11_depletable_dep_boy_a': 'f4_57',
+  'schedL.L11_depletable_dep_boy_b': 'f4_58',
+  'schedL.L11_depletable_dep_eoy_c': 'f4_59',
+  'schedL.L11_depletable_dep_eoy_d': 'f4_60',
+  'schedL.L12_land_boy_b':           'f4_62',
+  'schedL.L12_land_eoy_d':           'f4_64',
+  'schedL.L13a_intang_boy_a':        'f4_65',
+  'schedL.L13a_intang_eoy_c':        'f4_67',
+  'schedL.L13b_amort_boy_a':         'f4_69',
+  'schedL.L13b_amort_boy_b':         'f4_70',
+  'schedL.L13b_amort_eoy_c':         'f4_71',
+  'schedL.L13b_amort_eoy_d':         'f4_72',
+  'schedL.L14_other_boy_b':          'f4_74',
+  'schedL.L14_other_eoy_d':          'f4_76',
+  'schedL.L15_total_boy_b':          'f4_78',
+  'schedL.L15_total_eoy_d':          'f4_80',
+  // Liabilities and shareholders' equity — 1120-S lines 16-27.
+  'schedL.L16_ap_boy_b':             'f4_82',
+  'schedL.L16_ap_eoy_d':             'f4_84',
+  'schedL.L17_mortshort_boy_b':      'f4_86',
+  'schedL.L17_mortshort_eoy_d':      'f4_88',
+  'schedL.L18_othercurrliab_boy_b':  'f4_90',
+  'schedL.L18_othercurrliab_eoy_d':  'f4_92',
+  'schedL.L19_loansfrom_boy_b':      'f4_94',
+  'schedL.L19_loansfrom_eoy_d':      'f4_96',
+  'schedL.L20_mortlong_boy_b':       'f4_98',
+  'schedL.L20_mortlong_eoy_d':       'f4_100',
+  'schedL.L21_otherliab_boy_b':      'f4_102',
+  'schedL.L21_otherliab_eoy_d':      'f4_104',
+  // 1120-S line 22 is a single "Capital stock" line. An S corporation may
+  // have only one class of stock, so the 1120's preferred/common split
+  // collapses here; L22a_pref is deliberately unmapped rather than sharing
+  // a box with common and letting write order decide.
+  'schedL.L22b_common_boy_b':        'f4_106',
+  'schedL.L22b_common_eoy_d':        'f4_108',
   'schedL.L23_paidin_boy_b':         'f4_110',
   'schedL.L23_paidin_eoy_d':         'f4_112',
-  'schedL.L25_retained_boy_b':       'f4_118',
-  'schedL.L25_retained_eoy_d':       'f4_120',
-  'schedL.L26_adj_boy_b':            'f4_122',
-  'schedL.L26_adj_eoy_d':            'f4_124',
+  // The 1120's line 25 (retained earnings, unappropriated) is the 1120-S's
+  // line 24; there is no appropriated line here, so L24_retapp is unmapped.
+  'schedL.L25_retained_boy_b':       'f4_114',
+  'schedL.L25_retained_eoy_d':       'f4_116',
+  'schedL.L26_adj_boy_b':            'f4_118',
+  'schedL.L26_adj_eoy_d':            'f4_120',
+  'schedL.L27_treasury_boy_b':       'f4_122',
+  'schedL.L27_treasury_eoy_d':       'f4_124',
   'schedL.L28_total_boy_b':          'f4_126',
   'schedL.L28_total_eoy_d':          'f4_128',
 
