@@ -31,26 +31,59 @@ export async function signUpThroughUi(page: Page, email: string, name = 'E2E Tes
 }
 
 /**
- * Remove an account created by a test. Needs the service role key; without it
- * the account is left behind and the caller is told, rather than failing the
- * run for a cleanup concern.
+ * Remove an account created by a test, and everything it owns. Needs the
+ * service role key; without it the account is left behind and the caller is
+ * told, rather than failing the run for a cleanup concern.
+ *
+ * Two ways this has failed, both silently, both self-reinforcing:
+ *
+ *  - It only ever read the FIRST page of the admin user list. Once prod held
+ *    more than a page of accounts, new test users were no longer on it, every
+ *    delete returned 'not-found', and the table grew — which pushed the next
+ *    run further out of reach. It reached 432 accounts before anyone looked.
+ *  - Deleting the auth user leaves its data: the entity reference does not
+ *    cascade, so 132 entities, 90 returns and 90 documents stayed behind.
+ *
+ * So: page until the address is actually found, and delete the rows before
+ * the account that owns them.
  */
 export async function deleteUserByEmail(email: string): Promise<'deleted' | 'skipped' | 'not-found'> {
-  // Without the service role key every run silently leaves its accounts behind.
-  // That went unnoticed long enough to accumulate 52 of them in the production
-  // auth table. `npm run test:e2e:clean` loads the key from SSM first.
   if (!SERVICE) return 'skipped'
   const auth = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` }
 
-  const list = await fetch(
-    `${SUPABASE_URL}/auth/v1/admin/users?page=1&per_page=200`, { headers: auth },
-  )
-  const body: any = await list.json().catch(() => ({}))
-  const user = (body?.users || []).find((u: any) => u.email === email)
+  let user: { id: string } | undefined
+  for (let page = 1; page <= 50 && !user; page++) {
+    const list = await fetch(
+      `${SUPABASE_URL}/auth/v1/admin/users?page=${page}&per_page=200`, { headers: auth },
+    )
+    const body: any = await list.json().catch(() => ({}))
+    const users: any[] = body?.users || []
+    user = users.find((u: any) => u.email === email)
+    if (users.length < 200) break
+  }
   if (!user) return 'not-found'
 
+  await deleteOwnedRows(user.id, auth)
   await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${user.id}`, { method: 'DELETE', headers: auth })
   return 'deleted'
+}
+
+/** Children first — tax_return/document/scenario/obligation all point at the entity. */
+async function deleteOwnedRows(userId: string, auth: Record<string, string>): Promise<void> {
+  const rest = `${SUPABASE_URL}/rest/v1`
+  const headers = { ...auth, 'Content-Type': 'application/json' }
+
+  const res = await fetch(`${rest}/tax_entity?user_id=eq.${userId}&select=id`, { headers })
+  const entities: any[] = await res.json().catch(() => [])
+  const ids = entities.map(e => e.id).filter(Boolean)
+
+  if (ids.length) {
+    const inList = `(${ids.join(',')})`
+    for (const table of ['tax_return', 'document', 'scenario', 'obligation']) {
+      await fetch(`${rest}/${table}?entity_id=in.${inList}`, { method: 'DELETE', headers })
+    }
+  }
+  await fetch(`${rest}/tax_entity?user_id=eq.${userId}`, { method: 'DELETE', headers })
 }
 
 /**
