@@ -30,6 +30,13 @@ export interface ExportLine {
   value: number | string
 }
 
+export interface ExportDetail {
+  bucket: string
+  line: string | null
+  label: string
+  value: number
+}
+
 export interface ReturnExport {
   entity: { name: string; form_type: string; ein: string | null }
   return: {
@@ -41,8 +48,19 @@ export interface ReturnExport {
     computed_at: string | null
   }
   lines: ExportLine[]
+  details: ExportDetail[]
   k1s: any[]
   line_count: number
+}
+
+/**
+ * Which IRS line each detail bucket supports. The same knowledge the statement
+ * page in build_return_pdf uses — "(attach statement)" lines.
+ */
+const DETAIL_LINES: Record<string, Record<string, string>> = {
+  other_deductions: { '1120S': '20', '1120': '26' },
+  other_costs:      { '1120S': '5',  '1120': '5' },   // Form 1125-A
+  other_income:     { '1120S': '5',  '1120': '10' },
 }
 
 /** Schedules in the order they appear on the return. Unknown ones sort last. */
@@ -192,9 +210,45 @@ export function buildReturnExport(row: any, entity: any, k1s: any[] = []): Retur
       computed_at: row?.computed_at ?? null,
     },
     lines,
+    details: extractDetails(row),
     k1s: Array.isArray(k1s) ? k1s : [],
     line_count: lines.length,
   }
+}
+
+/**
+ * Pull the `<bucket>_detail` arrays out of the saved inputs.
+ *
+ * These are the itemisations behind an "(attach statement)" line — the arrays
+ * compute_validation checks sum to the scalar and the statement page prints.
+ * They live in input_data, NOT field_values, so an export built only from
+ * field_values shows the line as a single figure and the breakdown exists
+ * nowhere the API can reach. Line 20 came back as one number, 283,661, and the
+ * only itemisation was a spreadsheet somebody had built by hand.
+ */
+function extractDetails(row: any): ExportDetail[] {
+  const inputs = (row?.input_data || {}) as Record<string, unknown>
+  const formType = String(row?.form_type || '')
+  const out: ExportDetail[] = []
+
+  for (const [key, value] of Object.entries(inputs)) {
+    if (!key.endsWith('_detail') || !Array.isArray(value)) continue
+    const bucket = key.slice(0, -'_detail'.length)
+    const line = DETAIL_LINES[bucket]?.[formType] ?? null
+    for (const item of value) {
+      if (Array.isArray(item)) {
+        const amt = Number(item[1])
+        if (isFinite(amt)) out.push({ bucket, line, label: String(item[0] ?? ''), value: amt })
+        continue
+      }
+      if (!item || typeof item !== 'object') continue
+      const o = item as Record<string, any>
+      const amt = parseFloat(String(o.amount ?? o.value ?? ''))
+      if (!isFinite(amt)) continue
+      out.push({ bucket, line, label: String(o.label ?? o.description ?? o.name ?? ''), value: amt })
+    }
+  }
+  return out
 }
 
 /** RFC 4180: quote anything containing a comma, quote or newline; double the quotes. */
@@ -212,6 +266,16 @@ export function exportToCsv(exp: ReturnExport): string {
       l.section_label, l.line ?? '', l.column ?? '', l.key, l.label, l.value,
     ].map(csvCell).join(','))
   }
+  // The itemisation behind an "(attach statement)" line. Without these the CSV
+  // repeats the single rolled-up figure and the breakdown is lost.
+  for (const d of exp.details) {
+    rows.push([
+      exp.entity.name, exp.return.tax_year, exp.return.form_type, exp.return.source,
+      `Detail: ${d.bucket.replace(/_/g, ' ')}`, d.line ?? '', '',
+      `${d.bucket}_detail`, d.label, d.value,
+    ].map(csvCell).join(','))
+  }
+
   // K-1s carry per-shareholder amounts that are not field_values lines, so
   // they would vanish from a CSV built only from the form. Append them with
   // the shareholder in the line column.

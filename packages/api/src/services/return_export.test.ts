@@ -172,3 +172,50 @@ describe('superseded Schedule K twins', () => {
     expect(keys).toContain('schedK.L18_reconciliation')
   })
 })
+
+describe('itemisation behind an "(attach statement)" line', () => {
+  /**
+   * The detail arrays live in input_data, not field_values, so an export built
+   * only from field_values showed line 20 as a single 283,661 and the
+   * breakdown existed nowhere the API could reach.
+   */
+  const withDetail = {
+    ...row,
+    input_data: {
+      other_deductions: 283_661,
+      other_deductions_detail: [
+        { label: 'Contract labor', amount: 120_000 },
+        { label: 'Internet and telecommunications', amount: 40_297 },
+        { label: 'Legal and accounting services', amount: -10_500 },
+      ],
+    },
+  }
+
+  it('exports each item against the line it supports', () => {
+    const exp = buildReturnExport(withDetail, entity, K1S)
+    expect(exp.details).toHaveLength(3)
+    expect(exp.details[0]).toMatchObject({
+      bucket: 'other_deductions', line: '20', label: 'Contract labor', value: 120_000,
+    })
+    // A credit in the itemisation stays a credit.
+    expect(exp.details.find(d => d.label.startsWith('Legal'))!.value).toBe(-10_500)
+  })
+
+  it('knows the line differs by form — 20 on an 1120-S, 26 on an 1120', () => {
+    const asC = buildReturnExport({ ...withDetail, form_type: '1120' }, entity)
+    expect(asC.details[0].line).toBe('26')
+  })
+
+  it('writes the items into the CSV under the rolled-up line', () => {
+    const csv = exportToCsv(buildReturnExport(withDetail, entity, K1S))
+    expect(csv).toContain('Detail: other deductions')
+    expect(csv).toContain('Contract labor')
+    expect(csv).toContain('-10500')
+    // The rolled-up figure is still there; the detail sits alongside it.
+    expect(csv).toContain('deductions.L20_other')
+  })
+
+  it('has no details when the return carries only the scalar', () => {
+    expect(buildReturnExport(row, entity).details).toHaveLength(0)
+  })
+})
