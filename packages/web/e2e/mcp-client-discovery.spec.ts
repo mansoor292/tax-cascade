@@ -106,9 +106,27 @@ test.describe('MCP discovery, as a real client performs it', () => {
   test.describe('authenticated tool call', () => {
     const email = testEmail('mcpauth')
 
+    /**
+     * Mint a throwaway account and REMEMBER the address.
+     *
+     * Most tests here used to call createUserWithApiKey(testEmail('...'))
+     * inline and throw the address away, which made the account impossible to
+     * delete afterwards. Those seven tests were the entire leak: 'E2E Mask
+     * Check', 'E2E GetEntity Strip' and 'E2E Strip Check' accounted for 129
+     * of the 132 entities found stranded in production.
+     */
+    const minted: string[] = []
+    async function freshClient(tag: string): Promise<{ apiKey: string }> {
+      const addr = testEmail(tag)
+      minted.push(addr)
+      return createUserWithApiKey(addr)
+    }
+
     test.afterAll(async () => {
-      const r = await deleteUserByEmail(email)
-      if (r === 'skipped') console.log(`NOTE: no service role key — left ${email} behind`)
+      for (const addr of [email, ...minted]) {
+        const r = await deleteUserByEmail(addr)
+        if (r === 'skipped') console.log(`NOTE: no service role key — left ${addr} behind`)
+      }
     })
 
     test('a token holder can list tools through the deployed endpoint', async ({ request, baseURL }) => {
@@ -142,7 +160,7 @@ test.describe('MCP discovery, as a real client performs it', () => {
       // they were consenting to. Titles + read-only/destructive hints are
       // the metadata the connector CAN provide; this pins that every tool
       // has them and that the hints stay honest for the tools that matter.
-      const { apiKey } = await createUserWithApiKey(testEmail('mcpann'))
+      const { apiKey } = await freshClient('mcpann')
       const res = await request.post(`${baseURL}/mcp`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -173,7 +191,7 @@ test.describe('MCP discovery, as a real client performs it', () => {
       // pass-through activity) in the same voice as documented facts, and
       // only distinguished them when challenged. The server instructions
       // are the connector-side lever; this pins that they ship.
-      const { apiKey } = await createUserWithApiKey(testEmail('mcpinstr'))
+      const { apiKey } = await freshClient('mcpinstr')
       const res = await request.post(`${baseURL}/mcp`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -210,7 +228,7 @@ test.describe('MCP discovery, as a real client performs it', () => {
       // Initialize-time instructions did not stop the inference at the
       // moment of reasoning (the audit retest failed), so the reminder now
       // rides in-band with the entity list — this pins that it does.
-      const { apiKey } = await createUserWithApiKey(testEmail('mcpnote'))
+      const { apiKey } = await freshClient('mcpnote')
       const res = await request.post(`${baseURL}/mcp`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -236,7 +254,7 @@ test.describe('MCP discovery, as a real client performs it', () => {
       // and a client's Claude cited the raw UUID as "evidence" that entities
       // sharing it were related — an internal id doing reasoning work. The
       // strip contract must hold on BOTH list tools.
-      const { apiKey } = await createUserWithApiKey(testEmail('mcpstrip'))
+      const { apiKey } = await freshClient('mcpstrip')
       const auth = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
 
       // A fresh account lists zero documents, which passes any strip check
@@ -276,7 +294,7 @@ test.describe('MCP discovery, as a real client performs it', () => {
       // the live connector on the exact tool a client was being asked to
       // authorize. Ciphertext and tenancy ids must never reach a model on
       // ANY of the entity tools.
-      const { apiKey } = await createUserWithApiKey(testEmail('mcpgetent'))
+      const { apiKey } = await freshClient('mcpgetent')
       const auth = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
       const ent = await request.post(`${baseURL}/api/entities`, {
         headers: auth, data: { name: 'E2E GetEntity Strip', form_type: '1120S', ein: '12-3456789' },
@@ -303,7 +321,7 @@ test.describe('MCP discovery, as a real client performs it', () => {
       // report. Masking must happen at the data boundary (every tool response
       // funnels through one masker), not by trusting the model to not repeat
       // what it was shown. Values here are synthetic.
-      const { apiKey } = await createUserWithApiKey(testEmail('mcpmask'))
+      const { apiKey } = await freshClient('mcpmask')
       const auth = { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
       const ent = await request.post(`${baseURL}/api/entities`, {
         headers: auth, data: { name: 'E2E Mask Check', form_type: '1120S', ein: '12-3456789' },
@@ -346,7 +364,7 @@ test.describe('MCP discovery, as a real client performs it', () => {
       // If a server does not advertise tools, a client has no reason to
       // surface them as callable. Reported symptom was "connected as an MCP
       // source but not available as a direct tool", so this is worth pinning.
-      const { apiKey } = await createUserWithApiKey(testEmail('mcpcap'))
+      const { apiKey } = await freshClient('mcpcap')
       const res = await request.post(`${baseURL}/mcp`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -368,7 +386,7 @@ test.describe('MCP discovery, as a real client performs it', () => {
     test('a tool can actually be CALLED, not merely listed', async ({ request, baseURL }) => {
       // tools/list succeeding proves nothing about invocation. This is the
       // exact request behind "list my tax entities" — the thing that failed.
-      const { apiKey } = await createUserWithApiKey(testEmail('mcpcall'))
+      const { apiKey } = await freshClient('mcpcall')
       const res = await request.post(`${baseURL}/mcp`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
