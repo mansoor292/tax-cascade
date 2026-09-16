@@ -533,9 +533,14 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         } catch (_) { /* skip */ }
       }
 
-      // Pass through schedule keys from user inputs
+      // Pass through schedule keys from user inputs. schedM2 was missing from
+      // this list while the 1120 path had it, so there was no way to put an
+      // accumulated adjustments account on an S corporation return — the one
+      // form where that schedule carries real weight, since AAA is what
+      // determines how much a shareholder can draw out tax-free.
       const scheduleKeys1120S = Object.entries(mergedInputs).filter(([k]) =>
-        k.startsWith('schedL.') || k.startsWith('schedM1.') || k.startsWith('schedK.')
+        k.startsWith('schedL.') || k.startsWith('schedM1.')
+        || k.startsWith('schedM2.') || k.startsWith('schedK.')
       )
       if (scheduleKeys1120S.length) {
         if (!engineResult.field_values) engineResult.field_values = {}

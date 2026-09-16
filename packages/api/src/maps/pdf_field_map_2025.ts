@@ -501,6 +501,36 @@ export const F1120S_2025: Record<string, string> = {
   // computed return should carry; an extracted return has no engine value, so
   // the alias below fills it in without being able to overwrite.
   'schedK.L18_income_loss':          'f4_4',
+
+  // ── Schedule M-2 (Page 5) — the accumulated adjustments account ──
+  //
+  // There was no 1120-S Schedule M-2 map at all, so the schedule printed
+  // blank on every S-corporation return this system has produced. On an 1120
+  // that would be a presentation gap; here it is the account that tracks what
+  // a shareholder can take out tax-free, and it is the schedule a reader
+  // checks distributions against.
+  //
+  // The line numbers do NOT mean the same thing as the 1120's M-2, so the
+  // existing keys cannot simply be reused. The 1120 runs "2 Net income,
+  // 3 Other increases, 4 Add lines 1-3"; the 1120-S runs "2 Ordinary income,
+  // 3 Other additions, 4 Loss, 5 Other reductions, 6 Combine". Only lines 1
+  // and 8 carry the same meaning on both, and L4_add is 1120-only — mapping
+  // it here would put an "add" subtotal on the S corporation's LOSS line.
+  //
+  // Four columns per row at x = 259/338/418/497: (a) accumulated adjustments
+  // account, (b) shareholders' undistributed taxable income previously taxed,
+  // (c) accumulated earnings and profits, (d) other adjustments account.
+  // Only column (a) is mapped: a corporation that has always been an S corp
+  // has no C-corp earnings and profits, so (b)-(d) stay empty, and several of
+  // those cells are shaded on the form anyway.
+  'schedM2.L1_beg_balance':          'f5_19',
+  'schedM2.L2_ordinary_income':      'f5_23',
+  'schedM2.L3_other_additions':      'f5_27',
+  'schedM2.L4_loss':                 'f5_31',
+  'schedM2.L5_other_reductions':     'f5_35',
+  'schedM2.L6_combine':              'f5_39',
+  'schedM2.L7_distributions':        'f5_43',
+  'schedM2.L8_end_balance':          'f5_47',
 }
 
 // ═══════════════════════════════════════════════════════════════

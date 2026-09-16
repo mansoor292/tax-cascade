@@ -256,3 +256,44 @@ describe('Schedule K twin keys', () => {
     expect(line18).toContain('1,302,595')
   })
 })
+
+describe('1120-S Schedule M-2 (accumulated adjustments account)', () => {
+  /**
+   * There was no 1120-S Schedule M-2 map at all, so the schedule printed
+   * blank on every S-corporation return. It is not a presentation detail
+   * here: AAA is what determines how much a shareholder can draw out
+   * tax-free, and it is what a reader checks distributions against.
+   *
+   * The 1120's M-2 line numbers mean different things — its line 4 is an
+   * "add lines 1-3" subtotal where the 1120-S's line 4 is a LOSS — so the
+   * existing keys could not be reused wholesale.
+   */
+  it('puts each AAA figure on its own line', async () => {
+    const text = await renderText('1120S', 2025, {
+      'schedM2.L1_beg_balance': 82_652,
+      'schedM2.L2_ordinary_income': 1_268_993,
+      'schedM2.L3_other_additions': 33_602,
+      'schedM2.L4_loss': 0,
+      'schedM2.L5_other_reductions': 4_491,
+      'schedM2.L6_combine': 1_380_756,
+      'schedM2.L7_distributions': 957_009,
+      'schedM2.L8_end_balance': 423_747,
+    })
+    const start = text.indexOf('Analysis of Accumulated Adjustments Account')
+    expect(start, 'no Schedule M-2 rendered').toBeGreaterThan(-1)
+    const rows = text.slice(start).split('\n')
+
+    const wrong: string[] = []
+    for (const [line, value] of [
+      ['1', 82_652], ['2', 1_268_993], ['3', 33_602],
+      ['5', 4_491], ['6', 1_380_756], ['7', 957_009],
+    ] as Array<[string, number]>) {
+      const got = lineCarrying(rows, value)
+      if (got !== line) wrong.push(`M-2 line ${line} (${value.toLocaleString()}) printed on ${got ?? 'NOWHERE'}`)
+    }
+    expect(wrong, wrong.join('\n')).toHaveLength(0)
+
+    // Line 8 wraps onto a second physical row, so match it on the value.
+    expect(text).toContain('423,747')
+  })
+})
