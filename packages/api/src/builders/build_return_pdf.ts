@@ -286,25 +286,37 @@ async function fillForm(
     labelToFieldId[e.label] = e.field_id
   }
 
+  // Two passes, because these three routes to a field are NOT equal.
+  //
+  // The typed map is hand-verified against the printed form. The label and
+  // fuzzy matchers are guesses over Textract-discovered labels, and they will
+  // happily find a field for a canonical key that was deliberately left
+  // unmapped. Running all three in one loop let a guess overwrite a verified
+  // value, with object key order deciding the winner: Schedule K line 18 has
+  // two canonical spellings, only one is mapped, and the unmapped one fuzzy-
+  // matched onto the same box and printed its 0 over the engine's $1,302,595.
+  //
+  // So: the map writes first and owns what it writes; the matchers may only
+  // fill fields still empty.
   let filled = 0
+  const written = new Set<string>()
+
   for (const [canonKey, value] of Object.entries(model)) {
     if (value === undefined || value === null || value === '') continue
-
-    // 1. Try typed canonical map first (schedL.L1_cash_boy_b → f6_2)
-    let fieldId = typedMap[canonKey]
-
-    // 2. Fallback: try matching the canonical key directly as a label
-    //    This works when field_values use the Textract label as the key
-    if (!fieldId) fieldId = labelToFieldId[canonKey]
-
-    // 3. Fuzzy fallback: strip prefix and match against labels
-    //    e.g. "schedL.L1_cash_boy_b" → look for label containing "1" and "cash"
-    if (!fieldId && jsonEntries.length) {
-      fieldId = fuzzyMatchLabel(canonKey, jsonEntries) || ''
-    }
-
+    const fieldId = typedMap[canonKey]
     if (!fieldId) continue
-    if (setField(form, fieldId, value)) filled++
+    if (setField(form, fieldId, value)) { filled++; written.add(fieldId) }
+  }
+
+  for (const [canonKey, value] of Object.entries(model)) {
+    if (value === undefined || value === null || value === '') continue
+    if (typedMap[canonKey]) continue
+    // Match the canonical key as a label directly, then fuzzily — e.g.
+    // "schedL.L1_cash_boy_b" → a label containing "1" and "cash".
+    let fieldId = labelToFieldId[canonKey]
+    if (!fieldId && jsonEntries.length) fieldId = fuzzyMatchLabel(canonKey, jsonEntries) || ''
+    if (!fieldId || written.has(fieldId)) continue
+    if (setField(form, fieldId, value)) { filled++; written.add(fieldId) }
   }
 
   return { pdf, filled }

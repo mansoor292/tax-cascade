@@ -53,6 +53,18 @@ const SCHED_L: Record<string, number> = {
   'schedL.L28_total_boy_b': 3_053_006,        'schedL.L28_total_eoy_d': 3_053_012,
 }
 
+async function renderText(formType: string, year: number, fieldValues: Record<string, number>): Promise<string> {
+  const { pdf } = await buildReturnPdf({ formType, taxYear: year, entity, fieldValues })
+  const dir = mkdtempSync(path.join(tmpdir(), 'render-'))
+  try {
+    const file = path.join(dir, 'r.pdf')
+    writeFileSync(file, await pdf.save())
+    return execFileSync('pdftotext', ['-layout', file, '-'], { encoding: 'utf8' })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 async function renderScheduleL(formType: string, year: number): Promise<string[]> {
   const { pdf } = await buildReturnPdf({
     formType, taxYear: year, entity, fieldValues: SCHED_L,
@@ -184,5 +196,40 @@ describe('1120 Schedule L field placement', () => {
     const treasury = rows.find(r => /^\s*27\s+Less cost of treasury/.test(r))
     expect(treasury).toContain('2,001')
     expect(treasury).not.toContain('3,053,006')
+  })
+})
+
+describe('the hand-verified field map outranks the label matchers', () => {
+  /**
+   * fillForm has three routes to a field: the typed map (checked against the
+   * printed form), a Textract label lookup, and a fuzzy label match. They used
+   * to run in one loop, so a guess could overwrite a verified value and object
+   * key order decided the winner.
+   *
+   * Schedule K line 18 is where that bit. It has two canonical spellings —
+   * L18_income_loss (the engine's) and L18_reconciliation (the filed-return
+   * extractor's). Only the first is mapped, but the second fuzzy-matched onto
+   * the same box and printed its zero over a $1.3M reconciliation. Removing it
+   * from the map was not enough; the matcher found it anyway.
+   */
+  it('prints the engine figure on Schedule K line 18, not the extractor twin', async () => {
+    const text = await renderText('1120S', 2025, {
+      'schedK.L1_ordinary': 1_268_993,
+      'schedK.L4_interest': 32_943,
+      'schedK.L18_income_loss': 1_302_595,
+      'schedK.L18_reconciliation': 0,
+    })
+    const row = text.split('\n').find(r => /subtract the sum of the amounts/.test(r))
+    expect(row, 'no Schedule K line 18 row rendered').toBeTruthy()
+    expect(row).toContain('1,302,595')
+  })
+
+  it('still fills line 18 from the extractor twin when the engine key is absent', async () => {
+    const text = await renderText('1120S', 2025, {
+      'schedK.L1_ordinary': 500_000,
+      'schedK.L18_reconciliation': 512_345,
+    })
+    const row = text.split('\n').find(r => /subtract the sum of the amounts/.test(r))
+    expect(row).toContain('512,345')
   })
 })
