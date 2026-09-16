@@ -233,3 +233,26 @@ describe('the hand-verified field map outranks the label matchers', () => {
     expect(row).toContain('512,345')
   })
 })
+
+describe('Schedule K twin keys', () => {
+  /**
+   * Making the field map authoritative fixed line 18 and broke line 7, which
+   * had been relying on the unmapped twin fuzzy-matching onto the same box.
+   * Both directions are pinned here so neither can regress into the other.
+   */
+  it('fills a mapped key that is zero from its twin, and leaves a real figure alone', async () => {
+    const text = await renderText('1120S', 2025, {
+      'schedK.L1_ordinary': 1_268_993,
+      'schedK.L7_st_gain': 0,                 // mapped, empty
+      'schedK.L7_st_capital_gain': 148,       // twin, real
+      'schedK.L18_income_loss': 1_302_595,    // mapped, real
+      'schedK.L18_reconciliation': 0,         // twin, empty
+    })
+    const line7 = text.split('\n').find(r => /Net short-term capital gain/.test(r))
+    expect(line7, 'no line 7 row rendered').toBeTruthy()
+    expect(line7).toContain('148')
+
+    const line18 = text.split('\n').find(r => /subtract the sum of the amounts/.test(r))
+    expect(line18).toContain('1,302,595')
+  })
+})

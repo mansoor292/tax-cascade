@@ -143,16 +143,30 @@ function buildModel(input: BuildPdfInput): Record<string, string | number> {
     // which printed, and line 18 lost to an extractor zero on a return whose
     // computed reconciliation was $1.3M. Fill the mapped key from its twin
     // only when the mapped key is absent, so neither can overwrite the other.
-    // Only pairs whose mapped side was read off the field map and whose
-    // behaviour was checked on a rendered page. Other Schedule K lines have
-    // twins too (L7, L8a, L16a) and currently print correctly by another
-    // route; they are deliberately left alone rather than guessed at.
-    const SCHED_K_FALLBACKS: Array<[mapped: string, twin: string]> = [
+    // Left is the spelling the field map carries, right is its twin. Fill the
+    // mapped key from the twin when the mapped key says nothing — absent, or
+    // present as a zero while the twin holds a real figure. A zero and an
+    // amount for the same line is not a disagreement about the amount; it is
+    // one of the two keys having been populated.
+    //
+    // This used to happen by accident: the unmapped twin fuzzy-matched onto
+    // the same box and overwrote whatever the map had put there. That worked
+    // for line 7 and failed for line 18, decided by nothing more than object
+    // key order. Making the map authoritative fixed 18 and broke 7, which is
+    // what these pairs are for — the relationship is now stated rather than
+    // left to a resemblance between labels.
+    const SCHED_K_TWINS: Array<[mapped: string, twin: string]> = [
       ['schedK.L18_income_loss', 'schedK.L18_reconciliation'],
       ['schedK.L5a_dividends', 'schedK.L5a_ordinary_dividends'],
+      ['schedK.L7_st_gain', 'schedK.L7_st_capital_gain'],
+      ['schedK.L8a_lt_gain', 'schedK.L8a_lt_capital_gain'],
+      ['schedK.L16a_tax_exempt_int', 'schedK.L16a_tax_exempt_interest'],
     ]
-    for (const [mapped, twin] of SCHED_K_FALLBACKS) {
-      if (model[mapped] === undefined && model[twin] !== undefined) model[mapped] = model[twin]
+    for (const [mapped, twin] of SCHED_K_TWINS) {
+      const have = model[mapped]
+      const alt = model[twin]
+      if (alt === undefined || alt === 0) continue
+      if (have === undefined || have === 0) model[mapped] = alt
     }
   }
 
