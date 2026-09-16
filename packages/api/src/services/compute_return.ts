@@ -495,20 +495,39 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
               // Schedule K pro-rata share items from P&L categorization
               // Common non-ordinary income that should flow to separate K lines
               const pnl = eoyResp.profit_and_loss?.items || {}
+              // The P&L summary lists every account TWICE — once bare
+              // ("Dividend Income") and once under its section path
+              // ("OtherIncome > Dividend Income") — plus "(Total)" roll-ups
+              // that contain their own children. Summing across all of them
+              // double counts: a single $511.16 dividend account came out as
+              // $1,022 on Schedule K line 5a, while the engine's own line 18
+              // reconciliation used the correct figure. Count the bare leaf
+              // keys only.
               const findByPattern = (patterns: RegExp[]): number => {
                 let total = 0
                 for (const [k, v] of Object.entries(pnl)) {
                   if (typeof v !== 'number' || v === 0) continue
+                  if (k.includes(' > ') || k.includes('(Total)')) continue
                   if (patterns.some(p => p.test(k))) total += Math.abs(v)
                 }
                 return Math.round(total)
               }
+              // These are a fallback for entities that supplied nothing: an
+              // explicit input is a stated fact and a pattern match over
+              // account names is a guess, so the guess must never overwrite it.
+              const stated = (k: string) => mergedInputs[k] !== undefined && mergedInputs[k] !== null
               const schedKInterest = findByPattern([/interest\s+income/i, /^interest\s+earned/i])
               const schedKDividends = findByPattern([/dividend\s+income/i, /^dividends/i])
               const schedKRoyalties = findByPattern([/royalt(y|ies)/i])
-              if (schedKInterest) engineResult.field_values['schedK.L4_interest'] = schedKInterest
-              if (schedKDividends) engineResult.field_values['schedK.L5a_dividends'] = schedKDividends
-              if (schedKRoyalties) engineResult.field_values['schedK.L6_royalties'] = schedKRoyalties
+              if (schedKInterest && !stated('schedule_k_interest')) {
+                engineResult.field_values['schedK.L4_interest'] = schedKInterest
+              }
+              if (schedKDividends && !stated('schedule_k_dividends_ordinary')) {
+                engineResult.field_values['schedK.L5a_dividends'] = schedKDividends
+              }
+              if (schedKRoyalties && !stated('schedule_k_royalties')) {
+                engineResult.field_values['schedK.L6_royalties'] = schedKRoyalties
+              }
             }
           }
         } catch (_) { /* skip */ }

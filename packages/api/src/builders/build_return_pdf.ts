@@ -136,6 +136,24 @@ function buildModel(input: BuildPdfInput): Record<string, string | number> {
       const aliased = aliases[key]
       if (aliased) model[aliased] = value
     }
+
+    // Several Schedule K lines have two canonical spellings: one the engine
+    // computes, one the filed-return extractor produces. Exactly ONE of each
+    // pair is mapped to a PDF field; mapping both meant iteration order chose
+    // which printed, and line 18 lost to an extractor zero on a return whose
+    // computed reconciliation was $1.3M. Fill the mapped key from its twin
+    // only when the mapped key is absent, so neither can overwrite the other.
+    // Only pairs whose mapped side was read off the field map and whose
+    // behaviour was checked on a rendered page. Other Schedule K lines have
+    // twins too (L7, L8a, L16a) and currently print correctly by another
+    // route; they are deliberately left alone rather than guessed at.
+    const SCHED_K_FALLBACKS: Array<[mapped: string, twin: string]> = [
+      ['schedK.L18_income_loss', 'schedK.L18_reconciliation'],
+      ['schedK.L5a_dividends', 'schedK.L5a_ordinary_dividends'],
+    ]
+    for (const [mapped, twin] of SCHED_K_FALLBACKS) {
+      if (model[mapped] === undefined && model[twin] !== undefined) model[mapped] = model[twin]
+    }
   }
 
   // 4. Entity metadata

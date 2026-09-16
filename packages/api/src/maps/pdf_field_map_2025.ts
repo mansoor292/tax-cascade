@@ -493,7 +493,13 @@ export const F1120S_2025: Record<string, string> = {
   'schedK.L17a_invest_income':       'f4_1',
   'schedK.L17b_invest_expense':      'f4_2',
   'schedK.L17c_div_from_ae':         'f4_3',
-  'schedK.L18_reconciliation':       'f4_4',
+  // Line 18 has TWO canonical keys: L18_income_loss is what the engine
+  // computes, L18_reconciliation is what the filed-return extractor produces.
+  // Both used to point at f4_4, so whichever the model iterated last won —
+  // in practice the extractor's zero, printing line 18 as 0 on a return whose
+  // computed reconciliation was $1.3M. The engine's figure is the one a
+  // computed return should carry; an extracted return has no engine value, so
+  // the alias below fills it in without being able to overwrite.
   'schedK.L18_income_loss':          'f4_4',
 }
 
