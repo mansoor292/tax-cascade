@@ -926,8 +926,10 @@ router.post('/:id/k1s', async (req, res) => {
     .select('*').eq('id', req.params.id).single()
   if (!taxReturn) return res.status(404).json({ error: 'Return not found' })
   const { data: entity } = await supabase.from('tax_entity')
-    .select('user_id, name, ein, address, city, state, zip, meta').eq('id', taxReturn.entity_id).single()
+    .select('user_id, name, ein, ein_enc, address, city, state, zip, meta').eq('id', taxReturn.entity_id).single()
   if (!entity || entity.user_id !== userId) return res.status(403).json({ error: 'Forbidden' })
+  // The corporation's EIN goes in Part I of every K-1 and is stored encrypted.
+  await hydrate(supabase, entity, { ...ENCRYPTED_ENTITY_FIELDS, userId })
   if (taxReturn.form_type !== '1120S') {
     return res.status(400).json({ error: `K-1 generation from a return supports 1120S only (this is ${taxReturn.form_type}). For partnership K-1s use POST /api/returns/k1s/1065 with explicit totals and partners.` })
   }
@@ -1037,11 +1039,16 @@ router.get('/:id/pdf', async (req, res) => {
 
   // Generate the PDF using the full builder (same code that produces verified returns)
   try {
-    // Get entity data
+    // Get entity data. The EIN is PRINTED on the return (box D) and on every
+    // statement page, and it is stored encrypted — selecting `ein` bare left
+    // box D empty and the statements reading "EIN: null" on every generated
+    // package. Select the _enc twin and hydrate, as the scenario PDF route
+    // already does.
     const { data: entityData } = await supabase.from('tax_entity')
-      .select('name, ein, address, city, state, zip, date_incorporated, meta')
+      .select('user_id, name, ein, ein_enc, address, city, state, zip, date_incorporated, meta')
       .eq('id', taxReturn.entity_id).single()
     if (!entityData) return res.status(404).json({ error: 'Entity not found' })
+    await hydrate(supabase, entityData, { ...ENCRYPTED_ENTITY_FIELDS, userId })
 
     // Try to get raw textract KVs from the source document. Select the _enc
     // twin and hydrate: post-cutover the plaintext column is null, so the

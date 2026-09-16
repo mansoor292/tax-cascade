@@ -53,6 +53,12 @@ jobs:
           done
           echo "API never converged on ${GITHUB_SHA:0:7}"; exit 1
 
+      - name: Install poppler-utils
+        # pdftotext — the statement-page specs assert on the text that lands
+        # on a generated return, which is the only way to catch a PDF that
+        # renders but says the wrong thing.
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+        working-directory: .
       - name: Install
         run: npm ci --workspaces --include-workspace-root
         working-directory: .
