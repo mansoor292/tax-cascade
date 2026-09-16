@@ -27,10 +27,11 @@ const row = {
     'nested.payload': { ignored: true },
     'blank.value': null,
   },
-  computed_data: {
-    k1s: [{ name: 'Mansoor Razzaq', pct: 100, ordinary_income: 1_268_993, w2_wages: 120_000 }],
-  },
+  computed_data: { inputs: {}, field_values: {}, citations: [] },
 }
+
+/** K-1s are passed in by the caller — they are not stored on the return. */
+const K1S = [{ name: 'Mansoor Razzaq', pct: 100, ordinary_income: 1_268_993, w2_wages: 120_000 }]
 
 describe('parseCanonicalKey', () => {
   it('splits section, line and Schedule L column', () => {
@@ -55,7 +56,7 @@ describe('parseCanonicalKey', () => {
 })
 
 describe('buildReturnExport', () => {
-  const exp = buildReturnExport(row, entity)
+  const exp = buildReturnExport(row, entity, K1S)
 
   it('drops nested payloads and empty values, keeping a real zero', () => {
     const keys = exp.lines.map(l => l.key)
@@ -87,12 +88,18 @@ describe('buildReturnExport', () => {
 })
 
 describe('exportToCsv', () => {
-  const csv = exportToCsv(buildReturnExport(row, entity))
+  const csv = exportToCsv(buildReturnExport(row, entity, K1S))
   const rows = csv.trim().split('\n')
 
   it('writes a header and one row per line', () => {
     expect(rows[0]).toBe('entity,tax_year,form_type,source,section,line,column,canonical_key,label,value')
     expect(rows.some(r => r.includes('schedL.L25_retained_eoy_d,retained,423717'))).toBe(true)
+  })
+
+  it('exports no K-1 rows when the caller supplies none', () => {
+    // The old code read row.computed_data.k1s, which is never populated —
+    // it looked correct and silently produced nothing.
+    expect(exportToCsv(buildReturnExport(row, entity))).not.toContain('k1.')
   })
 
   it('appends K-1 amounts, which are not field_values lines', () => {

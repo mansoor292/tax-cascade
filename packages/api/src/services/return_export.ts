@@ -127,7 +127,14 @@ function compareLines(a: ExportLine, b: ExportLine): number {
   return a.key < b.key ? -1 : a.key > b.key ? 1 : 0
 }
 
-export function buildReturnExport(row: any, entity: any): ReturnExport {
+/**
+ * @param k1s Shareholder K-1 amounts. These are NOT stored on the return —
+ *   computed_data holds inputs, field_values, liabilities and citations, and
+ *   the K-1s only ever existed in the compute response. The caller re-derives
+ *   them from the saved inputs, the same way the K-1 PDF route does. Reading
+ *   them off computed_data looks right and silently yields nothing.
+ */
+export function buildReturnExport(row: any, entity: any, k1s: any[] = []): ReturnExport {
   const fv = (row?.field_values || {}) as Record<string, unknown>
 
   const lines: ExportLine[] = []
@@ -153,7 +160,7 @@ export function buildReturnExport(row: any, entity: any): ReturnExport {
       computed_at: row?.computed_at ?? null,
     },
     lines,
-    k1s: Array.isArray(row?.computed_data?.k1s) ? row.computed_data.k1s : [],
+    k1s: Array.isArray(k1s) ? k1s : [],
     line_count: lines.length,
   }
 }

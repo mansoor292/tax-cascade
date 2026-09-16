@@ -478,7 +478,21 @@ router.get('/:id/export', async (req, res) => {
   await hydrateReturn(data, userId)
   await hydrateNestedEntity(data, userId)
 
-  const exported = buildReturnExport(data, (data as any).tax_entity)
+  // K-1 amounts are not persisted — computed_data carries inputs,
+  // field_values, liabilities and citations, and the K-1s only ever lived in
+  // the compute response. Re-derive them from the saved inputs, as the K-1 PDF
+  // route does, so an export of an S corporation return is not silently
+  // missing the half of it the shareholder actually needs.
+  let k1s: any[] = []
+  const inputs = (data as any).input_data || {}
+  if ((data as any).form_type === '1120S' && Array.isArray(inputs.shareholders) && inputs.shareholders.length) {
+    try {
+      k1s = calc1120S(inputs as any)?.computed?.k1s || []
+    } catch (e: any) {
+      console.error('export: K-1 re-derivation failed:', e.message)
+    }
+  }
+  const exported = buildReturnExport(data, (data as any).tax_entity, k1s)
 
   if (format === 'csv') {
     const slug = `${exported.entity.name || 'return'}_${exported.return.form_type}_${exported.return.tax_year}`
