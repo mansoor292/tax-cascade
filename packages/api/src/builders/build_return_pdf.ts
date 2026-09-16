@@ -559,19 +559,77 @@ async function fill4562(
 
 // ─── Generate statement pages ───
 
+/**
+ * Normalize an itemization into [description, amount] pairs.
+ *
+ * Two shapes reach here. The entity carries a standing list of tuples
+ * (`meta.other_deductions`); a compute call carries `<bucket>_detail` objects
+ * ({label, amount}), the same arrays compute_validation already checks sum to
+ * the scalar. Only the first was ever read, so an itemization supplied at
+ * compute time printed as a one-line "Total:" page — the detail was validated,
+ * stored, and then dropped on the floor at PDF time.
+ */
+function normalizeItems(raw: unknown): Array<[string, number]> {
+  if (!Array.isArray(raw)) return []
+  const items: Array<[string, number]> = []
+  for (const item of raw) {
+    if (Array.isArray(item)) {
+      const amt = Number(item[1])
+      if (isFinite(amt)) items.push([String(item[0] ?? ''), amt])
+      continue
+    }
+    if (item && typeof item === 'object') {
+      const o = item as Record<string, any>
+      const amt = parseFloat(String(o.amount ?? o.value ?? ''))
+      if (!isFinite(amt)) continue
+      items.push([String(o.label ?? o.description ?? o.name ?? ''), amt])
+    }
+  }
+  return items
+}
+
+/**
+ * Pick the itemization to print for one statement. Per-return detail beats the
+ * entity's standing list, but only if it ties to the figure actually on the
+ * form: a statement that contradicts the line it supports is worse than the
+ * summary page, so a detail that doesn't foot is refused rather than printed.
+ */
+function itemizationFor(
+  formAmount: number, perReturn: unknown, standing: unknown, label: string,
+): Array<[string, number]> {
+  for (const candidate of [normalizeItems(perReturn), normalizeItems(standing)]) {
+    if (!candidate.length) continue
+    const sum = candidate.reduce((t, [, a]) => t + a, 0)
+    if (!formAmount || Math.abs(sum - formAmount) <= 1) return candidate
+    console.error(
+      `[statements] ${label}: itemization sums to ${sum} but the form carries ` +
+      `${formAmount} — printing the summary page instead of a statement that ` +
+      'would not tie to the return.',
+    )
+  }
+  return []
+}
+
 async function generateStatements(
   entity: EntityData, year: number, formType: string,
   model: Record<string, string | number>,
+  inputData: Record<string, any> = {},
 ): Promise<PDFDocument | null> {
-  // Collect statement data
-  const otherDeductions = (entity.meta?.other_deductions || []) as Array<[string, number]>
-  const cogsOtherCosts = (entity.meta?.cogs_other_costs || []) as Array<[string, number]>
-  const otherIncome = (entity.meta?.other_income || []) as Array<[string, number]>
+  const otherDedAmount = Number(model['deductions.L26_other_deductions'] || model['deductions.L20_other'] || 0)
+  const cogsOtherAmount = Number(model['cogs.L5_other'] || 0)
+  const otherIncomeAmount = Number(model['income.L5_other_income'] || model['income.L10_other_income'] || 0)
+
+  const otherDeductions = itemizationFor(
+    otherDedAmount, inputData.other_deductions_detail, entity.meta?.other_deductions, 'other deductions')
+  const cogsOtherCosts = itemizationFor(
+    cogsOtherAmount, inputData.other_costs_detail, entity.meta?.cogs_other_costs, 'COGS other costs')
+  const otherIncome = itemizationFor(
+    otherIncomeAmount, inputData.other_income_detail, entity.meta?.other_income, 'other income')
 
   // Determine which statements to generate
-  const hasOtherDed = otherDeductions.length > 0 || model['deductions.L26_other_deductions'] || model['deductions.L20_other']
-  const hasCogsCosts = cogsOtherCosts.length > 0 || model['cogs.L5_other']
-  const hasOtherIncome = otherIncome.length > 0
+  const hasOtherDed = otherDeductions.length > 0 || !!otherDedAmount
+  const hasCogsCosts = cogsOtherCosts.length > 0 || !!cogsOtherAmount
+  const hasOtherIncome = otherIncome.length > 0 || !!otherIncomeAmount
 
   if (!hasOtherDed && !hasCogsCosts && !hasOtherIncome) return null
 
@@ -579,38 +637,47 @@ async function generateStatements(
   const font = await stmtPdf.embedFont(StandardFonts.Courier)
   const boldFont = await stmtPdf.embedFont(StandardFonts.CourierBold)
 
+  /**
+   * Draw a statement, continuing onto further pages as needed.
+   *
+   * Overflow used to add a blank page and keep drawing on the first one, so
+   * any itemization past ~47 rows was silently dropped off the bottom. That
+   * was survivable only while itemizations never actually reached here.
+   */
   function addStatementPage(title: string, items: Array<[string, number]>, totalLabel: string): PDFPage {
-    const page = stmtPdf.addPage([612, 792])
+    const firstPage = stmtPdf.addPage([612, 792])
+    let page = firstPage
     let y = 740
-    const draw = (text: string, x: number, yy: number, f: PDFFont = font, size = 10) =>
-      page.drawText(text, { x, y: yy, font: f, size, color: rgb(0, 0, 0) })
+    const draw = (text: string, x: number, f: PDFFont = font, size = 10) =>
+      page.drawText(text, { x, y, font: f, size, color: rgb(0, 0, 0) })
 
-    draw(entity.name, 50, y, boldFont, 12); y -= 15
-    draw(`EIN: ${entity.ein}`, 50, y); y -= 15
-    draw(`Tax Year ${year}`, 50, y); y -= 25
-    draw(title, 50, y, boldFont, 11); y -= 20
-    draw('-'.repeat(65), 50, y); y -= 15
+    const header = (continued: boolean) => {
+      y = 740
+      draw(entity.name, 50, boldFont, 12); y -= 15
+      draw(`EIN: ${entity.ein}`, 50); y -= 15
+      draw(`Tax Year ${year}`, 50); y -= 25
+      draw(continued ? `${title} (continued)` : title, 50, boldFont, 11); y -= 20
+      draw('-'.repeat(65), 50); y -= 15
+    }
 
+    header(false)
     let total = 0
     for (const [desc, amt] of items) {
-      draw(desc, 60, y)
-      draw(amt.toLocaleString().padStart(12), 430, y)
+      // Leave room for the rule + total line so they never land on their own.
+      if (y < 110) {
+        page = stmtPdf.addPage([612, 792])
+        header(true)
+      }
+      draw(desc.slice(0, 60), 60)
+      draw(amt.toLocaleString().padStart(12), 430)
       total += amt
       y -= 14
-      // Page overflow: start new page if running low
-      if (y < 80) {
-        const _nextPage = stmtPdf.addPage([612, 792])
-        y = 740
-        // Continue drawing on new page (simplified: re-bind draw to new page)
-        // For now, items that overflow will just clip. In practice, statement
-        // pages have < 30 line items which fits in one page.
-      }
     }
     y -= 5
-    draw('-'.repeat(65), 50, y); y -= 15
-    draw(totalLabel, 60, y, boldFont)
-    draw(total.toLocaleString().padStart(12), 430, y, boldFont)
-    return page
+    draw('-'.repeat(65), 50); y -= 15
+    draw(totalLabel, 60, boldFont)
+    draw(total.toLocaleString().padStart(12), 430, boldFont)
+    return firstPage
   }
 
   // Summary-only fallback: if no line items provided, show just the total
@@ -631,42 +698,25 @@ async function generateStatements(
     return page
   }
 
-  // Other Deductions statement
-  if (hasOtherDed) {
-    const formLabel = formType === '1120S' ? 'Form 1120-S, Line 20' : 'Form 1120, Line 26'
-    if (otherDeductions.length > 0) {
-      addStatementPage(
-        `${formLabel} \u2014 Other Deductions`,
-        otherDeductions,
-        'Total Other Deductions',
-      )
-    } else {
-      const amt = Number(model['deductions.L26_other_deductions'] || model['deductions.L20_other'] || 0)
-      if (amt) addSummaryPage(`${formLabel} \u2014 Other Deductions`, amt)
-    }
-  }
-
-  // COGS Other Costs statement
-  if (hasCogsCosts) {
-    if (cogsOtherCosts.length > 0) {
-      addStatementPage(
-        'Form 1125-A, Line 5 \u2014 Other Costs (COGS)',
-        cogsOtherCosts,
-        'Total Other Costs',
-      )
-    } else {
-      const amt = Number(model['cogs.L5_other'] || 0)
-      if (amt) addSummaryPage('Form 1125-A, Line 5 \u2014 Other Costs (COGS)', amt)
-    }
-  }
-
-  // Other Income statement (1120S)
-  if (hasOtherIncome && otherIncome.length > 0) {
-    addStatementPage(
+  // Each statement itemizes when it can and falls back to the total when the
+  // caller supplied no detail. The line numbers are the ones the form prints
+  // beside "(attach statement)" \u2014 1120-S line 20, 1120 line 26.
+  const statements: Array<[boolean, string, Array<[string, number]>, number, string]> = [
+    [hasOtherDed,
+      `${formType === '1120S' ? 'Form 1120-S, Line 20' : 'Form 1120, Line 26'} \u2014 Other Deductions`,
+      otherDeductions, otherDedAmount, 'Total Other Deductions'],
+    [hasCogsCosts,
+      'Form 1125-A, Line 5 \u2014 Other Costs (COGS)',
+      cogsOtherCosts, cogsOtherAmount, 'Total Other Costs'],
+    [hasOtherIncome,
       `Form ${formType === '1120S' ? '1120-S' : formType}, Line ${formType === '1120S' ? '5' : '10'} \u2014 Other Income`,
-      otherIncome,
-      'Total Other Income',
-    )
+      otherIncome, otherIncomeAmount, 'Total Other Income'],
+  ]
+
+  for (const [wanted, title, items, amount, totalLabel] of statements) {
+    if (!wanted) continue
+    if (items.length > 0) addStatementPage(title, items, totalLabel)
+    else if (amount) addSummaryPage(title, amount)
   }
 
   return stmtPdf.getPageCount() > 0 ? stmtPdf : null
@@ -872,7 +922,7 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
     }
 
     // Statement pages (other deductions, COGS detail, other income)
-    const stmts = await generateStatements(entity, taxYear, formType, model)
+    const stmts = await generateStatements(entity, taxYear, formType, model, input.inputData || {})
     if (stmts) await append(stmts, 'Statements')
   }
 
