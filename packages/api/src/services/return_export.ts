@@ -68,6 +68,32 @@ const SECTION_LABELS: Record<string, string> = {
 }
 const SECTION_ORDER = Object.keys(SECTION_LABELS)
 
+/**
+ * Superseded canonical key → the key that replaces it.
+ *
+ * Several Schedule K lines exist under two spellings: one the engine computes
+ * and one the filed-return extractor produces. Only one of each pair is mapped
+ * to a PDF field, and the other lingers in field_values holding whatever it
+ * was last set to — usually zero. Left in an export they show up as a second
+ * entry for the same IRS line with a different number, which is precisely the
+ * confusion that had Schedule K line 18 printing 0 against a $1.3M
+ * reconciliation and line 5a printing double the dividends.
+ *
+ * Dropped from the export only when the surviving key is actually present, so
+ * a filed import that carries just the extractor's spelling keeps its value.
+ * Nothing is deleted from storage — the PDF field map still reads some of
+ * these, and the twin-fill in build_return_pdf depends on them being there.
+ */
+const SUPERSEDED_KEYS: Record<string, string> = {
+  'schedK.L18_reconciliation': 'schedK.L18_income_loss',
+  'schedK.L7_st_gain': 'schedK.L7_st_capital_gain',
+  'schedK.L8a_lt_gain': 'schedK.L8a_lt_capital_gain',
+  'schedK.L16a_tax_exempt_int': 'schedK.L16a_tax_exempt_interest',
+  'schedK.L11_179': 'schedK.L11_section_179',
+  'schedK.L12a_cash_charity': 'schedK.L12a_charitable',
+  'schedK.L5a_dividends': 'schedK.L5a_ordinary_dividends',
+}
+
 /** Schedule L runs four columns; keep them in the order the form prints them. */
 const COLUMN_ORDER = ['boy_a', 'boy_b', 'eoy_c', 'eoy_d']
 const COLUMN_RE = /_(boy_a|boy_b|eoy_c|eoy_d)$/
@@ -141,6 +167,8 @@ export function buildReturnExport(row: any, entity: any, k1s: any[] = []): Retur
   for (const [key, value] of Object.entries(fv)) {
     if (value === null || value === undefined || value === '') continue
     if (typeof value === 'object') continue      // nested payloads are not lines
+    const survivor = SUPERSEDED_KEYS[key]
+    if (survivor && fv[survivor] !== undefined && fv[survivor] !== null) continue
     lines.push({ ...parseCanonicalKey(key), value: value as number | string })
   }
   lines.sort(compareLines)

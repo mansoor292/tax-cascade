@@ -24,6 +24,14 @@ const row = {
     'tax.L22_ordinary_income': 1_268_993,
     'meta.entity_name': 'Edgewater Test Inc',
     'schedM2.L8_end_balance': 423_747,
+    // Twin spellings of the same Schedule K lines — the second of each pair
+    // is superseded and must not appear as a second entry for that line.
+    'schedK.L18_income_loss': 1_302_595,
+    'schedK.L18_reconciliation': 0,
+    'schedK.L7_st_capital_gain': 148,
+    'schedK.L7_st_gain': 0,
+    'schedK.L5a_ordinary_dividends': 511,
+    'schedK.L5a_dividends': 1_022,
     'nested.payload': { ignored: true },
     'blank.value': null,
   },
@@ -135,5 +143,32 @@ describe('exportToCsv', () => {
     const [header, dataRow] = withComma.trim().split('\n')
     expect(fields(dataRow)).toHaveLength(fields(header).length)
     expect(fields(dataRow).at(-1)).toBe('Acme, Inc')
+  })
+})
+
+describe('superseded Schedule K twins', () => {
+  it('exports one entry per line, keeping the surviving spelling', () => {
+    const exp = buildReturnExport(row, entity, K1S)
+    const keys = exp.lines.map(l => l.key)
+
+    for (const gone of ['schedK.L18_reconciliation', 'schedK.L7_st_gain', 'schedK.L5a_dividends']) {
+      expect(keys, `${gone} is superseded and should not be exported`).not.toContain(gone)
+    }
+    for (const kept of ['schedK.L18_income_loss', 'schedK.L7_st_capital_gain', 'schedK.L5a_ordinary_dividends']) {
+      expect(keys).toContain(kept)
+    }
+
+    // One line 18, not two saying different things.
+    expect(exp.lines.filter(l => l.section === 'schedK' && l.line === '18')).toHaveLength(1)
+    expect(exp.lines.find(l => l.section === 'schedK' && l.line === '18')!.value).toBe(1_302_595)
+    expect(exp.lines.find(l => l.section === 'schedK' && l.line === '5a')!.value).toBe(511)
+  })
+
+  it('keeps the superseded spelling when nothing replaces it', () => {
+    // A filed import carries the extractor's spelling and no engine key.
+    // Dropping it there would lose the only value for that line.
+    const extracted = { ...row, field_values: { 'schedK.L18_reconciliation': 987_654 } }
+    const keys = buildReturnExport(extracted, entity).lines.map(l => l.key)
+    expect(keys).toContain('schedK.L18_reconciliation')
   })
 })
