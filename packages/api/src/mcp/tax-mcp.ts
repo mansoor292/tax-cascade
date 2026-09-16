@@ -32,6 +32,19 @@ async function api(token: string, method: string, path: string, body?: any): Pro
 }
 
 /**
+ * Same call, but hand back the raw body. Needed for endpoints that answer with
+ * something other than JSON — the CSV export in particular, where parsing the
+ * response as JSON would throw on the first comma.
+ */
+async function apiText(token: string, method: string, path: string): Promise<string> {
+  const resp = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { 'Authorization': `Bearer ${token}` },
+  })
+  return resp.text()
+}
+
+/**
  * Mask tax identifiers before ANY tool response reaches a model.
  *
  * Client finding, 2026-09-01 (SOP-02 retest): the first answer displayed the
@@ -268,6 +281,7 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   run_scenario:               { title: 'Run what-if scenario', ...WRITE },
   compare_scenarios:          { title: 'Compare scenarios', ...RO },
   get_pdf:                    { title: 'Get return PDF', ...RO },
+  export_return:              { title: 'Export return lines (JSON/CSV)', ...RO },
   mark_reviewed:              { title: 'Mark return reviewed', ...WRITE },
   delete_return:              { title: 'Delete return', ...DESTRUCTIVE },
   review_return:              { title: 'Review return (QC)', ...WRITE },
@@ -316,6 +330,7 @@ function createServer(apiKey: string): McpServer {
   )
 
   const call = (method: string, path: string, body?: any) => api(apiKey, method, path, body)
+  const callText = (method: string, path: string) => apiText(apiKey, method, path)
 
   // Every registration below uses the 4-arg form (name, description, schema,
   // handler); this wrap threads in each tool's annotations from the one table
@@ -649,6 +664,22 @@ Serves cached PDFs by default (pdf_s3_path on the return row). Pass refresh=true
     if (skip_review) qs.set('skip_review', 'true')
     const q = qs.toString() ? '?' + qs.toString() : ''
     return text(await call('GET', `/api/returns/${return_id}/pdf${q}`))
+  })
+
+  // ─── Tool: export_return ───
+  server.tool('export_return', `Read a computed return's actual line values — every populated line with its canonical key, schedule, IRS line number, column and amount, plus each shareholder's K-1 figures.
+
+This is how you INSPECT a return. get_pdf renders one for filing and tells you nothing about what is on it; compare_returns gives a handful of headline metrics across years. Use this when you need the figures themselves: checking that a schedule foots, reconciling to the books, handing numbers to a preparer, or answering "what does line 20 say".
+
+format 'json' (default) returns {entity, return, lines[], k1s[]}. Each line carries: key (the canonical key, authoritative), section_label, line, column (Schedule L runs boy_a/boy_b/eoy_c/eoy_d) and value. Labels are derived from the key and are a convenience only — cite the canonical key or the IRS line number, never the label, when precision matters.
+
+format 'csv' returns the same rows as CSV for a spreadsheet.`, {
+    return_id: z.string().describe('Tax return UUID'),
+    format: z.enum(['json', 'csv']).optional().describe("'json' (default) or 'csv'"),
+  }, async ({ return_id, format }) => {
+    const path = `/api/returns/${return_id}/export?format=${format || 'json'}`
+    // CSV must not go through the JSON parser.
+    return text(format === 'csv' ? await callText('GET', path) : await call('GET', path))
   })
 
   // ─── Tool: mark_reviewed ───

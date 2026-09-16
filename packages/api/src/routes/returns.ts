@@ -44,6 +44,7 @@ import { buildScheduleL } from '../maps/qbo_to_schedule_l.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 import { getFinancials } from './qbo.js'
 import { computeReturn } from '../services/compute_return.js'
+import { buildReturnExport, exportToCsv } from '../services/return_export.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 
 const supabase = lazyServiceClient()
@@ -442,6 +443,51 @@ router.get('/:id', async (req, res) => {
   await hydrateNestedEntity(data, userId)
   stripEnc((data as any).tax_entity)
   res.json({ return: stripEnc(data as any) })
+})
+
+/**
+ * Export a return's line values as JSON or CSV.
+ *
+ * There was no way to read what is actually ON a computed return. You could
+ * compute one, validate it and render it to PDF, but to see the figures you
+ * had to query the database or run the rendered form back through a text
+ * extractor. Every discrepancy found during a filing review this week was
+ * found one of those two ways, which is not a workflow anyone else can use.
+ *
+ * GET /api/returns/:id/export            → structured JSON, one entry per line
+ * GET /api/returns/:id/export?format=csv → text/csv, same rows
+ */
+router.get('/:id/export', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const format = String(req.query.format || 'json').toLowerCase()
+  if (format !== 'json' && format !== 'csv') {
+    return res.status(400).json({ error: "format must be 'json' or 'csv'" })
+  }
+
+  const { data } = await supabase.from('tax_return')
+    .select('*, tax_entity(name, form_type, ein, ein_enc, user_id)')
+    .eq('id', req.params.id).single()
+
+  // Same ownership rule as GET /:id — 404 rather than 403 so a stranger does
+  // not learn the id exists.
+  if (!data || (data as any).tax_entity?.user_id !== userId) {
+    return res.status(404).json({ error: 'Not found' })
+  }
+  await hydrateReturn(data, userId)
+  await hydrateNestedEntity(data, userId)
+
+  const exported = buildReturnExport(data, (data as any).tax_entity)
+
+  if (format === 'csv') {
+    const slug = `${exported.entity.name || 'return'}_${exported.return.form_type}_${exported.return.tax_year}`
+      .replace(/[^A-Za-z0-9._-]+/g, '_')
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="${slug}.csv"`)
+    return res.send(exportToCsv(exported))
+  }
+  res.json(exported)
 })
 
 // Multi-year comparison for an entity
