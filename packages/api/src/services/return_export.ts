@@ -92,6 +92,10 @@ const SUPERSEDED_KEYS: Record<string, string> = {
   'schedK.L11_179': 'schedK.L11_section_179',
   'schedK.L12a_cash_charity': 'schedK.L12a_charitable',
   'schedK.L5a_dividends': 'schedK.L5a_ordinary_dividends',
+  'schedK.L5b_qual_div': 'schedK.L5b_qualified_dividends',
+  'schedK.L10_other_amount': 'schedK.L10_other_income',
+  'schedM1.L1_net_income': 'schedM1.L1_net_income_books',
+  'schedM1.L8_income_line18': 'schedM1.L8_income_K18',
 }
 
 /** Schedule L runs four columns; keep them in the order the form prints them. */

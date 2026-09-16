@@ -155,14 +155,20 @@ function buildModel(input: BuildPdfInput): Record<string, string | number> {
     // key order. Making the map authoritative fixed 18 and broke 7, which is
     // what these pairs are for — the relationship is now stated rather than
     // left to a resemblance between labels.
-    const SCHED_K_TWINS: Array<[mapped: string, twin: string]> = [
+    const SCHEDULE_TWINS: Array<[mapped: string, twin: string]> = [
       ['schedK.L18_income_loss', 'schedK.L18_reconciliation'],
       ['schedK.L5a_dividends', 'schedK.L5a_ordinary_dividends'],
       ['schedK.L7_st_gain', 'schedK.L7_st_capital_gain'],
       ['schedK.L8a_lt_gain', 'schedK.L8a_lt_capital_gain'],
       ['schedK.L16a_tax_exempt_int', 'schedK.L16a_tax_exempt_interest'],
+      ['schedK.L5b_qual_div', 'schedK.L5b_qualified_dividends'],
+      ['schedK.L10_other_amount', 'schedK.L10_other_income'],
+      ['schedK.L11_179', 'schedK.L11_section_179'],
+      ['schedK.L12a_cash_charity', 'schedK.L12a_charitable'],
+      ['schedM1.L1_net_income_books', 'schedM1.L1_net_income'],
+      ['schedM1.L8_income_K18', 'schedM1.L8_income_line18'],
     ]
-    for (const [mapped, twin] of SCHED_K_TWINS) {
+    for (const [mapped, twin] of SCHEDULE_TWINS) {
       const have = model[mapped]
       const alt = model[twin]
       if (alt === undefined || alt === 0) continue

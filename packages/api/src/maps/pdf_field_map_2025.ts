@@ -435,15 +435,17 @@ export const F1120S_2025: Record<string, string> = {
   'schedL.L28_total_eoy_d':          'f4_128',
 
   // Reconciliation (Page 5 — Schedule M-1 equivalent for S-Corps)
+  // One key per box — L1_net_income was mapped here too, so whichever the
+  // model iterated last decided what line 1 printed. The engine emits
+  // L1_net_income (ordinary income); the book figure belongs on this line and
+  // reaches it through SCHEDULE_TWINS when nothing sets it explicitly.
   'schedM1.L1_net_income_books':     'f5_1',
-  'schedM1.L1_net_income':           'f5_1',
   'schedM1.L2_income_on_K':          'f5_4',
   'schedM1.L3_expenses_not_K':       'f5_9',
   'schedM1.L4_add':                  'f5_10',
   'schedM1.L5_income_not_K':         'f5_13',
   'schedM1.L6_ded_on_K':             'f5_16',
   'schedM1.L7_add_5_6':              'f5_17',
-  'schedM1.L8_income_line18':        'f5_18',
   'schedM1.L8_income_K18':           'f5_18',
 
   // Schedule B — Other information (Page 2)
@@ -470,10 +472,14 @@ export const F1120S_2025: Record<string, string> = {
   'schedK.L8c_unrecaptured':         'f3_15',
   'schedK.L9_1231':                  'f3_16',
   'schedK.L10_other_amount':         'f3_18',
+  // One key per box. L11_section_179 and L12a_charitable used to be mapped
+  // here as well, both onto these same two fields, so whichever the model
+  // iterated last decided what printed — the defect that had line 18 showing
+  // zero against a $1.3M reconciliation. The 2024 map never had them. The
+  // engine emits those spellings, so they reach the box through SCHED_K_TWINS
+  // in build_return_pdf rather than through a second mapping.
   'schedK.L11_179':                  'f3_19',
-  'schedK.L11_section_179':          'f3_19',
   'schedK.L12a_cash_charity':        'f3_20',
-  'schedK.L12a_charitable':          'f3_20',
   'schedK.L12b_noncash_charity':     'f3_21',
   'schedK.L12c_invest_interest':     'f3_22',
   'schedK.L13a_li_housing_42':       'f3_27',
