@@ -20,6 +20,7 @@ import { errorOutcome, type HttpOutcome } from '../lib/http_error.js'
 import { lazyServiceClient } from '../lib/supabase.js'
 import { getFinancials } from '../routes/qbo.js'
 import { validateInputArithmetic } from './compute_validation.js'
+import { deriveReconciliation1120S, type ReconciliationIssue } from './reconciliation.js'
 import { entityIdentityFields } from '../builders/entity_identity.js'
 import { extractAggregates as extractAggregatesFromFv } from '@taxengine/shared'
 import { INPUT_SCHEMAS } from '../routes/schema.js'
@@ -122,6 +123,34 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     let supportingDocs: any[] = []
     // Caller's inputs override existing; unspecified fields fall through to prior state.
     const mergedInputs: any = { ...existingInputData, ...inputs }
+
+    // Re-validate against the MERGED inputs, not just the caller's.
+    //
+    // The first pass above only saw what this caller typed. A caller who
+    // updates `other_deductions` to a new figure without restating
+    // `other_deductions_detail` passes that check — there is no detail array
+    // in their payload to check — and then the stored detail is merged back in
+    // underneath. The return is saved with an itemisation that contradicts the
+    // line it supports, and nothing ever looked. That is exactly how line 20
+    // came to read 285,741 over a breakdown totalling 283,661.
+    //
+    // The same applies to a Schedule L where only some lines are restated.
+    // Validate what will actually be persisted.
+    {
+      const mergedErrors = validateInputArithmetic(mergedInputs as Record<string, any>)
+      if (mergedErrors.length) {
+        return { status: 422, body: {
+          error: 'ARITHMETIC_MISMATCH',
+          message: 'The saved inputs this compute would produce do not add up. '
+                 + 'These fields come from merging your inputs over the ones already '
+                 + 'stored on the return, so a figure you did not resend may be the '
+                 + 'one that no longer agrees.',
+          mismatches: mergedErrors,
+          hint: 'Restate the detail array alongside the scalar you changed (or send '
+              + 'an empty array to drop it), or correct whichever side is wrong.',
+        } }
+      }
+    }
     const autoMergeLog: Array<{ field: string; value: number; sources: string[]; confidence?: string }> = []
     // Warnings from the QBO mapper — non-blocking context for the caller
     // (SSTB_SUSPECTED, OFFICER_COMP_UNSPLIT, CONTINGENCY_IN_REVENUE, ...)
@@ -412,6 +441,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     }
 
     let engineResult: any = null
+    let reconciliationIssues: ReconciliationIssue[] = []
 
     if (form_type === '1120') {
       engineResult = calc1120({ ...mergedInputs, tax_year })
@@ -545,6 +575,20 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       if (scheduleKeys1120S.length) {
         if (!engineResult.field_values) engineResult.field_values = {}
         for (const [k, v] of scheduleKeys1120S) engineResult.field_values[k] = v
+      }
+
+      // Schedules M-1 and M-2 follow the income statement. They were pure
+      // pass-through, so when the figures above them changed the caller's
+      // earlier values stayed put — a recompute moved ordinary income by
+      // $37,483 and left M-1 line 8 and M-2 line 2 on the old number, with the
+      // ending AAA (and the shareholder's basis) built on income the return no
+      // longer reported. The lines the form computes are derived here; the
+      // facts only the caller knows are left alone.
+      if (engineResult.field_values) {
+        reconciliationIssues = deriveReconciliation1120S(
+          engineResult.field_values,
+          engineResult.computed?.ordinary_income_loss ?? 0,
+        )
       }
     } else if (form_type === '1040') {
       // Schedule E — compute first if structured inputs provided, then inject
@@ -932,6 +976,10 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       // Warnings from the QBO → inputs mapper (SSTB_SUSPECTED,
       // OFFICER_COMP_UNSPLIT, CONTINGENCY_IN_REVENUE, etc.). Non-blocking.
       qbo_warnings: qboWarnings.length > 0 ? qboWarnings : undefined,
+      // Schedule M-1 line 8 is labelled "Income (loss) (Schedule K, line 18)".
+      // When the reconciling items do not bridge book income to that total,
+      // say so rather than forcing the number and hiding it.
+      reconciliation_issues: reconciliationIssues.length > 0 ? reconciliationIssues : undefined,
       pdf_coverage: {
         filled: filledCount,
         total: totalMapFields,
