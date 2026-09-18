@@ -52,6 +52,13 @@ export interface BuildPdfResult {
   filled: number
   pages: number
   forms: string[]
+  /**
+   * The tax year of the blank form and field map actually used. Equals the
+   * return's tax year unless no map exists for that year, in which case the
+   * pair falls back together and the rendered form carries a DIFFERENT year in
+   * its heading. Callers rendering a package for filing must check this.
+   */
+  formYear: number
 }
 
 // ─── Helpers ───
@@ -83,20 +90,59 @@ function parseBSVal(s: string): number {
   return isNaN(n) ? 0 : Math.round(Math.abs(n))
 }
 
-function getFieldMap(formType: string, year: number): Record<string, string> {
+function mapForYear(formType: string, year: number): Record<string, string> | null {
   const base = `F${formType.replace('-', '')}`
-  // Try exact year first, then fall back — Schedule L field IDs are stable across years
-  for (const y of [year, 2025, 2024]) {
-    const map = (maps2025 as any)[`${base}_${y}`] || (maps2024 as any)[`${base}_${y}`]
-    if (map && Object.keys(map).length > 0) return map
-  }
-  return {}
+  const map = (maps2025 as any)[`${base}_${year}`] || (maps2024 as any)[`${base}_${year}`]
+  return map && Object.keys(map).length > 0 ? map : null
 }
 
+function blankForYear(formName: string, year: number): string | null {
+  const path = `data/irs_forms/${formName}_${year}.pdf`
+  return existsSync(path) ? path : null
+}
+
+/**
+ * A field map and a blank form MUST come from the same year.
+ *
+ * These two resolved independently, each with its own [year, 2025, 2024]
+ * fallback, and nothing required the answers to agree. Blank PDFs are on disk
+ * for 2020-2025 but typed maps only go back to 2023 (2022 for the 1120), so a
+ * 2023 1040 loaded the 2023 blank and — where a year's map was missing — wrote
+ * another year's field IDs into it. Widget numbering moves between years, so
+ * every value landed on a different line: total income printed on line 10
+ * "Adjustments to income", wages printed in the tax-exempt interest box. The
+ * render reported `filled: 62` and looked entirely healthy.
+ *
+ * So the year is chosen ONCE, for the pair. An exact-year match is used when
+ * both halves exist; otherwise the newest year that has both. The chosen year
+ * is returned so the caller can see it is not the return's year — a 2022
+ * return on a 2025 form is wrong, but it is VISIBLY wrong, which the scrambled
+ * page was not.
+ */
+function resolveFormYear(formType: string, formName: string, year: number): {
+  year: number; map: Record<string, string>; path: string
+} | null {
+  for (const y of [year, 2025, 2024, 2023, 2022]) {
+    const map = mapForYear(formType, y)
+    const path = blankForYear(formName, y)
+    if (map && path) return { year: y, map, path }
+  }
+  return null
+}
+
+/**
+ * Blank-only lookup, for the attached sub-forms (1125-A, Schedule G, 4562).
+ *
+ * Those fillers carry their field IDs inline rather than in a typed map, and
+ * the IDs are the 2024/2025 layout — which is safe only because blanks for
+ * those forms exist for 2024 and 2025 alone. Adding an earlier-year blank
+ * without moving the IDs into a year-keyed map would reintroduce exactly the
+ * mismatch resolveFormYear exists to prevent.
+ */
 function loadForm(formName: string, year: number): string | null {
   for (const y of [year, 2025, 2024]) {
-    const path = `data/irs_forms/${formName}_${y}.pdf`
-    if (existsSync(path)) return path
+    const path = blankForYear(formName, y)
+    if (path) return path
   }
   return null
 }
@@ -131,10 +177,35 @@ function buildModel(input: BuildPdfInput): Record<string, string | number> {
     const aliases = getCanonicalAliases(input.formType)
     for (const [key, value] of Object.entries(input.fieldValues)) {
       if (value === undefined || value === null) continue
-      // Write under both the original and the aliased key so either PDF map year works
       model[key] = value
+    }
+
+    // An alias may only FILL a canonical line, never restate one.
+    //
+    // A descriptive key and its IRS-line key are two spellings of one line —
+    // `deductions.other_deductions` and `deductions.L20_other`. Writing both in
+    // one loop meant the later one won, and which came later was object key
+    // order: the same bug SCHEDULE_TWINS below was written for, left standing
+    // on the income and deductions aliases because those pairs had never been
+    // seen to disagree.
+    //
+    // They disagree on an amendment. An amended row carries the engine's new
+    // figures under the IRS-line keys AND the descriptive keys copied from the
+    // filed import it amends, still holding last year's filed numbers. On the
+    // 2023 1120-S that printed a page mixing the two — amended gross receipts
+    // against filed cost of goods sold, amended total income against filed
+    // total deductions — which foots to nothing and is not either return.
+    //
+    // A filed import usually carries only the descriptive spelling, so the
+    // alias is still how those rows reach the form; it just may not speak over
+    // a line the row (or the engine, in steps 1-2) already stated. A canonical
+    // zero is a stated value: on an amendment that zeroes a deduction, zero is
+    // the answer and the filed amount is the stale one.
+    for (const [key, value] of Object.entries(input.fieldValues)) {
+      if (value === undefined || value === null) continue
       const aliased = aliases[key]
-      if (aliased) model[aliased] = value
+      if (!aliased || model[aliased] !== undefined) continue
+      model[aliased] = value
     }
 
     // Several Schedule K lines have two canonical spellings: one the engine
@@ -167,6 +238,14 @@ function buildModel(input: BuildPdfInput): Record<string, string | number> {
       ['schedK.L12a_cash_charity', 'schedK.L12a_charitable'],
       ['schedM1.L1_net_income_books', 'schedM1.L1_net_income'],
       ['schedM1.L8_income_K18', 'schedM1.L8_income_line18'],
+      // 1040. The extractor writes the sub-letter spelling the form prints
+      // ("11b", "12e", "13a"); the map carries the bare line number. Both were
+      // stored, only the bare one was mapped, and it held zero — so adjusted
+      // gross income, the standard deduction and the QBI deduction all printed
+      // as 0 on a return whose line 14 correctly showed their sum.
+      ['income.L11_agi', 'income.L11b_agi'],
+      ['deductions.L12_standard', 'deductions.L12e_standard'],
+      ['deductions.L13_qbi', 'deductions.L13a_qbi'],
     ]
     for (const [mapped, twin] of SCHEDULE_TWINS) {
       const have = model[mapped]
@@ -287,20 +366,20 @@ function extractScheduleL(kvs: Array<{ key: string; value: string }>, model: Rec
 async function fillForm(
   formName: string, year: number, formType: string,
   model: Record<string, string | number>,
-): Promise<{ pdf: PDFDocument; filled: number } | null> {
-  const path = loadForm(formName, year)
-  if (!path) return null
+): Promise<{ pdf: PDFDocument; filled: number; formYear: number } | null> {
+  // The map and the blank are resolved together — never independently.
+  const resolved = resolveFormYear(formType, formName, year)
+  if (!resolved) return null
+  const { year: formYear, map: typedMap, path } = resolved
 
   const pdf = await PDFDocument.load(readFileSync(path))
   const form = pdf.getForm()
 
-  // Primary: hand-coded canonical map (year-specific field IDs, verified)
-  const typedMap = getFieldMap(formType, year)
-
   // Fallback: Textract-discovered JSON map (label → field_id)
-  // This lets ANY discovered form be filled without a hand-coded TS map
+  // This lets ANY discovered form be filled without a hand-coded TS map.
+  // Keyed to the SAME year as the blank, for the same reason.
   const { getFieldMap: getJsonMap } = await import('../maps/field_maps.js')
-  const jsonEntries = getJsonMap(formName, year)
+  const jsonEntries = getJsonMap(formName, formYear)
   const labelToFieldId: Record<string, string> = {}
   for (const e of jsonEntries) {
     labelToFieldId[e.label] = e.field_id
@@ -339,7 +418,7 @@ async function fillForm(
     if (setField(form, fieldId, value)) { filled++; written.add(fieldId) }
   }
 
-  return { pdf, filled }
+  return { pdf, filled, formYear }
 }
 
 /**
@@ -981,6 +1060,7 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
     filled: totalFilled,
     pages: merged.getPageCount(),
     forms,
+    formYear: main.formYear,
   }
 }
 

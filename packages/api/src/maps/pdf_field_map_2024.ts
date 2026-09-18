@@ -481,10 +481,109 @@ export function getMappedKeys(form: '1120' | '1040' | '1120S'): string[] {
 
 
 // Year-keyed aliases for the PDF route
+// Year-keyed aliases below are the SAME object under another year's name, not
+// separately verified maps. That is safe only while the layout genuinely did
+// not move; F1040_2023 was one of these and was wrong by a full widget on
+// every page-1 line (see its comment). Before trusting one for a filing,
+// stamp the blank for that year and check the lines land where they belong.
 export const F1120_2024 = PDF_FIELD_MAP_1120
-export const F1120_2023 = PDF_FIELD_MAP_1120  // 2023 uses same form layout as 2024
-export const F1120_2022 = PDF_FIELD_MAP_1120
+export const F1120_2023 = PDF_FIELD_MAP_1120  // unverified copy of 2024
+export const F1120_2022 = PDF_FIELD_MAP_1120  // unverified copy of 2024
 export const F1040_2024 = PDF_FIELD_MAP_1040
-export const F1040_2023 = PDF_FIELD_MAP_1040
+/**
+ * Form 1040, tax year 2023 — field IDs read off the 2023 blank itself.
+ *
+ * This was `= PDF_FIELD_MAP_1040`, the 2024 map, on the assumption that the
+ * layout does not move between years. It moves. Every page-1 money field on
+ * the 2023 form sits one widget EARLIER than its 2024 counterpart (2023 line
+ * 1z is f1_40; 2024 line 1z is f1_41), so a 2023 return filled with the 2024
+ * map printed every income figure one line low: wages in the tax-exempt
+ * interest box, total income on line 10 "Adjustments to income", adjusted
+ * gross income blank. The page looked complete and the builder reported 62
+ * fields filled.
+ *
+ * These IDs come from stamping each field on data/irs_forms/f1040_2023.pdf
+ * with its own name, rendering, and reading which line each landed on — the
+ * same method used for the 1120-S Schedule L. A key is taken from the probe
+ * only where the probe also reproduces the VERIFIED 2024 map for that line,
+ * so a misread label cannot introduce a mapping nobody checked. Page 2 is
+ * unchanged between the two years; the 29 differences are all on page 1.
+ */
+export const F1040_2023: Record<string, string> = {
+  'meta.first_name':          'f1_04',
+  'meta.last_name':           'f1_05',
+  'meta.ssn':                 'f1_06',
+  'meta.spouse_first':        'f1_07',
+  'meta.spouse_last':         'f1_08',
+  'meta.spouse_ssn':          'f1_09',
+  'meta.address':             'f1_10',
+  'meta.apt':                 'f1_11',
+  'meta.city':                'f1_12',
+  'meta.state':               'f1_13',
+  'meta.zip':                 'f1_14',
+  'income.L1a_w2_wages':      'f1_31',
+  'income.L1b_household':     'f1_32',
+  'income.L1c_tips':          'f1_33',
+  'income.L1d_medicaid':      'f1_34',
+  'income.L1e_dependent_care':'f1_35',
+  'income.L1f_adoption':      'f1_36',
+  'income.L1g_8919':          'f1_37',
+  'income.L1h_other_earned':  'f1_38',
+  'income.L1i_combat_pay':    'f1_39',
+  'income.L1z_total_wages':   'f1_40',
+  'income.L2a_tax_exempt_int':'f1_41',
+  'income.L2b_taxable_int':   'f1_42',
+  'income.L3a_qual_dividends':'f1_43',
+  'income.L3b_ord_dividends': 'f1_44',
+  'income.L4a_ira':           'f1_45',
+  'income.L4b_ira_taxable':   'f1_46',
+  'income.L5a_pensions':      'f1_47',
+  'income.L5b_pensions_tax':  'f1_48',
+  'income.L6a_social_sec':    'f1_49',
+  'income.L6b_ss_taxable':    'f1_50',
+  'income.L7_capital_gains':  'f1_51',
+  'income.L8_schedule1':      'f1_52',
+  'income.L9_total_income':   'f1_53',
+  'income.L10_adjustments':   'f1_54',
+  'income.L11_agi':           'f1_55',
+  'deductions.L12_standard':  'f1_56',
+  'deductions.L13_qbi':       'f1_57',
+  'deductions.L14_total':     'f1_58',
+  'tax.L15_taxable_income':   'f1_59',
+  'tax.L16_income_tax':       'f2_01',
+  'tax.L17_sched2':           'f2_03',
+  'tax.L18_add_16_17':        'f2_04',
+  'credits.L19_child_tax':    'f2_05',
+  'credits.L20_sched3':       'f2_06',
+  'credits.L21_add_19_20':    'f2_07',
+  'tax.L22_subtract':         'f2_08',
+  'tax.L23_other_taxes':      'f2_09',
+  'tax.L24_total_tax':        'f2_10',
+  'payments.L25a_w2':         'f2_11',
+  'payments.L25b_1099':       'f2_12',
+  'payments.L25c_other':      'f2_13',
+  'payments.L25d_total':      'f2_14',
+  'payments.L26_estimated':   'f2_15',
+  'payments.L27_eic':         'f2_16',
+  'payments.L28_child_addl':  'f2_17',
+  'payments.L29_aoc':         'f2_18',
+  'payments.L30_reserved':    'f2_19',
+  'payments.L31_sched3_15':   'f2_20',
+  'payments.L32_other_total': 'f2_21',
+  'payments.L33_total':       'f2_22',
+  'result.L34_overpayment':   'f2_23',
+  'refund.L35a_refunded':     'f2_24',
+  'refund.L36_applied_est':   'f2_27',
+  'owed.L37_amount_owed':     'f2_28',
+  'penalty.L38_est_penalty':  'f2_29',
+  'preparer.occupation':      'f2_33',
+  'preparer.spouse_occ':      'f2_35',
+  'preparer.name':            'f2_39',
+  'preparer.ptin':            'f2_40',
+  'preparer.firm_name':       'f2_41',
+  'preparer.firm_phone':      'f2_42',
+  'preparer.firm_address':    'f2_43',
+  'preparer.firm_ein':        'f2_44',
+}
 export const F1120S_2024 = PDF_FIELD_MAP_1120S
-export const F1120S_2023 = PDF_FIELD_MAP_1120S
+export const F1120S_2023 = PDF_FIELD_MAP_1120S  // unverified copy of 2024
