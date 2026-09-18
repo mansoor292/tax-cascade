@@ -395,8 +395,19 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         const priorTiBeforeNol = (priorRet?.field_values as any)?.['tax.L28_ti_before_nol']
         const priorNolGenerated = (typeof priorTiBeforeNol === 'number' && priorTiBeforeNol < 0)
           ? Math.abs(priorTiBeforeNol) : 0
-        if (priorNolGenerated > 0) {
-          setIfUnset('nol_deduction', Math.round(priorNolGenerated), `prior-year NOL (${tax_year - 1})`, 1, `cross_year:nol_carryforward`)
+
+        // A prior year can hand forward an NOL WITHOUT having made a loss: the
+        // 80% cap leaves part of an existing carryforward unused. Only the
+        // loss case was carried, so a chain of profitable years slowly dropped
+        // the balance — Edgewater Ventures lost $83,423 of carryforward into
+        // 2024 that way. Both sources add: a loss generates new NOL, and the
+        // unused balance survives alongside it.
+        const priorRemaining = Number((priorRet?.field_values as any)?.['nol.carryover_next_year'])
+        const carried = priorNolGenerated + (Number.isFinite(priorRemaining) && priorRemaining > 0 ? priorRemaining : 0)
+        if (carried > 0) {
+          const why = priorNolGenerated > 0 && priorRemaining > 0 ? 'loss + unused carryforward'
+            : priorNolGenerated > 0 ? 'loss' : 'unused carryforward'
+          setIfUnset('nol_deduction', Math.round(carried), `prior-year NOL (${tax_year - 1}, ${why})`, 1, `cross_year:nol_carryforward`)
         }
       } catch {/* best-effort, skip silently */}
     }
@@ -496,6 +507,25 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         for (const [k, v] of scheduleKeys) {
           engineResult.field_values[k] = v  // user-provided overrides QBO-derived
         }
+      }
+
+      // What is left of the NOL after this year must be recorded on this year.
+      //
+      // §172(a)(2) caps the deduction at 80% of taxable income, so a profitable
+      // year with a carryforward uses part of it and leaves the rest. The
+      // engine computes that remainder as nol_carryforward_remaining and it was
+      // discarded: computed_data is not persisted, so nothing in the vault ever
+      // said how much was left. Edgewater Ventures carried $710,075 into 2022,
+      // used $367,413, carried $342,662 into 2023, used $259,239 — and the
+      // $83,423 still outstanding simply vanished, so 2024 computed with no NOL
+      // at all and overstated tax by ~$17,500.
+      //
+      // It goes in field_values because that is what survives, what the export
+      // shows, and where next year's compute looks for it.
+      if (engineResult.computed) {
+        if (!engineResult.field_values) engineResult.field_values = {}
+        engineResult.field_values['nol.carryover_next_year'] =
+          Math.round(engineResult.computed.nol_carryforward_remaining ?? 0)
       }
     } else if (form_type === '1120S') {
       engineResult = calc1120S(mergedInputs)
