@@ -49,15 +49,22 @@ export const F1040_2025: Record<string, string> = {
   'income.L9_total_income':     'f1_73',
   'income.L10_adjustments':     'f1_74',
   // 2025 has new L11a/L11b structure
-  'income.L11a_subtract':       'f1_75',  // 11a (need to verify from full map)
-  'income.L11b_agi':            'f1_76',  // 11b = AGI (new for 2025)
-  // 2025 has new deduction structure: 12a-12e
+  // 11a is the last money box on page 1; 11b opens page 2, so the pair
+  // straddles the page break. L11b_agi was 'f1_76' — a page-1 id that is not
+  // the AGI box — so adjusted gross income printed nowhere on a 2025 return.
+  // Likewise 12e and 13b were absent entirely and the standard deduction never
+  // appeared, on the form for the year currently being filed.
+  'income.L11a_subtract':       'f1_75',  // verified: 11a, page 1
+  'income.L11b_agi':            'f2_01',  // verified: 11b, page 2
+  'deductions.L12e_standard':   'f2_02',  // verified
   'deductions.L13a_qbi':        'f2_03',
+  'deductions.L13b_addl':       'f2_04',  // verified: Schedule 1-A, new for 2025
   'deductions.L14_total':       'f2_05',
   'tax.L15_taxable_income':     'f2_06',
 
   // Page 2: Tax
-  'tax.L16_income_tax':         'f2_07',  // need to verify
+  'tax.L16_income_tax':         'f2_08',  // verified: f2_07 is the "Check if
+                                            // any from Form(s): 3 ___" write-in
   'tax.L17_sched2':             'f2_09',
   'tax.L18_add_16_17':          'f2_10',
   'credits.L19_child_tax':      'f2_11',

@@ -290,7 +290,10 @@ export const PDF_FIELD_MAP_1040: Record<string, string> = {
   'tax.L15_taxable_income':    'f1_60',   // "15 Taxable income"
 
   // ── Page 2: Tax and Credits (Lines 16-24) ──
-  'tax.L16_income_tax':        'f2_01',   // "16 Tax" (f2_02 is checkbox area)
+  'tax.L16_income_tax':        'f2_02',   // "16 Tax" amount. f2_01 is the
+                                          // "Check if any from Form(s): 3 ___"
+                                          // write-in, which is where the tax
+                                          // printed while line 16 stayed blank.
   'tax.L17_sched2':            'f2_03',   // "17 Amount from Schedule 2, line 3"
   'tax.L18_add_16_17':         'f2_04',   // "18 Add lines 16 and 17"
   'credits.L19_child_tax':     'f2_05',   // "19 Child tax credit from Schedule 8812"
@@ -490,6 +493,99 @@ export const F1120_2024 = PDF_FIELD_MAP_1120
 export const F1120_2023 = PDF_FIELD_MAP_1120  // unverified copy of 2024
 export const F1120_2022 = PDF_FIELD_MAP_1120  // unverified copy of 2024
 export const F1040_2024 = PDF_FIELD_MAP_1040
+
+/**
+ * Form 1040, tax year 2022 — field IDs read off the 2022 blank itself.
+ *
+ * There was no 2022 map at all, so a 2022 individual return rendered on a 2025
+ * blank (see resolveFormYear in build_return_pdf): correctly filled, but
+ * carrying "2025" in its heading and its line structure. The 2022 form has the
+ * same line layout as 2023 and 2024, just shifted — 2022 line 1a is f1_28
+ * where 2023 is f1_31 and 2024 is f1_32.
+ *
+ * Built by the same probe as F1040_2023: stamp every field on
+ * data/irs_forms/f1040_2022.pdf with its own name, render, read which line each
+ * landed on, and accept a key only where the probe also reproduces the verified
+ * 2024 map for that line. Three keys the probe could not confirm are set here
+ * by hand and noted inline; every line is render-verified in
+ * form_year_pairing.test.ts.
+ */
+export const F1040_2022: Record<string, string> = {
+  'meta.first_name':          'f1_04',
+  'meta.last_name':           'f1_05',
+  'meta.ssn':                 'f1_06',
+  'meta.spouse_first':        'f1_07',
+  'meta.spouse_last':         'f1_08',
+  'meta.spouse_ssn':          'f1_09',
+  'meta.address':             'f1_10',
+  'meta.apt':                 'f1_11',
+  'meta.city':                'f1_12',
+  'meta.state':               'f1_13',
+  'meta.zip':                 'f1_14',
+  'income.L1a_w2_wages':      'f1_28',
+  'income.L1b_household':     'f1_29',
+  'income.L1c_tips':          'f1_30',
+  'income.L1d_medicaid':      'f1_31',
+  'income.L1e_dependent_care':'f1_32',
+  'income.L1f_adoption':      'f1_33',
+  'income.L1g_8919':          'f1_34',
+  'income.L1h_other_earned':  'f1_35',
+  'income.L1i_combat_pay':    'f1_36',
+  'income.L1z_total_wages':   'f1_37',
+  'income.L2a_tax_exempt_int':'f1_38',
+  'income.L2b_taxable_int':   'f1_39',
+  'income.L3a_qual_dividends':'f1_40',
+  'income.L3b_ord_dividends': 'f1_41',
+  'income.L4a_ira':           'f1_42',
+  'income.L4b_ira_taxable':   'f1_43',
+  'income.L5a_pensions':      'f1_44',
+  'income.L5b_pensions_tax':  'f1_45',
+  'income.L6a_social_sec':    'f1_46',
+  'income.L6b_ss_taxable':    'f1_47',
+  'income.L7_capital_gains':  'f1_48',
+  'income.L8_schedule1':      'f1_49',
+  'income.L9_total_income':   'f1_50',
+  'income.L10_adjustments':   'f1_51',
+  'income.L11_agi':           'f1_52',
+  'deductions.L12_standard':  'f1_53',
+  'deductions.L13_qbi':       'f1_54',
+  'deductions.L14_total':     'f1_55',
+  'tax.L15_taxable_income':   'f1_56',
+  'tax.L16_income_tax':       'f2_02',
+  'tax.L17_sched2':           'f2_03',
+  'tax.L18_add_16_17':        'f2_04',
+  'credits.L19_child_tax':    'f2_05',
+  'credits.L20_sched3':       'f2_06',
+  'credits.L21_add_19_20':    'f2_07',
+  'tax.L22_subtract':         'f2_08',
+  'tax.L23_other_taxes':      'f2_09',
+  'tax.L24_total_tax':        'f2_10',
+  'payments.L25a_w2':         'f2_11',
+  'payments.L25b_1099':       'f2_12',
+  'payments.L25c_other':      'f2_13',
+  'payments.L25d_total':      'f2_14',
+  'payments.L26_estimated':   'f2_15',
+  'payments.L27_eic':         'f2_16',
+  'payments.L28_child_addl':  'f2_17',
+  'payments.L29_aoc':         'f2_18',
+  'payments.L30_reserved':    'f2_19',
+  'payments.L31_sched3_15':   'f2_20',
+  'payments.L32_other_total': 'f2_21',
+  'payments.L33_total':       'f2_22',
+  'result.L34_overpayment':   'f2_23',
+  'refund.L35a_refunded':     'f2_24',
+  'refund.L36_applied_est':   'f2_27',
+  'owed.L37_amount_owed':     'f2_28',
+  'penalty.L38_est_penalty':  'f2_29',
+  'preparer.occupation':      'f2_33',
+  'preparer.spouse_occ':      'f2_35',
+  'preparer.name':            'f2_39',
+  'preparer.ptin':            'f2_40',
+  'preparer.firm_name':       'f2_41',
+  'preparer.firm_phone':      'f2_42',
+  'preparer.firm_address':    'f2_43',
+  'preparer.firm_ein':        'f2_44',
+}
 /**
  * Form 1040, tax year 2023 — field IDs read off the 2023 blank itself.
  *
@@ -550,7 +646,7 @@ export const F1040_2023: Record<string, string> = {
   'deductions.L13_qbi':       'f1_57',
   'deductions.L14_total':     'f1_58',
   'tax.L15_taxable_income':   'f1_59',
-  'tax.L16_income_tax':       'f2_01',
+  'tax.L16_income_tax':       'f2_02',
   'tax.L17_sched2':           'f2_03',
   'tax.L18_add_16_17':        'f2_04',
   'credits.L19_child_tax':    'f2_05',

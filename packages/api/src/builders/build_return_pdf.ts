@@ -70,6 +70,25 @@ function findField(form: ReturnType<PDFDocument['getForm']>, shortId: string): P
 }
 
 /**
+ * A money amount as it goes on a return: whole dollars, thousands separated.
+ *
+ * These forms are filed in whole dollars. Stored amounts are not always whole
+ * — QuickBooks carries cents, and the 80%-of-taxable-income NOL limit leaves
+ * binary-float residue — so `toLocaleString()` alone printed taxable income as
+ * "91,853.2" and an NOL deduction as "367,412.80000000005" on the 1120.
+ *
+ * Per the IRS instructions, amounts are ADDED with cents and only the result is
+ * rounded, so callers must sum raw values and format once at the end rather
+ * than formatting each addend. Non-numeric values (percentages, EINs, dates)
+ * are passed through as strings and never reach this.
+ */
+function money(value: number): string {
+  const rounded = Math.round(value)
+  // Math.round(-0.2) is -0, which prints as "-0".
+  return (Object.is(rounded, -0) ? 0 : rounded).toLocaleString()
+}
+
+/**
  * Set a PDF text field. Zero values ARE written (rule: zero must appear on the form).
  * Only null/undefined/empty-string are skipped.
  */
@@ -77,7 +96,7 @@ function setField(form: ReturnType<PDFDocument['getForm']>, shortId: string, val
   if (value === null || value === undefined || value === '') return false
   const field = findField(form, shortId)
   if (!field) return false
-  const str = typeof value === 'number' ? value.toLocaleString() : String(value)
+  const str = typeof value === 'number' ? money(value) : String(value)
   const maxLen = field.getMaxLength()
   if (maxLen !== undefined && str.length > maxLen) field.setMaxLength(str.length)
   field.setText(str)
@@ -246,6 +265,15 @@ function buildModel(input: BuildPdfInput): Record<string, string | number> {
       ['income.L11_agi', 'income.L11b_agi'],
       ['deductions.L12_standard', 'deductions.L12e_standard'],
       ['deductions.L13_qbi', 'deductions.L13a_qbi'],
+      ['income.L7_capital_gains', 'income.L7a_capital_gains'],
+      // Both directions, because WHICH spelling is the mapped one changes with
+      // the year: 2024 maps the bare line number, 2025 maps the sub-letter the
+      // restructured form prints. A pair only fires when one side is empty, so
+      // stating it twice cannot make the two overwrite each other.
+      ['income.L11b_agi', 'income.L11_agi'],
+      ['deductions.L12e_standard', 'deductions.L12_standard'],
+      ['deductions.L13a_qbi', 'deductions.L13_qbi'],
+      ['income.L7a_capital_gains', 'income.L7_capital_gains'],
     ]
     for (const [mapped, twin] of SCHEDULE_TWINS) {
       const have = model[mapped]
@@ -798,14 +826,14 @@ async function generateStatements(
         header(true)
       }
       draw(desc.slice(0, 60), 60)
-      draw(amt.toLocaleString().padStart(12), 430)
+      draw(money(amt).padStart(12), 430)
       total += amt
       y -= 14
     }
     y -= 5
     draw('-'.repeat(65), 50); y -= 15
     draw(totalLabel, 60, boldFont)
-    draw(total.toLocaleString().padStart(12), 430, boldFont)
+    draw(money(total).padStart(12), 430, boldFont)
     return firstPage
   }
 
@@ -821,7 +849,7 @@ async function generateStatements(
     draw(`Tax Year ${year}`, 50, y); y -= 25
     draw(title, 50, y, boldFont, 11); y -= 20
     draw('-'.repeat(65), 50, y); y -= 15
-    draw(`Total: ${totalAmount.toLocaleString()}`, 60, y)
+    draw(`Total: ${money(totalAmount)}`, 60, y)
     y -= 15
     draw('-'.repeat(65), 50, y)
     return page

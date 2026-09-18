@@ -148,6 +148,67 @@ describe('form year pairing', () => {
     expect(lineRow(text, /Qualified business income deduction/)).toContain('501,393')
   })
 
+  it('puts every 1040 money line on its own line, 2022 through 2025', async () => {
+    // The sweep that caught three separate map defects: F1040_2023 was the
+    // 2024 map, there was no 2022 map at all, and tax.L16_income_tax pointed
+    // at the "Check if any from Form(s): 3 ___" write-in box in EVERY year, so
+    // the income tax printed there and line 16 stayed blank. The 2025 form
+    // also splits AGI across the page break (11a page 1, 11b page 2) and
+    // renumbers the standard deduction to 12e; neither was mapped, so both
+    // printed nowhere on the year currently being filed.
+    const CASES: Array<[string, number, RegExp]> = [
+      ['income.L1a_w2_wages',       1_010_000, /Total amount from Form\(s\) W-2/],
+      ['income.L1z_total_wages',    1_020_000, /Add lines 1a through 1h/],
+      ['income.L2a_tax_exempt_int', 1_030_000, /Tax-exempt interest/],
+      ['income.L2b_taxable_int',    1_040_000, /b Taxable interest/],
+      ['income.L3a_qual_dividends', 1_050_000, /Qualified dividends/],
+      ['income.L3b_ord_dividends',  1_060_000, /b Ordinary dividends/],
+      ['income.L4a_ira',            1_070_000, /IRA distributions/],
+      ['income.L5a_pensions',       1_080_000, /Pensions and annuities/],
+      ['income.L6a_social_sec',     1_090_000, /Social security benefits/],
+      ['income.L7_capital_gains',   1_100_000, /Capital gain or \(loss\)/],
+      ['income.L9_total_income',    1_110_000, /This is your total income/],
+      ['income.L10_adjustments',    1_120_000, /Adjustments to income/],
+      ['income.L11_agi',            1_130_000, /adjusted gross income/],
+      ['deductions.L12_standard',   1_140_000, /Standard deduction or itemized/],
+      ['deductions.L13_qbi',        1_150_000, /Qualified business income deduction/],
+      ['deductions.L14_total',      1_160_000, /Add lines 12(e)?[, ].*13/],
+      ['tax.L15_taxable_income',    1_170_000, /This is your taxable income/],
+      ['tax.L16_income_tax',        1_180_000, /\b16\s+Tax \(see instructions\)/],
+      ['tax.L17_sched2',            1_190_000, /Amount from Schedule 2, line 3/],
+      ['tax.L18_add_16_17',         1_200_000, /Add lines 16 and 17/],
+      ['tax.L24_total_tax',         1_210_000, /This is your total tax/],
+    ]
+    const fv: Record<string, number> = {}
+    for (const [k, v] of CASES) fv[k] = v
+
+    for (const year of [2022, 2023, 2024, 2025]) {
+      const { text, formYear } = await render('1040', year, fv)
+      expect(formYear, `${year} should render on its own form`).toBe(year)
+      for (const [key, value, label] of CASES) {
+        const row = lineRow(text, label)
+        expect(row, `${year}: no row matched ${label} (for ${key})`).not.toBe('')
+        expect(row, `${year}: ${key} (${value.toLocaleString()}) is not on its line`)
+          .toContain(value.toLocaleString())
+      }
+    }
+  })
+
+  it('prints whole dollars, never cents or float residue', async () => {
+    // QuickBooks carries cents and the 80%-of-taxable-income NOL limit leaves
+    // binary-float residue, so the 1120 printed taxable income as "91,853.2"
+    // and an NOL deduction as "367,412.80000000005".
+    const { text } = await render('1120', 2024, {
+      'tax.L30_taxable_income': 91_853.19999999995,
+      'tax.L29a_nol': 367_412.80000000005,
+      'income.L11_total_income': 1_685_718.74,
+    })
+    expect(text).not.toMatch(/\d,\d{3}\.\d/)
+    expect(lineRow(text, /This is your taxable income|Taxable income\. Subtract/)).toContain('91,853')
+    expect(text).toContain('367,413')
+    expect(text).toContain('1,685,719')
+  })
+
   it('renders every year we hold a blank for without scrambling it', async () => {
     // The whole span on disk. Each must either render coherently or not at all
     // — never a filled page with values on the wrong lines.
