@@ -141,6 +141,14 @@ const TRANSACTIONAL_RESOURCES = new Set([
 const DEFAULT_LIMIT = 50
 const HARD_MAX = 200
 
+/**
+ * Stripe's ceiling, which is lower than QBO's and is Stripe's rule, not ours:
+ * every list and search endpoint 400s on limit > 100. HARD_MAX above stays at
+ * 200 because QBO genuinely serves that. Mirrors STRIPE_PAGE_MAX in
+ * routes/stripe.ts, which clamps server-side regardless of what arrives.
+ */
+const STRIPE_PAGE_MAX = 100
+
 async function maybeSpill(
   call: (m: string, p: string, b?: any) => Promise<any>,
   response: any,
@@ -1067,8 +1075,12 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
   // Dispatcher — replaces stripe_invoices, stripe_payments, stripe_payouts, stripe_customers, stripe_revenue.
   server.tool('stripe_data', `Query Stripe data for an entity. Single dispatcher for all Stripe pulls.
 
-- data_type='revenue', year → annual gross/fees/net summary for tax reporting (small, cache-friendly).
-- data_type='invoices'|'payments'|'payouts'|'customers' (+ filters) → lists. Default 50 rows, hard cap 200.
+- data_type='revenue', year → annual gross/fees/net summary for tax reporting (small, cache-friendly). Pages internally; no cursor needed.
+- data_type='invoices'|'payments'|'payouts'|'customers' (+ filters) → lists. Default 50 rows per page, max 100 (Stripe's own ceiling).
+
+PAGING: a list response carries has_more and next_cursor. To get the next page, pass next_cursor back as cursor. Repeat until next_cursor is null. A list is NOT the whole set just because it came back — check has_more before concluding something is absent.
+
+FINDING A CUSTOMER: data_type='customers' with name='acme' does a substring name search; with email= it filters by exact email. Invoice rows carry the customer ID in 'customer', so you do not need a lookup to act on an invoice you can already see.
 
 Year-long invoice/payment pulls can be huge — pass spill_to to park the payload in scratch storage and get shape+preview back.`, {
     entity_id: z.string().describe('Entity UUID'),
@@ -1076,8 +1088,10 @@ Year-long invoice/payment pulls can be huge — pass spill_to to park the payloa
     year: z.number().optional().describe('Tax year (revenue only)'),
     status: z.string().optional().describe('Invoice status: draft, open, paid, void, uncollectible'),
     customer: z.string().optional().describe('Stripe customer ID (invoices only)'),
-    email: z.string().optional().describe('Email filter (customers only)'),
-    limit: z.number().optional().describe('Max results'),
+    email: z.string().optional().describe('Exact email filter (customers only)'),
+    name: z.string().optional().describe('Substring name search (customers only) — e.g. name="acme" matches "Acme Holdings LLC"'),
+    limit: z.number().optional().describe('Rows per page, max 100'),
+    cursor: z.string().optional().describe("next_cursor from the previous response, to fetch the next page"),
     created_gte: z.string().optional().describe('Date floor (Unix ts or YYYY-MM-DD) — invoices/payments'),
     created_lte: z.string().optional().describe('Date ceiling — invoices/payments'),
     spill_to: z.string().optional().describe('Scratch key to park the full response under. Use for year-spanning invoice/payment/customer lists.'),
@@ -1087,9 +1101,11 @@ Year-long invoice/payment pulls can be huge — pass spill_to to park the payloa
       const qs = year ? `?year=${year}` : ''
       response = await call('GET', `/api/stripe/${entity_id}/revenue${qs}`)
     } else {
-      // Cap list responses at DEFAULT_LIMIT / HARD_MAX to keep chat context small.
-      // Caller can still bump it up to HARD_MAX; above that we clamp.
-      const effectiveLimit = Math.min(Number(filters.limit) || DEFAULT_LIMIT, HARD_MAX)
+      // Cap list responses to keep chat context small. The ceiling is Stripe's
+      // own: it 400s on limit > 100, so the old HARD_MAX of 200 here turned a
+      // request for a big page into an error rather than a page. Paging past
+      // this is what `cursor` is for.
+      const effectiveLimit = Math.min(Number(filters.limit) || DEFAULT_LIMIT, STRIPE_PAGE_MAX)
       const qs = new URLSearchParams()
       for (const [k, v] of Object.entries(filters)) {
         if (k === 'limit') continue

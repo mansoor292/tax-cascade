@@ -4,7 +4,7 @@
  * Users provide their Stripe secret key (sk_live_... or sk_test_...).
  * The key is stored per-entity and used to make Stripe API calls.
  */
-import { Router,  } from 'express'
+import { Router, type Request } from 'express'
 import { getDek, encrypt, decryptString } from '../lib/crypto.js'
 import { encryptionEnabled } from '../lib/row_crypto.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
@@ -21,6 +21,9 @@ const supabase = lazyServiceClient()
  * here; they get re-encrypted the next time the entity reconnects.
  */
 const STRIPE_KEY_ENC_PREFIX = 'enc1:'
+
+/** Stripe's hard ceiling on `limit` for list and search endpoints alike. */
+export const STRIPE_PAGE_MAX = 100
 
 async function sealStripeKey(userId: string, plainKey: string): Promise<string> {
   if (!encryptionEnabled()) return plainKey
@@ -74,6 +77,75 @@ async function stripeFetch(
 export function toStripeTs(v: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return String(Math.floor(Date.parse(v + 'T00:00:00Z') / 1000))
   return v
+}
+
+/**
+ * Limit and cursor for the Stripe list routes.
+ *
+ * Two things were wrong and they compounded. `limit` went to Stripe verbatim
+ * while the MCP tool allowed up to 200 — Stripe 400s above 100, so any caller
+ * asking for a big page got an error instead of a page. And `starting_after`
+ * was accepted by every route but exposed by no tool, so responses said
+ * `has_more: true` with nothing the caller could do about it; only the revenue
+ * summary, which loops internally, ever saw past the first page.
+ *
+ * `cursor` is the one name callers use, echoed back as `next_cursor`, so the
+ * loop is: call, read next_cursor, pass it as cursor, repeat until null.
+ */
+export function pageParams(req: Pick<Request, 'query'>): Record<string, string> {
+  const requested = parseInt(req.query.limit as string, 10)
+  const params: Record<string, string> = {
+    limit: String(Math.min(Number.isFinite(requested) && requested > 0 ? requested : 25, STRIPE_PAGE_MAX)),
+  }
+  const cursor = (req.query.cursor || req.query.starting_after) as string | undefined
+  if (cursor) params.starting_after = cursor
+  return params
+}
+
+/** The cursor for the NEXT call, or null when this was the last page. */
+export function nextCursor(data: any): string | null {
+  const rows = data?.data || []
+  return data?.has_more && rows.length ? rows[rows.length - 1].id : null
+}
+
+/**
+ * Which Stripe endpoint serves a customer lookup, and with what parameters.
+ *
+ * `name` searches; everything else lists. Stripe's /customers list filters by
+ * email only — there is no name filter — so a name lookup has to go through
+ * the Search API, which also paginates differently: a `page` token instead of
+ * a `starting_after` object id. Callers see ONE knob, `cursor`, echoed back as
+ * `next_cursor`, because a model picking between two cursor parameters by
+ * endpoint is a thing that will go wrong. `starting_after` and `page` are both
+ * still accepted as older spellings.
+ */
+export function customerQuery(q: Record<string, any>): {
+  path: string; params: Record<string, string>; byName: boolean
+} {
+  const byName = typeof q.name === 'string' && q.name.trim() !== ''
+  const cursor = (q.cursor || q.starting_after || q.page) as string | undefined
+  const limit = pageParams({ query: q } as Pick<Request, 'query'>).limit
+
+  if (byName) {
+    // `~` is substring match. Quote the term and escape embedded backslashes
+    // and quotes, or a name containing either breaks the query syntax.
+    const term = String(q.name).trim().replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    const params: Record<string, string> = { limit, query: `name~"${term}"` }
+    if (cursor) params.page = cursor
+    return { path: '/customers/search', params, byName }
+  }
+
+  const params: Record<string, string> = { limit }
+  if (q.email) params.email = String(q.email)
+  if (cursor) params.starting_after = cursor
+  return { path: '/customers', params, byName }
+}
+
+/** Search returns a page token; list wants the last id on the page. */
+export function customerCursor(data: any, byName: boolean): string | null {
+  if (!data?.has_more) return null
+  if (byName) return data.next_page ?? null
+  return nextCursor(data)
 }
 
 const router = Router()
@@ -157,10 +229,9 @@ router.get('/:entity_id/invoices', async (req, res) => {
   const stripeKey = await getStripeKey(req.params.entity_id)
   if (!stripeKey) return res.status(400).json({ error: 'No Stripe connection for this entity' })
 
-  const params: Record<string, string> = { limit: req.query.limit as string || '25' }
+  const params: Record<string, string> = pageParams(req)
   if (req.query.status) params.status = req.query.status as string
   if (req.query.customer) params.customer = req.query.customer as string
-  if (req.query.starting_after) params.starting_after = req.query.starting_after as string
   if (req.query.created_gte) params['created[gte]'] = toStripeTs(req.query.created_gte as string)
   if (req.query.created_lte) params['created[lte]'] = toStripeTs(req.query.created_lte as string)
 
@@ -171,10 +242,18 @@ router.get('/:entity_id/invoices', async (req, res) => {
 
     res.json({
       count: data.data?.length || 0,
-      has_more: data.has_more,
+      has_more: Boolean(data.has_more),
+      next_cursor: nextCursor(data),
       invoices: (data.data || []).map((inv: any) => ({
         id: inv.id,
         number: inv.number,
+        // The customer ID, not just the display name. Every write route
+        // (invoice create, and the `customer` filter on this route) is keyed
+        // by cus_..., so without it on the row there was no way to get from an
+        // invoice you can see to an action you can take — the caller had to go
+        // list customers and match on name, which only works if the name is
+        // unique and the customer is on the first page.
+        customer: inv.customer,
         customer_name: inv.customer_name,
         customer_email: inv.customer_email,
         status: inv.status,
@@ -199,8 +278,7 @@ router.get('/:entity_id/payments', async (req, res) => {
   const stripeKey = await getStripeKey(req.params.entity_id)
   if (!stripeKey) return res.status(400).json({ error: 'No Stripe connection for this entity' })
 
-  const params: Record<string, string> = { limit: req.query.limit as string || '25' }
-  if (req.query.starting_after) params.starting_after = req.query.starting_after as string
+  const params: Record<string, string> = pageParams(req)
   if (req.query.created_gte) params['created[gte]'] = toStripeTs(req.query.created_gte as string)
   if (req.query.created_lte) params['created[lte]'] = toStripeTs(req.query.created_lte as string)
 
@@ -208,7 +286,8 @@ router.get('/:entity_id/payments', async (req, res) => {
     const data = await stripeFetch(stripeKey, '/charges', params)
     res.json({
       count: data.data?.length || 0,
-      has_more: data.has_more,
+      has_more: Boolean(data.has_more),
+      next_cursor: nextCursor(data),
       payments: (data.data || []).map((ch: any) => ({
         id: ch.id,
         amount: ch.amount / 100,
@@ -233,9 +312,8 @@ router.get('/:entity_id/balance-transactions', async (req, res) => {
   const stripeKey = await getStripeKey(req.params.entity_id)
   if (!stripeKey) return res.status(400).json({ error: 'No Stripe connection for this entity' })
 
-  const params: Record<string, string> = { limit: req.query.limit as string || '25' }
+  const params: Record<string, string> = pageParams(req)
   if (req.query.type) params.type = req.query.type as string
-  if (req.query.starting_after) params.starting_after = req.query.starting_after as string
   if (req.query.created_gte) params['created[gte]'] = toStripeTs(req.query.created_gte as string)
   if (req.query.created_lte) params['created[lte]'] = toStripeTs(req.query.created_lte as string)
 
@@ -243,7 +321,8 @@ router.get('/:entity_id/balance-transactions', async (req, res) => {
     const data = await stripeFetch(stripeKey, '/balance_transactions', params)
     res.json({
       count: data.data?.length || 0,
-      has_more: data.has_more,
+      has_more: Boolean(data.has_more),
+      next_cursor: nextCursor(data),
       transactions: (data.data || []).map((bt: any) => ({
         id: bt.id,
         amount: bt.amount / 100,
@@ -269,14 +348,14 @@ router.get('/:entity_id/payouts', async (req, res) => {
   const stripeKey = await getStripeKey(req.params.entity_id)
   if (!stripeKey) return res.status(400).json({ error: 'No Stripe connection for this entity' })
 
-  const params: Record<string, string> = { limit: req.query.limit as string || '25' }
-  if (req.query.starting_after) params.starting_after = req.query.starting_after as string
+  const params: Record<string, string> = pageParams(req)
 
   try {
     const data = await stripeFetch(stripeKey, '/payouts', params)
     res.json({
       count: data.data?.length || 0,
-      has_more: data.has_more,
+      has_more: Boolean(data.has_more),
+      next_cursor: nextCursor(data),
       payouts: (data.data || []).map((p: any) => ({
         id: p.id,
         amount: p.amount / 100,
@@ -300,16 +379,18 @@ router.get('/:entity_id/customers', async (req, res) => {
   const stripeKey = await getStripeKey(req.params.entity_id)
   if (!stripeKey) return res.status(400).json({ error: 'No Stripe connection for this entity' })
 
-  const params: Record<string, string> = { limit: req.query.limit as string || '25' }
-  if (req.query.email) params.email = req.query.email as string
-  if (req.query.starting_after) params.starting_after = req.query.starting_after as string
+  const { path, params, byName } = customerQuery(req.query)
 
   try {
-    const data = await stripeFetch(stripeKey, '/customers', params)
+    const data = await stripeFetch(stripeKey, path, params)
+    const rows = data.data || []
+
     res.json({
-      count: data.data?.length || 0,
-      has_more: data.has_more,
-      customers: (data.data || []).map((c: any) => ({
+      count: rows.length,
+      has_more: Boolean(data.has_more),
+      next_cursor: customerCursor(data, byName),
+      matched_by: byName ? 'name_search' : 'list',
+      customers: rows.map((c: any) => ({
         id: c.id,
         name: c.name,
         email: c.email,
