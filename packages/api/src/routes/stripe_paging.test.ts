@@ -131,3 +131,29 @@ describe('customerCursor', () => {
     expect(customerCursor({ has_more: true, data: [{ id: 'cus_a' }] }, true)).toBeNull()
   })
 })
+
+/**
+ * The search call must carry its own API version.
+ *
+ * Caught only against prod: requests send no Stripe-Version header, so they
+ * run on whatever version the connected ACCOUNT is pinned to. This one sits
+ * on 2019-03-14 and answered the first live name search with "Search is not
+ * supported on api version 2019-03-14". No unit test could have found it —
+ * the account's version is not in this repo — so what is pinned here is the
+ * decision that followed: search overrides the version, nothing else does.
+ */
+describe('Stripe API version for search', () => {
+  it('pins a version that actually serves the Search endpoints', async () => {
+    const src = await import('node:fs').then(fs =>
+      fs.readFileSync(new URL('./stripe.ts', import.meta.url), 'utf8'))
+
+    const pinned = src.match(/const STRIPE_SEARCH_VERSION = '([\d-]+)'/)?.[1]
+    expect(pinned, 'STRIPE_SEARCH_VERSION is gone').toBeTruthy()
+    // Search shipped in 2020-08-27; anything earlier is rejected outright.
+    expect(new Date(pinned!).getTime()).toBeGreaterThanOrEqual(new Date('2020-08-27').getTime())
+
+    // And it is applied to the search path only — raising it for every call
+    // would change response shapes on the endpoints that already work.
+    expect(src).toMatch(/byName \? STRIPE_SEARCH_VERSION : undefined/)
+  })
+})

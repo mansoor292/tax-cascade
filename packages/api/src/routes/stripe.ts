@@ -47,9 +47,25 @@ async function getStripeKey(entityId: string): Promise<string | null> {
   }
 }
 
+/**
+ * Minimum Stripe API version that serves the Search endpoints.
+ *
+ * Requests carry no Stripe-Version header, so they run on whatever version the
+ * connected ACCOUNT is pinned to — and a long-lived account can be pinned
+ * years back. The first live name search returned "Search is not supported on
+ * api version 2019-03-14", which no unit test could have caught: the account
+ * version is not in this repo.
+ *
+ * Only the search call overrides it. Raising the version for every call would
+ * silently change response shapes on the endpoints that already work, across
+ * seven years of Stripe releases, to fix one of them.
+ */
+const STRIPE_SEARCH_VERSION = '2020-08-27'
+
 async function stripeFetch(
   stripeKey: string, path: string, params?: Record<string, string>,
   method: 'GET' | 'POST' | 'DELETE' = 'GET',
+  apiVersion?: string,
 ): Promise<any> {
   const encoded = params ? new URLSearchParams(params) : undefined
   const qs = method === 'GET' && encoded ? '?' + encoded.toString() : ''
@@ -57,6 +73,7 @@ async function stripeFetch(
     method,
     headers: {
       'Authorization': `Bearer ${stripeKey}`,
+      ...(apiVersion ? { 'Stripe-Version': apiVersion } : {}),
       ...(method !== 'GET' && encoded ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
     },
     ...(method !== 'GET' && encoded ? { body: encoded.toString() } : {}),
@@ -382,7 +399,10 @@ router.get('/:entity_id/customers', async (req, res) => {
   const { path, params, byName } = customerQuery(req.query)
 
   try {
-    const data = await stripeFetch(stripeKey, path, params)
+    // Search needs a modern API version; the list path keeps the account's.
+    const data = await stripeFetch(
+      stripeKey, path, params, 'GET', byName ? STRIPE_SEARCH_VERSION : undefined,
+    )
     const rows = data.data || []
 
     res.json({
