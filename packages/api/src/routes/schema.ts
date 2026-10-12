@@ -78,7 +78,21 @@ export const INPUT_SCHEMAS: Record<string, FormSchema> = {
       { name: 'net_se_income', type: 'number', required: false, description: 'Net self-employment income (Schedule C: 1099-NEC/1099-K receipts minus business expenses). Triggers SE tax (15.3%), half-SE deduction, and possibly Additional Medicare Tax.', category: 'income' },
       { name: 'num_dependents', type: 'number', required: false, description: 'Number of qualifying children (for Child Tax Credit)', category: 'dependents' },
       { name: 'withholding', type: 'number', required: false, description: 'Federal income tax withheld (W-2 box 2 plus any 1099 box 4 withholding)', category: 'payments', irs_line: '25d' },
-      { name: 'estimated_payments', type: 'number', required: false, description: 'Estimated tax payments you sent the IRS during the year (your 1040-ES records)', category: 'payments', irs_line: '26' },
+      { name: 'estimated_payments', type: 'number', required: false, description: 'Estimated tax payments you sent the IRS during the year (your 1040-ES records). NOT a payment sent with Form 4868 — use extension_payment.', category: 'payments', irs_line: '26' },
+      // Source documents. Each produces the supporting schedule as data
+      // (Schedules 1/2/3/B/D, Forms 8949/8959/8960/8995-A) in field_values and
+      // the export, instead of one figure folded into a 1040 line.
+      { name: 'w2s', type: 'array', required: false, description: 'One entry per W-2: { owner: "taxpayer"|"spouse", employer, box1, box2, box3, box4, box5, box6 }. Wages and withholding default to the totals. Box 5/6 drive Form 8959 (additional Medicare tax and the 0.9% already withheld, line 25c); box 4 across two employers of the same person drives the excess social security credit (Schedule 3 line 11).', category: 'income', irs_line: '1a / 25a' },
+      { name: 'taxable_interest_detail', type: 'array', required: false, description: 'Schedule B Part I payers: [{ label, amount }] (1099-INT box 1). Sums to taxable_interest.', category: 'income', irs_line: 'Sch B 1' },
+      { name: 'ordinary_dividends_detail', type: 'array', required: false, description: 'Schedule B Part II payers: [{ label, amount, qualified }] (1099-DIV box 1a, qualified = box 1b).', category: 'income', irs_line: 'Sch B 5' },
+      { name: 'k1_portfolio', type: 'object', required: false, description: 'K-1 portfolio items added to the 1099 figures: { name, interest (box 4), ordinary_dividends (5a), qualified_dividends (5b), st_gain (7), lt_gain (8a) }. Do not also fold them into taxable_interest etc.', category: 'k1' },
+      { name: 'capital_transactions_detail', type: 'array', required: false, description: 'Broker 1099-B sales: [{ label, proceeds, basis, adjustment, term: "short"|"long", box: "A".."F" }]. Builds Form 8949 / Schedule D, applies the $3,000 loss limit, and replaces capital_gains.', category: 'income', irs_line: '7' },
+      { name: 'other_income', type: 'number', required: false, description: 'Schedule 1 line 8z other income (e.g. 1099-MISC box 8 substitute payments in lieu of dividends).', category: 'income', irs_line: 'Sch 1 8z' },
+      { name: 'other_income_detail', type: 'array', required: false, description: 'Itemization of other_income: [{ label, amount, investment }]. investment:true counts it as net investment income on Form 8960.', category: 'income', irs_line: 'Sch 1 8z' },
+      { name: 'extension_payment', type: 'number', required: false, description: 'Amount paid with Form 4868 (or a Direct Pay "extension" payment) — Schedule 3 line 10 → 1040 line 31.', category: 'payments', irs_line: 'Sch 3 10' },
+      { name: 'prior_year_tax', type: 'number', required: false, description: 'Prior-year total tax (prior 1040 line 24) — Form 2210 safe harbor.', category: 'payments' },
+      { name: 'prior_year_agi', type: 'number', required: false, description: 'Prior-year AGI — over $150,000 the safe harbor is 110% of prior-year tax.', category: 'payments' },
+      { name: 'foreign_accounts', type: 'boolean', required: false, description: 'Schedule B Part III line 7a: any interest in or authority over a foreign financial account.', category: 'income', irs_line: 'Sch B 7a' },
     ],
   },
 

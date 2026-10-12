@@ -118,17 +118,19 @@ describe('calc1040 (TY2025)', () => {
     withholding: 0, estimated_payments: 0,
   }
 
-  it('uses the TY2025 MFJ standard deduction of $30,000', () => {
+  // 31,500, not Rev. Proc. 2024-40's 30,000: the One Big Beautiful Bill Act
+  // (§70102) raised the 2025 amount retroactively.
+  it('uses the TY2025 MFJ standard deduction of $31,500', () => {
     const r = calc1040({ ...base, wages: 100_000 })
     expect(r.computed.agi).toBe(100_000)
-    expect(r.computed.taxable_income).toBe(70_000)   // 100,000 − 30,000
+    expect(r.computed.taxable_income).toBe(68_500)   // 100,000 − 31,500
   })
 
   it('computes ordinary tax from the 12% MFJ bracket', () => {
     const r = calc1040({ ...base, wages: 100_000 })
-    // Taxable 70,000 sits in the MFJ 12% band (23,850 → 96,950):
-    //   2,385 + 0.12 × (70,000 − 23,850) = 2,385 + 5,538 = 7,923
-    expect(r.computed.income_tax).toBe(7_923)
+    // Taxable 68,500 sits in the MFJ 12% band (23,850 → 96,950):
+    //   2,385 + 0.12 × (68,500 − 23,850) = 2,385 + 5,358 = 7,743
+    expect(r.computed.income_tax).toBe(7_743)
   })
 
   it('charges no Additional Medicare Tax below the MFJ threshold', () => {
@@ -157,7 +159,7 @@ describe('calc1040 (TY2025)', () => {
   it('takes itemized deductions only when they are elected', () => {
     const standard = calc1040({ ...base, wages: 200_000, itemized_deductions: 50_000 })
     const itemized = calc1040({ ...base, wages: 200_000, itemized_deductions: 50_000, use_itemized: true })
-    expect(standard.computed.taxable_income).toBe(170_000)   // 200,000 − 30,000
+    expect(standard.computed.taxable_income).toBe(168_500)   // 200,000 − 31,500
     expect(itemized.computed.taxable_income).toBe(150_000)   // 200,000 − 50,000
   })
 })

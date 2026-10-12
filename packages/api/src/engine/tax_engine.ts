@@ -304,6 +304,27 @@ export interface Form1040_Inputs {
   // Payments
   withholding:          number
   estimated_payments:   number
+  // ── Source-document detail (all optional; see form1040_detail.ts) ──
+  /** One entry per W-2. When given, wages and withholding default to its totals. */
+  w2s?:                 W2Input[]
+  /** Schedule B Part I payers (1099-INT box 1). Sums to taxable_interest when both are given. */
+  taxable_interest_detail?: DetailItem[]
+  /** Schedule B Part II payers (1099-DIV box 1a; `qualified` = box 1b). */
+  ordinary_dividends_detail?: DetailItem[]
+  /** Schedule 1 line 8z other income, e.g. 1099-MISC box 8 substitute payments. */
+  other_income?:        number
+  other_income_detail?: DetailItem[]
+  /** Broker 1099-B sales — Form 8949 / Schedule D. Replaces capital_gains when given. */
+  capital_transactions_detail?: CapitalTransaction[]
+  /** K-1 portfolio items (1120-S boxes 4, 5a, 5b, 7, 8a) — added to the 1099 figures. */
+  k1_portfolio?:        K1PortfolioItems
+  /** Paid with Form 4868 — Schedule 3 line 10, not an estimated payment. */
+  extension_payment?:   number
+  /** Prior-year total tax and AGI — the Form 2210 safe harbor. */
+  prior_year_tax?:      number
+  prior_year_agi?:      number
+  /** Schedule B Part III: any foreign financial account. */
+  foreign_accounts?:    boolean
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -312,8 +333,8 @@ export interface Form1040_Inputs {
 import {
   ordinaryTax, standardDeduction, qbiDeduction,
   ltcgTax, niitTax, amtTax, seTax, childTaxCredit, additionalMedicareTax,
-  
 } from './tax_tables.js'
+import { summarizeW2s, scheduleD, type W2Input, type DetailItem, type CapitalTransaction, type K1PortfolioItems } from './form1040_detail.js'
 
 /** Form 1120-S calculation */
 export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
@@ -616,6 +637,40 @@ export function calc1040(raw: Form1040_Inputs): {
   }, raw)
   const s = inp.filing_status
 
+  // ── Source documents → scalars (form1040_detail.ts) ───────────
+  const detailIn = (raw || {}) as Partial<Form1040_Inputs>
+  const w2 = summarizeW2s(detailIn.w2s, inp.tax_year)
+  if (w2.count) {
+    if (!inp.wages) inp.wages = w2.wages
+    if (!inp.withholding) inp.withholding = w2.withholding
+  }
+  const k1p = detailIn.k1_portfolio || {}
+  const n0 = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0)
+  const sumItems = (xs?: DetailItem[], f: (x: DetailItem) => number = x => n0(x.amount)) =>
+    Math.round((xs || []).reduce((t, x) => t + f(x), 0))
+  if (detailIn.taxable_interest_detail?.length && !inp.taxable_interest) inp.taxable_interest = sumItems(detailIn.taxable_interest_detail)
+  if (detailIn.ordinary_dividends_detail?.length) {
+    if (!inp.ordinary_dividends) inp.ordinary_dividends = sumItems(detailIn.ordinary_dividends_detail)
+    if (!inp.qualified_dividends) inp.qualified_dividends = sumItems(detailIn.ordinary_dividends_detail, x => n0(x.qualified))
+  }
+  // K-1 portfolio income lands on the same 1040 lines as the 1099s.
+  inp.taxable_interest += Math.round(n0(k1p.interest))
+  inp.ordinary_dividends += Math.round(n0(k1p.ordinary_dividends))
+  inp.qualified_dividends += Math.round(n0(k1p.qualified_dividends))
+  const other_income = Math.round(n0(detailIn.other_income) ||
+    sumItems(detailIn.other_income_detail))
+  const other_investment_income = detailIn.other_income_detail?.length
+    ? sumItems(detailIn.other_income_detail.filter(x => x.investment))
+    : 0
+  const schedD = scheduleD(detailIn.capital_transactions_detail, k1p, s)
+  if (schedD.any) {
+    inp.capital_gains = schedD.lineAmount
+    inp.ltcg_portion = schedD.netCapitalGain
+  } else if (inp.capital_gains < 0) {
+    // §1211(b): a net capital loss offsets ordinary income only up to 3,000.
+    inp.capital_gains = Math.max(inp.capital_gains, s === 'mfs' ? -1500 : -3000)
+  }
+
   // ── Social Security taxability (§86) ──────────────────────────
   // Provisional income = AGI (before SS) + tax-exempt interest + 50% of SS
   const ss_threshold_1 = s === 'mfj' ? 32000 : 25000
@@ -640,7 +695,7 @@ export function calc1040(raw: Form1040_Inputs): {
     inp.wages + inp.taxable_interest + inp.ordinary_dividends +
     inp.ira_distributions + inp.pensions_annuities + ss_taxable +
     inp.capital_gains + inp.schedule1_income + inp.k1_ordinary_income +
-    (inp.net_se_income || 0)
+    other_income + (inp.net_se_income || 0)
   )
 
   // ── Line 10: Adjustments ──────────────────────────────────────
@@ -661,6 +716,7 @@ export function calc1040(raw: Form1040_Inputs): {
     tentative_taxable,
     s, inp.tax_year,
     inp.is_sstb || false,
+    inp.qualified_dividends + Math.max(0, inp.ltcg_portion || 0),
   )
   const taxable_income = Math.max(0, tentative_taxable - qbi_deduction)  // Line 15
 
@@ -680,10 +736,15 @@ export function calc1040(raw: Form1040_Inputs): {
 
   // ── Schedule 2: Other taxes ───────────────────────────────────
   const se_tax = se_detail.se_tax
-  const nii = inp.taxable_interest + inp.ordinary_dividends + inp.capital_gains
+  // Form 8960: line 5a is the net GAIN — a capital loss does not reduce
+  // interest and dividends.
+  const nii_gain = schedD.any ? Math.max(0, schedD.total) : Math.max(0, inp.capital_gains)
+  const nii = inp.taxable_interest + inp.ordinary_dividends + nii_gain + other_investment_income
   const niit_status = (s === 'hoh' || s === 'qw') ? 'single' : s as 'single' | 'mfj' | 'mfs'
   const niit = niitTax(nii, agi, niit_status, inp.tax_year)
-  const additional_medicare = additionalMedicareTax(inp.wages, inp.net_se_income || 0, s)
+  // Form 8959 runs on Medicare wages (box 5), not box 1.
+  const medicare_wages = w2.count ? w2.medicareWages : inp.wages
+  const additional_medicare = additionalMedicareTax(medicare_wages, inp.net_se_income || 0, s)
 
   // ── Credits ───────────────────────────────────────────────────
   const ctc_detail = childTaxCredit(inp.num_dependents || 0, agi, s, inp.tax_year)
@@ -694,7 +755,12 @@ export function calc1040(raw: Form1040_Inputs): {
   const total_tax = Math.max(0, tax_before_credits - ctc_nonrefundable)
 
   // ── Line 33: Payments ─────────────────────────────────────────
-  const total_payments = inp.withholding + inp.estimated_payments + ctc_detail.refundable
+  const addl_medicare_withheld = w2.addlMedicareWithheld          // 1040 line 25c
+  const extension_payment = Math.round(n0(detailIn.extension_payment))
+  const excess_ss = w2.excessSS
+  const sched3_payments = extension_payment + excess_ss            // Schedule 3 line 15 → 1040 line 31
+  const total_payments = inp.withholding + addl_medicare_withheld + inp.estimated_payments +
+    ctc_detail.refundable + sched3_payments
 
   const net = total_tax - total_payments
   const refund = Math.max(0, -net)
@@ -729,7 +795,9 @@ export function calc1040(raw: Form1040_Inputs): {
     'income.L6a_social_sec':       inp.social_security,
     'income.L6b_ss_taxable':       ss_taxable,
     'income.L7a_capital_gains':    inp.capital_gains,
-    'income.L8_schedule1':         inp.schedule1_income,
+    // Schedule 1 line 10: K-1 ordinary income is Schedule 1 line 5, so it
+    // belongs here — it was in line 9's total and missing from line 8.
+    'income.L8_schedule1':         inp.schedule1_income + inp.k1_ordinary_income + other_income,
     'income.L9_total_income':      total_income,
     'income.L10_adjustments':      adjustments,
     'income.L11b_agi':             agi,
@@ -750,8 +818,10 @@ export function calc1040(raw: Form1040_Inputs): {
     'credits.L21_add_19_20':       ctc_nonrefundable,
     // Payments — default L25a_w2 = withholding (assume all withholding is W-2)
     'payments.L25a_w2':            inp.withholding,
-    'payments.L25d_total':         inp.withholding,
+    'payments.L25c_other':         addl_medicare_withheld,
+    'payments.L25d_total':         inp.withholding + addl_medicare_withheld,
     'payments.L26_estimated':      inp.estimated_payments,
+    'payments.L31_sched3':         sched3_payments,
     'payments.L28_child_addl':     ctc_detail.refundable,
     'payments.L32_other_total':    ctc_detail.refundable,
     'payments.L33_total':          total_payments,
@@ -767,8 +837,106 @@ export function calc1040(raw: Form1040_Inputs): {
     }
   }
 
+  // ── Supporting schedules ──────────────────────────────────────
+  // Emitted whenever they carry anything, so an export of the return shows
+  // where each face line came from. Keys follow the canonical pattern
+  // <schedule>.L<line>_<label>; the label is a convenience, the line is the
+  // identifier.
+  const put = (k: string, v: number) => { if (v) field_values[k] = Math.round(v) }
+  // Schedule 1
+  put('sched1.L5_rental_partnership_scorp', inp.schedule1_income + inp.k1_ordinary_income)
+  put('sched1.L8z_other_income', other_income)
+  put('sched1.L9_total_other_income', other_income)
+  put('sched1.L10_additional_income', inp.schedule1_income + inp.k1_ordinary_income + other_income)
+  put('sched1.L26_adjustments', adjustments)
+  // Schedule 2
+  put('sched2.L2_amt', amt)
+  put('sched2.L3_add_1z_2', amt)
+  put('sched2.L4_se_tax', se_tax)
+  put('sched2.L11_additional_medicare', additional_medicare)
+  put('sched2.L12_niit', niit)
+  put('sched2.L21_total_other_taxes', niit + additional_medicare + se_tax)
+  // Schedule 3
+  put('sched3.L10_extension_payment', extension_payment)
+  put('sched3.L11_excess_social_security', excess_ss)
+  put('sched3.L15_total_payments', sched3_payments)
+  // Schedule B — required over $1,500 of either
+  if (inp.taxable_interest > 1500 || inp.ordinary_dividends > 1500 || detailIn.taxable_interest_detail || detailIn.ordinary_dividends_detail) {
+    put('schedB.L2_total_interest', inp.taxable_interest)
+    put('schedB.L4_taxable_interest', inp.taxable_interest)
+    put('schedB.L6_total_dividends', inp.ordinary_dividends)
+    ;(field_values as Record<string, any>)['schedB.L7a_foreign_account'] = detailIn.foreign_accounts ? 'Yes' : 'No'
+  }
+  // Schedule D / Form 8949
+  if (schedD.any) Object.assign(field_values, schedD.fv)
+  // Form 8959 — Additional Medicare Tax
+  if (additional_medicare || addl_medicare_withheld) {
+    const threshold = s === 'mfj' ? 250000 : s === 'mfs' ? 125000 : 200000
+    put('f8959.L1_medicare_wages', medicare_wages)
+    put('f8959.L4_total', medicare_wages)
+    put('f8959.L5_threshold', threshold)
+    put('f8959.L6_excess', Math.max(0, medicare_wages - threshold))
+    put('f8959.L7_tax_on_wages', additional_medicare)
+    put('f8959.L18_total', additional_medicare)
+    if (w2.count) {
+      put('f8959.L19_medicare_withheld', w2.medicareWithheld)
+      put('f8959.L20_medicare_wages', w2.medicareWages)
+      put('f8959.L21_regular_rate', w2.regularMedicare)
+      put('f8959.L22_additional_withheld', addl_medicare_withheld)
+      put('f8959.L24_total_withholding', addl_medicare_withheld)
+    }
+  }
+  // Form 8960 — Net Investment Income Tax
+  if (niit) {
+    const threshold = s === 'mfj' ? 250000 : s === 'mfs' ? 125000 : 200000
+    put('f8960.L1_interest', inp.taxable_interest)
+    put('f8960.L2_dividends', inp.ordinary_dividends)
+    put('f8960.L5a_net_gain', nii_gain)
+    put('f8960.L7_other', other_investment_income)
+    put('f8960.L8_total', nii)
+    put('f8960.L12_net_investment_income', nii)
+    put('f8960.L13_magi', agi)
+    put('f8960.L14_threshold', threshold)
+    put('f8960.L15_excess', Math.max(0, agi - threshold))
+    put('f8960.L16_lesser', Math.min(nii, Math.max(0, agi - threshold)))
+    put('f8960.L17_niit', niit)
+  }
+  // Form 8995-A — QBI deduction above the threshold (8995 below it)
+  const qbi = inp.k1_ordinary_income + inp.qbi_from_k1
+  if (qbi > 0) {
+    const ncg = inp.qualified_dividends + Math.max(0, inp.ltcg_portion || 0)
+    put('f8995a.L2_qbi', qbi)
+    put('f8995a.L3_twenty_pct_qbi', qbi * 0.20)
+    put('f8995a.L4_w2_wages', inp.k1_w2_wages)
+    put('f8995a.L5_fifty_pct_wages', inp.k1_w2_wages * 0.50)
+    put('f8995a.L6_twentyfive_pct_wages', inp.k1_w2_wages * 0.25)
+    put('f8995a.L7_ubia', inp.k1_ubia)
+    put('f8995a.L8_two_half_pct_ubia', inp.k1_ubia * 0.025)
+    put('f8995a.L9_add_6_8', inp.k1_w2_wages * 0.25 + inp.k1_ubia * 0.025)
+    put('f8995a.L10_greater_5_9', Math.max(inp.k1_w2_wages * 0.50, inp.k1_w2_wages * 0.25 + inp.k1_ubia * 0.025))
+    put('f8995a.L33_taxable_income_before_qbi', tentative_taxable)
+    put('f8995a.L34_net_capital_gain', ncg)
+    put('f8995a.L35_subtract', Math.max(0, tentative_taxable - ncg))
+    put('f8995a.L36_income_limit', Math.max(0, tentative_taxable - ncg) * 0.20)
+    put('f8995a.L39_qbi_deduction', qbi_deduction)
+  }
+
+  // ── Form 2210 — was enough paid during the year? ──────────────
+  // An extension payment is not timely for this purpose. The penalty itself
+  // depends on payment dates and the IRS's quarterly rates, so this reports
+  // the shortfall rather than guessing a figure.
+  const prior_tax = n0(detailIn.prior_year_tax)
+  const timely_paid = inp.withholding + addl_medicare_withheld + inp.estimated_payments
+  let form2210_required = 0, form2210_shortfall = 0
+  if (total_tax - inp.withholding - addl_medicare_withheld >= 1000) {
+    const ninety = Math.round(total_tax * 0.90)
+    const prior_mult = n0(detailIn.prior_year_agi) > (s === 'mfs' ? 75000 : 150000) ? 1.10 : 1.00
+    form2210_required = prior_tax > 0 ? Math.min(ninety, Math.round(prior_tax * prior_mult)) : ninety
+    form2210_shortfall = Math.max(0, form2210_required - timely_paid)
+  }
+
   return {
-    computed: computedCore,
+    computed: { ...computedCore, form2210_required_annual_payment: form2210_required, form2210_shortfall },
     field_values,
     citations: [
       `IRS tax brackets for TY${inp.tax_year} (Rev. Proc.)`,

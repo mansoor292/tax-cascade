@@ -496,6 +496,14 @@ Routing: by default, updates the latest proforma for (entity, year, form) — or
   }
 Without pal_limitation, rental losses flow through without §469 limiting (optimistic for high-MAGI filers — always ask if they're active participants). With it, Form 8582 runs, loss is pro-rated across loss-making properties, and Form 8582 PDF is bundled alongside Schedule E. Read response.schedule_e.computed.pal.suspended_rental for next-year carryforward.
 
+1040 source documents — pass these instead of pre-summed figures so the return carries its supporting schedules as data (Schedules 1/2/3/B/D, Forms 8949/8959/8960/8995-A; read them back with export_return):
+  w2s: [{ owner: 'taxpayer'|'spouse', employer, box1, box2, box3, box4, box5, box6 }]
+  taxable_interest_detail: [{ label, amount }]            ordinary_dividends_detail: [{ label, amount, qualified }]
+  k1_portfolio: { name, interest, ordinary_dividends, qualified_dividends, st_gain, lt_gain }   (K-1 boxes 4/5a/5b/7/8a — not also in taxable_interest)
+  capital_transactions_detail: [{ label, proceeds, basis, adjustment, term: 'short'|'long', box: 'A'..'F' }]
+  other_income / other_income_detail: [{ label, amount, investment }]   (Schedule 1 line 8z)
+  extension_payment (paid with Form 4868 — NOT estimated_payments), prior_year_tax, prior_year_agi (Form 2210 safe harbor → computed.form2210_shortfall), foreign_accounts
+
 QBO auto-pull: for 1120/1120S with a QBO connection, compute_return maps the P&L + BS automatically. Pass only overrides — 1099 interest, officer_comp split, NOL carryforward, etc. Caller-provided values always win, INCLUDING explicit \`0\` (that's how you force-zero a QBO-defaulted field). For a one-shot convenience wrapper see compute_return_from_qbo.
 
 Response: \`qbo_warnings\` (preparer-judgment items — surface to user), \`supporting_documents.auto_merged\` (values from W-2/1099/K-1 docs — echo for confirmation), \`missing_fields\` (critical lines at 0 that need user confirmation before get_pdf).

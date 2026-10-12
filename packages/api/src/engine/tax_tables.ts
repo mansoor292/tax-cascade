@@ -431,7 +431,9 @@ const TY2025: YearlyTables = {
       [206700,0.24,35302],[394600,0.32,80398],[501050,0.35,114462],[751600,0.37,202154.50],
     ],
   },
-  standard_deduction: { single:15000, mfj:30000, mfs:15000, hoh:22500, qw:30000 },
+  // One Big Beautiful Bill Act §70102 raised the 2025 amounts after
+  // Rev. Proc. 2024-40 published 15,000 / 30,000 / 22,500.
+  standard_deduction: { single:15750, mfj:31500, mfs:15750, hoh:23625, qw:31500 },
   qbi_threshold:      { single:197300, mfj:394600, mfs:197300, hoh:197300, qw:394600 },
   qbi_phaseout:       { single:247300, mfj:494600, mfs:247300, hoh:247300, qw:494600 },
   amt_exemption:      { single:88100, mfj:137000, mfs:68500 },
@@ -602,8 +604,14 @@ export function amtTax(
   const phaseout_reduction = Math.max(0, Math.round((amti - phaseout_start) * 0.25))
   const exemption = Math.max(0, exemption_full - phaseout_reduction)
   const amt_taxable = Math.max(0, amti - exemption)
-  // 26% on first $232,600 ($116,300 MFS), 28% above — TY2024 values
-  const break_point = status === 'mfs' ? 116300 : 232600
+  // 26% up to the year's breakpoint, 28% above. This was the 2024 figure for
+  // every year.
+  const AMT_BREAK: Record<number, number> = {
+    2018: 191100, 2019: 194800, 2020: 197900, 2021: 199900,
+    2022: 206100, 2023: 220700, 2024: 232600, 2025: 239100,
+  }
+  const full = AMT_BREAK[year] ?? 239100
+  const break_point = status === 'mfs' ? full / 2 : full
   if (amt_taxable <= break_point) return Math.round(amt_taxable * 0.26)
   return Math.round(break_point * 0.26 + (amt_taxable - break_point) * 0.28)
 }
@@ -624,12 +632,13 @@ export function qbiDeduction(
   status:         FilingStatus,
   year:           number,
   is_sstb:        boolean = false,
+  net_capital_gain: number = 0,  // §199A(a)(1)(B): the 20% cap excludes it (8995-A line 34)
 ): number {
   if (qbi_income <= 0) return 0
   const t = TAX_TABLES[year]
   const threshold = t.qbi_threshold[status]
   const phaseout  = t.qbi_phaseout[status]
-  const cap       = Math.round(taxable_income * 0.20)
+  const cap       = Math.round(Math.max(0, taxable_income - net_capital_gain) * 0.20)
 
   // Regime 1: below threshold — SSTBs get full 20% just like non-SSTBs
   if (taxable_income <= threshold) {

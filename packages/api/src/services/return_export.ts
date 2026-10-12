@@ -60,7 +60,10 @@ export interface ReturnExport {
 const DETAIL_LINES: Record<string, Record<string, string>> = {
   other_deductions: { '1120S': '20', '1120': '26' },
   other_costs:      { '1120S': '5',  '1120': '5' },   // Form 1125-A
-  other_income:     { '1120S': '5',  '1120': '10' },
+  other_income:     { '1120S': '5',  '1120': '10', '1040': 'Sch 1 8z' },
+  taxable_interest:     { '1040': 'Sch B 1' },
+  ordinary_dividends:   { '1040': 'Sch B 5' },
+  capital_transactions: { '1040': 'Form 8949 / Sch D' },
 }
 
 /** Schedules in the order they appear on the return. Unknown ones sort last. */
@@ -76,7 +79,15 @@ const SECTION_LABELS: Record<string, string> = {
   overpayment: 'Overpayment',
   refund: 'Refund',
   dep: 'Depreciation (Form 4562)',
+  credits: 'Credits',
+  sched1: 'Schedule 1 (Form 1040)',
+  sched2: 'Schedule 2 (Form 1040)',
+  sched3: 'Schedule 3 (Form 1040)',
   schedB: 'Schedule B',
+  schedD: 'Schedule D (Form 1040)',
+  f8959: 'Form 8959 (Additional Medicare Tax)',
+  f8960: 'Form 8960 (Net Investment Income Tax)',
+  f8995a: 'Form 8995-A (QBI deduction)',
   schedK: 'Schedule K',
   schedule_k1: 'Schedule K-1',
   schedL: 'Schedule L (balance sheet)',
@@ -243,7 +254,10 @@ function extractDetails(row: any): ExportDetail[] {
       }
       if (!item || typeof item !== 'object') continue
       const o = item as Record<string, any>
-      const amt = parseFloat(String(o.amount ?? o.value ?? ''))
+      // A broker sale carries proceeds and basis, not an amount.
+      const amt = o.amount === undefined && o.value === undefined && o.proceeds !== undefined
+        ? Number(o.proceeds) - Number(o.basis ?? 0) + Number(o.adjustment ?? 0)
+        : parseFloat(String(o.amount ?? o.value ?? ''))
       if (!isFinite(amt)) continue
       out.push({ bucket, line, label: String(o.label ?? o.description ?? o.name ?? ''), value: amt })
     }
