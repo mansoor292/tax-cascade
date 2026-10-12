@@ -935,7 +935,7 @@ function fill1120SExtras(
   // Title
   if (entity.meta?.title) {
     // 1120S title field ID differs by year
-    if (year >= 2025) setField(form, 'f1_54', entity.meta.title)
+    if (year >= 2025) setField(form, 'f1_56', entity.meta.title)
     else setField(form, 'f1_50', entity.meta.title)
   }
 

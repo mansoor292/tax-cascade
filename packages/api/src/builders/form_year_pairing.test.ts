@@ -209,6 +209,35 @@ describe('form year pairing', () => {
     expect(text).toContain('1,685,719')
   })
 
+  it('puts the 2025 1120-S header, line 1c and title where they belong', async () => {
+    // Line 1c and total assets had no mapping and printed blank; the officer's
+    // title went to f1_54, which on the 2025 form is the direct-deposit routing
+    // number, so a filing copy showed "PRESIDENT" as the refund bank.
+    const res = await buildReturnPdf({
+      formType: '1120S', taxYear: 2025,
+      entity: { ...entity, meta: { title: 'PRESIDENT' } },
+      fieldValues: {
+        'income.L1a_gross_receipts': 2_922_791, 'income.L1c_balance': 2_922_791,
+        'meta.total_assets': 2_229_848,
+      },
+    })
+    const dir = mkdtempSync(path.join(tmpdir(), 'yearpair-'))
+    try {
+      const file = path.join(dir, 'r.pdf')
+      writeFileSync(file, await res.pdf.save())
+      const text = execFileSync('pdftotext', ['-layout', '-f', '1', '-l', '1', file, '-'], { encoding: 'utf8' })
+      expect(text).toMatch(/c Balance\s+1c\s+2,922,791/)
+      expect(lineRow(text, /Total assets/)).toContain('2,229,848')
+      // Single physical lines: lineRow would run on from 28c into the signature
+      // block, which has no line number to stop it.
+      const line = (re: RegExp) => text.split('\n').find(l => re.test(l)) ?? ''
+      expect(line(/Routing number/).replace(/\s+/g, '')).not.toContain('PRESIDENT')
+      expect(line(/Signature of officer/)).toContain('PRESIDENT')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('renders every year we hold a blank for without scrambling it', async () => {
     // The whole span on disk. Each must either render coherently or not at all
     // — never a filled page with values on the wrong lines.

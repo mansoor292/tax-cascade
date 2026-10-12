@@ -299,11 +299,13 @@ export const F1120S_2025: Record<string, string> = {
   'meta.business_code':         'f1_12',
   'meta.ein':                   'f1_13',
   'meta.date_incorporated':     'f1_14',
+  'meta.total_assets':          'f1_15',
   'meta.num_shareholders':      'f1_16',
 
   // Income
   'income.L1a_gross_receipts':  'f1_17',
   'income.L1b_returns':         'f1_18',
+  'income.L1c_balance':         'f1_19',
   'income.L2_cogs':             'f1_20',
   'income.L3_gross_profit':     'f1_21',
   'income.L4_net_gain_4797':    'f1_22',
@@ -340,7 +342,12 @@ export const F1120S_2025: Record<string, string> = {
   'penalty.L25':                'f1_49',
   'owed.L26':                   'f1_50',
   'overpayment.L27':            'f1_51',
-  'meta.title':                 'f1_54',
+  'refund.L28_credited':        'f1_52',
+  'refund.L28_refunded':        'f1_53',
+  // f1_54/f1_55 are the direct-deposit routing and account numbers; the
+  // officer's title is f1_56. The title once went to f1_54 and printed
+  // "PRESIDENT" in the routing-number boxes.
+  'meta.title':                 'f1_56',
 
   // ── Schedule L (Balance Sheet — Page 4) ──
   //
