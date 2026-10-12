@@ -147,7 +147,7 @@ export function scheduleD(
   fv['schedD.L16_total'] = total
   if (total < 0) {
     fv['schedD.L21_loss_allowed'] = allowed
-    fv['schedD.loss_carryover'] = total - allowed
+    if (total !== allowed) fv['schedD.loss_carryover'] = total - allowed
   }
   return { lineAmount: allowed, total, netST, netLT, netCapitalGain, fv, any: list.length > 0 || !!k1st || !!k1lt }
 }

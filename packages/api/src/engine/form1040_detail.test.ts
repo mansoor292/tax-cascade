@@ -106,6 +106,24 @@ describe('1040 supporting schedules', () => {
     for (const s of ['sched1', 'schedB', 'schedD', 'f8995a']) expect(sections.has(s), s).toBe(true)
     const sale = exp.details.find(d => d.bucket === 'capital_transactions')
     expect(sale?.value).toBe(-500)
+  })
+
+  it('lists K-1 portfolio income as a Schedule B payer and drops stray twin zeros', () => {
+    const inputs = { ...base, wages: 50_000,
+      taxable_interest_detail: [{ label: 'Broker', amount: 406 }],
+      k1_portfolio: { name: 'S Corp (K-1)', interest: 32_943 },
+      capital_transactions_detail: [{ label: 'XYZ', proceeds: 387_278.28, basis: 387_883.08, term: 'short' }] }
+    const r = calc1040(inputs)
+    const fv: Record<string, any> = { ...r.field_values, 'income.L7_capital_gains': 0, 'income.L11_agi': 0 }
+    const exp = buildReturnExport({ form_type: '1040', field_values: fv, input_data: inputs }, { name: 'Test' })
+    const payers = exp.details.filter(d => d.bucket === 'taxable_interest')
+    expect(payers.reduce((t, d) => t + d.value, 0)).toBe(fv['schedB.L2_total_interest'])
+    expect(exp.lines.find(l => l.key === 'income.L7_capital_gains')).toBeUndefined()
+    expect(exp.lines.find(l => l.key === 'income.L11_agi')).toBeUndefined()
+    expect(exp.details.find(d => d.bucket === 'capital_transactions')?.value).toBe(-604.8)
+    // A 2024 import where the unsuffixed key is the real line keeps it.
+    const old = buildReturnExport({ form_type: '1040', field_values: { 'income.L11_agi': 634_665, 'income.L11b_agi': 0 } }, { name: 'T' })
+    expect(old.lines.find(l => l.key === 'income.L11_agi')?.value).toBe(634_665)
     expect(exp.details.find(d => d.bucket === 'taxable_interest')?.line).toBe('Sch B 1')
   })
 })

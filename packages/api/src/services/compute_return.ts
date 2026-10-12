@@ -945,8 +945,23 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     }> = []
     const schema = INPUT_SCHEMAS[form_type]
     if (schema) {
+      // A 1040 scalar the engine derives from source documents is not missing.
+      const derivedFrom: Record<string, string[]> = {
+        wages: ['w2s'], withholding: ['w2s'],
+        taxable_interest: ['taxable_interest_detail', 'k1_portfolio'],
+        ordinary_dividends: ['ordinary_dividends_detail', 'k1_portfolio'],
+        qualified_dividends: ['ordinary_dividends_detail', 'k1_portfolio'],
+        capital_gains: ['capital_transactions_detail', 'k1_portfolio'],
+        ltcg_portion: ['capital_transactions_detail', 'k1_portfolio'],
+        qbi_from_k1: ['k1_ordinary_income'],
+      }
+      const hasSource = (name: string) => (derivedFrom[name] || []).some(src => {
+        const v = mergedInputs[src]
+        return Array.isArray(v) ? v.length > 0 : v && typeof v === 'object' ? Object.keys(v).length > 0 : !!v
+      })
       for (const f of schema.fields) {
         if (f.type !== 'number') continue
+        if (form_type === '1040' && hasSource(f.name)) continue
         const v = mergedInputs[f.name]
         if (v === undefined || v === null || v === 0) {
           const prior = priorByInputName(f.name)

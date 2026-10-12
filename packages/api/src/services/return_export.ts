@@ -127,6 +127,21 @@ const SUPERSEDED_KEYS: Record<string, string> = {
   'schedM1.L8_income_line18': 'schedM1.L8_income_K18',
 }
 
+/**
+ * 1040 lines that exist under a year's two spellings (2025 split 7/7a, 11/11b,
+ * 12/12e, 13/13a) or under an older alias. Unlike SUPERSEDED_KEYS these are
+ * dropped only when they hold nothing the survivor doesn't — a zero, or the
+ * same figure — because on a 2024 filed import the unsuffixed key IS the line
+ * and its twin is the stray zero.
+ */
+const TWIN_ZEROS: Record<string, string> = {
+  'income.L7_capital_gains': 'income.L7a_capital_gains',
+  'income.L11_agi': 'income.L11b_agi',
+  'deductions.L12_standard': 'deductions.L12e_standard',
+  'deductions.L13_qbi': 'deductions.L13a_qbi',
+  'payments.L31_sched3_15': 'payments.L31_sched3',
+}
+
 /** Schedule L runs four columns; keep them in the order the form prints them. */
 const COLUMN_ORDER = ['boy_a', 'boy_b', 'eoy_c', 'eoy_d']
 const COLUMN_RE = /_(boy_a|boy_b|eoy_c|eoy_d)$/
@@ -202,6 +217,8 @@ export function buildReturnExport(row: any, entity: any, k1s: any[] = []): Retur
     if (typeof value === 'object') continue      // nested payloads are not lines
     const survivor = SUPERSEDED_KEYS[key]
     if (survivor && fv[survivor] !== undefined && fv[survivor] !== null) continue
+    const twin = TWIN_ZEROS[key]
+    if (twin && fv[twin] !== undefined && fv[twin] !== null && (Number(value) === 0 || value === fv[twin])) continue
     lines.push({ ...parseCanonicalKey(key), value: value as number | string })
   }
   lines.sort(compareLines)
@@ -259,8 +276,17 @@ function extractDetails(row: any): ExportDetail[] {
         ? Number(o.proceeds) - Number(o.basis ?? 0) + Number(o.adjustment ?? 0)
         : parseFloat(String(o.amount ?? o.value ?? ''))
       if (!isFinite(amt)) continue
-      out.push({ bucket, line, label: String(o.label ?? o.description ?? o.name ?? ''), value: amt })
+      out.push({ bucket, line, label: String(o.label ?? o.description ?? o.name ?? ''), value: Math.round(amt * 100) / 100 })
     }
+  }
+  // A 1040's K-1 portfolio income is a Schedule B payer like any 1099. Without
+  // these rows the payer list stops short of line 2 / line 6 by the K-1 amount.
+  const k1 = inputs.k1_portfolio as Record<string, any> | undefined
+  if (formType === '1040' && k1 && typeof k1 === 'object') {
+    const name = String(k1.name || 'Schedule K-1')
+    const interest = Number(k1.interest), dividends = Number(k1.ordinary_dividends)
+    if (interest) out.push({ bucket: 'taxable_interest', line: DETAIL_LINES.taxable_interest['1040'], label: name, value: interest })
+    if (dividends) out.push({ bucket: 'ordinary_dividends', line: DETAIL_LINES.ordinary_dividends['1040'], label: name, value: dividends })
   }
   return out
 }
