@@ -37,6 +37,15 @@ async function hydrateReturns(rows: any[] | null | undefined, userId: string): P
   for (const r of rows || []) await hydrateReturn(r, userId)
 }
 
+/**
+ * Canonical keys a caller may set directly on an 1120/1120-S: the balance
+ * sheet and reconciliations, Schedule K, and the supporting forms the engine
+ * does not compute (1125-A cost of goods sold, 4562 depreciation/amortization).
+ */
+export function isPassthroughScheduleKey(k: string): boolean {
+  return /^(schedL|schedM1|schedM2|schedK|cogs|dep|amort)\./.test(k)
+}
+
 export async function computeReturn(userId: string, body: any): Promise<HttpOutcome> {
   const { entity_id, tax_year, form_type, inputs, save, return_id, amend_of, new_row } = body || {}
   if (!form_type || !tax_year || !inputs) {
@@ -498,10 +507,11 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         } catch (_) { /* QBO not connected or fetch failed — skip silently */ }
       }
 
-      // Pass through any schedL/schedM/schedK keys from user inputs into field_values
-      const scheduleKeys = Object.entries(mergedInputs).filter(([k]) =>
-        k.startsWith('schedL.') || k.startsWith('schedM1.') || k.startsWith('schedM2.') || k.startsWith('schedK.')
-      )
+      // Pass through schedule keys from user inputs into field_values.
+      // cogs./dep./amort. carry Form 1125-A and Form 4562: without them the
+      // return could state line 2 and line 20 but not the forms behind them,
+      // and the attached 1125-A/4562 printed blank.
+      const scheduleKeys = Object.entries(mergedInputs).filter(([k]) => isPassthroughScheduleKey(k))
       if (scheduleKeys.length) {
         if (!engineResult.field_values) engineResult.field_values = {}
         for (const [k, v] of scheduleKeys) {
@@ -598,10 +608,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       // accumulated adjustments account on an S corporation return — the one
       // form where that schedule carries real weight, since AAA is what
       // determines how much a shareholder can draw out tax-free.
-      const scheduleKeys1120S = Object.entries(mergedInputs).filter(([k]) =>
-        k.startsWith('schedL.') || k.startsWith('schedM1.')
-        || k.startsWith('schedM2.') || k.startsWith('schedK.')
-      )
+      const scheduleKeys1120S = Object.entries(mergedInputs).filter(([k]) => isPassthroughScheduleKey(k))
       if (scheduleKeys1120S.length) {
         if (!engineResult.field_values) engineResult.field_values = {}
         for (const [k, v] of scheduleKeys1120S) engineResult.field_values[k] = v

@@ -212,8 +212,14 @@ export const PDF_FIELD_MAP_1120: Record<string, string> = {
   // Left side: f6_156..f6_162
   'schedM2.L1_beg_balance':         'f6_156',
   'schedM2.L2_net_income':          'f6_157',
+  'schedM2.L3_other_increases':     'f6_161',
   'schedM2.L4_add':                 'f6_162',
-  // Right side: f6_163..f6_169
+  // Right side: f6_163..f6_169 (same rects as 2025 — see that map's note)
+  'schedM2.L5a_cash_distributions': 'f6_163',
+  'schedM2.L5b_stock_distributions': 'f6_164',
+  'schedM2.L5c_property_distributions': 'f6_165',
+  'schedM2.L6_other_decreases':     'f6_167',
+  'schedM2.L7_add_5_6':             'f6_168',
   'schedM2.L8_end_balance':         'f6_169',
 }
 

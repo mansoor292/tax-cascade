@@ -148,3 +148,25 @@ export function buildScheduleL(
 
   return model
 }
+
+/**
+ * Field values to render a return's PDF with: the SAVED return, with Schedule L
+ * taken from QBO only when the return carries none of its own.
+ *
+ * The PDF route used to spread a fresh QBO Schedule L OVER the saved values,
+ * so a return whose balance sheet had been corrected and saved line by line
+ * printed the raw QBO mapping instead — the shareholder loan counted twice,
+ * intangibles on line 10, line 18's sign flipped, retained earnings plugged.
+ * The saved return is what was reviewed; it is what must print. QBO fills in
+ * only for a return computed without any Schedule L at all.
+ */
+export function fieldValuesForPdf(
+  saved: Record<string, any> | null | undefined,
+  qboScheduleL: ScheduleLData | null | undefined,
+): Record<string, any> {
+  const fv = { ...(saved || {}) }
+  const hasOwn = Object.keys(fv).some(k => k.startsWith('schedL.'))
+  if (hasOwn || !qboScheduleL) return fv
+  for (const [k, v] of Object.entries(qboScheduleL)) if (fv[k] === undefined) fv[k] = v
+  return fv
+}

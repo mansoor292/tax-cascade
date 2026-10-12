@@ -40,7 +40,7 @@ async function hydrateReturns(rows: any[] | null | undefined, userId: string): P
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { INPUT_SCHEMAS } from './schema.js'
 import { buildReturnPdf } from '../builders/build_return_pdf.js'
-import { buildScheduleL } from '../maps/qbo_to_schedule_l.js'
+import { buildScheduleL, fieldValuesForPdf } from '../maps/qbo_to_schedule_l.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 import { getFinancials } from './qbo.js'
 import { computeReturn } from '../services/compute_return.js'
@@ -1176,7 +1176,8 @@ router.get('/:id/pdf', async (req, res) => {
         // builder still reads computedData?.schedule_e for nested rentals/
         // partnerships data. Flat metrics flow via fieldValues only.
         computedData: taxReturn.computed_data,
-        fieldValues: { ...taxReturn.field_values, ...schedLOverrides },
+        // Saved values win; QBO Schedule L only fills a return that has none.
+        fieldValues: fieldValuesForPdf(taxReturn.field_values, schedLOverrides),
         textractKvs,
       })
       pdf = result.pdf; filled = result.filled; pages = result.pages; forms = result.forms

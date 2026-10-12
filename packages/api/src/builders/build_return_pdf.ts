@@ -525,6 +525,52 @@ function fuzzyMatchLabel(
 
 // ─── Schedule K checkboxes (1120) ───
 
+/**
+ * Schedule K question → checkbox group on the 2024/2025 Form 1120 (same layout
+ * both years; c4_* = page 4, c5_* = page 5). [0] = Yes, [1] = No, except
+ * K1_method where [0]/[1]/[2] = cash/accrual/other.
+ *
+ * Positions verified against the widget rects of the blank forms. This table
+ * used to skip question 15b, so every answer from 16 on landed one row early:
+ * a "Yes" to 28 (controlled group) printed as a "Yes" to 27 (digital assets)
+ * and 28 showed the answer meant for 29a. 29b and 30c had no entry at all.
+ */
+export const SCHED_K_CHECKBOXES_1120: Record<string, [string, number]> = {
+  'K1_method':            ['c4_1', 1],
+  'K3_subsidiary':        ['c4_2', -1],
+  'K4a_foreign_own':      ['c4_3', -1],
+  'K4b_individual_own':   ['c4_4', -1],
+  'K5a_own_foreign':      ['c4_5', -1],
+  'K5b_own_partnership':  ['c4_6', -1],
+  'K6_dividends':         ['c4_7', -1],
+  'K7_foreign_25pct':     ['c4_8', -1],
+  'K13_receipts_250k':    ['c5_1', -1],
+  'K14_utp':              ['c5_2', -1],
+  'K15a_1099':            ['c5_3', -1],
+  'K15b_filed_1099':      ['c5_4', -1],
+  'K16_ownership_change': ['c5_5', -1],
+  'K17_dispose_65pct':    ['c5_6', -1],
+  'K18_351_transfer':     ['c5_7', -1],
+  'K19_payments':         ['c5_8', -1],
+  'K20_cooperative':      ['c5_9', -1],
+  'K21_267a':             ['c5_10', -1],
+  'K22_500m':             ['c5_11', -1],
+  'K23_163j':             ['c5_12', -1],
+  'K24_8990':             ['c5_13', -1],
+  'K25_qof':              ['c5_14', -1],
+  'K26_foreign_acq':      ['c5_15', -1],
+  'K27_digital_asset':    ['c5_16', -1],
+  'K28_controlled_group': ['c5_17', -1],
+  'K29a_59k':             ['c5_18', -1],
+  'K29b_59k_current':     ['c5_19', -1],
+  'K29c_safe_harbor':     ['c5_20', -1],
+  'K30a_repurchase':      ['c5_21', -1],
+  'K30b_foreign_corp':    ['c5_22', -1],
+  'K30c_surrogate':       ['c5_23', -1],
+  'K31_consolidated':     ['c5_24', -1],
+}
+
+
 function fillScheduleKCheckboxes(
   form: ReturnType<PDFDocument['getForm']>,
   schedK: Record<string, string>,
@@ -533,37 +579,7 @@ function fillScheduleKCheckboxes(
   // c4_* = page 4, c5_* = page 5
   // For most: [0] = Yes, [1] = No
   // For K1_method: [0] = Cash, [1] = Accrual, [2] = Other
-  const checkboxMap: Record<string, [string, number]> = {
-    'K1_method':            ['c4_1', 1],  // [1] = accrual
-    'K3_subsidiary':        ['c4_2', -1],
-    'K4a_foreign_own':      ['c4_3', -1],
-    'K4b_individual_own':   ['c4_4', -1],
-    'K5a_own_foreign':      ['c4_5', -1],
-    'K5b_own_partnership':  ['c4_6', -1],
-    'K6_dividends':         ['c4_7', -1],
-    'K7_foreign_25pct':     ['c4_8', -1],
-    'K13_receipts_250k':    ['c5_1', -1],
-    'K14_utp':              ['c5_2', -1],
-    'K15a_1099':            ['c5_3', -1],
-    'K16_ownership_change': ['c5_4', -1],
-    'K17_dispose_65pct':    ['c5_5', -1],
-    'K18_351_transfer':     ['c5_6', -1],
-    'K19_payments':         ['c5_7', -1],
-    'K20_cooperative':      ['c5_8', -1],
-    'K21_267a':             ['c5_9', -1],
-    'K22_500m':             ['c5_10', -1],
-    'K23_163j':             ['c5_11', -1],
-    'K24_8990':             ['c5_12', -1],
-    'K25_qof':              ['c5_13', -1],
-    'K26_foreign_acq':      ['c5_14', -1],
-    'K27_digital_asset':    ['c5_15', -1],
-    'K28_controlled_group': ['c5_16', -1],
-    'K29a_59k':             ['c5_17', -1],
-    'K29c_safe_harbor':     ['c5_18', -1],
-    'K30a_repurchase':      ['c5_19', -1],
-    'K30b_foreign_corp':    ['c5_20', -1],
-    'K31_consolidated':     ['c5_21', -1],
-  }
+  const checkboxMap = SCHED_K_CHECKBOXES_1120
 
   for (const f of form.getFields()) {
     if (!(f instanceof PDFCheckBox)) continue
@@ -890,6 +906,17 @@ function fill1120Extras(
   const schedK = entity.meta?.sched_k as Record<string, string> | undefined
   if (schedK) {
     fillScheduleKCheckboxes(form, schedK)
+  }
+
+  // Schedule K text lines. 2a-c sit on page 4 in the same boxes in 2024 and
+  // 2025 (verified by filling the blank and rendering it); line 10 is the
+  // shareholder count. These printed blank on every 1120 until now.
+  if (year >= 2024) {
+    setField(form, 'f4_2', entity.meta?.business_code)
+    setField(form, 'f4_3', entity.meta?.business_activity)
+    setField(form, 'f4_4', entity.meta?.product_service)
+    const owners = entity.meta?.owners
+    if (Array.isArray(owners) && owners.length > 0 && owners.length <= 100) setField(form, 'f4_35', String(owners.length))
   }
 
   // Title (field ID varies by year)

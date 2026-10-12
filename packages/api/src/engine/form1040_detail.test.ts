@@ -117,7 +117,7 @@ describe('1040 supporting schedules', () => {
     const fv: Record<string, any> = { ...r.field_values, 'income.L7_capital_gains': 0, 'income.L11_agi': 0 }
     const exp = buildReturnExport({ form_type: '1040', field_values: fv, input_data: inputs }, { name: 'Test' })
     const payers = exp.details.filter(d => d.bucket === 'taxable_interest')
-    expect(payers.reduce((t, d) => t + d.value, 0)).toBe(fv['schedB.L2_total_interest'])
+    expect(payers.reduce((t, d) => t + (d.value ?? 0), 0)).toBe(fv['schedB.L2_total_interest'])
     expect(exp.lines.find(l => l.key === 'income.L7_capital_gains')).toBeUndefined()
     expect(exp.lines.find(l => l.key === 'income.L11_agi')).toBeUndefined()
     expect(exp.details.find(d => d.bucket === 'capital_transactions')?.value).toBe(-604.8)

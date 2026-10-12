@@ -219,3 +219,32 @@ describe('itemisation behind an "(attach statement)" line', () => {
     expect(buildReturnExport(row, entity).details).toHaveLength(0)
   })
 })
+
+describe('1120 supporting statements as data', () => {
+  it('exports Form 1125-E officers and Schedule O members with their attributes', () => {
+    const row = {
+      form_type: '1120', field_values: { 'deductions.L12_officer_comp': 105_067 },
+      input_data: {
+        officer_compensation: 105_067,
+        officer_compensation_detail: [
+          { label: 'Officer A', title: 'President', time_pct: 100, common_pct: 100, preferred_pct: 0, amount: 105_067 },
+        ],
+        controlled_group_detail: [
+          { label: 'Affiliate Inc', ein_last4: '5008', relationship: 'brother-sister', owner_pct: 85 },
+        ],
+      },
+    }
+    const exp = buildReturnExport(row, { name: 'X' })
+    const officer = exp.details.find(d => d.bucket === 'officer_compensation')!
+    expect(officer.line).toBe('12 (Form 1125-E)')
+    expect(officer.value).toBe(105_067)
+    expect(officer.attributes).toEqual({ title: 'President', time_pct: 100, common_pct: 100, preferred_pct: 0 })
+    // A member row has no amount and used to be dropped.
+    const member = exp.details.find(d => d.bucket === 'controlled_group')!
+    expect(member.value).toBeNull()
+    expect(member.line).toBe('Sch K 28 (Schedule O)')
+    expect(member.attributes?.owner_pct).toBe(85)
+    const csv = exportToCsv(exp)
+    expect(csv).toContain('Affiliate Inc (ein_last4: 5008; relationship: brother-sister; owner_pct: 85)')
+  })
+})

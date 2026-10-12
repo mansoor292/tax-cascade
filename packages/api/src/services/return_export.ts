@@ -34,7 +34,12 @@ export interface ExportDetail {
   bucket: string
   line: string | null
   label: string
-  value: number
+  /** null for a row that itemizes facts rather than an amount — a Schedule O
+   *  group member, say — and carries them in `attributes`. */
+  value: number | null
+  /** Every other field the caller gave the item (Form 1125-E time and stock
+   *  percentages, a member's EIN suffix). Absent when there are none. */
+  attributes?: Record<string, string | number | boolean>
 }
 
 export interface ReturnExport {
@@ -61,6 +66,15 @@ const DETAIL_LINES: Record<string, Record<string, string>> = {
   other_deductions: { '1120S': '20', '1120': '26' },
   other_costs:      { '1120S': '5',  '1120': '5' },   // Form 1125-A
   other_income:     { '1120S': '5',  '1120': '10', '1040': 'Sch 1 8z' },
+  // 1120 supporting statements and forms that exist only as itemizations
+  officer_compensation: { '1120': '12 (Form 1125-E)', '1120S': '7 (Form 1125-E)' },
+  taxes_licenses:       { '1120': '17', '1120S': '12' },
+  employee_benefits:    { '1120': '24', '1120S': '18' },
+  amortization:         { '1120': 'Form 4562 Part VI', '1120S': 'Form 4562 Part VI' },
+  controlled_group:     { '1120': 'Sch K 28 (Schedule O)' },
+  schedL_other_current_assets:      { '1120': 'Sch L 6',  '1120S': 'Sch L 6' },
+  schedL_other_assets:              { '1120': 'Sch L 14', '1120S': 'Sch L 14' },
+  schedL_other_current_liabilities: { '1120': 'Sch L 18', '1120S': 'Sch L 18' },
   taxable_interest:     { '1040': 'Sch B 1' },
   ordinary_dividends:   { '1040': 'Sch B 5' },
   capital_transactions: { '1040': 'Form 8949 / Sch D' },
@@ -275,8 +289,20 @@ function extractDetails(row: any): ExportDetail[] {
       const amt = o.amount === undefined && o.value === undefined && o.proceeds !== undefined
         ? Number(o.proceeds) - Number(o.basis ?? 0) + Number(o.adjustment ?? 0)
         : parseFloat(String(o.amount ?? o.value ?? ''))
-      if (!isFinite(amt)) continue
-      out.push({ bucket, line, label: String(o.label ?? o.description ?? o.name ?? ''), value: Math.round(amt * 100) / 100 })
+      const attributes: Record<string, string | number | boolean> = {}
+      for (const [k, v] of Object.entries(o)) {
+        if (DETAIL_CORE_FIELDS.has(k)) continue
+        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') attributes[k] = v
+      }
+      const hasAttrs = Object.keys(attributes).length > 0
+      // Without an amount the row is only worth keeping for what it describes.
+      if (!isFinite(amt) && !hasAttrs) continue
+      out.push({
+        bucket, line,
+        label: String(o.label ?? o.description ?? o.name ?? ''),
+        value: isFinite(amt) ? Math.round(amt * 100) / 100 : null,
+        ...(hasAttrs ? { attributes } : {}),
+      })
     }
   }
   // A 1040's K-1 portfolio income is a Schedule B payer like any 1099. Without
@@ -290,6 +316,11 @@ function extractDetails(row: any): ExportDetail[] {
   }
   return out
 }
+
+/** Fields extractDetails already reads into label/value; the rest are attributes. */
+const DETAIL_CORE_FIELDS = new Set([
+  'label', 'description', 'name', 'amount', 'value', 'proceeds', 'basis', 'adjustment',
+])
 
 /** RFC 4180: quote anything containing a comma, quote or newline; double the quotes. */
 function csvCell(v: unknown): string {
@@ -312,7 +343,11 @@ export function exportToCsv(exp: ReturnExport): string {
     rows.push([
       exp.entity.name, exp.return.tax_year, exp.return.form_type, exp.return.source,
       `Detail: ${d.bucket.replace(/_/g, ' ')}`, d.line ?? '', '',
-      `${d.bucket}_detail`, d.label, d.value,
+      `${d.bucket}_detail`,
+      d.attributes
+        ? `${d.label} (${Object.entries(d.attributes).map(([k, v]) => `${k}: ${v}`).join('; ')})`
+        : d.label,
+      d.value ?? '',
     ].map(csvCell).join(','))
   }
 

@@ -581,9 +581,20 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
     'tax.L29b_special_ded':            special_deductions,
     'tax.L29c_total_29':               nol_applied + special_deductions,
     'tax.L30_taxable_income':          taxable_income,
+    // Schedule J Part I/II roll-ups. Only 1a was emitted, so lines 2, 4, 7,
+    // 11a and 12 printed 0 under a page-1 line 31 that showed the tax — and
+    // line 31 is defined as Schedule J line 12. No AMT (line 3) or Part I
+    // line 8-10 items are modeled, so 2 = 4 = 1a and 7 = 11a = 12.
     'schedJ.J1a_income_tax':           income_tax,
+    'schedJ.J2_total_income_tax':      income_tax,
+    'schedJ.J4_add_2_3':               income_tax,
+    'schedJ.J7_subtract_6_4':          total_tax,
+    'schedJ.J11a_total_before_def':    total_tax,
+    'schedJ.J12_total_tax':            total_tax,
     'tax.L31_total_tax':               total_tax,
     'schedJ.J14_estimated_payments':   inp.estimated_tax_paid,
+    'schedJ.J19_total_payments':       total_payments,
+    'schedJ.J23_total_pay_credits':    total_payments,
     'payments.L33_total_payments':     total_payments,
     'payments.L35_amount_owed':        balance_due,
     'payments.L36_overpayment':        overpayment,

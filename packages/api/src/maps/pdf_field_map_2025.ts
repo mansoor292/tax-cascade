@@ -278,8 +278,18 @@ export const F1120_2025: Record<string, string> = {
   'schedM1.L10_income_line28':       'f6_155',
 
   // Page 6: Schedule M-2 (Retained Earnings)
+  // Lines 2, 5a-c, 6 and 7 were unmapped, so the fuzzy label matcher placed
+  // them — 5a (cash distributions) landed on Schedule J line 5a, the foreign
+  // tax credit. Rects verified against the blank: left column 2-4, right 5-8.
   'schedM2.L1_beg_balance':          'f6_156',
+  'schedM2.L2_net_income':           'f6_157',
+  'schedM2.L3_other_increases':      'f6_161',
   'schedM2.L4_add':                  'f6_162',
+  'schedM2.L5a_cash_distributions':  'f6_163',
+  'schedM2.L5b_stock_distributions': 'f6_164',
+  'schedM2.L5c_property_distributions': 'f6_165',
+  'schedM2.L6_other_decreases':      'f6_167',
+  'schedM2.L7_add_5_6':              'f6_168',
   'schedM2.L8_end_balance':          'f6_169',
 }
 

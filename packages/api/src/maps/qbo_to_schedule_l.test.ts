@@ -14,7 +14,7 @@
  * itself reports.
  */
 import { describe, it, expect } from 'vitest'
-import { buildScheduleL } from './qbo_to_schedule_l.js'
+import { buildScheduleL, fieldValuesForPdf } from './qbo_to_schedule_l.js'
 
 const EOY_2025 = {
   'BankAccounts (Total)': 520_571.20,
@@ -92,5 +92,25 @@ describe('buildScheduleL — equity', () => {
     ;(renamed as any)['Owner draws — Mansoor'] = -5_250_580.43
     const n = buildScheduleL(renamed, EOY_2024)
     expect(liabilitiesAndEquity(n, 'eoy_d')).toBe(n['schedL.L28_total_eoy_d'])
+  })
+})
+
+describe('fieldValuesForPdf', () => {
+  const qbo = { 'schedL.L7_loans_eoy_d': 500_000, 'schedL.L14_other_eoy_d': 1_446_749, 'schedL.L15_total_eoy_d': 1_654_986 }
+
+  it('prints the saved Schedule L, not a fresh QBO mapping', () => {
+    // A reviewed 2025 return printed L7 500,000 and L14 1,446,749 (the loan
+    // counted twice) because the route spread QBO over the saved values.
+    const saved = { 'tax.L31_total_tax': 30_514, 'schedL.L7_loans_eoy_d': 571_514, 'schedL.L14_other_eoy_d': 608_564 }
+    const fv = fieldValuesForPdf(saved, qbo)
+    expect(fv['schedL.L7_loans_eoy_d']).toBe(571_514)
+    expect(fv['schedL.L14_other_eoy_d']).toBe(608_564)
+    expect(fv['schedL.L15_total_eoy_d'], 'no QBO line mixed into a saved Schedule L').toBeUndefined()
+  })
+
+  it('uses QBO when the return has no Schedule L of its own', () => {
+    const fv = fieldValuesForPdf({ 'tax.L31_total_tax': 1 }, qbo)
+    expect(fv['schedL.L7_loans_eoy_d']).toBe(500_000)
+    expect(fv['tax.L31_total_tax']).toBe(1)
   })
 })
