@@ -484,6 +484,10 @@ All reports are cached; pass refresh=true only when the user explicitly wants fr
 
 Routing: by default, updates the latest proforma for (entity, year, form) — or inserts if none. Never touches filed_import rows. Pass amend_of=<filed_return_id> to create an amendment. Pass new_row=true to force a fresh proforma (scenario snapshot). Pass return_id to update a specific row (rejected if it's filed_import).
 
+1120 payments: estimated_tax_paid (Schedule J line 14), prior_year_overpayment (line 13, overpayment credited from the prior year), deposit_7004 (line 17).
+
+1120 amendments also produce Form 1120-X (section \`amended.*\`, Part I columns _a as reported / _b change / _c correct, then lines 5a–13 netting payments against what the original return already paid out). Pass \`amended_x\`: { original?: { total_income, total_deductions (lines 27 + 29c), taxable_income, total_tax } — defaults to the superseded return; prior_year_credit (5a), estimated_tax (5b), refund_4466 (5c), deposit_7004 (5e), other_credits (5f+5g), tax_paid_after (6), original_overpayment (8, as reported or later adjusted), credit_to_estimated (12) }. amended.L13_refunded is the refund being claimed; amended.L10_tax_owed the balance due.
+
 1040 Schedule E (rentals / partnerships / K-1 pass-through): pass nested \`schedule_e\` inside \`inputs\`. Engine computes per-property net, Part I totals (L23a-e, L24-26), Part II partnership total (L32), and flows L41 into Schedule 1 line 5. Shape:
   schedule_e: {
     rental_properties: [{ address, property_type, fair_rental_days, personal_use_days,

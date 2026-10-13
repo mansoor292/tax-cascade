@@ -241,8 +241,12 @@ export interface Form1120_Inputs {
   general_business_credit?:  number
   prior_year_min_tax_credit?: number
   other_credits?:           number
-  // Payments
+  // Payments (Schedule J Part III). Only estimated_tax_paid existed, so a
+  // prior-year overpayment credited forward had to be folded into "estimated
+  // payments" and line 13 could not say where the money came from.
   estimated_tax_paid:   number
+  prior_year_overpayment?: number   // J13 — overpayment credited from the prior year
+  deposit_7004?:        number      // J17 — tax deposited with Form 7004
   tax_year:             number
 }
 
@@ -335,6 +339,98 @@ import {
   ltcgTax, niitTax, amtTax, seTax, childTaxCredit, additionalMedicareTax,
 } from './tax_tables.js'
 import { summarizeW2s, scheduleD, type W2Input, type DetailItem, type CapitalTransaction, type K1PortfolioItems } from './form1040_detail.js'
+
+/**
+ * Form 1120-X — the amended corporate return as the IRS asks for it.
+ *
+ * Catipult stored an amendment as a corrected Form 1120 and nothing else,
+ * so the refund it showed was the corrected return's whole overpayment.
+ * Edgewater Ventures' 2023 amendment read 435,059 when the claim was
+ * 192,234 — the original return had already credited 242,825 forward —
+ * and its 2024 amendment read 168,170 against a 22,332 claim, because the
+ * IRS had already refunded 145,838. A preparer pulling those rows had to
+ * redo the netting by hand. This computes Part I the way the form does:
+ * column A as originally reported (or as the IRS later adjusted it),
+ * column C as corrected, B the difference, then lines 5–13 netting the
+ * payments against what the original return already paid out.
+ */
+export interface Form1120X_Column {
+  total_income: number       // Form 1120 line 11
+  total_deductions: number   // Form 1120 lines 27 + 29c (NOL and special deductions included)
+  taxable_income: number     // Form 1120 line 30
+  total_tax: number          // Form 1120 line 31
+}
+
+export interface Form1120X_Inputs {
+  original: Form1120X_Column
+  corrected: Form1120X_Column
+  prior_year_credit?: number     // 5a — overpayment credited from the prior year (as the IRS posted it)
+  estimated_tax?: number         // 5b
+  refund_4466?: number           // 5c — quick refund applied for on Form 4466
+  deposit_7004?: number          // 5e
+  other_credits?: number         // 5f + 5g
+  tax_paid_after?: number        // 6 — paid with the original return or after it was filed
+  original_overpayment?: number  // 8 — overpayment on the original return, or as later adjusted
+  credit_to_estimated?: number   // 12 — part of line 11 to credit to next year's estimated tax
+}
+
+export function calc1120X(inp: Form1120X_Inputs): { field_values: Record<string, number>; refund: number; amount_owed: number } {
+  const n = (v: unknown) => Math.round(Number(v) || 0)
+  const fv: Record<string, number> = {}
+  const cols: Array<[string, keyof Form1120X_Column]> = [
+    ['L1_total_income', 'total_income'],
+    ['L2_total_deductions', 'total_deductions'],
+    ['L3_taxable_income', 'taxable_income'],
+    ['L4_total_tax', 'total_tax'],
+  ]
+  for (const [key, field] of cols) {
+    const a = n(inp.original[field])
+    const c = n(inp.corrected[field])
+    fv[`amended.${key}_a`] = a
+    fv[`amended.${key}_b`] = c - a
+    fv[`amended.${key}_c`] = c
+  }
+  const l5a = n(inp.prior_year_credit), l5b = n(inp.estimated_tax), l5c = n(inp.refund_4466)
+  const l5d = l5a + l5b - l5c
+  const l5e = n(inp.deposit_7004), l5fg = n(inp.other_credits), l6 = n(inp.tax_paid_after)
+  const l7 = l5d + l5e + l5fg + l6
+  const l8 = n(inp.original_overpayment)
+  const l9 = l7 - l8
+  const taxC = fv['amended.L4_total_tax_c']
+  const l10 = Math.max(0, taxC - l9)
+  const l11 = Math.max(0, l9 - taxC)
+  const l12 = Math.min(l11, n(inp.credit_to_estimated))
+  const l13 = l11 - l12
+  Object.assign(fv, {
+    'amended.L5a_prior_year_credit': l5a,
+    'amended.L5b_estimated_tax': l5b,
+    'amended.L5c_refund_4466': l5c,
+    'amended.L5d_net_estimated': l5d,
+    'amended.L5e_7004_deposit': l5e,
+    'amended.L5f_other_credits': l5fg,
+    'amended.L6_tax_paid_after': l6,
+    'amended.L7_total_payments': l7,
+    'amended.L8_original_overpayment': l8,
+    'amended.L9_net_payments': l9,
+    'amended.L10_tax_owed': l10,
+    'amended.L11_overpayment': l11,
+    'amended.L12_credited_estimated': l12,
+    'amended.L13_refunded': l13,
+  })
+  return { field_values: fv, refund: l13, amount_owed: l10 }
+}
+
+/** Column A/C of Form 1120-X read off a Form 1120's field_values. */
+export function form1120XColumn(fv: Record<string, any>): Form1120X_Column {
+  const v = (k: string) => Number(fv?.[k]) || 0
+  return {
+    total_income: v('income.L11_total_income'),
+    total_deductions: v('deductions.L27_total_deductions') + v('tax.L29c_total_29'),
+    taxable_income: v('tax.L30_taxable_income'),
+    total_tax: v('tax.L31_total_tax'),
+  }
+}
+
 
 /** Form 1120-S calculation */
 export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
@@ -486,6 +582,7 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
     charitable_contrib: 0, depreciation: 0, depletion: 0, advertising: 0,
     pension_plans: 0, employee_benefits: 0, other_deductions: 0,
     nol_deduction: 0, special_deductions: 0, estimated_tax_paid: 0,
+    prior_year_overpayment: 0, deposit_7004: 0,
     tax_year: 2025,
   }, raw)
   const balance_1c = inp.gross_receipts - inp.returns_allowances
@@ -541,7 +638,9 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
     (inp.other_credits ?? 0)
   const total_tax = Math.max(0, income_tax - total_credits)
 
-  const total_payments = inp.estimated_tax_paid
+  const prior_year_overpayment = Number(inp.prior_year_overpayment) || 0
+  const deposit_7004 = Number(inp.deposit_7004) || 0
+  const total_payments = inp.estimated_tax_paid + prior_year_overpayment + deposit_7004
   const net = total_tax - total_payments
   const balance_due  = Math.max(0, net)
   const overpayment  = Math.max(0, -net)
@@ -592,7 +691,9 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
     'schedJ.J11a_total_before_def':    total_tax,
     'schedJ.J12_total_tax':            total_tax,
     'tax.L31_total_tax':               total_tax,
+    'schedJ.J13_prior_overpayment':    prior_year_overpayment,
     'schedJ.J14_estimated_payments':   inp.estimated_tax_paid,
+    'schedJ.J17_7004_deposit':         deposit_7004,
     'schedJ.J19_total_payments':       total_payments,
     'schedJ.J23_total_pay_credits':    total_payments,
     'payments.L33_total_payments':     total_payments,

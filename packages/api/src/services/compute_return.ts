@@ -13,7 +13,7 @@
  * comments; in particular filed_import rows are never written, and
  * `inputs:{}` is a no-op merge over the seeded row.
  */
-import { calc1120, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
+import { calc1120, calc1120X, form1120XColumn, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { encryptedFields, hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS, ENCRYPTED_DOC_FIELDS, RETURN_ENC_COLS, DOC_ENC_COLS } from '../lib/row_crypto.js'
 import { errorOutcome, type HttpOutcome } from '../lib/http_error.js'
@@ -98,10 +98,10 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
   //   amend_of    — create a new `amendment` row that supersedes this one
   //   new_row     — force INSERT a new proforma even if one exists
   //   (default)   — update latest proforma for (entity, year, form); insert if none
-  let targetRow: { id: string; source: string; entity_id: string; tax_year: number; form_type: string } | null = null
+  let targetRow: { id: string; source: string; entity_id: string; tax_year: number; form_type: string; supersedes_id?: string | null } | null = null
   if (return_id) {
     const { data } = await supabase.from('tax_return')
-      .select('id, source, entity_id, tax_year, form_type').eq('id', return_id).single()
+      .select('id, source, entity_id, tax_year, form_type, supersedes_id').eq('id', return_id).single()
     if (!data) return { status: 404, body: { error: `return_id ${return_id} not found` } }
     if (data.source === 'filed_import') {
       return { status: 409, body: {
@@ -560,6 +560,29 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         if (!engineResult.field_values) engineResult.field_values = {}
         engineResult.field_values['nol.carryover_next_year'] =
           Math.round(engineResult.computed.nol_carryforward_remaining ?? 0)
+      }
+
+      // An amendment also carries its Form 1120-X (engine/tax_engine.ts
+      // calc1120X): column A from `amended_x.original` when the caller gives
+      // it — the figures as filed or as the IRS later adjusted them — or else
+      // from the return this one supersedes.
+      if (engineResult.field_values && (targetRow?.source === 'amendment' || amendOfRow)) {
+        const xIn = (mergedInputs.amended_x || {}) as Record<string, any>
+        let original = xIn.original
+        if (!original) {
+          let origFv = amendOfRow?.field_values
+          if (!origFv && targetRow?.supersedes_id) {
+            const { data: orig } = await supabase.from('tax_return')
+              .select(`field_values, ${RETURN_ENC_COLS}`).eq('id', targetRow.supersedes_id).single()
+            await hydrateReturn(orig, userId)
+            origFv = orig?.field_values
+          }
+          if (origFv) original = form1120XColumn(origFv)
+        }
+        if (original) {
+          const x = calc1120X({ ...xIn, original, corrected: form1120XColumn(engineResult.field_values) } as any)
+          Object.assign(engineResult.field_values, x.field_values)
+        }
       }
     } else if (form_type === '1120S') {
       engineResult = calc1120S(mergedInputs)

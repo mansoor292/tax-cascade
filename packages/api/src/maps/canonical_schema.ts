@@ -56,6 +56,7 @@ const FIELD_VALUE_SECTION_PREFIXES = new Set([
   'dep',
   'amort',
   'nol',
+  'amended',
   'meta',
   'preparer',
 ])

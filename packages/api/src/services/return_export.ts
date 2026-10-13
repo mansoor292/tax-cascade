@@ -107,6 +107,7 @@ const SECTION_LABELS: Record<string, string> = {
   schedL: 'Schedule L (balance sheet)',
   schedM1: 'Schedule M-1',
   schedM2: 'Schedule M-2',
+  amended: 'Form 1120-X',
   preparer: 'Preparer',
 }
 const SECTION_ORDER = Object.keys(SECTION_LABELS)
@@ -157,8 +158,9 @@ const TWIN_ZEROS: Record<string, string> = {
 }
 
 /** Schedule L runs four columns; keep them in the order the form prints them. */
-const COLUMN_ORDER = ['boy_a', 'boy_b', 'eoy_c', 'eoy_d']
+const COLUMN_ORDER = ['boy_a', 'boy_b', 'eoy_c', 'eoy_d', 'a', 'b', 'c']
 const COLUMN_RE = /_(boy_a|boy_b|eoy_c|eoy_d)$/
+const AMENDED_COLUMN_RE = /_(a|b|c)$/
 
 /** `schedL.L25_retained_eoy_d` → section schedL, line 25, column eoy_d, "retained". */
 export function parseCanonicalKey(key: string): Omit<ExportLine, 'value'> {
@@ -174,7 +176,8 @@ export function parseCanonicalKey(key: string): Omit<ExportLine, 'value'> {
   }
 
   let column: string | null = null
-  const colMatch = rest.match(COLUMN_RE)
+  // Form 1120-X Part I runs columns A (as reported), B (change), C (correct).
+  const colMatch = rest.match(section === 'amended' ? AMENDED_COLUMN_RE : COLUMN_RE)
   if (colMatch) {
     column = colMatch[1]
     rest = rest.slice(0, -colMatch[0].length)
