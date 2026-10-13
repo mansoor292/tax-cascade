@@ -310,14 +310,14 @@ function buildModel(input: BuildPdfInput): Record<string, string | number> {
     if (e.zip) model['meta.zip'] = e.zip
     if (e.city || e.state || e.zip)
       model['meta.city_state_zip'] = [e.city, e.state, e.zip].filter(Boolean).join(', ')
-    if (e.date_incorporated) model['meta.date_incorporated'] = e.date_incorporated
+    if (e.date_incorporated) model['meta.date_incorporated'] = usDate(e.date_incorporated)
   }
 
   // Business metadata (1120 / 1120S)
   if (e.meta?.business_activity) model['meta.business_activity'] = e.meta.business_activity
   if (e.meta?.product_service) model['meta.product_service'] = e.meta.product_service
   if (e.meta?.business_code) model['meta.business_activity_code'] = e.meta.business_code
-  if (e.meta?.s_election_date) model['meta.s_election_date'] = e.meta.s_election_date
+  if (e.meta?.s_election_date) model['meta.s_election_date'] = usDate(e.meta.s_election_date)
   if (e.meta?.total_assets) model['meta.total_assets'] = e.meta.total_assets
   if (e.meta?.num_shareholders) model['meta.num_shareholders'] = e.meta.num_shareholders
 
@@ -1015,6 +1015,16 @@ function fill1040Extras(
 }
 
 // ─── Main entry point ───
+
+/**
+ * Box C (date incorporated) and the S-election date print as the IRS writes
+ * them, MM/DD/YYYY. Entities store ISO dates, and the 2025 Form 1120 went out
+ * with "2018-07-01" in box C where every filed return said 06/22/2018.
+ */
+export function usDate(d: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d).trim())
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : d
+}
 
 export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResult> {
   const { formType, taxYear, entity } = input

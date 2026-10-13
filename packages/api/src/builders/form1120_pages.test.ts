@@ -10,6 +10,7 @@
  *    16 on printed one row early — "Yes, member of a controlled group" came
  *    out as "Yes, digital assets".
  *  - Schedule K lines 2a–c and 10 were never filled.
+ *  - Box C printed the incorporation date as an ISO string (2018-07-01).
  */
 import { describe, it, expect } from 'vitest'
 import { execFileSync } from 'child_process'
@@ -141,5 +142,25 @@ describe('Schedule K checkbox table', () => {
   it('names controlled group (28) on the box after digital assets (27)', () => {
     expect(SCHED_K_CHECKBOXES_1120.K27_digital_asset[0]).toBe('c5_16')
     expect(SCHED_K_CHECKBOXES_1120.K28_controlled_group[0]).toBe('c5_17')
+  })
+})
+
+describe('Form 1120 box C', () => {
+  it('prints the incorporation date as MM/DD/YYYY', async () => {
+    const r = calc1120({ gross_receipts: 100_000, tax_year: 2025 } as any)
+    const { pdf } = await buildReturnPdf({
+      formType: '1120', taxYear: 2025,
+      entity: { ...entity, date_incorporated: '2018-06-22' }, fieldValues: r.field_values as any,
+    })
+    const dir = mkdtempSync(path.join(tmpdir(), 'f1120-'))
+    try {
+      const file = path.join(dir, 'r.pdf')
+      writeFileSync(file, await pdf.save())
+      const p1 = execFileSync('pdftotext', ['-f', '1', '-l', '1', '-layout', file, '-'], { encoding: 'utf8' })
+      expect(p1).toContain('06/22/2018')
+      expect(p1).not.toContain('2018-06-22')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
