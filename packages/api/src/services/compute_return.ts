@@ -46,6 +46,29 @@ export function isPassthroughScheduleKey(k: string): boolean {
   return /^(schedL|schedM1|schedM2|schedK|cogs|dep|amort)\./.test(k)
 }
 
+/**
+ * Schedule J and payment lines a caller may set only where the engine left
+ * them alone.
+ *
+ * A return computed onto an existing row keeps every line the engine does
+ * not recompute. Edgewater Ventures' 2024 amendment was seeded from the
+ * filed return and kept its Schedule J line 13 (242,825 prior-year credit)
+ * and line 37 (147,713 refunded) after the corrected payments were put on
+ * line 14, so the row counted the credit twice, and no input could clear
+ * it. Lines the engine computes (J14, L33, L36…) stay the engine's; the
+ * caller can only fill or zero the ones it never touches.
+ */
+export function overlayUncomputedLines(
+  engineFv: Record<string, any>,
+  inputs: Record<string, any>,
+): void {
+  for (const [k, v] of Object.entries(inputs)) {
+    if (!/^(schedJ|payments)\./.test(k)) continue
+    if (k in engineFv) continue
+    engineFv[k] = v
+  }
+}
+
 export async function computeReturn(userId: string, body: any): Promise<HttpOutcome> {
   const { entity_id, tax_year, form_type, inputs, save, return_id, amend_of, new_row } = body || {}
   if (!form_type || !tax_year || !inputs) {
@@ -518,6 +541,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
           engineResult.field_values[k] = v  // user-provided overrides QBO-derived
         }
       }
+      if (engineResult.field_values) overlayUncomputedLines(engineResult.field_values, mergedInputs)
 
       // What is left of the NOL after this year must be recorded on this year.
       //
