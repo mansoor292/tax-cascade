@@ -290,6 +290,7 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   compare_scenarios:          { title: 'Compare scenarios', ...RO },
   get_pdf:                    { title: 'Get return PDF', ...RO },
   export_return:              { title: 'Export return lines (JSON/CSV)', ...RO },
+  audit_risk:                 { title: 'Audit-risk screen (DIF-style)', ...RO },
   mark_reviewed:              { title: 'Mark return reviewed', ...WRITE },
   delete_return:              { title: 'Delete return', ...DESTRUCTIVE },
   review_return:              { title: 'Review return (QC)', ...WRITE },
@@ -700,6 +701,22 @@ format 'csv' returns the same rows as CSV for a spreadsheet.`, {
     const path = `/api/returns/${return_id}/export?format=${format || 'json'}`
     // CSV must not go through the JSON parser.
     return text(format === 'csv' ? await callText('GET', path) : await call('GET', path))
+  })
+
+  // ─── Tool: audit_risk ───
+  server.tool('audit_risk', `Screen a saved 1120, 1120-S or 1040 for audit risk — a transparent, rule-based stand-in for the IRS's confidential DIF score.
+
+Returns score 0-100, band (low/elevated/high), the ratios it measured, and flags. Each flag carries the rule code, kind (ratio / integrity / pattern / change), the measured value, the threshold, the canonical lines it read and a plain explanation.
+
+- ratio: expenses vs receipts (>80%), meals (>2%), travel/vehicles (>8%), advertising (>10%, 20% retail), "other deductions" (>10% of deductions, worse if not itemized), charitable.
+- integrity: Schedule L not balancing or its lines not adding to the total, M-1 not reaching line 28, M-2 not reaching its ending balance, Schedule B payers not adding to line 2b. Fix these before filing — the IRS's automated checks catch them regardless of score.
+- pattern: S-corp officer pay low beside distributions (reasonable compensation), loans to shareholders, high income class, K-1 income dwarfing wages.
+- change: a line that moved by >50% and >$25,000 from the prior year.
+
+Present it as a heuristic screen, never as the IRS's score. A flag means "keep documentation", not "do not deduct": ordinary and necessary expenses are deductible whatever their ratio.`, {
+    return_id: z.string().describe('Tax return UUID'),
+  }, async ({ return_id }) => {
+    return text(await call('GET', `/api/returns/${return_id}/audit-risk`))
   })
 
   // ─── Tool: mark_reviewed ───

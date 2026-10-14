@@ -45,6 +45,7 @@ import { sendError, sendDbError } from '../lib/http_error.js'
 import { getFinancials } from './qbo.js'
 import { computeReturn } from '../services/compute_return.js'
 import { buildReturnExport, exportToCsv } from '../services/return_export.js'
+import { rateReturn } from '../engine/audit_risk.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 
 const supabase = lazyServiceClient()
@@ -502,6 +503,37 @@ router.get('/:id/export', async (req, res) => {
     return res.send(exportToCsv(exported))
   }
   res.json(exported)
+})
+
+// Audit-risk screen — a transparent, rule-based stand-in for the IRS DIF score
+// (engine/audit_risk.ts). Read-only. Compares to the prior year's filed return
+// when one exists, else its latest amendment/proforma.
+router.get('/:id/audit-risk', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+  const { data } = await supabase.from('tax_return')
+    .select('*, tax_entity(name, form_type, meta, user_id)')
+    .eq('id', req.params.id).single()
+  if (!data || (data as any).tax_entity?.user_id !== userId) {
+    return res.status(404).json({ error: 'Not found' })
+  }
+  await hydrateReturn(data, userId)
+
+  const RANK: Record<string, number> = { filed_import: 0, amendment: 1, proforma: 2 }
+  const { data: priors } = await supabase.from('tax_return').select('*')
+    .eq('entity_id', (data as any).entity_id).eq('tax_year', (data as any).tax_year - 1)
+    .eq('form_type', (data as any).form_type)
+  const prior = (priors || []).filter((r: any) => r.source in RANK)
+    .sort((a: any, b: any) => RANK[a.source] - RANK[b.source])[0]
+  if (prior) await hydrateReturn(prior, userId)
+
+  const report = rateReturn((data as any).form_type, (data as any).field_values || {}, {
+    prior: prior?.field_values || null,
+    inputs: (data as any).input_data || null,
+    business_code: (data as any).tax_entity?.meta?.business_code,
+  }, (data as any).tax_year)
+  res.json({ return_id: (data as any).id, entity: (data as any).tax_entity?.name, source: (data as any).source,
+    compared_to: prior ? { return_id: prior.id, source: prior.source, tax_year: prior.tax_year } : null, ...report })
 })
 
 // Multi-year comparison for an entity
