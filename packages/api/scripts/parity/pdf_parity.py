@@ -89,10 +89,27 @@ class BlankPage:
         self.vocab = set(w[4].lower() for w in self.words if len(w[4]) > 2)
         self.header = header_forms(self.words)
         self.widgets = []
-        for wd in page.widgets() or []:
+        raw = list(page.widgets() or [])
+        counts = defaultdict(int)
+        for wd in raw:
+            counts[wd.field_name] += 1
+        seen = defaultdict(int)
+        for wd in raw:
             r = wd.rect
+            name = wd.field_name
+            # IRS fields have unique names ("c2_1[0]", "c2_1[1]"). State fill-ins
+            # reuse ONE name for a Yes/No pair or a filing-status set and tell
+            # the boxes apart by export value; keyed by name alone, a "No"
+            # filed against a "Yes" generated merged into one box and matched.
+            if counts[name] > 1:
+                if wd.field_type_string in ('CheckBox', 'RadioButton'):
+                    on = [st for st in (wd.button_states() or {}).get('normal', []) if st != 'Off']
+                    name = f'{name}#{on[0] if on else seen[name]}'
+                else:
+                    name = f'{name}#{seen[wd.field_name]}'
+                seen[wd.field_name] += 1
             self.widgets.append({
-                'name': wd.field_name, 'type': wd.field_type_string,
+                'name': name, 'type': wd.field_type_string,
                 'rect': (r.x0, r.y0, r.x1, r.y1),
             })
         self.labels = {}
@@ -152,7 +169,30 @@ def classify(page_words, blanks):
 
 # ─── Filled values ───
 
-def filled_values(page_words, blank):
+def drawn_marks(drawings):
+    """Midpoints of diagonal strokes — a check mark DRAWN rather than typed.
+
+    The filer's software ticks a box with a glyph ("8" in ZapfDingbats), which
+    text extraction sees. The NY fill-in forms (and any form whose on-state
+    appearance is vector art) draw an X as two crossing lines, which it does
+    not: every box we ticked read as empty. Box borders are axis-aligned, so
+    only strokes moving in both x and y count.
+    """
+    marks = []
+    for d in drawings or []:
+        for it in d.get('items', []):
+            if it[0] == 'l':
+                p1, p2 = it[1], it[2]
+                if abs(p1.x - p2.x) > 0.8 and abs(p1.y - p2.y) > 0.8:
+                    marks.append(((p1.x + p2.x) / 2, (p1.y + p2.y) / 2))
+            elif it[0] == 'c':
+                p1, p4 = it[1], it[4]
+                if abs(p1.x - p4.x) > 0.8 and abs(p1.y - p4.y) > 0.8:
+                    marks.append(((p1.x + p4.x) / 2, (p1.y + p4.y) / 2))
+    return marks
+
+
+def filled_values(page_words, blank, drawings=None):
     """Subtract template words, assign the rest to the blank's widgets."""
     tmpl = defaultdict(list)
     for w in blank.words:
@@ -186,6 +226,14 @@ def filled_values(page_words, blank):
         ws.sort(key=lambda w: (round(w[1]), w[0]))
         raw = ' '.join(w[4] for w in ws)
         vals[name] = (raw, norm_value(raw, types.get(name) == 'CheckBox'))
+    marks = drawn_marks(drawings)
+    if marks:
+        for wd in blank.widgets:
+            if wd['type'] not in ('CheckBox', 'RadioButton') or vals.get(wd['name'], ('', ''))[1]:
+                continue
+            x0, y0, x1, y1 = wd['rect']
+            if any(x0 - 1 <= mx <= x1 + 1 and y0 - 1 <= my <= y1 + 1 for mx, my in marks):
+                vals[wd['name']] = ('X', 'X')
     loose_text = ' '.join(w[4] for w in sorted(loose, key=lambda w: (round(w[1]), w[0])))
     return vals, loose_text
 
@@ -221,7 +269,7 @@ def analyse(path, blanks, bake):
         words = p.get_text('words')
         blank, score = classify(words, blanks)
         if blank:
-            vals, loose = filled_values(words, blank)
+            vals, loose = filled_values(words, blank, p.get_drawings())
             out.append({'page': i + 1, 'key': blank.key, 'blank': blank, 'vals': vals, 'loose': loose, 'score': round(score, 2)})
         else:
             out.append({'page': i + 1, 'key': None, 'title': page_title(p), 'rows': statement_rows(p), 'score': round(score, 2)})
