@@ -1120,6 +1120,17 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
     if (stmts) await append(stmts, 'Statements')
   }
 
+  // 6. Registered attachments (src/builders/forms/) — schedules, supporting
+  //    forms and state returns, in attachment-sequence order.
+  const { buildAttachments } = await import('./forms/index.js')
+  for (const a of await buildAttachments({
+    formType, taxYear, entity, model,
+    inputData: input.inputData || {}, computedData: input.computedData || {},
+  })) {
+    await append(a.pdf, a.label)
+    totalFilled += a.filled || 0
+  }
+
   return {
     pdf: merged,
     filled: totalFilled,
