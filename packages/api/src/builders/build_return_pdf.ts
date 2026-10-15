@@ -6,7 +6,8 @@
  *
  * Takes entity data + engine data + field values -> produces a multi-form PDF package.
  *
- * For 1120:  Main form + 1125-A (COGS) + Schedule G + 4562 + statements
+ * For 1120:  Main form + 1125-A (COGS); Schedule G, O, 1125-E, 2220, 4562 and the
+ *            statements are registered attachments (src/builders/forms/)
  * For 1120S: Main form + statements (other deductions + other income)
  * For 1040:  Main form (personal header, filing status, W-2 breakdown, Schedule 2)
  */
@@ -15,6 +16,7 @@ import { readFileSync, existsSync } from 'fs'
 import { getEngineToCanonicalMap, CANON_1040_ALIASES, getCanonicalAliases } from '../maps/engine_to_pdf.js'
 import * as maps2024 from '../maps/pdf_field_map_2024.js'
 import * as maps2025 from '../maps/pdf_field_map_2025.js'
+import { dropInstructionPages } from './forms/acroform.js'
 
 // ─── Types ───
 
@@ -438,6 +440,11 @@ async function fillForm(
   for (const [canonKey, value] of Object.entries(model)) {
     if (value === undefined || value === null || value === '') continue
     if (typedMap[canonKey]) continue
+    // Lines of the 1120's ATTACHED forms (1125-A cogs.*, 4562 dep.*/amort.*)
+    // never belong on the 1120 itself, but their IRS line numbers collide
+    // with the main form's: cogs.L6_total fuzzy-matched "6 Total credits" on
+    // Schedule J and printed cost of goods sold as a tax credit.
+    if (formType === '1120' && /^(cogs|dep|amort)\./.test(canonKey)) continue
     // Match the canonical key as a label directly, then fuzzily — e.g.
     // "schedL.L1_cash_boy_b" → a label containing "1" and "cash".
     let fieldId = labelToFieldId[canonKey]
@@ -671,63 +678,9 @@ async function fill1125A(
   setField(form, 'f1_15', model['cogs.L7_inventory_eoy'])
   setField(form, 'f1_17', model['cogs.L8_cogs'])
 
-  return pdf
-}
-
-// ─── Fill Schedule G (Ownership) — 1120 only ───
-
-async function fillScheduleG(
-  year: number, entity: EntityData,
-): Promise<PDFDocument | null> {
-  const path = loadForm('f1120sg', year)
-  if (!path) return null
-
-  const pdf = await PDFDocument.load(readFileSync(path))
-  const form = pdf.getForm()
-
-  setField(form, 'f1_1_0_', entity.name)
-  setField(form, 'f1_3_0_', entity.ein)
-
-  // Fill owners from entity.meta.owners
-  const owners = entity.meta?.owners as Array<{
-    name: string; ssn: string; country: string; pct: string
-  }> | undefined
-  if (owners) {
-    for (let i = 0; i < Math.min(owners.length, 4); i++) {
-      const o = owners[i]
-      setField(form, `f1_${4 + i * 4}_0_`, o.name)
-      setField(form, `f1_${5 + i * 4}_0_`, o.ssn)
-      setField(form, `f1_${6 + i * 4}_0_`, o.country)
-      setField(form, `f1_${7 + i * 4}_0_`, o.pct)
-    }
-  }
-
-  return pdf
-}
-
-// ─── Fill 4562 (Depreciation) ───
-
-async function fill4562(
-  year: number, entity: EntityData, model: Record<string, string | number>,
-): Promise<PDFDocument | null> {
-  const path = loadForm('f4562', year)
-  if (!path) return null
-
-  const pdf = await PDFDocument.load(readFileSync(path))
-  const form = pdf.getForm()
-
-  setField(form, 'f1_1', entity.name)
-  setField(form, 'f1_2', `Form ${entity.meta?.form_type || '1120'} ${entity.meta?.business_activity || ''}`.trim())
-  setField(form, 'f1_3', entity.ein)
-  setField(form, 'f1_4', model['dep.L1_179_limit'])
-  setField(form, 'f1_6', model['dep.L3_threshold'])
-  setField(form, 'f1_21', model['dep.L16_macrs_current'])
-  setField(form, 'f1_22', model['dep.L17_macrs_prior'])
-  setField(form, 'f1_25', model['dep.L22_total'])
-  setField(form, 'f2_57', model['dep.L43_amortization'])
-  setField(form, 'f2_58', model['dep.L44_total_amort'])
-
-  return pdf
+  // The blank carries two pages of instructions after the form; filed
+  // packages attach the form page only.
+  return dropInstructionPages(pdf)
 }
 
 // ─── Generate statement pages ───
@@ -897,26 +850,141 @@ async function generateStatements(
 
 // ─── Fill 1120-specific extras on the main form ───
 
+/**
+ * Schedule K answers stated on the RETURN (input_data.schedK_answers_detail,
+ * [{label: "28 Member of a controlled group", answer: "Yes - ..."}]).
+ *
+ * Only the entity's standing meta.sched_k was ever read, so answers saved for
+ * a given year never reached the form, and a year whose answer differed from
+ * the standing one could not be expressed. The label's leading question
+ * number keys the answer; a bare number with lettered parts on the form
+ * ("29", "30") answers its (a) part. An empty answer is a deliberate blank —
+ * it clears the standing answer rather than falling back to it.
+ */
+export function schedKFromDetail(detail: unknown): { answers: Record<string, string>; text: Record<string, string> } {
+  const answers: Record<string, string> = {}
+  const text: Record<string, string> = {}
+  if (!Array.isArray(detail)) return { answers, text }
+  const byToken: Record<string, string> = {}
+  for (const key of Object.keys(SCHED_K_CHECKBOXES_1120)) {
+    const m = /^K(\d+[a-z]?)_/.exec(key)
+    if (m) byToken[m[1]] = key
+  }
+  for (const item of detail) {
+    const m = /^\s*(\d+[a-z]?)\b/.exec(String(item?.label ?? ''))
+    if (!m) continue
+    let token = m[1]
+    const raw = String(item?.answer ?? '').trim()
+    text[token] = raw
+    if (!byToken[token] && byToken[`${token}a`]) token = `${token}a`
+    const key = byToken[token]
+    if (!key) continue
+    if (key === 'K1_method') {
+      answers[key] = /accrual/i.test(raw) ? 'accrual' : /cash/i.test(raw) ? 'cash' : raw ? 'other' : ''
+    } else {
+      answers[key] = /^yes\b/i.test(raw) ? 'yes' : /^no\b/i.test(raw) ? 'no' : ''
+    }
+  }
+  return { answers, text }
+}
+
+/**
+ * The itemize lines on Schedules M-1 and M-2 (page 6, 2024/2025 layout).
+ * Each item prints as "label amount" on one text line; the wide lines come
+ * first because the short lead-in line after "(itemize):" holds only a few
+ * characters, which is also where filed software leaves it empty.
+ */
+const M1M2_ITEM_LINES: Array<[inputKey: string, lines: string[]]> = [
+  ['schedM1_L4_items', ['f6_137', 'f6_136']],
+  ['schedM1_L5_items', ['f6_142']],
+  ['schedM1_L7_items', ['f6_146', 'f6_147']],
+  ['schedM1_L8_items', ['f6_151', 'f6_152']],
+  ['schedM2_L3_items', ['f6_159', 'f6_160', 'f6_158']],
+  ['schedM2_L6_items', ['f6_166']],
+]
+
+const US_COUNTRY = /^(us|u\.s\.?|usa|u\.s\.a\.?|united states( of america)?)$/i
+
+function clearText(form: ReturnType<PDFDocument['getForm']>, shortId: string) {
+  const f = findField(form, shortId)
+  if (f) f.setText('')
+}
+
 function fill1120Extras(
   form: ReturnType<PDFDocument['getForm']>,
   entity: EntityData,
   year: number,
+  model: Record<string, string | number> = {},
+  inputData: Record<string, any> = {},
 ) {
-  // Schedule K checkboxes
-  const schedK = entity.meta?.sched_k as Record<string, string> | undefined
-  if (schedK) {
+  // Schedule K checkboxes: the entity's standing answers, overridden per key
+  // by what the return itself states.
+  const fromReturn = schedKFromDetail(inputData.schedK_answers_detail)
+  const schedK: Record<string, string> = { ...(entity.meta?.sched_k as Record<string, string> | undefined) }
+  for (const [k, v] of Object.entries(fromReturn.answers)) {
+    if (v) schedK[k] = v
+    else delete schedK[k]
+  }
+  if (Object.keys(schedK).length) {
     fillScheduleKCheckboxes(form, schedK)
   }
 
   // Schedule K text lines. 2a-c sit on page 4 in the same boxes in 2024 and
   // 2025 (verified by filling the blank and rendering it); line 10 is the
-  // shareholder count. These printed blank on every 1120 until now.
+  // shareholder count. These printed blank on every 1120 until now. The
+  // return's own answers win over the entity's standing ones; an empty
+  // line-10 answer leaves the count blank.
   if (year >= 2024) {
-    setField(form, 'f4_2', entity.meta?.business_code)
-    setField(form, 'f4_3', entity.meta?.business_activity)
-    setField(form, 'f4_4', entity.meta?.product_service)
-    const owners = entity.meta?.owners
-    if (Array.isArray(owners) && owners.length > 0 && owners.length <= 100) setField(form, 'f4_35', String(owners.length))
+    const t = fromReturn.text
+    setField(form, 'f4_2', t['2a'] || entity.meta?.business_code)
+    setField(form, 'f4_3', t['2b'] || entity.meta?.business_activity)
+    setField(form, 'f4_4', t['2c'] || entity.meta?.product_service)
+    if ('10' in t) {
+      if (/^\d+$/.test(t['10'])) setField(form, 'f4_35', t['10'])
+      else clearText(form, 'f4_35')
+    } else {
+      const owners = entity.meta?.owners
+      if (Array.isArray(owners) && owners.length > 0 && owners.length <= 100) setField(form, 'f4_35', String(owners.length))
+    }
+  }
+
+  if (year >= 2025) {
+    // Header: the suite is already part of the street address on most entity
+    // records ("... DRIVE STE 1A"), and printing it again in the room/suite
+    // box doubles it. The country box is for foreign addresses only.
+    const suite = String(model['meta.suite'] ?? '').trim()
+    if (suite && new RegExp(`\\b${suite.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(entity.address || '')) clearText(form, 'f1_6')
+    if (US_COUNTRY.test(String(model['meta.country'] ?? '').trim())) clearText(form, 'f1_9')
+
+    // Line 34: "Check if Form 2220 is attached" — it is, whenever the return
+    // carries Form 2220 inputs and they produced a penalty.
+    if (inputData.form2220 && Number(model['payments.L34_est_penalty']) > 0) {
+      for (const f of form.getFields()) if (f instanceof PDFCheckBox && f.getName().endsWith('.c1_10[0]')) f.check()
+    }
+
+    // "May the IRS discuss this return with the preparer shown below?"
+    const discuss = String(inputData.discuss_with_preparer ?? entity.meta?.preparer?.discuss ?? '').toLowerCase()
+    const box = discuss === 'yes' ? 'c1_12[0]' : discuss === 'no' ? 'c1_12[1]' : null
+    if (box) for (const f of form.getFields()) if (f instanceof PDFCheckBox && f.getName().endsWith(`.${box}`)) f.check()
+
+    // Schedule L line 2b, columns (b) and (d), carry the NET receivable
+    // (2a less the allowance) — 2a's own (b)/(d) are shaded. The map used to
+    // point those boxes at the allowance, so every receivable printed as 0.
+    const n = (k: string) => Number(model[k]) || 0
+    const has = (k: string) => model[k] !== undefined && model[k] !== null && model[k] !== ''
+    if (has('schedL.L2a_trade_boy_a') || has('schedL.L2a_trade_boy_b'))
+      setField(form, 'f6_10', has('schedL.L2a_trade_boy_b') ? n('schedL.L2a_trade_boy_b') : n('schedL.L2a_trade_boy_a') - n('schedL.L2b_baddebt_boy_a'))
+    if (has('schedL.L2a_trade_eoy_c') || has('schedL.L2a_trade_eoy_d'))
+      setField(form, 'f6_12', has('schedL.L2a_trade_eoy_d') ? n('schedL.L2a_trade_eoy_d') : n('schedL.L2a_trade_eoy_c') - n('schedL.L2b_baddebt_eoy_c'))
+
+    // M-1 / M-2 itemizations printed on the schedule itself.
+    for (const [key, lines] of M1M2_ITEM_LINES) {
+      const items = Array.isArray(inputData[key]) ? inputData[key] : []
+      items.slice(0, lines.length).forEach((it: any, i: number) => {
+        const amount = Number(it?.amount)
+        setField(form, lines[i], `${String(it?.label ?? '')}${Number.isFinite(amount) ? ' ' + money(amount) : ''}`.trim())
+      })
+    }
   }
 
   // Title (field ID varies by year)
@@ -1047,7 +1115,7 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
 
   // 2. Form-specific extras (checkboxes, preparer, title, etc.)
   if (formType === '1120') {
-    fill1120Extras(mainForm, entity, taxYear)
+    fill1120Extras(mainForm, entity, taxYear, model, input.inputData || {})
   } else if (formType === '1120S') {
     fill1120SExtras(mainForm, entity, model, taxYear)
   } else if (formType === '1040') {
@@ -1103,21 +1171,13 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
       if (cogs) await append(cogs, 'Form 1125-A')
     }
 
-    // Schedule G (ownership) — 1120 only
-    if (formType === '1120' && entity.meta?.owners) {
-      const sg = await fillScheduleG(taxYear, entity)
-      if (sg) await append(sg, 'Schedule G')
+    // Schedule G, Form 4562 and the statements of a 1120 are registered
+    // attachments (forms/registry_1120.ts). The 1120-S still uses the generic
+    // statement pages (other deductions, COGS detail, other income).
+    if (formType === '1120S') {
+      const stmts = await generateStatements(entity, taxYear, formType, model, input.inputData || {})
+      if (stmts) await append(stmts, 'Statements')
     }
-
-    // 4562 (depreciation) — 1120 only (1120S uses field map)
-    if (formType === '1120' && (model['dep.L22_total'] || model['deductions.L20_depreciation'])) {
-      const dep = await fill4562(taxYear, entity, model)
-      if (dep) await append(dep, 'Form 4562')
-    }
-
-    // Statement pages (other deductions, COGS detail, other income)
-    const stmts = await generateStatements(entity, taxYear, formType, model, input.inputData || {})
-    if (stmts) await append(stmts, 'Statements')
   }
 
   // 6. Registered attachments (src/builders/forms/) — schedules, supporting

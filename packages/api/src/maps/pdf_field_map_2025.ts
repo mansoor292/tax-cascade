@@ -195,9 +195,10 @@ export const F1120_2025: Record<string, string> = {
   'schedL.L2a_trade_boy_a':          'f6_5',
   'schedL.L2a_trade_eoy_c':          'f6_7',
   'schedL.L2b_baddebt_boy_a':        'f6_9',
-  'schedL.L2b_baddebt_boy_b':        'f6_10',
   'schedL.L2b_baddebt_eoy_c':        'f6_11',
-  'schedL.L2b_baddebt_eoy_d':        'f6_12',
+  // Line 2b columns (b)/(d), f6_10/f6_12, are the NET receivable (2a less the
+  // allowance), not the allowance — mapping the allowance there printed a
+  // receivable as 0. fill1120Extras writes the net.
   'schedL.L3_inv_boy_b':             'f6_14',
   'schedL.L3_inv_eoy_d':             'f6_16',
   'schedL.L4_usgov_boy_b':           'f6_18',
@@ -271,8 +272,20 @@ export const F1120_2025: Record<string, string> = {
   // Page 6: Schedule M-1 (Reconciliation)
   'schedM1.L1_net_income_books':     'f6_133',
   'schedM1.L2_fed_tax_books':        'f6_134',
+  // M-1 detail amounts (rects verified against the 2025 blank). The itemize
+  // TEXT lines (f6_136/137, 142, 146/147, 151/152) are written by
+  // fill1120Extras from input_data.schedM1_L*_items.
+  'schedM1.L3_excess_cap_losses':    'f6_135',
+  'schedM1.L4_income_not_recorded':  'f6_138',
+  'schedM1.L5a_depreciation':        'f6_139',
+  'schedM1.L5b_charitable':          'f6_140',
+  'schedM1.L5c_travel_ent':          'f6_141',
   'schedM1.L5_expenses_not_ded':     'f6_143',
   'schedM1.L6_add_1_thru_5':         'f6_144',
+  'schedM1.L7a_tax_exempt_interest': 'f6_145',
+  'schedM1.L7_income_not_included':  'f6_148',
+  'schedM1.L8a_depreciation':        'f6_149',
+  'schedM1.L8b_charitable':          'f6_150',
   'schedM1.L8_ded_not_charged':      'f6_153',
   'schedM1.L9_add_7_8':              'f6_154',
   'schedM1.L10_income_line28':       'f6_155',

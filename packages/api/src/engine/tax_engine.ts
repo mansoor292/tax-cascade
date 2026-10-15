@@ -247,6 +247,11 @@ export interface Form1120_Inputs {
   estimated_tax_paid:   number
   prior_year_overpayment?: number   // J13 — overpayment credited from the prior year
   deposit_7004?:        number      // J17 — tax deposited with Form 7004
+  // Line 34 — estimated tax penalty. `form2220` computes it (and the form is
+  // attached); `estimated_tax_penalty` states it outright when the penalty
+  // was figured elsewhere. Neither → line 34 is 0, as before.
+  form2220?:            Omit<Form2220Inputs, 'tax_year' | 'total_tax'>
+  estimated_tax_penalty?: number
   tax_year:             number
 }
 
@@ -268,6 +273,7 @@ export interface Form1120_Result {
     total_credits:    number  // FTC + GBC + PYMTC + other
     total_tax:        number  // after credits
     total_payments:   number
+    estimated_tax_penalty: number
     balance_due:      number
     overpayment:      number
   }
@@ -339,6 +345,7 @@ import {
   ltcgTax, niitTax, amtTax, seTax, childTaxCredit, additionalMedicareTax,
 } from './tax_tables.js'
 import { summarizeW2s, scheduleD, type W2Input, type DetailItem, type CapitalTransaction, type K1PortfolioItems } from './form1040_detail.js'
+import { calc2220, type Form2220Inputs } from './form2220.js'
 
 /**
  * Form 1120-X — the amended corporate return as the IRS asks for it.
@@ -641,7 +648,15 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
   const prior_year_overpayment = Number(inp.prior_year_overpayment) || 0
   const deposit_7004 = Number(inp.deposit_7004) || 0
   const total_payments = inp.estimated_tax_paid + prior_year_overpayment + deposit_7004
-  const net = total_tax - total_payments
+
+  // Line 34. Line 35 is "the total of lines 31, 32, and 34" less line 33, so
+  // a penalty left off line 34 understated the balance due by exactly that
+  // much (Form 2220 was simply not modeled).
+  let estimated_tax_penalty = Number(inp.estimated_tax_penalty) || 0
+  if (inp.form2220 && typeof inp.form2220 === 'object') {
+    estimated_tax_penalty = calc2220({ ...inp.form2220, tax_year: inp.tax_year, total_tax }).L38
+  }
+  const net = total_tax + estimated_tax_penalty - total_payments
   const balance_due  = Math.max(0, net)
   const overpayment  = Math.max(0, -net)
 
@@ -697,6 +712,7 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
     'schedJ.J19_total_payments':       total_payments,
     'schedJ.J23_total_pay_credits':    total_payments,
     'payments.L33_total_payments':     total_payments,
+    'payments.L34_est_penalty':        estimated_tax_penalty,
     'payments.L35_amount_owed':        balance_due,
     'payments.L36_overpayment':        overpayment,
   }
@@ -713,7 +729,7 @@ export function calc1120(raw: Form1120_Inputs): Form1120_Result {
       taxable_income_before_nol, special_deductions,
       nol_applied, nol_carryforward_remaining, nol_generated,
       taxable_income,
-      income_tax, total_credits, total_tax, total_payments, balance_due, overpayment
+      income_tax, total_credits, total_tax, total_payments, estimated_tax_penalty, balance_due, overpayment
     },
     field_values,
     citations: [

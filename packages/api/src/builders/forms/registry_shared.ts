@@ -4,5 +4,8 @@
  * See ./types.ts.
  */
 import type { AttachmentBuilder } from './types.js'
+import { buildForm1125E } from './form_1125e.js'
 
-export const builders: AttachmentBuilder[] = []
+export const builders: AttachmentBuilder[] = [
+  buildForm1125E,
+]
