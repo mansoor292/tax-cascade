@@ -441,7 +441,11 @@ const TY2025: YearlyTables = {
   ltcg_0pct_limit:    { single:48350, mfj:96700, mfs:48350, hoh:64750, qw:96700 },
   ltcg_15pct_limit:   { single:533400, mfj:600050, mfs:300000, hoh:566700, qw:600050 },
   niit_threshold:     { single:200000, mfj:250000, mfs:125000 },
-  child_tax_credit:   2000,
+  // P.L. 119-21 §70104 raised the credit to $2,200 per child from 2025 (the
+  // 2025 Schedule 8812 line 5 prints "Multiply line 4 by $2,200"); the
+  // refundable portion stays $1,700. This row was left at the pre-2025 $2,000
+  // when the standard deduction above was updated for the same act.
+  child_tax_credit:   2200,
   ctc_refundable_max: 1700,
   educator_expense:   300,
   student_loan_interest_max: 2500,
@@ -696,9 +700,11 @@ export function childTaxCredit(
   const t = TAX_TABLES[year]
   const max_per_child = t.child_tax_credit
   let credit = num_children * max_per_child
-  // Phase-out: $50 per $1,000 above threshold
+  // Phase-out: $50 per $1,000 above threshold. Schedule 8812 line 10 rounds
+  // the excess UP to the next $1,000 ("if the result is $1,025, enter
+  // $2,000"); flooring it understated the reduction by up to $50.
   const threshold = status === 'mfj' ? 400000 : 200000
-  const reduction = Math.max(0, Math.floor((magi - threshold) / 1000)) * 50
+  const reduction = Math.max(0, Math.ceil((magi - threshold) / 1000)) * 50
   credit = Math.max(0, credit - reduction)
   const refundable = Math.min(credit, num_children * t.ctc_refundable_max)
   return { credit, refundable }

@@ -51,6 +51,12 @@ const FIELD_VALUE_SECTION_PREFIXES = new Set([
   'f8959',
   'f8960',
   'f8995a',
+  // 1040 line 38 (Form 2210), Schedule 8812 and Form 7203 — added with the
+  // 2025 parity work; penalty.L38_est_penalty was already being written and
+  // tripped this validator on every 1040.
+  'penalty',
+  'f8812',
+  'f7203',
   'schedE',
   'schedule_e',
   'dep',

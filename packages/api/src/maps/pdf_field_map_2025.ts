@@ -80,6 +80,16 @@ export const F1040_2025: Record<string, string> = {
   'payments.L25c_other':        'f2_19',
   'payments.L25d_total':        'f2_20',
   'payments.L26_estimated':     'f2_21',
+  // 27-32 were unmapped: the fuzzy label matcher then put whichever twin key
+  // it met first on line 31 (a stored 0), so a six-figure Schedule 3 total
+  // printed as 0 and line 32 was blank. Verified against the 2025 blank and
+  // the filed 2025 joint return (scripts/parity/).
+  'payments.L27_eic':           'f2_23',
+  'payments.L28_child_addl':    'f2_24',
+  'payments.L29_aoc':           'f2_25',
+  'payments.L30_reserved':      'f2_26',
+  'payments.L31_sched3':        'f2_27',
+  'payments.L32_other_total':   'f2_28',
   'payments.L33_total':         'f2_29',
 
   // Result

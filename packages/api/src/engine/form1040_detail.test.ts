@@ -24,7 +24,7 @@ describe('1040 supporting schedules', () => {
     expect(calc1040({ ...base, wages: 50_000 }).field_values!['deductions.L12e_standard']).toBe(31_500)
   })
 
-  it('caps a capital loss at 3,000 and keeps it out of net investment income', () => {
+  it('caps a capital loss at 3,000 and nets only the allowed 3,000 against investment income', () => {
     const r = calc1040({ ...base, wages: 50_000, taxable_interest: 40_000,
       capital_transactions_detail: [{ label: 'XYZ', proceeds: 10_000, basis: 20_000, term: 'short' }] })
     const fv = r.field_values!
@@ -32,9 +32,11 @@ describe('1040 supporting schedules', () => {
     expect(fv['schedD.L1a_gain_h']).toBe(-10_000)
     expect(fv['schedD.L21_loss_allowed']).toBe(-3_000)
     expect(fv['schedD.loss_carryover']).toBe(-7_000)
-    // 8960 line 5a is a gain or zero — the loss does not reduce interest.
-    expect(fv['f8960.L12_net_investment_income']).toBe(40_000)
-    expect(fv['sched2.L12_niit']).toBe(Math.round(40_000 * 0.038))
+    // 8960 line 5a is 1040 line 7: the deductible 3,000, not the whole 10,000
+    // loss and not zero. The other 7,000 waits for next year.
+    expect(fv['f8960.L5a_net_gain']).toBe(-3_000)
+    expect(fv['f8960.L12_net_investment_income']).toBe(37_000)
+    expect(fv['sched2.L12_niit']).toBe(Math.round(37_000 * 0.038))
   })
 
   it('adds K-1 portfolio items to the 1099 lines and lists payers on Schedule B', () => {
