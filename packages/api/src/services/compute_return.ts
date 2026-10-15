@@ -779,7 +779,10 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         await hydrateReturn(data, userId)
         seededFieldValues = data?.field_values || {}
       }
-      const rawExisting: Record<string, any> = seededFieldValues
+      // Sections the engine computes in full are restated, never inherited:
+      // see services/engine_owned.ts for the stale-line bug this prevents.
+      const { dropEngineOwned } = await import('./engine_owned.js')
+      const rawExisting: Record<string, any> = dropEngineOwned(seededFieldValues, form_type)
       const existingFieldValues: Record<string, any> = {}
       for (const [k, v] of Object.entries(rawExisting)) {
         if (k.startsWith('meta.') || k.startsWith('preparer.')) continue

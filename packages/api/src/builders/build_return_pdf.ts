@@ -11,7 +11,7 @@
  * For 1120S: Main form + statements (other deductions + other income)
  * For 1040:  Main form (personal header, filing status, W-2 breakdown, Schedule 2)
  */
-import { PDFDocument, PDFTextField, PDFCheckBox, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib'
+import { PDFDocument, PDFTextField, PDFCheckBox, PDFName, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib'
 import { readFileSync, existsSync } from 'fs'
 import { getEngineToCanonicalMap, CANON_1040_ALIASES, getCanonicalAliases } from '../maps/engine_to_pdf.js'
 import * as maps2024 from '../maps/pdf_field_map_2024.js'
@@ -1191,6 +1191,35 @@ function fill1040Extras(
   // Filled by the main loop.
 }
 
+// ─── Appearance streams ───
+
+/**
+ * Drop a filled text field's pre-drawn appearance so the value is what renders.
+ *
+ * Only the merged package is ever saved, and it has no AcroForm of its own,
+ * so pdf-lib never regenerates the appearance of a field filled on a source
+ * form (that happens in save(), for the saving document's form only). Most
+ * IRS widgets ship with no appearance, so viewers draw them from the value
+ * and nothing was visibly wrong. A few ship with a drawn appearance: the 2025
+ * Form 1040's Identity Protection PIN boxes carry their comb cell borders.
+ * That stale drawing won, and the spouse's IP PIN printed as six empty
+ * cells on a return whose data held it. Found by the filed-return parity
+ * check (scripts/parity), 2026-10-15. Removing the appearance puts those
+ * widgets on the same footing as every other filled field.
+ */
+export function clearStaleAppearances(src: PDFDocument): number {
+  let cleared = 0
+  let fields
+  try { fields = src.getForm().getFields() } catch { return 0 }
+  for (const f of fields) {
+    if (!(f instanceof PDFTextField) || !f.getText()) continue
+    for (const w of f.acroField.getWidgets()) {
+      if (w.dict.has(PDFName.of('AP'))) { w.dict.delete(PDFName.of('AP')); cleared++ }
+    }
+  }
+  return cleared
+}
+
 // ─── Main entry point ───
 
 /**
@@ -1235,6 +1264,7 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
   const merged = await PDFDocument.create()
 
   async function append(src: PDFDocument, label?: string) {
+    clearStaleAppearances(src)
     const pages = await merged.copyPages(src, src.getPageIndices())
     pages.forEach(p => merged.addPage(p))
     if (label) forms.push(label)

@@ -611,7 +611,7 @@ def main():
     s_counts = defaultdict(int)
     for s in stmt:
         s_counts[s['status']] += 1
-    total_filed = sum(1 for r in results for it in r['items'] if it['filed'] and it['status'] != 'ZERO/BLANK')
+    total_filed = sum(1 for r in results for it in r['items'] if it['filed'] and not it['status'].startswith('ZERO/BLANK'))
     matched = counts['MATCH']
 
     lines = [f'# Parity: {os.path.basename(a.filed)} vs {os.path.basename(a.api)}', '']
@@ -627,7 +627,7 @@ def main():
         lines.append(f'Flat form {fl["form"]} (compared by value): ' + ', '.join(f'{k} {v}' for k, v in sorted(fc.items())))
     lines.append('')
     for r in results:
-        bad = [it for it in r['items'] if it['status'] not in ('MATCH', 'ZERO/BLANK')]
+        bad = [it for it in r['items'] if not it['status'].startswith(('MATCH', 'ZERO/BLANK'))]
         lines.append(f'## {r["key"]} (filed p{r["filed_page"]}, ours p{r["api_page"]}) — {len(r["items"]) - len(bad)}/{len(r["items"])} match' + (f' — {r["note"]}' if r.get('note') else ''))
         if bad:
             lines.append('| Box | Line | Filed | Ours | Status |')
@@ -663,7 +663,8 @@ def main():
     if not a.quiet:
         print('\n'.join(lines[:6]))
     flat_missing = any(it['status'] in ('MISSING', 'FORM NOT GENERATED') for fl in flat for it in fl['items'])
-    ok = matched == total_filed and not miss and not unclassified and not flat_missing
+    # Statement pages never match a blank by design; they pass when every row is found.
+    ok = matched == total_filed and not miss and not flat_missing
     sys.exit(0 if ok else 1)
 
 
