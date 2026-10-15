@@ -17,6 +17,7 @@ import { getEngineToCanonicalMap, CANON_1040_ALIASES, getCanonicalAliases } from
 import * as maps2024 from '../maps/pdf_field_map_2024.js'
 import * as maps2025 from '../maps/pdf_field_map_2025.js'
 import { dropInstructionPages } from './forms/acroform.js'
+import { fill1120SAnswers, parseAnswers } from './forms/f1120s_answers.js'
 
 // ─── Types ───
 
@@ -620,12 +621,14 @@ function fillScheduleBCheckbox(
   const method = schedK['accounting_method'] || schedK['K1_method']
   if (!method) return
 
+  // [0] cash, [1] accrual, [2] other — on the 2024 and the 2025 blank alike.
+  // Accrual used to check [2] as well "for some forms", which put a second
+  // mark in "Other" on every accrual-basis return.
   for (const f of form.getFields()) {
     if (!(f instanceof PDFCheckBox)) continue
     const name = f.getName()
     if (method === 'cash' && name.includes('c2_1[0]')) f.check()
     if (method === 'accrual' && name.includes('c2_1[1]')) f.check()
-    if (method === 'accrual' && name.includes('c2_1[2]')) f.check() // some forms use [2] for accrual
     if (method === 'other' && name.includes('c2_1[2]')) f.check()
   }
 }
@@ -1020,10 +1023,23 @@ function fill1120SExtras(
   entity: EntityData,
   model: Record<string, string | number>,
   year: number,
+  inputData: Record<string, any> = {},
 ) {
-  // Schedule B accounting method checkbox
   const schedK = entity.meta?.sched_k as Record<string, string> | undefined
-  if (schedK) {
+  if (year === 2025) {
+    // Header G/H/I, every Schedule B answer, Schedule K 14a/b and the
+    // preparer block — see forms/f1120s_answers.ts.
+    fill1120SAnswers(form, year, {
+      answers: parseAnswers(inputData.schedB_answers_detail),
+      accountingMethod: entity.meta?.accounting_method || schedK?.accounting_method || schedK?.K1_method,
+      businessActivity: entity.meta?.business_activity,
+      productService: entity.meta?.product_service,
+      shareholderCount: Array.isArray(inputData.shareholders) ? inputData.shareholders.length : undefined,
+      preparer: entity.meta?.preparer,
+      country: model['meta.country'],
+    })
+  } else if (schedK) {
+    // Schedule B accounting method checkbox
     fillScheduleBCheckbox(form, schedK)
   }
 
@@ -1117,7 +1133,7 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
   if (formType === '1120') {
     fill1120Extras(mainForm, entity, taxYear, model, input.inputData || {})
   } else if (formType === '1120S') {
-    fill1120SExtras(mainForm, entity, model, taxYear)
+    fill1120SExtras(mainForm, entity, model, taxYear, input.inputData || {})
   } else if (formType === '1040') {
     fill1040Extras(mainForm, entity, model, taxYear)
   }
