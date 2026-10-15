@@ -7,9 +7,11 @@
  */
 import type { AttachmentBuilder } from './types.js'
 import { buildNyIt203, buildNyIt203b, buildNyIt2 } from './state_ny.js'
+import { buildFlF1120 } from './state_fl.js'
 
 export const builders: AttachmentBuilder[] = [
   buildNyIt203,
   buildNyIt203b,
   buildNyIt2,
+  buildFlF1120,
 ]
