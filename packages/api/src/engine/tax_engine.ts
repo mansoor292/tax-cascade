@@ -335,6 +335,14 @@ export interface Form1040_Inputs {
   prior_year_agi?:      number
   /** Schedule B Part III: any foreign financial account. */
   foreign_accounts?:    boolean
+  /** Capital losses carried in from the prior year (Schedule D lines 6 and 14), positive amounts. */
+  capital_loss_carryover?: CapitalLossCarryover
+  /** Dated estimated payments for Form 2210; without dates, estimated_payments counts as paid evenly. */
+  estimated_payments_detail?: Array<{ date: string; amount: number }>
+  /** Line 38 as stated by the caller (e.g. the annualized method); replaces the regular-method figure. */
+  estimated_tax_penalty?: number
+  /** Form 7203 basis facts for the S corporation behind the K-1. */
+  form7203?: Form7203Input
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -342,9 +350,13 @@ export interface Form1040_Inputs {
 // ─────────────────────────────────────────────────────────────
 import {
   ordinaryTax, standardDeduction, qbiDeduction,
-  ltcgTax, niitTax, amtTax, seTax, childTaxCredit, additionalMedicareTax,
+  ltcgTax, niitTax, amtTax, seTax, childTaxCredit, additionalMedicareTax, TAX_TABLES,
 } from './tax_tables.js'
-import { summarizeW2s, scheduleD, type W2Input, type DetailItem, type CapitalTransaction, type K1PortfolioItems } from './form1040_detail.js'
+import {
+  summarizeW2s, scheduleD, capitalLossCarryoverWorksheet, form2210Penalty, form7203StockBasis,
+  type W2Input, type DetailItem, type CapitalTransaction, type K1PortfolioItems, type CapitalLossCarryover,
+  type Form7203Input,
+} from './form1040_detail.js'
 import { calc2220, type Form2220Inputs } from './form2220.js'
 
 /**
@@ -790,7 +802,7 @@ export function calc1040(raw: Form1040_Inputs): {
   const other_investment_income = detailIn.other_income_detail?.length
     ? sumItems(detailIn.other_income_detail.filter(x => x.investment))
     : 0
-  const schedD = scheduleD(detailIn.capital_transactions_detail, k1p, s)
+  const schedD = scheduleD(detailIn.capital_transactions_detail, k1p, s, detailIn.capital_loss_carryover)
   if (schedD.any) {
     inp.capital_gains = schedD.lineAmount
     inp.ltcg_portion = schedD.netCapitalGain
@@ -864,10 +876,14 @@ export function calc1040(raw: Form1040_Inputs): {
 
   // ── Schedule 2: Other taxes ───────────────────────────────────
   const se_tax = se_detail.se_tax
-  // Form 8960: line 5a is the net GAIN — a capital loss does not reduce
-  // interest and dividends.
-  const nii_gain = schedD.any ? Math.max(0, schedD.total) : Math.max(0, inp.capital_gains)
-  const nii = inp.taxable_interest + inp.ordinary_dividends + nii_gain + other_investment_income
+  // Form 8960 line 5a is the gain or loss from 1040 line 7 — so a net capital
+  // loss counts, but only the part §1211(b) lets you deduct this year (3,000;
+  // the carryforward never touches NII). Treas. Reg. §1.1411-4(d)(2). This
+  // used to floor 5a at zero, which the filed 2025 joint return shows is
+  // wrong: its 8960 nets the 3,000 against interest and dividends.
+  const nii_gain = schedD.any ? schedD.lineAmount : inp.capital_gains
+  // Line 12: net investment income, never below zero.
+  const nii = Math.max(0, inp.taxable_interest + inp.ordinary_dividends + nii_gain + other_investment_income)
   const niit_status = (s === 'hoh' || s === 'qw') ? 'single' : s as 'single' | 'mfj' | 'mfs'
   const niit = niitTax(nii, agi, niit_status, inp.tax_year)
   // Form 8959 runs on Medicare wages (box 5), not box 1.
@@ -890,9 +906,44 @@ export function calc1040(raw: Form1040_Inputs): {
   const total_payments = inp.withholding + addl_medicare_withheld + inp.estimated_payments +
     ctc_detail.refundable + sched3_payments
 
+  // ── Form 2210 — was enough paid during the year? ──────────────
+  // An extension payment is not timely for this purpose. Required annual
+  // payment = the smaller of 90% of this year's tax and 100% (110% above
+  // $150,000 AGI) of last year's. Withholding — including the 0.9% withheld
+  // (25c) and excess social security (Schedule 3 line 11) — counts as paid
+  // evenly on the four due dates.
+  const prior_tax = n0(detailIn.prior_year_tax)
+  const withholding_2210 = inp.withholding + addl_medicare_withheld + excess_ss
+  const timely_paid = withholding_2210 + inp.estimated_payments
+  const tax_2210 = total_tax - ctc_detail.refundable
+  let form2210_required = 0, form2210_shortfall = 0, est_penalty = 0
+  if (tax_2210 - withholding_2210 >= 1000) {
+    const ninety = Math.round(tax_2210 * 0.90)
+    const prior_mult = n0(detailIn.prior_year_agi) > (s === 'mfs' ? 75000 : 150000) ? 1.10 : 1.00
+    form2210_required = prior_tax > 0 ? Math.min(ninety, Math.round(prior_tax * prior_mult)) : ninety
+    form2210_shortfall = Math.max(0, form2210_required - timely_paid)
+    if (form2210_shortfall > 0) {
+      const dated = detailIn.estimated_payments_detail || []
+      // Undated estimates are spread like withholding: the only assumption
+      // that needs no dates, and the one Form 2210 makes for withholding.
+      const undated = dated.length ? 0 : inp.estimated_payments
+      const p2210 = form2210Penalty({
+        taxYear: inp.tax_year,
+        requiredAnnualPayment: form2210_required,
+        withholding: withholding_2210 + undated,
+        payments: dated,
+      })
+      est_penalty = p2210?.penalty ?? 0
+    }
+  }
+  if (detailIn.estimated_tax_penalty !== undefined && detailIn.estimated_tax_penalty !== null) {
+    est_penalty = Math.round(n0(detailIn.estimated_tax_penalty))
+  }
+
+  // Line 37 includes the line 38 penalty; an overpayment is reduced by it.
   const net = total_tax - total_payments
-  const refund = Math.max(0, -net)
-  const owed   = Math.max(0, net)
+  const refund = Math.max(0, -net - est_penalty)
+  const owed   = Math.max(0, net + est_penalty)
 
   // Build a field_values bag with both short keys AND IRS-line canonical keys
   // so both the engine_to_pdf map and direct canonical keys work.
@@ -928,6 +979,9 @@ export function calc1040(raw: Form1040_Inputs): {
     'income.L8_schedule1':         inp.schedule1_income + inp.k1_ordinary_income + other_income,
     'income.L9_total_income':      total_income,
     'income.L10_adjustments':      adjustments,
+    // 2025 prints AGI twice: 11a closes page 1, 11b opens page 2. Only 11b
+    // was emitted, so 11a printed 0 on every 2025 return.
+    'income.L11a_subtract':        agi,
     'income.L11b_agi':             agi,
     // Deductions
     'deductions.L12e_standard':    deduction,
@@ -941,8 +995,12 @@ export function calc1040(raw: Form1040_Inputs): {
     'tax.L22_subtract':            income_tax + amt - ctc_nonrefundable,
     'tax.L23_other_taxes':         niit + additional_medicare + se_tax,  // Schedule 2 L21
     'tax.L24_total_tax':           total_tax,
-    // Credits
+    // Credits. Line 20 is stated even at zero: a face line the return leaves
+    // unsaid is up for grabs by the PDF builder's label matcher, which put
+    // Form 8959 line 20 (Medicare wages, six figures) in the 1040's line 20
+    // credits box. Line 36 below, for the same reason (8995-A line 36).
     'credits.L19_child_tax':       ctc_nonrefundable,
+    'credits.L20_sched3':          0,
     'credits.L21_add_19_20':       ctc_nonrefundable,
     // Payments — default L25a_w2 = withholding (assume all withholding is W-2)
     'payments.L25a_w2':            inp.withholding,
@@ -951,12 +1009,18 @@ export function calc1040(raw: Form1040_Inputs): {
     'payments.L26_estimated':      inp.estimated_payments,
     'payments.L31_sched3':         sched3_payments,
     'payments.L28_child_addl':     ctc_detail.refundable,
-    'payments.L32_other_total':    ctc_detail.refundable,
+    // Line 32 adds 27 through 31 — Schedule 3's payments included. It carried
+    // the refundable child credit alone, so an extension payment
+    // printed on line 31 and vanished from line 32.
+    'payments.L32_other_total':    ctc_detail.refundable + sched3_payments,
     'payments.L33_total':          total_payments,
-    // Result
+    // Result. Line 34 is the overpayment; the line 38 penalty comes out of
+    // what is refunded (35a) or is added to what is owed (37).
     'refund.L35a_refunded':        refund,
-    'result.L34_overpayment':      refund,
+    'refund.L36_applied_est':      0,
+    'result.L34_overpayment':      Math.max(0, -net),
     'owed.L37_amount_owed':        owed,
+    'penalty.L38_est_penalty':     est_penalty,
   }
   // Keep zero values — structural. Only drop undefined/null.
   for (const k of Object.keys(field_values)) {
@@ -996,7 +1060,19 @@ export function calc1040(raw: Form1040_Inputs): {
     ;(field_values as Record<string, any>)['schedB.L7a_foreign_account'] = detailIn.foreign_accounts ? 'Yes' : 'No'
   }
   // Schedule D / Form 8949
-  if (schedD.any) Object.assign(field_values, schedD.fv)
+  if (schedD.any) {
+    Object.assign(field_values, schedD.fv)
+    // What carries to next year, short- and long-term (Capital Loss Carryover
+    // Worksheet) — next year's line 6 and line 14.
+    if (schedD.total < 0) {
+      const next = capitalLossCarryoverWorksheet({
+        taxableIncome: agi - deduction - qbi_deduction,
+        lossAllowed: -schedD.lineAmount, netST: schedD.netST, netLT: schedD.netLT,
+      })
+      put('schedD.carryover_next_st', next.short_term)
+      put('schedD.carryover_next_lt', next.long_term)
+    }
+  }
   // Form 8959 — Additional Medicare Tax
   if (additional_medicare || addl_medicare_withheld) {
     const threshold = s === 'mfj' ? 250000 : s === 'mfs' ? 125000 : 200000
@@ -1005,6 +1081,11 @@ export function calc1040(raw: Form1040_Inputs): {
     put('f8959.L5_threshold', threshold)
     put('f8959.L6_excess', Math.max(0, medicare_wages - threshold))
     put('f8959.L7_tax_on_wages', additional_medicare)
+    // Parts II and III restate the threshold, and Part II line 10 the wages
+    // from line 4, even with no self-employment or RRTA income to test.
+    put('f8959.L9_threshold', threshold)
+    put('f8959.L10_wages_from_L4', medicare_wages)
+    put('f8959.L15_threshold', threshold)
     put('f8959.L18_total', additional_medicare)
     if (w2.count) {
       put('f8959.L19_medicare_withheld', w2.medicareWithheld)
@@ -1019,7 +1100,14 @@ export function calc1040(raw: Form1040_Inputs): {
     const threshold = s === 'mfj' ? 250000 : s === 'mfs' ? 125000 : 200000
     put('f8960.L1_interest', inp.taxable_interest)
     put('f8960.L2_dividends', inp.ordinary_dividends)
+    // Lines 4a/4b: S-corporation income on Schedule E is entered in full on
+    // 4a and backed out on 4b when it comes from a nonpassive trade or
+    // business — which is what K-1 ordinary income from the shareholder's own
+    // corporation is. 4c (their sum) is then zero.
+    put('f8960.L4a_rental_partnership', inp.k1_ordinary_income)
+    put('f8960.L4b_nonsection1411_adj', -inp.k1_ordinary_income)
     put('f8960.L5a_net_gain', nii_gain)
+    put('f8960.L5d_combined', nii_gain)
     put('f8960.L7_other', other_investment_income)
     put('f8960.L8_total', nii)
     put('f8960.L12_net_investment_income', nii)
@@ -1041,26 +1129,62 @@ export function calc1040(raw: Form1040_Inputs): {
     put('f8995a.L7_ubia', inp.k1_ubia)
     put('f8995a.L8_two_half_pct_ubia', inp.k1_ubia * 0.025)
     put('f8995a.L9_add_6_8', inp.k1_w2_wages * 0.25 + inp.k1_ubia * 0.025)
-    put('f8995a.L10_greater_5_9', Math.max(inp.k1_w2_wages * 0.50, inp.k1_w2_wages * 0.25 + inp.k1_ubia * 0.025))
+    const l10 = Math.max(inp.k1_w2_wages * 0.50, inp.k1_w2_wages * 0.25 + inp.k1_ubia * 0.025)
+    put('f8995a.L10_greater_5_9', l10)
+    // Part II, one business: line 11 caps 20% of QBI at the wage limit; with
+    // no phased-in reduction (Part III) or patron reduction, it carries
+    // unchanged through 13, 15 and 16 to the Part IV total on 27 and 32.
+    const component = inp.is_sstb && tentative_taxable >= TAX_TABLES[inp.tax_year].qbi_phaseout[s]
+      ? 0 : Math.min(qbi * 0.20, l10)
+    put('f8995a.L11_smaller_3_10', component)
+    put('f8995a.L13_greater_11_12', component)
+    put('f8995a.L15_qbi_component', component)
+    put('f8995a.L16_total_qbi_component', component)
+    // Part III prints the threshold and phase-in range for the filing status.
+    const t = TAX_TABLES[inp.tax_year]
+    put('f8995a.L21_threshold', t.qbi_threshold[s])
+    put('f8995a.L23_phase_in_range', t.qbi_phaseout[s] - t.qbi_threshold[s])
+    put('f8995a.L27_total_qbi_component', component)
+    put('f8995a.L32_qbi_before_income_limit', component)
     put('f8995a.L33_taxable_income_before_qbi', tentative_taxable)
     put('f8995a.L34_net_capital_gain', ncg)
     put('f8995a.L35_subtract', Math.max(0, tentative_taxable - ncg))
     put('f8995a.L36_income_limit', Math.max(0, tentative_taxable - ncg) * 0.20)
+    put('f8995a.L37_qbi_before_dpad', qbi_deduction)
     put('f8995a.L39_qbi_deduction', qbi_deduction)
   }
 
-  // ── Form 2210 — was enough paid during the year? ──────────────
-  // An extension payment is not timely for this purpose. The penalty itself
-  // depends on payment dates and the IRS's quarterly rates, so this reports
-  // the shortfall rather than guessing a figure.
-  const prior_tax = n0(detailIn.prior_year_tax)
-  const timely_paid = inp.withholding + addl_medicare_withheld + inp.estimated_payments
-  let form2210_required = 0, form2210_shortfall = 0
-  if (total_tax - inp.withholding - addl_medicare_withheld >= 1000) {
-    const ninety = Math.round(total_tax * 0.90)
-    const prior_mult = n0(detailIn.prior_year_agi) > (s === 'mfs' ? 75000 : 150000) ? 1.10 : 1.00
-    form2210_required = prior_tax > 0 ? Math.min(ninety, Math.round(prior_tax * prior_mult)) : ninety
-    form2210_shortfall = Math.max(0, form2210_required - timely_paid)
+  // Form 7203 — stock basis, from the K-1 items above plus the shareholder's
+  // own basis facts. Required in any year with a distribution.
+  if (detailIn.form7203 && typeof detailIn.form7203 === 'object') {
+    const b = form7203StockBasis(detailIn.form7203, {
+      ordinary: inp.k1_ordinary_income, interest: k1p.interest, dividends: k1p.ordinary_dividends,
+      capitalGain: n0(k1p.st_gain) + n0(k1p.lt_gain),
+    })
+    for (const [k, v] of Object.entries(b.lines)) put(`f7203.${k}`, v)
+    put('f7203.excess_distribution_gain', b.excessDistribution)
+  }
+
+  // Schedule 8812 — filed whenever a dependent is claimed, even when the
+  // credit phases out to nothing (line 12 "No. Stop here").
+  if ((inp.num_dependents || 0) > 0) {
+    const kids = inp.num_dependents || 0
+    const perChild = TAX_TABLES[inp.tax_year].child_tax_credit
+    const l8 = kids * perChild
+    const l9 = s === 'mfj' ? 400000 : 200000
+    const l10 = Math.max(0, Math.ceil((agi - l9) / 1000) * 1000)
+    const l11 = l10 * 0.05
+    put('f8812.L1_agi', agi)
+    put('f8812.L3_add_1_2d', agi)
+    put('f8812.L4_qualifying_children', kids)
+    put('f8812.L5_children_credit', l8)
+    put('f8812.L8_add_5_7', l8)
+    put('f8812.L9_threshold', l9)
+    put('f8812.L10_excess_rounded', l10)
+    put('f8812.L11_phaseout', l11)
+    put('f8812.L12_after_phaseout', Math.max(0, l8 - l11))
+    put('f8812.L13_credit_limit', income_tax + amt)
+    put('f8812.L14_ctc_odc', ctc_nonrefundable)
   }
 
   return {

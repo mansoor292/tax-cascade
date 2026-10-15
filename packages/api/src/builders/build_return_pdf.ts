@@ -638,9 +638,21 @@ function fillScheduleBCheckbox(
 function fillFilingStatus(
   form: ReturnType<PDFDocument['getForm']>,
   filingStatus: string,
+  year: number,
 ) {
-  // c1_01 checkbox: [0]=Single, [1]=MFJ, [2]=MFS, [3]=HOH, [4]=QSS
-  const statusMap: Record<string, string> = {
+  // 2024: c1_01 [0]=Single, [1]=MFJ, [2]=MFS, [3]=HOH, [4]=QSS.
+  // 2025 split the five boxes into two columns that REUSE one short name:
+  // Single/MFJ/MFS are Checkbox_ReadOrder[0].c1_8[0..2] and HOH/QSS are
+  // Page1[0].c1_8[0..1]. The 2024 names match nothing on the 2025 form, so no
+  // filing status was ever ticked on a 2025 return; matching on the bare short
+  // name would tick Single and HOH together. Match on the full-name suffix.
+  const statusMap: Record<string, string> = year >= 2025 ? {
+    'single': 'Checkbox_ReadOrder[0].c1_8[0]',
+    'mfj': 'Checkbox_ReadOrder[0].c1_8[1]',
+    'mfs': 'Checkbox_ReadOrder[0].c1_8[2]',
+    'hoh': 'Page1[0].c1_8[0]',
+    'qss': 'Page1[0].c1_8[1]',
+  } : {
     'single': 'c1_01[0]',
     'mfj': 'c1_01[1]',
     'mfs': 'c1_01[2]',
@@ -652,10 +664,89 @@ function fillFilingStatus(
   if (!target) return
 
   for (const f of form.getFields()) {
-    if (f instanceof PDFCheckBox && f.getName().includes(target)) {
+    if (!(f instanceof PDFCheckBox)) continue
+    const name = f.getName()
+    if (year >= 2025 ? name.endsWith(`.${target}`) : name.includes(target)) {
       f.check()
       break
     }
+  }
+}
+
+/** Tick the checkbox whose full name ends with `.suffix`. */
+function checkSuffix(form: ReturnType<PDFDocument['getForm']>, suffix: string): void {
+  for (const f of form.getFields()) {
+    if (f instanceof PDFCheckBox && f.getName().endsWith(`.${suffix}`)) { f.check(); return }
+  }
+}
+
+/**
+ * 2025 Form 1040 boxes that come from the return's inputs rather than its
+ * computed lines. Field IDs verified against the 2025 blank and the filed
+ * 2025 joint return (scripts/parity/).
+ *
+ *  - Dependents are COLUMNS on the 2025 form, four of them: first name
+ *    f1_31..34, last name f1_35..38, SSN f1_39..42, relationship f1_43..46,
+ *    then per column the (5)(a)/(b) lived-with-you / in-the-U.S. pair and the
+ *    (7) child-tax-credit / other-dependent pair.
+ *  - SSN boxes are comb fields: digits only. A dashed SSN overran the comb.
+ */
+const DEPENDENT_COLUMNS_2025 = [
+  { first: 'f1_31', last: 'f1_35', ssn: 'f1_39', rel: 'f1_43', lived: 'c1_12[0]', us: 'c1_13[0]', ctc: 'c1_28[0]', odc: 'c1_28[1]' },
+  { first: 'f1_32', last: 'f1_36', ssn: 'f1_40', rel: 'f1_44', lived: 'c1_14[0]', us: 'c1_15[0]', ctc: 'c1_29[0]', odc: 'c1_29[1]' },
+  { first: 'f1_33', last: 'f1_37', ssn: 'f1_41', rel: 'f1_45', lived: 'c1_16[0]', us: 'c1_17[0]', ctc: 'c1_30[0]', odc: 'c1_30[1]' },
+  { first: 'f1_34', last: 'f1_38', ssn: 'f1_42', rel: 'f1_46', lived: 'c1_18[0]', us: 'c1_19[0]', ctc: 'c1_31[0]', odc: 'c1_31[1]' },
+]
+
+function fill1040Inputs2025(
+  form: ReturnType<PDFDocument['getForm']>,
+  entity: EntityData,
+  inputData: Record<string, any>,
+) {
+  const digits = (v: unknown) => String(v ?? '').replace(/\D/g, '')
+  if (entity.ein) setField(form, 'f1_16', digits(entity.ein))
+  if (entity.meta?.spouse_ssn) setField(form, 'f1_19', digits(entity.meta.spouse_ssn))
+
+  // Main home in the U.S. for more than half the year (new on 2025).
+  if (inputData.main_home_in_us) checkSuffix(form, 'c1_5[0]')
+  // Digital assets: [0] Yes, [1] No.
+  if (inputData.digital_assets !== undefined) checkSuffix(form, inputData.digital_assets ? 'c1_10[0]' : 'c1_10[1]')
+
+  const deps = Array.isArray(inputData.dependents_detail) ? inputData.dependents_detail : []
+  deps.slice(0, DEPENDENT_COLUMNS_2025.length).forEach((d: any, i: number) => {
+    const col = DEPENDENT_COLUMNS_2025[i]
+    setField(form, col.first, d.first_name)
+    setField(form, col.last, d.last_name)
+    if (d.ssn) setField(form, col.ssn, digits(d.ssn))
+    setField(form, col.rel, d.relationship)
+    if (d.lived_with_you) checkSuffix(form, col.lived)
+    if (d.lived_in_us) checkSuffix(form, col.us)
+    if (d.ctc) checkSuffix(form, col.ctc)
+    else if (d.odc) checkSuffix(form, col.odc)
+  })
+
+  // Third-party designee: [0] Yes, [1] No.
+  if (inputData.third_party_designee !== undefined) checkSuffix(form, inputData.third_party_designee ? 'c2_17[0]' : 'c2_17[1]')
+
+  // Signature block: occupations, Identity Protection PINs, phone, email.
+  const sig = inputData.signature_detail || {}
+  setField(form, 'f2_40', sig.taxpayer_occupation)
+  if (sig.taxpayer_ip_pin) setField(form, 'f2_41', digits(sig.taxpayer_ip_pin))
+  setField(form, 'f2_42', sig.spouse_occupation)
+  if (sig.spouse_ip_pin) setField(form, 'f2_43', digits(sig.spouse_ip_pin))
+  setField(form, 'f2_44', sig.phone)
+  setField(form, 'f2_45', sig.email)
+
+  // Paid preparer.
+  const prep = entity.meta?.preparer as Record<string, any> | undefined
+  if (prep) {
+    setField(form, 'f2_46', prep.name)
+    setField(form, 'f2_47', prep.ptin)
+    if (prep.self_employed) checkSuffix(form, 'c2_18[0]')
+    setField(form, 'f2_48', prep.firm_name)
+    setField(form, 'f2_49', prep.phone)
+    setField(form, 'f2_50', prep.firm_address)
+    setField(form, 'f2_51', prep.firm_ein)
   }
 }
 
@@ -1074,13 +1165,15 @@ function fill1040Extras(
   form: ReturnType<PDFDocument['getForm']>,
   entity: EntityData,
   _model: Record<string, string | number>,
-  _year: number,
+  year: number,
+  inputData: Record<string, any> = {},
 ) {
   // Filing status checkbox
-  const filingStatus = entity.meta?.filing_status as string | undefined
+  const filingStatus = (entity.meta?.filing_status ?? inputData.filing_status) as string | undefined
   if (filingStatus) {
-    fillFilingStatus(form, filingStatus)
+    fillFilingStatus(form, filingStatus, year)
   }
+  if (year === 2025) fill1040Inputs2025(form, entity, inputData)
 
   // W-2 breakdown (1a, 1e, 1z) — these are in the model via canonical keys:
   //   income.L1a_w2_wages, income.L1e_dependent_care, income.L1z_total_wages
@@ -1135,7 +1228,7 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
   } else if (formType === '1120S') {
     fill1120SExtras(mainForm, entity, model, taxYear, input.inputData || {})
   } else if (formType === '1040') {
-    fill1040Extras(mainForm, entity, model, taxYear)
+    fill1040Extras(mainForm, entity, model, taxYear, input.inputData || {})
   }
 
   // 3. Build merged package
