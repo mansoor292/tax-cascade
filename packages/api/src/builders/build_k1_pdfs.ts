@@ -131,6 +131,9 @@ export interface K1Data1120S {
   lt_cap_gain?: number
   other_portfolio?: number
   tax_exempt_interest?: number
+  nondeductible_expenses?: number
+  distributions?: number
+  investment_income?: number
   rental_real_estate?: number
   other_rental?: number
   collectibles_gain?: number
@@ -215,10 +218,20 @@ export async function build1120SK1(
   put('L11_179', nz(k1.section_179))
 
   // Coded boxes: what the allocation implies, then what the caller states.
+  // 16C, 16D, 17A and 17V used to print only when typed in as supplemental
+  // rows, though the engine knows all four: the blind test (2026-10-16) found
+  // a K-1 with no distributions and no nondeductible expenses on it — the two
+  // figures the shareholder's Form 7203 basis computation is built from.
   const codes: Record<string, K1Code[]> = { '10': [], '12': [], '13': [], '15': [], '16': [], '17': [] }
   if (nz(k1.other_portfolio)) codes['10'].push({ code: 'A', amount: nz(k1.other_portfolio) })
   if (nz(k1.charitable)) codes['12'].push({ code: 'A', amount: nz(k1.charitable) })
   if (nz(k1.tax_exempt_interest)) codes['16'].push({ code: 'A', amount: nz(k1.tax_exempt_interest) })
+  if (nz(k1.nondeductible_expenses)) codes['16'].push({ code: 'C', amount: nz(k1.nondeductible_expenses) })
+  if (nz(k1.distributions)) codes['16'].push({ code: 'D', amount: nz(k1.distributions) })
+  // Section 199A information goes by statement (code V); investment income is code A.
+  const hasQbi = [k1.qbi_income, k1.w2_wages, k1.ubia, k1.qbi_1231_gain, k1.qbi_179, k1.reit_dividends, k1.ptp_income].some(v => nz(v))
+  if (hasQbi) codes['17'].push({ code: 'V', amount: nz(k1.qbi_income), statement: true })
+  if (nz(k1.investment_income)) codes['17'].push({ code: 'A', amount: nz(k1.investment_income) })
   for (const [box, list] of Object.entries(k1.codes || {})) {
     for (const c of list || []) {
       if (!codes[box]) continue
@@ -281,7 +294,6 @@ export async function build1120SK1(
   }
 
   // Section 199A statement (box 17 code V) and the box 17 statement lines.
-  const hasQbi = [k1.qbi_income, k1.w2_wages, k1.ubia, k1.qbi_1231_gain, k1.qbi_179, k1.reit_dividends, k1.ptp_income].some(v => nz(v))
   if (hasQbi || lineSeventeen.length) {
     await appendStatement(pdf, await k1QbiStatement(issuer, k1, lineSeventeen))
   }

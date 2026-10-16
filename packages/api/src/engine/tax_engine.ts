@@ -161,6 +161,13 @@ export interface Form1120S_Inputs {
   schedule_k_lt_cap_gain?:            number  // K line 8a — net long-term capital gain (loss)
   schedule_k_other_portfolio_income?: number  // K line 10 — other income (loss)
   schedule_k_tax_exempt_interest?:    number  // K line 16a — tax-exempt interest
+  // K line 16c / 16d. The canonical spellings (schedK.L16c_nondeductible,
+  // schedK.L16d_distributions) are read too: that is where returns carry them.
+  schedule_k_nondeductible_expenses?: number  // K line 16c — nondeductible expenses (K-1 16C)
+  schedule_k_distributions?:          number  // K line 16d — distributions (K-1 16D)
+  // Schedule D (Form 1120-S). When present its lines 7 and 15 ARE Schedule K
+  // lines 7 and 8a (engine/schedule_d_1120s.ts).
+  schedule_d_1120s?:    unknown
   // §199A — flows to shareholders on K-1
   is_sstb?:             boolean
   // UBIA of qualified property (K-1 box 17 code V / Statement A) — the
@@ -197,6 +204,9 @@ export interface Form1120S_Result {
       lt_cap_gain?:           number
       other_portfolio?:       number
       tax_exempt_interest?:   number
+      nondeductible_expenses?: number  // box 16 code C
+      distributions?:          number  // box 16 code D
+      investment_income?:      number  // box 17 code A
     }>
   }
   field_values?: Record<string, number>
@@ -348,9 +358,11 @@ export interface Form1040_Inputs {
 // ─────────────────────────────────────────────────────────────
 // Year-specific tax functions imported from tax_tables.ts
 // ─────────────────────────────────────────────────────────────
+import { scheduleD1120STotals } from './schedule_d_1120s.js'
 import {
   ordinaryTax, standardDeduction, qbiDeduction,
   ltcgTax, niitTax, amtTax, seTax, childTaxCredit, additionalMedicareTax, TAX_TABLES,
+  SECTION_179_LIMITS,
 } from './tax_tables.js'
 import {
   summarizeW2s, scheduleD, capitalLossCarryoverWorksheet, form2210Penalty, form7203StockBasis,
@@ -468,6 +480,28 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     schedule_k_ubia: 0,
     shareholders: [{ name: 'Shareholder', pct: 100 }],
   }, raw)
+  // Schedule K line 7 / 8a are Schedule D lines 7 / 15 when the return
+  // carries the schedule (see engine/schedule_d_1120s.ts for the dollar
+  // this cost when they were two separate numbers).
+  const schedD = scheduleD1120STotals(inp.schedule_d_1120s)
+  if (schedD) {
+    inp.schedule_k_st_cap_gain = schedD.L7
+    inp.schedule_k_lt_cap_gain = schedD.L15
+  }
+  const rawAny = (raw || {}) as unknown as Record<string, unknown>
+  const stated = (flat: number | undefined, canonical: string): number => {
+    if (typeof flat === 'number' && isFinite(flat) && flat !== 0) return flat
+    const v = rawAny[canonical]
+    return typeof v === 'number' && isFinite(v) ? v : 0
+  }
+  const nondeductible = stated(inp.schedule_k_nondeductible_expenses, 'schedK.L16c_nondeductible')
+  const distributions = stated(inp.schedule_k_distributions, 'schedK.L16d_distributions')
+  // Line 17a: "only the investment income included on lines 4, 5a, 6, and
+  // 10 of Schedule K" (1120-S instructions). Capital gains stay out unless a
+  // shareholder elects them in on Form 4952.
+  const investment_income = (inp.schedule_k_interest || 0) + (inp.schedule_k_dividends_ordinary || 0)
+    + (inp.schedule_k_royalties || 0) + (inp.schedule_k_other_portfolio_income || 0)
+
   const balance_1c = inp.gross_receipts - inp.returns_allowances
   const gross_profit = balance_1c - inp.cost_of_goods_sold
   const total_income = gross_profit + inp.net_gain_4797 + inp.other_income  // L6
@@ -503,6 +537,11 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     lt_cap_gain:          prorata(inp.schedule_k_lt_cap_gain, s.pct),
     other_portfolio:      prorata(inp.schedule_k_other_portfolio_income, s.pct),
     tax_exempt_interest:  prorata(inp.schedule_k_tax_exempt_interest, s.pct),
+    // Boxes 16C, 16D and 17A. An S corporation has one class of stock, so
+    // distributions are pro rata like everything else (§1361(b)(1)(D)).
+    nondeductible_expenses: prorata(nondeductible, s.pct),
+    distributions:          prorata(distributions, s.pct),
+    investment_income:      prorata(investment_income, s.pct),
   }))
 
   // IRS-line canonical field_values for direct PDF fill
@@ -542,6 +581,9 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     'schedK.L11_section_179':           inp.section_179,
     'schedK.L12a_charitable':           inp.charitable_contrib,
     'schedK.L16a_tax_exempt_interest':  inp.schedule_k_tax_exempt_interest || 0,
+    'schedK.L16c_nondeductible':        nondeductible,
+    'schedK.L16d_distributions':        distributions,
+    'schedK.L17a_invest_income':        investment_income,
     // L18: Income/loss reconciliation = ordinary + separately stated portfolio items - separately stated expenses
     'schedK.L18_income_loss':
       ordinary_income_loss
@@ -577,6 +619,8 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
       '1120-S Instructions: Line 20 = Sum of Lines 7-19',
       '1120-S Instructions: Line 21 = Line 6 - Line 20',
       'Schedule K-1: Pro-rata allocation per IRC §1366',
+      '1120-S Instructions: Schedule K lines 7 and 8a = Schedule D (Form 1120-S) lines 7 and 15',
+      '1120-S Instructions: Line 17a = investment income included on Schedule K lines 4, 5a, 6 and 10',
     ]
   }
 }
@@ -1305,9 +1349,9 @@ export interface Form4562_Inputs {
   taxpayer_id:       string
   tax_year:          number
   // Part I — Section 179
-  section_179_max?:           number  // Line 1 (default: 1,250,000 for 2025)
+  section_179_max?:           number  // Line 1 (default: SECTION_179_LIMITS for the year — 2,500,000 for 2025)
   section_179_total_cost?:    number  // Line 2
-  section_179_threshold?:     number  // Line 3 (default: 3,130,000 for 2025)
+  section_179_threshold?:     number  // Line 3 (default: SECTION_179_LIMITS — 4,000,000 for 2025)
   section_179_carryover?:     number  // Line 10
   business_income_limit?:     number  // Line 11
   // Part II — Special depreciation
@@ -1377,8 +1421,11 @@ export function calc4562(inp: Form4562_Inputs): Form4562_Result {
   const year = inp.tax_year || 2025
 
   // Part I — Section 179
-  const max179 = inp.section_179_max ?? 1250000  // 2025 limit
-  const threshold = inp.section_179_threshold ?? 3130000
+  // Year table, not a literal: the 2025 literal was Rev. Proc. 2024-40's
+  // $1.25M / $3.13M, which the One Big Beautiful Bill Act doubled.
+  const lim179 = SECTION_179_LIMITS[year] ?? SECTION_179_LIMITS[2025]
+  const max179 = inp.section_179_max ?? lim179.limit
+  const threshold = inp.section_179_threshold ?? lim179.threshold
   const totalCost = inp.section_179_total_cost ?? 0
   const reduction = Math.max(0, totalCost - threshold)
   const limitation = Math.max(0, max179 - reduction)  // Line 5

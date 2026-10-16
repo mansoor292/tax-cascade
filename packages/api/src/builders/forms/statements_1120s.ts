@@ -21,12 +21,14 @@
  *   schedL_other_current_liabilities_detail  [{label, boy, eoy}]   Sch L line 18
  *   schedL_other_liabilities_detail          [{label, boy, eoy}]   Sch L line 21
  *   schedM2_other_additions_detail           [{label, amount}]     M-2 line 3, column (a)
+ *     (absent: the Schedule K items line 3 was derived from, read off the model)
  *   meals_entertainment_detail               [{label, amount, deductible}]  line 20 meals
  *   schedK_other_items_detail                [{label|code, amount}]  Sch K line 17d
  *   amended_return_changes_detail            [{description, line, explanation, previous, amended}]
  */
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import type { Attachment, AttachmentContext } from './types.js'
+import { aaaFromScheduleK } from '../../services/reconciliation.js'
 
 const money = (v: number) => (Object.is(Math.round(v), -0) ? 0 : Math.round(v)).toLocaleString('en-US')
 const num = (v: unknown): number | undefined => {
@@ -52,7 +54,7 @@ function wrap(text: string, font: PDFFont, size: number, width: number): string[
   return lines
 }
 
-export function statementBlocks1120S(inputData: Record<string, any>): Block[] {
+export function statementBlocks1120S(inputData: Record<string, any>, model: Record<string, any> = {}): Block[] {
   const blocks: Block[] = []
   const boyEoy = (title: string, key: string) => {
     const rows = rowsOf(inputData[key])
@@ -74,7 +76,15 @@ export function statementBlocks1120S(inputData: Record<string, any>): Block[] {
   boyEoy('Statement - 1120S - Schedule L - Line 9 - Other investments', 'schedL_other_investments_detail')
   boyEoy('Statement - 1120S - Schedule L - Line 21 - Other liabilities', 'schedL_other_liabilities_detail')
 
-  const m2 = rowsOf(inputData.schedM2_other_additions_detail)
+  // Line 3 itemized as stated, or — when the line was derived from Schedule
+  // K (services/reconciliation.ts) — by the Schedule K items it was derived
+  // from. Only when they add up to the line: a stated figure with no rows
+  // gets no invented breakdown.
+  let m2 = rowsOf(inputData.schedM2_other_additions_detail)
+  if (!m2.length && typeof model['schedM2.L3_other_additions'] === 'number' && model['schedM2.L3_other_additions'] !== 0) {
+    const { additions, additionItems } = aaaFromScheduleK(model)
+    if (Math.abs(additions - model['schedM2.L3_other_additions']) <= 1) m2 = additionItems
+  }
   if (m2.length) {
     let t = 0
     const body = m2.map(r => { const a = num(r.amount ?? r.value) ?? 0; t += a; return [String(r.label ?? ''), money(a), ''] })
@@ -215,7 +225,7 @@ export async function renderStatementBlocks(
 }
 
 export async function buildStatements1120S(ctx: AttachmentContext): Promise<Attachment | null> {
-  const blocks = statementBlocks1120S(ctx.inputData || {})
+  const blocks = statementBlocks1120S(ctx.inputData || {}, ctx.model || {})
   if (!blocks.length) return null
   const pdf = await renderStatementBlocks(ctx.entity.name, ctx.entity.ein, blocks)
   return { seq: 5, label: 'Statements (Form 1120-S)', pdf }

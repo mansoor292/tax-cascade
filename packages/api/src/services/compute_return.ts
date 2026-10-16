@@ -20,7 +20,7 @@ import { errorOutcome, type HttpOutcome } from '../lib/http_error.js'
 import { lazyServiceClient } from '../lib/supabase.js'
 import { getFinancials } from '../routes/qbo.js'
 import { validateInputArithmetic } from './compute_validation.js'
-import { deriveReconciliation1120S, type ReconciliationIssue } from './reconciliation.js'
+import { deriveSupportingSchedules, type ReconciliationIssue } from './reconciliation.js'
 import { entityIdentityFields } from '../builders/entity_identity.js'
 import { extractAggregates as extractAggregatesFromFv } from '@taxengine/shared'
 import { INPUT_SCHEMAS } from '../routes/schema.js'
@@ -514,11 +514,15 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
               // authoritative than refetching prior-year QBO which can drift.
               applyPriorEoyToBoy(engineResult.field_values)
 
-              // Schedule M-1: line 1 = net income per books, line 10 = taxable income
+              // Schedule M-1 placeholder until the caller states book income:
+              // books = taxable income after tax, so lines 1 + 2 come to page 1
+              // line 28 with no other differences. (Line 1 used to be taxable
+              // income itself, which only "tied" because line 10 was typed in
+              // rather than added up; deriveReconciliation1120 adds it up.)
               const computed = engineResult.computed || {}
-              engineResult.field_values['schedM1.L1_net_income_books'] = computed.taxable_income ?? 0
+              const line28 = computed.taxable_income_before_nol ?? computed.taxable_income ?? 0
+              engineResult.field_values['schedM1.L1_net_income_books'] = line28 - (computed.income_tax ?? 0)
               engineResult.field_values['schedM1.L2_fed_tax_books'] = computed.income_tax ?? 0
-              engineResult.field_values['schedM1.L10_income_line28'] = computed.taxable_income_before_nol ?? computed.taxable_income ?? 0
 
               // Schedule M-2: line 1 = BOY retained, line 8 = EOY retained
               engineResult.field_values['schedM2.L1_beg_balance'] =
@@ -542,6 +546,13 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         }
       }
       if (engineResult.field_values) overlayUncomputedLines(engineResult.field_values, mergedInputs)
+
+      // The supporting schedules' arithmetic — M-1/M-2 totals, Form 1125-A
+      // lines 6 and 8, Form 4562's limits and totals (services/reconciliation.ts).
+      if (engineResult.field_values) {
+        reconciliationIssues = deriveSupportingSchedules('1120', engineResult.field_values, mergedInputs, tax_year,
+          engineResult.computed)
+      }
 
       // What is left of the NOL after this year must be recorded on this year.
       //
@@ -669,10 +680,8 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       // longer reported. The lines the form computes are derived here; the
       // facts only the caller knows are left alone.
       if (engineResult.field_values) {
-        reconciliationIssues = deriveReconciliation1120S(
-          engineResult.field_values,
-          engineResult.computed?.ordinary_income_loss ?? 0,
-        )
+        reconciliationIssues = deriveSupportingSchedules('1120S', engineResult.field_values, mergedInputs, tax_year,
+          engineResult.computed)
       }
     } else if (form_type === '1040') {
       // Schedule E — compute first if structured inputs provided, then inject

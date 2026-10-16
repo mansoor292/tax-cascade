@@ -12,6 +12,7 @@ import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import { setField, fillFromMap } from './pdf_filler.js'
 import type { Form4562_Inputs, Form4562_Result } from '../engine/tax_engine.js'
+import { SECTION_179_LIMITS } from '../engine/tax_tables.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FORMS_DIR = join(__dirname, '../../data/irs_forms')
@@ -80,10 +81,11 @@ export async function build4562Pdf(
   data['taxpayer_id'] = inputs.taxpayer_id
 
   // Part I
-  data['section_179_max'] = inputs.section_179_max ?? 1250000
+  const lim179 = SECTION_179_LIMITS[inputs.tax_year || 2025] ?? SECTION_179_LIMITS[2025]
+  data['section_179_max'] = inputs.section_179_max ?? lim179.limit
   if (inputs.section_179_total_cost) data['section_179_total_cost'] = inputs.section_179_total_cost
-  data['section_179_threshold'] = inputs.section_179_threshold ?? 3130000
-  const reduction = Math.max(0, (inputs.section_179_total_cost ?? 0) - (inputs.section_179_threshold ?? 3130000))
+  data['section_179_threshold'] = inputs.section_179_threshold ?? lim179.threshold
+  const reduction = Math.max(0, (inputs.section_179_total_cost ?? 0) - (inputs.section_179_threshold ?? lim179.threshold))
   data['reduction'] = reduction
   data['section_179_limitation'] = result.computed.section_179_limitation
   if (inputs.section_179_carryover) data['section_179_carryover'] = inputs.section_179_carryover

@@ -949,3 +949,16 @@ export function calc1040Full(inp: Form1040_Full): Form1040_Result {
     },
   }
 }
+
+/**
+ * Section 179 dollar limit and phase-out threshold by tax year (Form 4562
+ * lines 1 and 3). 2025 is the One Big Beautiful Bill Act's $2.5M / $4M
+ * (P.L. 119-21 §70306, tax years beginning after 2024) — not Rev. Proc.
+ * 2024-40's $1,250,000 / $3,130,000, which the act superseded.
+ */
+export const SECTION_179_LIMITS: Record<number, { limit: number; threshold: number }> = {
+  2022: { limit: 1_080_000, threshold: 2_700_000 },
+  2023: { limit: 1_160_000, threshold: 2_890_000 },
+  2024: { limit: 1_220_000, threshold: 3_050_000 },
+  2025: { limit: 2_500_000, threshold: 4_000_000 },
+}

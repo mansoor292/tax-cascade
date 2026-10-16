@@ -14,7 +14,10 @@
  *     L4?, L5?, L6?, L7?, L11?, L12?, L13?, L14?, L15?,      // amounts; L7/L15 derived when absent
  *     part3?: { L16?, L17?, L18?, L19?, L20?, L21?, L22?, L23? },
  *   }
- * A row's gain (h) is derived as proceeds − cost + adjustments when not given.
+ * A row's gain (h) is derived as proceeds − cost + adjustments, in whole
+ * dollars, when not given; lines 7 and 15 come from the same helper the
+ * engine uses for Schedule K lines 7 and 8a (engine/schedule_d_1120s.ts),
+ * so the schedule and the line that says "attach Schedule D" cannot differ.
  * Nothing is printed for a return without the object: an empty Schedule D is
  * not an attachment, it is noise.
  *
@@ -24,6 +27,7 @@
 import { PDFDocument, PDFCheckBox } from 'pdf-lib'
 import { readFileSync, existsSync } from 'fs'
 import type { Attachment, AttachmentContext } from './types.js'
+import { scheduleD1120STotals, scheduleDRowGain as rowGain } from '../../engine/schedule_d_1120s.js'
 
 type Row = { proceeds?: number; cost?: number; adjustments?: number; gain?: number }
 
@@ -56,13 +60,6 @@ export const SCHED_D_1120S_LINES_2025: Record<string, string> = {
 
 const money = (v: number) => (Object.is(Math.round(v), -0) ? 0 : Math.round(v)).toLocaleString('en-US')
 const num = (v: unknown): number | undefined => (typeof v === 'number' && isFinite(v) ? v : undefined)
-
-function rowGain(r: Row | undefined): number | undefined {
-  if (!r) return undefined
-  if (num(r.gain) !== undefined) return r.gain
-  if (num(r.proceeds) === undefined && num(r.cost) === undefined) return undefined
-  return (r.proceeds || 0) - (r.cost || 0) + (r.adjustments || 0)
-}
 
 export async function buildScheduleD1120S(ctx: AttachmentContext): Promise<Attachment | null> {
   const d = ctx.inputData?.schedule_d_1120s as ScheduleD1120S | undefined
@@ -105,9 +102,9 @@ export async function buildScheduleD1120S(ctx: AttachmentContext): Promise<Attac
     put(ids[3], rowGain(r))
   }
 
-  const sum = (keys: string[]) => keys.reduce((t, k) => t + (rowGain(rows[k as keyof typeof rows]) || 0), 0)
-  const l7 = num(d.L7) ?? (sum(['L1a', 'L1b', 'L2', 'L3']) + (d.L4 || 0) + (d.L5 || 0) - (d.L6 || 0))
-  const l15 = num(d.L15) ?? (sum(['L8a', 'L8b', 'L9', 'L10']) + (d.L11 || 0) + (d.L12 || 0) + (d.L13 || 0) - (d.L14 || 0))
+  const totals = scheduleD1120STotals(d)
+  const l7 = totals?.L7
+  const l15 = totals?.L15
   for (const k of ['L4', 'L5', 'L6', 'L11', 'L12', 'L13', 'L14'] as const) put(SCHED_D_1120S_LINES_2025[k], num(d[k]))
   put(SCHED_D_1120S_LINES_2025.L7, l7)
   put(SCHED_D_1120S_LINES_2025.L15, l15)
