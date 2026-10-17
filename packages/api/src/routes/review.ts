@@ -57,7 +57,7 @@ router.post('/:entity_id/run', async (req, res) => {
       return res.json({
         runs: runs.map(r => ({
           run_id: r.run_id, tax_year: r.tax_year, framework_version: r.framework_version, summary: r.summary,
-          to_act_on: r.findings.filter(f => ACT.has(f.status)).sort((a, b) => SEV[a.severity] - SEV[b.severity]).map(compact),
+          to_act_on: r.findings.filter(f => ACT.has(f.status) && f.change !== 'resolved').sort((a, b) => SEV[a.severity] - SEV[b.severity]).map(compact),
           passed: r.findings.filter(f => f.status === 'pass').map(f => f.title),
         })),
       })
@@ -79,7 +79,7 @@ router.get('/summary', async (req, res) => {
     for (const e of (ents ?? []).filter(x => !wanted || wanted.includes(x.id))) {
       for (const r of await latestRuns(supabase, userId, e.id)) {
         for (const f of r.findings) {
-          if (!ACT.has(f.status) || (f.resolution && f.resolution.resolution !== 'reopened')) continue
+          if (!ACT.has(f.status) || f.change === 'resolved' || (f.resolution && f.resolution.resolution !== 'reopened')) continue
           items.push({ entity: e.name, entity_id: e.id, form_type: e.form_type, ...compact(f) })
         }
       }

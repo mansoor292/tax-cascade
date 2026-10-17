@@ -78,7 +78,9 @@ export interface DiffInput {
 export function diffRuns({ previous, current }: DiffInput): Array<Finding & { change: DiffStatus; cause?: 'new_document' | 'new_fact' | 'framework' | 'first_run' | 'miss' }> {
   const actionable = (f: Finding) => f.status === 'finding' || f.status === 'gap' || f.status === 'error'
   if (!previous) return current.findings.map(f => ({ ...f, change: 'new' as const, ...(actionable(f) ? { cause: 'first_run' as const } : {}) }))
-  const prev = new Map(previous.findings.filter(actionable).map(f => [f.fingerprint, f]))
+  // A finding the previous run already marked resolved is history, not an
+  // open item — carrying it again would make it reappear in every run.
+  const prev = new Map(previous.findings.filter(f => actionable(f) && (f as { change?: string }).change !== 'resolved').map(f => [f.fingerprint, f]))
   const docsChanged = current.catalog_ids.some(id => !previous.catalog_ids.includes(id))
   const factsChanged = (current.facts_at ?? '') > (previous.facts_at ?? '')
   const frameworkChanged = current.version !== previous.version

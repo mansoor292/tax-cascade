@@ -113,8 +113,9 @@ export async function runReview(
 }
 
 export function summarize(findings: Array<Finding & { change?: string; cause?: string }>): Record<string, unknown> {
-  const count = (pred: (f: Finding & { change?: string; cause?: string }) => boolean) => findings.filter(pred).length
-  const act = findings.filter(f => f.status === 'finding' || f.status === 'gap' || f.status === 'error')
+  const open = findings.filter(f => f.change !== 'resolved')
+  const count = (pred: (f: Finding & { change?: string; cause?: string }) => boolean) => open.filter(pred).length
+  const act = open.filter(f => f.status === 'finding' || f.status === 'gap' || f.status === 'error')
   return {
     checks: new Set(findings.map(f => f.check)).size,
     findings: count(f => f.status === 'finding'),
@@ -124,7 +125,7 @@ export function summarize(findings: Array<Finding & { change?: string; cause?: s
     by_severity: Object.fromEntries(['critical', 'high', 'medium', 'low', 'info'].map(s => [s, act.filter(f => f.severity === s).length])),
     new: count(f => f.change === 'new' && (f.status === 'finding' || f.status === 'gap')),
     new_by_cause: Object.fromEntries(['new_document', 'new_fact', 'framework', 'first_run', 'miss'].map(c => [c, act.filter(f => f.change === 'new' && f.cause === c).length])),
-    resolved_since_last: count(f => f.change === 'resolved'),
+    resolved_since_last: findings.filter(f => f.change === 'resolved').length,
   }
 }
 

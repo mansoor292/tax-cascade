@@ -107,6 +107,9 @@ describe('review framework', () => {
     expect(byFact.find(x => x.fingerprint === 'c|2023|')?.cause).toBe('new_fact')
     const miss = diffRuns({ previous: prev, current: { findings: [f('c|2023|')], catalog_ids: ['c1'], facts_at: '2026-10-01', version: 'v1' } })
     expect(miss.find(x => x.fingerprint === 'c|2023|')?.cause).toBe('miss')
+    // A resolved item is not carried into the next run again.
+    const next = diffRuns({ previous: { ...prev, findings: byDoc }, current: { findings: [f('a|2023|'), f('c|2023|')], catalog_ids: ['c1', 'c2'], facts_at: '2026-10-01', version: 'v1' } })
+    expect(next.filter(x => x.fingerprint === 'b|2023|')).toEqual([])
   })
 
   it('AI conclusions that cite nothing on the return are dropped', () => {
