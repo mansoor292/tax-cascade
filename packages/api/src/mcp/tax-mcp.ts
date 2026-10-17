@@ -201,6 +201,10 @@ Two failure modes that slipped through even after the rules above shipped — tr
 
 Use record_tax_fact for values stated in conversation ("my W-2 wages were $150K"). Use ingest_document for uploaded PDFs. Both flow into compute_return's auto-merge.
 
+## Facts every return needs
+
+Facts that are not a document's box values — ownership and share counts, the S election and its acceptance, who lent money and from whose account, material participation, intercompany fees, state tax payment dates, IRS transcript events — are defined ONCE per return type in a registry, and every return of that type, every year, needs the same list. get_fact_gaps(entity_id, tax_year) returns that list with each fact answered, unknown, not applicable, missing or contradicted. Before preparing, reviewing or drawing a conclusion about a return, call it; ask the owner every missing and contradicted fact together in one message; record each answer with record_fact. Never fill a fact from inference. If you learn something a return needs that the list does not ask, say so — it belongs in the registry, not in entity meta or a note.
+
 ## Filed returns vs. computed returns — STRICT SEPARATION
 
 Returns live in two worlds. Don't cross them.
@@ -297,6 +301,9 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   use_prior_year:             { title: 'Pull prior-year values', ...RO },
   compare_returns:            { title: 'Compare returns across years', ...RO },
   record_tax_fact:            { title: 'Record tax fact', ...WRITE },
+  get_fact_gaps:              { title: 'Facts this return needs (gap list)', ...RO },
+  record_fact:                { title: 'Record a registry fact', ...WRITE },
+  list_facts:                 { title: 'List recorded facts', ...RO },
   ingest_document:            { title: 'Upload document', ...WRITE },
   list_documents:             { title: 'List documents', ...RO },
   fill_extraction_gaps:       { title: 'Fill extraction gaps', ...WRITE },
@@ -793,7 +800,7 @@ Present in plain English using the \`description\` field, grouped by category. E
   // ─── Tool: record_tax_fact ───
   // When the user states tax info in conversation (no document attached),
   // persist it so it flows into THIS compute AND future recomputes.
-  server.tool('record_tax_fact', 'Persist a tax fact from conversation (no document needed). Use when the user tells you values directly: "I got $10K interest from Chase", "My W-2 wages were $150K". Creates a virtual document that auto-merges into compute_return for this entity+year, just like an uploaded W-2 or 1099. Always include a source_note describing where the info came from (e.g. "client stated on call 2026-04-17") so it\'s audit-traceable.', {
+  server.tool('record_tax_fact', 'Persist a tax fact from conversation (no document needed). Use when the user tells you values directly: "I got $10K interest from Chase", "My W-2 wages were $150K". Creates a virtual document that auto-merges into compute_return for this entity+year, just like an uploaded W-2 or 1099. Always include a source_note describing where the info came from (e.g. "client stated on call 2026-04-17") so it\'s audit-traceable. This is for numeric values a document would carry (W-2, 1099, K-1 boxes); for facts that are not a document line — ownership, elections, loans and who made them, material participation, intercompany terms, IRS account events — use record_fact (get_fact_gaps lists them).', {
     entity_id: z.string().describe('Entity UUID'),
     tax_year: z.number().describe('Tax year this fact applies to'),
     category: z.enum([
@@ -807,6 +814,83 @@ Present in plain English using the \`description\` field, grouped by category. E
     summary: z.string().optional().describe('One-line human description'),
   }, async (params) => {
     return text(await call('POST', '/api/documents/fact', params))
+  })
+
+  // ─── Tool: get_fact_gaps ───
+  // The registry's list for one return. Open items carry the full question
+  // (and the shape of the answer); settled facts are compacted to key + value
+  // so the whole list still fits comfortably in a chat context.
+  server.tool('get_fact_gaps', `THE list of facts every return of this type needs. The list is defined once per return type (1120-S, 1120, 1040, 1065) in the fact registry and is the same for every return of that type and every year — something learned on one return is asked of all of them.
+
+Each fact comes back with a status:
+- missing — nobody has answered it. conditional_on means it depends on those facts (ask them together: "…and if so, …"); needs_subjects_from means the owner / K-1 / counterparty list must be answered first. catalog_value, when present, is what the filed return shows — ask the owner to confirm it, do not assume it.
+- contradicted — answered, but the filed return (catalog_line) shows catalog_value. Ask which is right.
+- unknown — the owner said they do not know.
+- answered / not_applicable — settled.
+
+Missing and contradicted facts MUST be asked of the owner ALL AT ONCE, in a single message grouped by area — not one at a time across a conversation, and none skipped because it looks minor: single unrecorded facts (material participation, a related-company loan taken for a shareholder loan) are what cost real money before this list existed. Record each answer with record_fact. Never answer a fact yourself by inference.`, {
+    entity_id: z.string().describe('Entity UUID'),
+    tax_year: z.number().describe('Tax year of the return'),
+    form_type: z.enum(['1120S', '1120', '1040', '1065']).optional().describe('Return type; defaults to the entity\'s own form type'),
+  }, async ({ entity_id, tax_year, form_type }) => {
+    const qs = new URLSearchParams({ year: String(tax_year) })
+    if (form_type) qs.set('form_type', form_type)
+    const resp = await call('GET', `/api/facts/${entity_id}/gaps?${qs}`)
+    if (!Array.isArray(resp?.gaps)) return text(resp)
+    const pick = (g: any, keys: string[]) =>
+      Object.fromEntries(keys.filter(k => g[k] !== undefined).map(k => [k, g[k]]))
+    const having = (status: string) => resp.gaps.filter((g: any) => g.status === status)
+    return text({
+      entity: resp.entity_name,
+      form_type: resp.form_type,
+      tax_year: resp.tax_year,
+      summary: resp.summary,
+      ask_now: resp.gaps
+        .filter((g: any) => g.status === 'missing' || g.status === 'contradicted')
+        .map((g: any) => pick(g, [
+          'key', 'subject', 'status', 'question', 'why', 'type', 'options', 'item_fields',
+          'conditional_on', 'needs_subjects_from', 'value', 'catalog_value', 'catalog_line', 'accepted_evidence',
+        ])),
+      unknown: having('unknown').map((g: any) => pick(g, ['key', 'subject', 'question', 'source_note', 'recorded_at'])),
+      answered: having('answered').map((g: any) => pick(g, ['key', 'subject', 'value', 'source', 'catalog_value', 'recorded_at'])),
+      not_applicable: having('not_applicable').map((g: any) => pick(g, ['key', 'subject', 'not_applicable_reason', 'source'])),
+    })
+  })
+
+  // ─── Tool: record_fact ───
+  server.tool('record_fact', `Record ONE answer to a fact from get_fact_gaps (e.g. scorp.election_effective_date, owners.material_participation for one owner, the rows of loans.from_related_entities). The write is checked against the fact registry: an unknown key, a key for another return type, a value of the wrong type, or a missing or extra tax_year / subject is refused with the reason. A new answer SUPERSEDES the previous one and the history is kept — nothing is overwritten.
+
+- tax_year: only for per-year facts; omit it for all-years facts (formation date, S election, basis at inception).
+- subject: for owner, K-1 and related-company facts — the name exactly as listed in owners.roster, k1.received or intercompany.counterparties.
+- status: answered (with value) | unknown (the owner does not know) | not_applicable (does not apply) — the last two take no value.
+- value: dates as YYYY-MM-DD; amounts as plain numbers (no $ or commas); percents 0-100; enums exactly as one of the listed options; lists as an array of row objects using the item_fields keys (an empty array means none).
+- source: owner (they told you) | document (pass evidence_document_id) | catalog (read from a filed return line) | derived (computed from other facts) | migrated.
+- source_note: always say exactly where it came from ("owner, call on 2026-10-17", "IRS CP261 letter", "2023 1120-S Schedule L line 19").`, {
+    entity_id: z.string().describe('Entity UUID'),
+    fact_key: z.string().describe('Registry key from get_fact_gaps, e.g. "owners.material_participation"'),
+    status: z.enum(['answered', 'unknown', 'not_applicable']).describe('answered needs a value; unknown / not_applicable take none'),
+    source: z.enum(['owner', 'document', 'catalog', 'derived', 'migrated']).describe('Where the answer came from'),
+    value: z.union([z.string(), z.number(), z.boolean(), z.array(z.record(z.any()))]).optional()
+      .describe('The answer, typed per the fact (see type / options / item_fields in get_fact_gaps)'),
+    tax_year: z.number().optional().describe('Per-year facts only'),
+    subject: z.string().optional().describe('Owner / K-1 issuer / related company, for owner and relationship facts'),
+    source_note: z.string().optional().describe('Exact provenance — who said it and when, or which document or return line'),
+    evidence_document_id: z.string().optional().describe('Document UUID supporting the answer (from list_documents)'),
+  }, async (params) => {
+    return text(await call('POST', '/api/facts', { ...params, recorded_by: 'mcp' }))
+  })
+
+  // ─── Tool: list_facts ───
+  server.tool('list_facts', 'List the facts recorded for an entity — current answers by default — with value, status, source, provenance note and evidence document. With tax_year: that year\'s answers plus the all-years ones. include_history adds superseded answers, to see what was said before and when it changed. For what is still MISSING use get_fact_gaps instead.', {
+    entity_id: z.string().describe('Entity UUID'),
+    tax_year: z.number().optional().describe('Limit to one tax year (all-years facts are always included)'),
+    include_history: z.boolean().optional().describe('Include superseded answers'),
+  }, async ({ entity_id, tax_year, include_history }) => {
+    const qs = new URLSearchParams()
+    if (tax_year !== undefined) qs.set('year', String(tax_year))
+    if (include_history) qs.set('history', '1')
+    const q = qs.toString()
+    return text(await call('GET', `/api/facts/${entity_id}${q ? `?${q}` : ''}`))
   })
 
   // ─── Tool: ingest_document ───

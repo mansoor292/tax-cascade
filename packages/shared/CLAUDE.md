@@ -2,7 +2,12 @@
 
 Canonical tax-domain constants and types both packages import: the
 metric ↔ sectioned-field_values maps (`metrics.ts`), the section display
-vocabulary (`sections.ts`), and the API response types (`types.ts`).
+vocabulary (`sections.ts`), the API response types (`types.ts`), and the
+fact registry (`facts.ts`) — the one list of facts each return type needs.
+A fact learned on one return is added to the registry, never parked in
+entity meta; its invariants are tested in packages/api/src/facts/ (this
+package has no test runner). Fact keys are stored in `tax_fact` rows, so
+never rename one that has answers.
 
 ## How the wiring works (do not "simplify" it)
 

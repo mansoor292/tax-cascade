@@ -70,6 +70,13 @@ export const ENCRYPTED_RETURN_FIELDS: FieldSpec = {
 }
 export const ENCRYPTED_DOC_FIELDS: FieldSpec = { json: ['meta', 'textract_data'] }
 export const ENCRYPTED_ENTITY_FIELDS: FieldSpec = { text: ['ein'] }
+/**
+ * tax_fact answers (services/facts.ts). The value is JSON because a fact can
+ * be a date, a flag, an amount or a list of loan rows; the note is free text
+ * that routinely names people, lenders and amounts. Ciphertext-only like the
+ * rest — tax_fact never had a plaintext era to fall back on.
+ */
+export const ENCRYPTED_FACT_FIELDS: FieldSpec = { json: ['value'], text: ['source_note'] }
 
 /**
  * Ciphertext sibling columns for selects that name columns explicitly.
@@ -86,6 +93,7 @@ export function encCols(spec: FieldSpec): string {
 // asserts these equal encCols(spec), so they cannot drift from the specs.
 export const RETURN_ENC_COLS = 'input_data_enc, computed_data_enc, field_values_enc, verification_enc'
 export const DOC_ENC_COLS = 'meta_enc, textract_data_enc'
+export const FACT_ENC_COLS = 'value_enc, source_note_enc'
 
 /**
  * Produce `*_enc` columns for any fields in `payload` that are set. Caller

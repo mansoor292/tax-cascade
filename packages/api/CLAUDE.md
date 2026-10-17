@@ -31,7 +31,7 @@ src/
 │                      sectioned-key map moved to @taxengine/shared
 ├── builders/          PDF fill; build_return_pdf.ts is the live package
 │                      builder, pdf_filler.ts has the shared helpers
-├── mcp/               tax-mcp.ts (45 tools; calls this server's own REST
+├── mcp/               tax-mcp.ts (50 tools; calls this server's own REST
 │                      over localhost — by design). OAuth lives ONLY in the
 │                      web package's Netlify Functions; do not add an
 │                      Express OAuth stack here (see server.ts's comment)
@@ -47,7 +47,7 @@ src/
 data/field_maps/       Textract-verified JSON maps (per form per year)
 data/irs_forms/        blank IRS PDFs, 2020–2025 — loadBlankForm() reads
                        these at runtime; they MUST be committed
-supabase/migrations/   7 migrations; *_remote_schema.sql is a dump, never
+supabase/migrations/   9 migrations; *_remote_schema.sql is a dump, never
                        hand-edited
 scripts/               deploy-reload.sh + load-ssm-env.sh are LOAD-BEARING
                        (webhook + pm2 call them by path); field-map regen
@@ -63,7 +63,10 @@ compute_from_qbo, amend, validate, PDF, extensions), `/api/entities`,
 of hardcoding), `/api/qbo` (OAuth, reports, transactions, AI
 recategorization, bank reconciliation), `/api/stripe`, `/api/scratch` (KV
 offload for MCP context), `/api/intake` (Gemini gap-fill), `/api/calendar`,
-`/api/discover`. `SKILL.md` documents the consumer workflow (entities → QBO →
+`/api/discover`, `/api/facts` (answers to the fact registry in
+`@taxengine/shared` facts.ts, table `tax_fact`, superseded never
+overwritten; `/:entity_id/gaps` is the per-return list every return of a
+type is held to — logic in services/facts.ts). `SKILL.md` documents the consumer workflow (entities → QBO →
 financials → validate → compute → scenarios → promote → PDF).
 
 Auth middleware (`server.ts` `/api` gate): static keys from `TAX_API_KEYS`
@@ -107,8 +110,10 @@ bespoke Python Textract reductions (in-file note).
 tests). Covered: the engine golden cases, calendar rules, QBO mapping,
 input coercion, 1065 archive mapping, the encrypted-field-spec drift
 guards, compute arithmetic validation, entity-identity parsing, the
-Textract poll loop, and the shared metric contract. **Route handlers,
-crypto primitives, and MCP still have no tests** — a green run does not
+Textract poll loop, the shared metric contract, the fact registry's
+invariants (src/facts/), fact gaps + the supersede write path, and the
+/api/facts route over HTTP with a faked database (the one route that has
+tests). **Other route handlers, crypto primitives, and MCP still have no tests** — a green run does not
 validate changes there; exercise those paths manually before claiming
 they work. `npm run lint` (eslint) exists here too.
 

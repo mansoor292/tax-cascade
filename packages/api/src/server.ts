@@ -44,6 +44,7 @@ import stripeRoutes from './routes/stripe.js'
 import scratchRoutes from './routes/scratch.js'
 import intakeRoutes from './routes/intake.js'
 import calendarRoutes from './routes/calendar.js'
+import factRoutes from './routes/facts.js'
 import discoveryRoutes from './discovery/discovery_routes.js'
 import oauthRoutes from './routes/oauth.js'
 import wellknownRoutes from './routes/wellknown.js'
@@ -315,6 +316,7 @@ app.use('/api/stripe', stripeRoutes)
 app.use('/api/scratch', scratchRoutes)
 app.use('/api/intake', intakeRoutes)
 app.use('/api/calendar', calendarRoutes)
+app.use('/api/facts', factRoutes)
 app.use('/api/discover', discoveryRoutes)
 
 // ─── Health ───

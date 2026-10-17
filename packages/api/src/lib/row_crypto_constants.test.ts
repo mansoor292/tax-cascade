@@ -9,8 +9,10 @@ import {
   ENCRYPTED_RETURN_FIELDS,
   ENCRYPTED_DOC_FIELDS,
   ENCRYPTED_ENTITY_FIELDS,
+  ENCRYPTED_FACT_FIELDS,
   RETURN_ENC_COLS,
   DOC_ENC_COLS,
+  FACT_ENC_COLS,
   encCols,
 } from './row_crypto.js'
 
@@ -21,6 +23,7 @@ describe('encrypted field specs', () => {
     // what stops them drifting from the specs.
     expect(RETURN_ENC_COLS).toBe(encCols(ENCRYPTED_RETURN_FIELDS))
     expect(DOC_ENC_COLS).toBe(encCols(ENCRYPTED_DOC_FIELDS))
+    expect(FACT_ENC_COLS).toBe(encCols(ENCRYPTED_FACT_FIELDS))
   })
 
   it('covers the known encrypted columns', () => {
@@ -29,6 +32,10 @@ describe('encrypted field specs', () => {
     )
     expect(new Set(ENCRYPTED_DOC_FIELDS.json)).toEqual(new Set(['meta', 'textract_data']))
     expect(ENCRYPTED_ENTITY_FIELDS.text).toEqual(['ein'])
+    // tax_fact: the answer itself and the provenance note both name people,
+    // lenders and amounts (migration 20261017120000_tax_fact.sql).
+    expect(ENCRYPTED_FACT_FIELDS.json).toEqual(['value'])
+    expect(ENCRYPTED_FACT_FIELDS.text).toEqual(['source_note'])
   })
 
   it('encCols handles mixed json+text specs', () => {
