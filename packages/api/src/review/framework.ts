@@ -69,7 +69,8 @@ export type DiffStatus = 'new' | 'unchanged' | 'changed' | 'resolved'
 
 export interface DiffInput {
   previous?: { findings: Finding[]; catalog_ids: string[]; facts_at: string | null; version: string }
-  current: { findings: Finding[]; catalog_ids: string[]; facts_at: string | null; version: string }
+  /** ai: whether this run ran the AI checks. Omitted means it did. */
+  current: { findings: Finding[]; catalog_ids: string[]; facts_at: string | null; version: string; ai?: boolean }
 }
 
 /** Compare a run with the previous one and say WHY each new finding is new:
@@ -80,7 +81,13 @@ export function diffRuns({ previous, current }: DiffInput): Array<Finding & { ch
   if (!previous) return current.findings.map(f => ({ ...f, change: 'new' as const, ...(actionable(f) ? { cause: 'first_run' as const } : {}) }))
   // A finding the previous run already marked resolved is history, not an
   // open item — carrying it again would make it reappear in every run.
-  const prev = new Map(previous.findings.filter(f => actionable(f) && (f as { change?: string }).change !== 'resolved').map(f => [f.fingerprint, f]))
+  const live = previous.findings.filter(f => (f as { change?: string }).change !== 'resolved')
+  // A run without the AI checks says nothing about the AI findings: they are
+  // carried as they stand, never marked resolved because nobody looked
+  // (2026-10-17 — a rules-only re-run after new transcripts would otherwise
+  // have dropped every verified AI item from the list).
+  const carried = current.ai === false ? live.filter(f => f.kind === 'ai') : []
+  const prev = new Map(live.filter(f => actionable(f) && !carried.includes(f)).map(f => [f.fingerprint, f]))
   const docsChanged = current.catalog_ids.some(id => !previous.catalog_ids.includes(id))
   const factsChanged = (current.facts_at ?? '') > (previous.facts_at ?? '')
   const frameworkChanged = current.version !== previous.version
@@ -98,5 +105,6 @@ export function diffRuns({ previous, current }: DiffInput): Array<Finding & { ch
     }
   }
   for (const [fp, f] of prev) if (!seen.has(fp)) out.push({ ...f, change: 'resolved' })
+  for (const f of carried) out.push({ ...f, change: 'unchanged' })
   return out
 }

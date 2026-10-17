@@ -92,7 +92,7 @@ export async function runReview(
     if (prev) await hydrate(supabase, prev, { ...ENCRYPTED_REVIEW_FIELDS, userId })
     const diffed = diffRuns({
       previous: prev ? { findings: (prev.findings as Finding[]) ?? [], catalog_ids: prev.catalog_ids ?? [], facts_at: prev.facts_at, version: prev.framework_version } : undefined,
-      current: { findings, catalog_ids: catalogIds, facts_at: factsAt, version },
+      current: { findings, catalog_ids: catalogIds, facts_at: factsAt, version, ai: !!opts.ai },
     })
     const summary = summarize(diffed)
     const payload = { findings: diffed }

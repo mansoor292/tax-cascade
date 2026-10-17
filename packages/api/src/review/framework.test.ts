@@ -112,6 +112,16 @@ describe('review framework', () => {
     expect(next.filter(x => x.fingerprint === 'b|2023|')).toEqual([])
   })
 
+  it('a run without the AI checks carries the AI findings, never resolves them', () => {
+    const f = (fp: string, kind: Finding['kind']): Finding => ({ check: fp.split('|')[0], status: 'finding', severity: 'high', title: fp, detail: '', evidence: [], fingerprint: fp, check_version: 1, area: 'x', kind, tax_year: 2023 })
+    const prev = { findings: [f('rule|2023|', 'rule'), f('ai.framework_scan|2023|x', 'ai')], catalog_ids: ['c1'], facts_at: null, version: 'v1' }
+    const rulesOnly = diffRuns({ previous: prev, current: { findings: [f('rule|2023|', 'rule')], catalog_ids: ['c1', 'c2'], facts_at: null, version: 'v1', ai: false } })
+    expect(rulesOnly.find(x => x.kind === 'ai')).toMatchObject({ change: 'unchanged', status: 'finding' })
+    // With the AI checks run, an AI finding that is gone is resolved.
+    const withAi = diffRuns({ previous: prev, current: { findings: [f('rule|2023|', 'rule')], catalog_ids: ['c1'], facts_at: null, version: 'v1', ai: true } })
+    expect(withAi.find(x => x.kind === 'ai')).toMatchObject({ change: 'resolved' })
+  })
+
   it('AI conclusions that cite nothing on the return are dropped', () => {
     const ids = new Set(['e1', 'e2'])
     expect(grounded([{ cited: ['e1', 'zz'] }, { cited: ['nope'] }, { cited: undefined }], ids)).toEqual([{ cited: ['e1'] }])
