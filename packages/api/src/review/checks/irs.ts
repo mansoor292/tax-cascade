@@ -54,6 +54,34 @@ export function postedFrom(ctx: ReviewContext, year: number): number | undefined
 }
 
 const FAILURE_TO_FILE = new Set(['160', '166', '246'])
+
+/** Was the year extended? The transcript's TC460 says so; a recorded answer
+ *  stands in when there is no transcript. EZA's 2021 and 2022 have no TC460,
+ *  so those returns were due 15 March, not 15 September. */
+function extensionOnFile(ctx: ReviewContext, year: number): { extended: boolean; how: string } {
+  const t = transcript(ctx.catalogs, year)
+  if (t) return transactions(t).some(x => x.code === '460') ? { extended: true, how: 'TC460 on the transcript' } : { extended: false, how: 'no extension (TC460) on the transcript' }
+  const f = ctx.facts.get('irs.extension_filed', { year })
+  return f?.value === false ? { extended: false, how: 'no extension filed (recorded)' } : { extended: true, how: f?.value === true ? 'extension filed (recorded)' : 'extension assumed' }
+}
+
+/** Months late, each month or part of one counting (§6699, §6651). */
+function monthsLate(due: Date, at: Date): number {
+  let m = 0
+  while (m < 600 && Date.UTC(due.getUTCFullYear(), due.getUTCMonth() + m, due.getUTCDate()) < at.getTime()) m++
+  return m
+}
+
+/** What a late-filing penalty would be had the IRS counted an earlier
+ *  receipt: the per-month rate is read off the assessment itself, so no rate
+ *  table is needed. §6699 (TC246) caps at 12 months, §6651 (TC166) at 5. */
+function reliefFromEarlierReceipt(p: { code: string; amount: number }, dueUsed: Date, counted: Date, earlier: Date): number {
+  const cap = p.code === '246' ? 12 : 5
+  const charged = Math.min(cap, monthsLate(dueUsed, counted))
+  if (!charged) return 0
+  const kept = Math.min(cap, monthsLate(dueUsed, earlier))
+  return Math.round(p.amount - (p.amount / charged) * kept)
+}
 const DAY = 86_400_000
 
 function addYears(d: Date, n: number): Date {
@@ -116,7 +144,7 @@ const statute: Check = {
 
 const transcriptAccount: Check = {
   id: 'irs.account_status',
-  version: 2,
+  version: 3,
   area: 'irs_account',
   title: 'What the IRS processed, duplicates, penalties and balance due',
   applies: ['1040', '1120', '1120S', '1065'],
@@ -160,14 +188,19 @@ const transcriptAccount: Check = {
       })
     }
     const pens = txs.filter(x => PENALTY_CODES[x.code] && x.amount > 0)
-    const ftf = pens.some(p => FAILURE_TO_FILE.has(p.code))
+    const { due, extended } = dueDates(ctx.entity.form_type, ctx.year)
+    const ext = extensionOnFile(ctx, ctx.year)
+    const dueUsed = ext.extended ? extended : due
+    const ftfPens = pens.filter(p => FAILURE_TO_FILE.has(p.code))
+    const relief = earlier && counted ? ftfPens.reduce((s, p) => s + reliefFromEarlierReceipt(p, dueUsed, counted, earlier.at!), 0) : 0
     if (pens.length) {
       const total = pens.reduce((s, p) => s + p.amount, 0)
       out.push({
         check: this.id, status: 'finding', severity: 'medium', key: 'penalties',
-        title: `${ctx.year}: penalties assessed ${money(total)} (${pens.map(p => `TC${p.code}`).join(', ')})`,
-        detail: `${pens.map(p => `${PENALTY_CODES[p.code]} ${money(p.amount)} on ${p.date}`).join('; ')}. First-time abatement needs a clean prior three years; otherwise reasonable cause.${ftf && earlier ? ` A return received earlier (${earlier.d.date}) supports cutting the late-filing penalty to the months before that date.` : ''}`,
+        title: `${ctx.year}: penalties assessed ${money(total)} (${pens.map(p => `TC${p.code}`).join(', ')})${relief > 0 ? ` — ${money(relief)} of it is abatable on the earlier receipt` : ''}`,
+        detail: `${pens.map(p => `${PENALTY_CODES[p.code]} ${money(p.amount)} on ${p.date}`).join('; ')}. First-time abatement needs a clean prior three years; otherwise reasonable cause.${ftfPens.length && earlier ? ` A return received earlier (${earlier.d.date}) supports cutting the late-filing penalty to the months before that date: due ${iso(dueUsed)} (${ext.how}), ${monthsLate(dueUsed, earlier.at!)} month(s) late at ${earlier.d.date} against ${monthsLate(dueUsed, counted!)} at ${iso(counted!)}${relief > 0 ? ` — ${money(relief)} less` : ''}.` : ''}`,
         evidence: pens.map(cite), asks: ['irs.penalties'],
+        ...(relief > 0 ? { dollar_effect: -relief } : {}),
       })
     }
     const bal = transcriptValue(t, 'Account', /^Account balance plus accruals|^Account balance$/i)
@@ -175,10 +208,9 @@ const transcriptAccount: Check = {
       out.push({ check: this.id, status: 'finding', severity: 'medium', key: 'balance', title: `${ctx.year}: ${money(bal.value)} owed to the IRS per the transcript`, detail: 'Pay it or request abatement; interest accrues daily.', evidence: [{ where: `${ctx.year} IRS transcript: ${bal.entry.raw}`, catalog_id: t.id, value: bal.value }], dollar_effect: bal.value })
     }
     const rec = transcriptValue(t, 'Return information', /return received date/i)
-    const { due, extended } = dueDates(ctx.entity.form_type, ctx.year)
     const received = parseDate(rec?.date)
-    if (received && received.getTime() > extended.getTime()) {
-      out.push({ check: this.id, status: 'finding', severity: 'medium', key: 'late', title: `${ctx.year}: return received ${rec!.date}, after the extended due date ${iso(extended)}`, detail: `Original due date ${iso(due)}. A return processed late draws late-filing penalties and starts the statute later.`, evidence: [{ where: `${ctx.year} IRS transcript: ${rec!.entry.raw}`, catalog_id: t.id }] })
+    if (received && received.getTime() > dueUsed.getTime()) {
+      out.push({ check: this.id, status: 'finding', severity: 'medium', key: 'late', title: `${ctx.year}: return received ${rec!.date}, after the ${ext.extended ? 'extended ' : ''}due date ${iso(dueUsed)}${ext.extended ? '' : ' (no extension on file)'}`, detail: `${ext.extended ? `Original due date ${iso(due)}; ${ext.how}.` : `${ext.how[0].toUpperCase()}${ext.how.slice(1)}, so the return was due ${iso(due)}, not ${iso(extended)}.`} A return processed late draws late-filing penalties and starts the statute later.`, evidence: [{ where: `${ctx.year} IRS transcript: ${rec!.entry.raw}`, catalog_id: t.id }] })
     }
     // Does the processed return match the catalogued one? If it matches
     // ANOTHER year's return, the IRS posted that return to this period —

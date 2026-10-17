@@ -49,7 +49,7 @@ describe('IRS account checks', () => {
   })
 
   it('a return received on the rolled due date is not late', async () => {
-    const t = (received: string) => tr(2022, { received, txs: [tx('150', 'Tax return filed', '11-06-2023')] })
+    const t = (received: string) => tr(2022, { received, txs: [tx('150', 'Tax return filed', '11-06-2023'), tx('460', 'Extension', '04-15-2023')] })
     expect((await run(2022, [t('10-16-2023')], [], indiv)).some(f => f.key === 'late')).toBe(false)
     expect((await run(2022, [t('10-17-2023')], [], indiv)).some(f => f.key === 'late')).toBe(true)
   })
@@ -97,5 +97,24 @@ describe('IRS account checks', () => {
     const fd = filingDate(ctx, 2025)
     expect(iso(fd.date!)).toBe('2026-10-14')
     expect(fd.source).toMatch(/carries the 2024 return/)
+  })
+
+  it('reads the extension off the transcript and prices relief from an earlier receipt (EZA 2021)', async () => {
+    // No TC460: due 15 Mar 2022. Counted receipt 12 Feb 2024 (12 months, capped);
+    // a copy arrived 15 Sep 2022 (6 months) — half the 2,520 is abatable.
+    const cats = [ret(2021, 100), tr(2021, { ti: 100, received: '02-12-2024', txs: [
+      tx('150', 'Tax return filed', '04-01-2024'), tx('976', 'Duplicate return filed', '09-15-2022'), tx('246', 'Failure to provide information penalty', '04-01-2024', 2520),
+    ] })]
+    const out = await run(2021, cats)
+    expect(out.find(f => f.key === 'late')!.title).toMatch(/after the due date 2022-03-15 \(no extension on file\)/)
+    const pen = out.find(f => f.key === 'penalties')! as { title: string; dollar_effect?: number }
+    expect(pen.dollar_effect).toBe(-1260)
+    expect(pen.title).toMatch(/1,260 of it is abatable/)
+  })
+
+  it('with a TC460 the extended date counts (EZA 2024: 2 months, 490)', async () => {
+    const cats = [ret(2024, 100), tr(2024, { ti: 100, received: '10-17-2025', txs: [tx('150', 'Tax return filed', '12-29-2025'), tx('460', 'Extension', '04-07-2025')] })]
+    const out = await run(2024, cats)
+    expect(out.find(f => f.key === 'late')!.title).toMatch(/after the extended due date 2025-09-15$/)
   })
 })
