@@ -41,6 +41,18 @@ function returnTaxable(ctx: ReviewContext, year: number): number | undefined {
   return amount(cat, 'f1040', { line: '15' })
 }
 
+/** The year whose return the IRS processed in `year`'s slot, when the
+ *  processed taxable income matches a neighbouring year's return instead. */
+export function postedFrom(ctx: ReviewContext, year: number): number | undefined {
+  const ti = transcriptValue(transcript(ctx.catalogs, year), 'Return information', /^Taxable Income$/i)
+  const ours = returnTaxable(ctx, year)
+  if (!ti || typeof ti.value !== 'number' || ours === undefined || Math.abs(ours - ti.value) <= 1) return undefined
+  return [year - 1, year + 1, year - 2, year + 2].find(y => {
+    const v = returnTaxable(ctx, y)
+    return v !== undefined && v !== 0 && Math.abs(v - (ti.value as number)) <= 1
+  })
+}
+
 const FAILURE_TO_FILE = new Set(['160', '166', '246'])
 const DAY = 86_400_000
 
@@ -51,14 +63,20 @@ function addYears(d: Date, n: number): Date {
 /** When the return counts as filed, and how we know. */
 export function filingDate(ctx: ReviewContext, year: number): { date?: Date; source: string; assumed: boolean } {
   const t = transcript(ctx.catalogs, year)
-  const rec = transcriptValue(t, 'Return information', /return received date/i)
-  if (rec?.date) return { date: parseDate(rec.date), source: `${year} IRS transcript: return received ${rec.date}`, assumed: false }
-  const tc150 = transactions(t).find(x => x.code === '150')
-  if (tc150?.date) return { date: parseDate(tc150.date), source: `${year} IRS transcript: TC150 ${tc150.date}`, assumed: false }
+  // When the IRS posted ANOTHER year's return here, the transcript's dates
+  // belong to that return, not to this year's (EZA 2025: the 2024 return's
+  // receipt would have started the 2025 statute).
+  const misposted = postedFrom(ctx, year)
+  if (misposted === undefined) {
+    const rec = transcriptValue(t, 'Return information', /return received date/i)
+    if (rec?.date) return { date: parseDate(rec.date), source: `${year} IRS transcript: return received ${rec.date}`, assumed: false }
+    const tc150 = transactions(t).find(x => x.code === '150')
+    if (tc150?.date) return { date: parseDate(tc150.date), source: `${year} IRS transcript: TC150 ${tc150.date}`, assumed: false }
+  }
   const f = ctx.facts.get('irs.filing_date', { year })
   if (f?.status === 'answered' && typeof f.value === 'string') {
     const d = parseDate(f.value)
-    if (d) return { date: d, source: `Recorded filing date ${f.value}`, assumed: false }
+    if (d) return { date: d, source: `Recorded filing date ${f.value}${misposted !== undefined ? ` (the ${year} transcript carries the ${misposted} return)` : ''}`, assumed: false }
   }
   const { due, extended } = dueDates(ctx.entity.form_type, year)
   const ext = ctx.facts.get('irs.extension_filed', { year })
@@ -68,7 +86,7 @@ export function filingDate(ctx: ReviewContext, year: number): { date?: Date; sou
 
 const statute: Check = {
   id: 'statute.windows',
-  version: 2,
+  version: 3,
   area: 'statute',
   title: 'Refund and assessment windows for the year',
   applies: ['1040', '1120', '1120S', '1065'],
@@ -168,10 +186,7 @@ const transcriptAccount: Check = {
     const ti = transcriptValue(t, 'Return information', /^Taxable Income$/i)
     const ours = returnTaxable(ctx, ctx.year)
     if (ti && typeof ti.value === 'number' && ours !== undefined && Math.abs(ours - ti.value) > 1) {
-      const posted = [ctx.year - 1, ctx.year + 1, ctx.year - 2, ctx.year + 2].find(y => {
-        const v = returnTaxable(ctx, y)
-        return v !== undefined && v !== 0 && Math.abs(v - (ti.value as number)) <= 1
-      })
+      const posted = postedFrom(ctx, ctx.year)
       const where = { where: `${ctx.year} IRS transcript: ${ti.entry.raw}`, catalog_id: t.id }
       out.push(posted !== undefined
         ? { check: this.id, status: 'finding', severity: 'high', key: 'mismatch', title: `${ctx.year}: the IRS posted the ${posted} return to ${ctx.year} (taxable income ${money(ti.value)}); the ${ctx.year} return (${money(ours)}) is not processed`, detail: `The return the IRS processed for ${ctx.year} carries the ${posted} return's taxable income. Ask the IRS to move it to ${posted} and process the ${ctx.year} return. Until it does, a ${ctx.year} return sent in will be set aside as a duplicate (TC976), and ${ctx.year}'s penalties and statute dates are running on the wrong return.`, evidence: [where] }

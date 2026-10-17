@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest'
 import type { CatalogEntry } from '../catalog/types.js'
 import type { CatalogView, EntityInfo } from './types.js'
 import { buildContext } from './context.js'
-import { irsChecks, dueDates } from './checks/irs.js'
+import { irsChecks, dueDates, filingDate } from './checks/irs.js'
 import { iso } from './lookup.js'
 
 let n = 0
@@ -88,5 +88,14 @@ describe('IRS account checks', () => {
     expect(noDate.find(f => f.key === '150')).toMatchObject({ status: 'gap', severity: 'medium' })
     const nothingOnFile = await run(2025, [tr(2025, { asOf: '10-14-2026' })])
     expect(nothingOnFile.find(f => f.key === '150')).toMatchObject({ status: 'finding', severity: 'high' })
+  })
+
+  it('a misposted return\'s receipt date never becomes this year\'s filing date', () => {
+    const cats = [ret(2024, 162007), ret(2025, 1306476), tr(2025, { ti: 162007, received: '03-15-2026', txs: [tx('150', 'Tax return filed', '03-30-2026')] })]
+    const facts = [{ fact_key: 'irs.filing_date', tax_year: 2025, subject: null, value: '2026-10-14', status: 'answered' as const, source: 'owner', recorded_at: '2026-10-17', superseded_by: null }]
+    const ctx = buildContext({ self: { entity: scorp, catalogs: cats }, others: [], year: 2025, facts, today: new Date('2026-10-17T00:00:00Z') })
+    const fd = filingDate(ctx, 2025)
+    expect(iso(fd.date!)).toBe('2026-10-14')
+    expect(fd.source).toMatch(/carries the 2024 return/)
   })
 })
