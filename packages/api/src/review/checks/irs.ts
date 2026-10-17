@@ -10,6 +10,7 @@
  */
 import type { Check, CheckResult, ReviewContext } from '../types.js'
 import { transcript, transactions, transcriptValue, parseDate, iso, money, filed, amount } from '../lookup.js'
+import { nextBusinessDay } from '../../engine/tax_calendar.js'
 
 const PENALTY_CODES: Record<string, string> = {
   '166': 'failure-to-file / late-filing penalty',
@@ -21,13 +22,27 @@ const PENALTY_CODES: Record<string, string> = {
   '186': 'estimated tax penalty',
 }
 
-/** Original due date (calendar-year filers), and the extended one. */
-function dueDates(formType: string, year: number): { due: Date; extended: Date } {
+/** Original due date (calendar-year filers), and the extended one — each
+ *  rolled past weekends and holidays (§7503). Without the roll a 1040 filed
+ *  Mon 16 Oct 2023 (the 15th was a Sunday) was reported late. */
+export function dueDates(formType: string, year: number): { due: Date; extended: Date } {
   const y = year + 1
-  if (formType === '1120S' || formType === '1065') return { due: new Date(Date.UTC(y, 2, 15)), extended: new Date(Date.UTC(y, 8, 15)) }
-  if (formType === '1120') return { due: new Date(Date.UTC(y, 3, 15)), extended: new Date(Date.UTC(y, 9, 15)) }
-  return { due: new Date(Date.UTC(y, 3, 15)), extended: new Date(Date.UTC(y, 9, 15)) }
+  const day = (m: number) => new Date(`${nextBusinessDay(`${y}-${String(m).padStart(2, '0')}-15`)}T00:00:00Z`)
+  if (formType === '1120S' || formType === '1065') return { due: day(3), extended: day(9) }
+  return { due: day(4), extended: day(10) }
 }
+
+/** Taxable income as the catalogued return for `year` prints it. */
+function returnTaxable(ctx: ReviewContext, year: number): number | undefined {
+  const cat = filed(ctx.catalogs, year)
+  if (!cat) return undefined
+  if (ctx.entity.form_type === '1120S') return amount(cat, 'f1120s', { line: year >= 2023 ? '22' : '21' })
+  if (ctx.entity.form_type === '1120') return amount(cat, 'f1120', { line: '30' })
+  return amount(cat, 'f1040', { line: '15' })
+}
+
+const FAILURE_TO_FILE = new Set(['160', '166', '246'])
+const DAY = 86_400_000
 
 function addYears(d: Date, n: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear() + n, d.getUTCMonth(), d.getUTCDate()))
@@ -53,7 +68,7 @@ export function filingDate(ctx: ReviewContext, year: number): { date?: Date; sou
 
 const statute: Check = {
   id: 'statute.windows',
-  version: 1,
+  version: 2,
   area: 'statute',
   title: 'Refund and assessment windows for the year',
   applies: ['1040', '1120', '1120S', '1065'],
@@ -83,7 +98,7 @@ const statute: Check = {
 
 const transcriptAccount: Check = {
   id: 'irs.account_status',
-  version: 1,
+  version: 2,
   area: 'irs_account',
   title: 'What the IRS processed, duplicates, penalties and balance due',
   applies: ['1040', '1120', '1120S', '1065'],
@@ -96,23 +111,44 @@ const transcriptAccount: Check = {
     const out: CheckResult[] = []
     const cite = (x: { code: string; label: string; amount: number; date?: string }) => ({ where: `${ctx.year} IRS transcript: TC${x.code} ${x.label} ${x.date ?? ''} ${money(x.amount)}`, catalog_id: t.id, value: x.amount })
     const tc150 = txs.find(x => x.code === '150')
-    if (!tc150) out.push({ check: this.id, status: 'finding', severity: 'high', key: '150', title: `${ctx.year}: no TC150 — the IRS shows no processed return`, detail: 'Without a TC150 the IRS treats the year as unfiled. Confirm whether a return was sent and where it posted (returns have posted to the wrong period before).', evidence: [] })
+    const asOf = String(transcriptValue(t, 'Header', /^Response Date$/i)?.value ?? transcriptValue(t, 'Header', /^Request Date$/i)?.value ?? '')
+    const asOfDate = parseDate(asOf)
+    if (!tc150) {
+      // A transcript pulled before or soon after the return went in cannot
+      // show it yet; that is a reason to pull a new one, not an unfiled year.
+      const fdFact = ctx.facts.get('irs.filing_date', { year: ctx.year })
+      const filedOn = fdFact?.status === 'answered' && typeof fdFact.value === 'string' ? parseDate(fdFact.value) : undefined
+      const onFile = !!filed(ctx.catalogs, ctx.year)
+      if (filedOn && asOfDate && asOfDate.getTime() < filedOn.getTime() + 90 * DAY) {
+        out.push({ check: this.id, status: 'gap', severity: 'low', key: '150', title: `${ctx.year}: return filed ${iso(filedOn)} — not yet posted on the transcript dated ${asOf}`, detail: `The transcript predates the return's processing. Pull a new account transcript after ${iso(new Date(filedOn.getTime() + 90 * DAY))} and confirm a TC150 for ${ctx.year}.`, evidence: [{ where: `${ctx.year} IRS transcript dated ${asOf}`, catalog_id: t.id }] })
+      } else if (onFile && !filedOn) {
+        out.push({ check: this.id, status: 'gap', severity: 'medium', key: '150', title: `${ctx.year}: a return is on file here, but the transcript${asOf ? ` dated ${asOf}` : ''} shows none processed`, detail: 'If the return was filed after the transcript date that is expected — record the filing date. Otherwise confirm where it posted (returns have posted to the wrong period before).', evidence: [{ where: `${ctx.year} IRS transcript${asOf ? ` dated ${asOf}` : ''}`, catalog_id: t.id }], asks: ['irs.filing_date'] })
+      } else {
+        out.push({ check: this.id, status: 'finding', severity: 'high', key: '150', title: `${ctx.year}: no TC150 — the IRS shows no processed return`, detail: 'Without a TC150 the IRS treats the year as unfiled. Confirm whether a return was sent and where it posted (returns have posted to the wrong period before).', evidence: [{ where: `${ctx.year} IRS transcript${asOf ? ` dated ${asOf}` : ''}`, catalog_id: t.id }] })
+      }
+    }
     const dups = txs.filter(x => x.code === '976' || x.code === '977')
+    // An earlier receipt only helps a failure-to-file penalty, and only if it
+    // really is earlier than the receipt the IRS counted.
+    const counted = parseDate(transcriptValue(t, 'Return information', /return received date/i)?.date) ?? parseDate(tc150?.date)
+    const earlier = dups.map(d => ({ d, at: parseDate(d.date) })).filter(x => x.at && counted && x.at.getTime() < counted.getTime())
+      .sort((a, b) => a.at!.getTime() - b.at!.getTime())[0]
     if (dups.length) {
       out.push({
         check: this.id, status: 'finding', severity: 'medium', key: '976',
         title: `${ctx.year}: ${dups.length} additional return(s) received and set aside (${dups.map(d => `TC${d.code} ${d.date}`).join(', ')})`,
-        detail: 'The IRS received more than one return for this period and processed only one. Confirm the processed one is the right version; the earliest receipt date supports penalty relief.',
+        detail: `The IRS received more than one return for this period and processed only one. Confirm the processed one is the right version.${earlier ? ` A copy arrived ${earlier.d.date}, before the receipt the IRS counted (${iso(counted!)}) — that date supports cutting a late-filing penalty.` : ''}`,
         evidence: dups.map(cite),
       })
     }
     const pens = txs.filter(x => PENALTY_CODES[x.code] && x.amount > 0)
+    const ftf = pens.some(p => FAILURE_TO_FILE.has(p.code))
     if (pens.length) {
       const total = pens.reduce((s, p) => s + p.amount, 0)
       out.push({
         check: this.id, status: 'finding', severity: 'medium', key: 'penalties',
         title: `${ctx.year}: penalties assessed ${money(total)} (${pens.map(p => `TC${p.code}`).join(', ')})`,
-        detail: `${pens.map(p => `${PENALTY_CODES[p.code]} ${money(p.amount)} on ${p.date}`).join('; ')}. First-time abatement needs a clean prior three years; otherwise reasonable cause. ${dups.length ? `A return received earlier (${dups[0].date}) supports cutting a late-filing penalty to the months before that date.` : ''}`,
+        detail: `${pens.map(p => `${PENALTY_CODES[p.code]} ${money(p.amount)} on ${p.date}`).join('; ')}. First-time abatement needs a clean prior three years; otherwise reasonable cause.${ftf && earlier ? ` A return received earlier (${earlier.d.date}) supports cutting the late-filing penalty to the months before that date.` : ''}`,
         evidence: pens.map(cite), asks: ['irs.penalties'],
       })
     }
@@ -126,16 +162,20 @@ const transcriptAccount: Check = {
     if (received && received.getTime() > extended.getTime()) {
       out.push({ check: this.id, status: 'finding', severity: 'medium', key: 'late', title: `${ctx.year}: return received ${rec!.date}, after the extended due date ${iso(extended)}`, detail: `Original due date ${iso(due)}. A return processed late draws late-filing penalties and starts the statute later.`, evidence: [{ where: `${ctx.year} IRS transcript: ${rec!.entry.raw}`, catalog_id: t.id }] })
     }
-    // Does the processed return match the catalogued one?
-    const cat = filed(ctx.catalogs, ctx.year)
+    // Does the processed return match the catalogued one? If it matches
+    // ANOTHER year's return, the IRS posted that return to this period —
+    // EZA's 2023 return posted to 2024 and its 2024 return to 2025.
     const ti = transcriptValue(t, 'Return information', /^Taxable Income$/i)
-    if (cat && ti && typeof ti.value === 'number') {
-      const ours = ctx.entity.form_type === '1120S'
-        ? amount(cat, 'f1120s', { line: ctx.year >= 2023 ? '22' : '21' })
-        : ctx.entity.form_type === '1120' ? amount(cat, 'f1120', { line: '30' }) : amount(cat, 'f1040', { line: '15' })
-      if (ours !== undefined && Math.abs(ours - ti.value) > 1) {
-        out.push({ check: this.id, status: 'finding', severity: 'high', key: 'mismatch', title: `${ctx.year}: the IRS processed taxable income of ${money(ti.value)}; the catalogued return shows ${money(ours)}`, detail: 'The IRS processed a different return from the one on file here (another copy, an amendment, or a return posted to the wrong period). Find out which.', evidence: [{ where: `${ctx.year} IRS transcript: ${ti.entry.raw}`, catalog_id: t.id }] })
-      }
+    const ours = returnTaxable(ctx, ctx.year)
+    if (ti && typeof ti.value === 'number' && ours !== undefined && Math.abs(ours - ti.value) > 1) {
+      const posted = [ctx.year - 1, ctx.year + 1, ctx.year - 2, ctx.year + 2].find(y => {
+        const v = returnTaxable(ctx, y)
+        return v !== undefined && v !== 0 && Math.abs(v - (ti.value as number)) <= 1
+      })
+      const where = { where: `${ctx.year} IRS transcript: ${ti.entry.raw}`, catalog_id: t.id }
+      out.push(posted !== undefined
+        ? { check: this.id, status: 'finding', severity: 'high', key: 'mismatch', title: `${ctx.year}: the IRS posted the ${posted} return to ${ctx.year} (taxable income ${money(ti.value)}); the ${ctx.year} return (${money(ours)}) is not processed`, detail: `The return the IRS processed for ${ctx.year} carries the ${posted} return's taxable income. Ask the IRS to move it to ${posted} and process the ${ctx.year} return. Until it does, a ${ctx.year} return sent in will be set aside as a duplicate (TC976), and ${ctx.year}'s penalties and statute dates are running on the wrong return.`, evidence: [where] }
+        : { check: this.id, status: 'finding', severity: 'high', key: 'mismatch', title: `${ctx.year}: the IRS processed taxable income of ${money(ti.value)}; the catalogued return shows ${money(ours)}`, detail: 'The IRS processed a different return from the one on file here (another copy, an amendment, or a return posted to the wrong period). Find out which.', evidence: [where] })
     }
     return out.length ? out : [{ check: this.id, status: 'pass', severity: 'info', title: `${ctx.year} account clean`, detail: '', evidence: [] }]
   },
