@@ -144,7 +144,7 @@ const statute: Check = {
 
 const transcriptAccount: Check = {
   id: 'irs.account_status',
-  version: 3,
+  version: 4,
   area: 'irs_account',
   title: 'What the IRS processed, duplicates, penalties and balance due',
   applies: ['1040', '1120', '1120S', '1065'],
@@ -206,6 +206,21 @@ const transcriptAccount: Check = {
     const bal = transcriptValue(t, 'Account', /^Account balance plus accruals|^Account balance$/i)
     if (bal && typeof bal.value === 'number' && bal.value > 0) {
       out.push({ check: this.id, status: 'finding', severity: 'medium', key: 'balance', title: `${ctx.year}: ${money(bal.value)} owed to the IRS per the transcript`, detail: 'Pay it or request abatement; interest accrues daily.', evidence: [{ where: `${ctx.year} IRS transcript: ${bal.entry.raw}`, catalog_id: t.id, value: bal.value }], dollar_effect: bal.value })
+    }
+    // A credit balance is the IRS holding the taxpayer's money — the 2023
+    // 1040 refund (181,409) was issued twice and came back both times
+    // (TC841 cancelled, TC740 undelivered), and nothing flagged it.
+    if (bal && typeof bal.value === 'number' && bal.value < -1) {
+      const refunds = txs.filter(x => x.code === '846')
+      const back = txs.filter(x => x.code === '740' || x.code === '841')
+      const history = [...refunds.map(r => `refund issued ${r.date} ${money(r.amount)}`), ...back.map(b => `${b.code === '740' ? 'undelivered refund returned to the IRS' : 'refund cancelled'} ${b.date}`)].join('; ')
+      out.push({
+        check: this.id, status: 'finding', severity: 'high', key: 'credit',
+        title: `${ctx.year}: the IRS is holding ${money(-bal.value)} of yours (credit balance${asOf ? ` as of ${asOf}` : ''})${back.length ? ' — the refund came back' : ''}`,
+        detail: `${history ? `${history}. ` : ''}${back.length ? 'The refund did not reach you. Ask the IRS to reissue it (confirm the address on file — Form 8822 if it changed — or give direct-deposit details), or have the credit applied to a balance due for another year. ' : 'Ask for it to be refunded or applied to another year. '}Pull a fresh transcript first: this one is dated ${asOf || 'unknown'}, and a reissue may already have gone out.`,
+        evidence: [{ where: `${ctx.year} IRS transcript: ${bal.entry.raw}`, catalog_id: t.id, value: bal.value }, ...[...refunds, ...back].map(cite)],
+        dollar_effect: bal.value,
+      })
     }
     const rec = transcriptValue(t, 'Return information', /return received date/i)
     const received = parseDate(rec?.date)

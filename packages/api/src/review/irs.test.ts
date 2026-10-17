@@ -117,4 +117,19 @@ describe('IRS account checks', () => {
     const out = await run(2024, cats)
     expect(out.find(f => f.key === 'late')!.title).toMatch(/after the extended due date 2025-09-15$/)
   })
+
+  it('a credit balance is money the IRS holds, and a returned refund is called out', async () => {
+    const cats = [cat('t2023', 2023, [
+      e('irs_transcript', { section: 'Header', line: 'Response Date', kind: 'text', value: '04-11-2026', raw: '' }),
+      e('irs_transcript', { section: 'Account', line: 'Account balance', value: -179816.02, raw: 'Account balance: -$179,816.02' }),
+      tx('150', 'Tax return filed', '01-05-2026'), tx('846', 'Refund issued', '01-19-2026', 181409.21), tx('841', 'Refund cancelled', '01-19-2026', -181409.21),
+      tx('846', 'Refund issued', '03-30-2026', 181409.21), tx('740', 'Undelivered refund returned to IRS', '03-30-2026', -181409.21),
+    ], 'irs_transcript')]
+    const out = await run(2023, cats, [], indiv)
+    const c = out.find(f => f.key === 'credit')! as { title: string; detail: string; severity: string; dollar_effect?: number }
+    expect(c.severity).toBe('high')
+    expect(c.dollar_effect).toBeCloseTo(-179816.02)
+    expect(c.title).toMatch(/holding 179,816.*the refund came back/)
+    expect(c.detail).toMatch(/undelivered refund returned to the IRS 03-30-2026/)
+  })
 })
