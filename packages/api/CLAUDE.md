@@ -36,6 +36,18 @@ src/
 │                      web package's Netlify Functions; do not add an
 │                      Express OAuth stack here (see server.ts's comment)
 ├── discovery/         download IRS PDF → Textract → auto-build field map
+├── catalog/           every value on every page of a return: pdf_layout (pdfjs
+│                      runs + drawn marks), xfa/describe (IRS line descriptions),
+│                      extract (classify page → subtract template → assign to
+│                      widgets; substitute forms aligned by anchors + line
+│                      labels; statements/worksheets as rows; transcripts
+│                      parsed), ties (each form's own arithmetic), query,
+│                      store (table return_catalog, entries encrypted)
+├── review/            the fixed review framework: checks/ (catalog, entity,
+│                      passthrough = NIIT/basis/7203/SSTB/loans, continuity,
+│                      irs/statute), ai.ts (grounded Gemini judgement checks),
+│                      framework.ts (runner + run diff), store.ts (review_run,
+│                      review_resolution)
 └── lib/               supabase.ts (serviceClient/anonClient/userClient/
                        requestUserId — THE clients, three on purpose;
                        module scope must use lazyServiceClient/lazyAnonClient
@@ -44,6 +56,13 @@ src/
                        field specs), http_error (sendError/errorOutcome),
                        s3.ts + textract.ts (flag-gated AWS dual path),
                        run_python, ssm, …
+data/line_dicts/       one gz JSON per IRS form revision: every widget with its
+                       page, rectangle, section/line/row/col and the IRS's own
+                       description, plus the blank's template text and drawn
+                       rules. Built by scripts/catalog/build_line_dicts.ts from
+                       irs.gov/pub/irs-prior (blanks cached, not committed);
+                       add a form to scripts/catalog/blanks_manifest.ts when a
+                       catalog reports a page it could not classify
 data/field_maps/       Textract-verified JSON maps (per form per year)
 data/irs_forms/        blank IRS PDFs, 2020–2025 — loadBlankForm() reads
                        these at runtime; they MUST be committed
@@ -63,7 +82,9 @@ compute_from_qbo, amend, validate, PDF, extensions), `/api/entities`,
 of hardcoding), `/api/qbo` (OAuth, reports, transactions, AI
 recategorization, bank reconciliation), `/api/stripe`, `/api/scratch` (KV
 offload for MCP context), `/api/intake` (Gemini gap-fill), `/api/calendar`,
-`/api/discover`, `/api/facts` (answers to the fact registry in
+`/api/discover`, `/api/catalog` (catalogue a return PDF, status, query),
+`/api/review` (run the framework, latest findings, one summary across
+entities, resolutions), `/api/facts` (answers to the fact registry in
 `@taxengine/shared` facts.ts, table `tax_fact`, superseded never
 overwritten; `/:entity_id/gaps` is the per-return list every return of a
 type is held to — logic in services/facts.ts). `SKILL.md` documents the consumer workflow (entities → QBO →

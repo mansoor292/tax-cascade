@@ -77,6 +77,13 @@ export const ENCRYPTED_ENTITY_FIELDS: FieldSpec = { text: ['ein'] }
  * rest — tax_fact never had a plaintext era to fall back on.
  */
 export const ENCRYPTED_FACT_FIELDS: FieldSpec = { json: ['value'], text: ['source_note'] }
+/** return_catalog: every value read off a return, and the per-page detail
+ *  (statement headings and unassigned text quote the return verbatim). */
+export const ENCRYPTED_CATALOG_FIELDS: FieldSpec = { json: ['entries', 'pages'] }
+/** review_run findings quote amounts and names from the return; review
+ *  resolution notes are free text. */
+export const ENCRYPTED_REVIEW_FIELDS: FieldSpec = { json: ['findings'] }
+export const ENCRYPTED_RESOLUTION_FIELDS: FieldSpec = { text: ['note'] }
 
 /**
  * Ciphertext sibling columns for selects that name columns explicitly.
@@ -94,6 +101,8 @@ export function encCols(spec: FieldSpec): string {
 export const RETURN_ENC_COLS = 'input_data_enc, computed_data_enc, field_values_enc, verification_enc'
 export const DOC_ENC_COLS = 'meta_enc, textract_data_enc'
 export const FACT_ENC_COLS = 'value_enc, source_note_enc'
+export const CATALOG_ENC_COLS = 'entries_enc, pages_enc'
+export const REVIEW_ENC_COLS = 'findings_enc'
 
 /**
  * Produce `*_enc` columns for any fields in `payload` that are set. Caller

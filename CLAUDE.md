@@ -33,6 +33,22 @@ Local dev needs `SUPABASE_SERVICE_ROLE_KEY` at minimum (see
 `packages/api/.env.production.template` for the full variable list); the web
 dev server proxies `/api` and `/auth` to `localhost:3737`.
 
+## Reading a return: the catalog, the fact registry, the review framework
+
+Since 2026-10-17 (docs/RETURN_CATALOG_AND_REVIEW.md — read it):
+- **Every question about a return is answered from its catalog** (`return_catalog`,
+  `src/catalog/`, MCP `query_catalog`), never by re-reading the PDF. The catalog
+  holds every box, check, K-1 item, statement row and worksheet line of every
+  page, located by the IRS's own line description (`data/line_dicts`, built from
+  each blank's XFA `<speak>` text by `scripts/catalog/build_line_dicts.ts`). If
+  the catalog can't answer, that is a catalog defect to fix.
+- **Every return type is held to one fact list** (`@taxengine/shared` facts.ts,
+  table `tax_fact`, `/api/facts`): what one return needed becomes a question for
+  all of them.
+- **Every return goes through the same checks** (`src/review/`, `/api/review`,
+  MCP `run_review`/`review_summary`): results are stored and each new finding
+  says why it is new (document, fact, framework, or a miss).
+
 ## Load-bearing facts (learned from production incidents — do not re-learn)
 
 1. **`src/bootstrap_env.ts` must stay the FIRST import in `server.ts`.**

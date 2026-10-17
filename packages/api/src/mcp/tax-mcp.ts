@@ -184,6 +184,10 @@ Call list_entities first. Figure out what the user needs from context — don't 
 
 Answer account-level and family-level questions ("what's on file?", "what's missing for 2024?") from list_entities + list_documents alone — they already carry every entity's returns, years, sources, and document types. Do NOT call get_entity once per entity for an overview; each call is a separate permission prompt for the user. get_entity is for drilling into ONE entity when you need what the summary omits (the Schedule K questionnaire, scenarios, full field detail).
 
+## Questions about a return are answered from the CATALOG
+
+Every value on every page of a catalogued return — each box, check, Schedule K-1 item, statement row and worksheet line — is stored with its form, section, line, column and page. Answer questions about a return with query_catalog, and cite the line it returned ("per the filed 2023 Form 1120-S, Schedule L line 19, column (d)"). Do not read or re-read the PDF to answer a question, and do not rely on the filed_import tax_return row (it holds 10–40% of a return). If query_catalog finds nothing, say the catalog has no such line for that return — that is a catalog gap to report (catalog_status shows coverage), not a reason to go to the PDF. Before relying on a year, check catalog_status: a return that is not catalogued, or catalogued as incomplete, must be called out.
+
 ## Evidence discipline — fact vs. absence vs. inference
 
 This system holds financial records; users act on what you say. Before stating any material financial or tax conclusion, check the underlying records (list_documents, compare_returns, get_entity — the extracted field values), and keep three categories distinct in your OWN voice, in the FIRST answer, not only when challenged:
@@ -329,6 +333,14 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   file_extension:             { title: 'File extension', ...WRITE },
   generate_k1s:               { title: 'Generate Schedule K-1s (issuer side)', ...WRITE },
   validate_extension:         { title: 'Validate extension inputs', ...RO },
+  query_catalog:              { title: 'Answer from the return catalog', ...RO },
+  catalog_status:             { title: 'Catalog coverage by year', ...RO },
+  catalog_document:           { title: 'Catalogue a stored return PDF', ...WRITE },
+  catalog_upload:             { title: 'Upload & catalogue a return PDF', ...WRITE },
+  run_review:                 { title: 'Run the review framework', ...WRITE },
+  get_review:                 { title: 'Latest review findings', ...RO },
+  review_summary:             { title: 'Everything to act on, all entities', ...RO },
+  resolve_finding:            { title: 'Record a decision on a finding', ...WRITE },
 }
 
 function extractApiKey(req: Request): string | null {
@@ -1160,6 +1172,105 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
       amount: z.number().optional().describe('Amount due, if there is one'),
     },
     async (params) => text(await call('POST', '/api/calendar', params)))
+
+  // ─── Tool: query_catalog ───
+  // The owner's rule (2026-10-17): every question about a return is answered
+  // from the catalog, never by going back to the PDF. In-band in the
+  // description as well as INSTRUCTIONS, because instructions-only rules
+  // demonstrably don't hold (see list_entities).
+  server.tool('query_catalog',
+    'Answer a question about a filed or computed return FROM ITS CATALOG — every box, checkbox, K-1 item, statement row and worksheet line of every page, each with its form, section, line, column and page. This is THE way to read a return: do not open the PDF, and do not use the filed_import tax_return row (partial). Filter by any combination: years, forms ("1120-S", "K-1", "Schedule E", "8960", or IRS slugs like f1120ssk), section ("Schedule L", "Part II", or a statement title), line ("19", "17a", "A", "J(2)"), col ("d"), row ("A"), canonical key, or free text (matches the IRS line label, its official description and the printed text — e.g. "passive", "loans from shareholders", "material participation"). Each hit has `where` — cite it in your answer. No hits means the catalog has no such line for that return: say so; check catalog_status for coverage.',
+    {
+      entity_id: z.string().describe('Entity UUID'),
+      years: z.array(z.number()).optional().describe('Tax years to search; omit for all catalogued years'),
+      forms: z.array(z.string()).optional().describe('Form names or IRS slugs, e.g. ["1120-S"], ["K-1"], ["Schedule E"], ["8960"], ["statement"]'),
+      section: z.string().optional().describe('Section or statement title substring, e.g. "Schedule L", "Schedule B", "Part II", "Other Deductions"'),
+      line: z.string().optional().describe('Printed line exactly as on the form: "19", "17a", "A", "J(2)"'),
+      col: z.string().optional().describe('Column letter/number, e.g. "d" for Schedule L end of year'),
+      row: z.string().optional().describe('Table row, e.g. "A" for the first Schedule E Part II row'),
+      canonical: z.string().optional().describe('Canonical field_values key, or a prefix ending in "." (e.g. "schedK.")'),
+      text: z.string().optional().describe('Words that must all appear in the label, the IRS description or the printed text'),
+      kinds: z.array(z.enum(['amount', 'text', 'check', 'row'])).optional().describe('Restrict to amounts, text boxes, ticked checkboxes, or statement rows'),
+      include_copies: z.boolean().optional().describe('Include second printed copies of a form (default false)'),
+      limit: z.number().optional().describe('Max hits (default 200)'),
+    },
+    async ({ entity_id, years, forms, kinds, ...rest }) => {
+      const qs = new URLSearchParams()
+      if (years?.length) qs.set('years', years.join(','))
+      if (forms?.length) qs.set('forms', forms.join(','))
+      if (kinds?.length) qs.set('kinds', kinds.join(','))
+      for (const [k, v] of Object.entries(rest)) if (v !== undefined && v !== null && v !== '') qs.set(k, String(v))
+      return text(await call('GET', `/api/catalog/${entity_id}/query?${qs.toString()}`))
+    })
+
+  // ─── Tool: catalog_status ───
+  server.tool('catalog_status',
+    'Is every filed return (and IRS transcript) for this entity catalogued, and catalogued completely? Lists each filed-return document by year with its catalog status (complete / incomplete / not catalogued) and the blocking problems. Check this before answering about a year: a return that is not catalogued or incomplete must be called out, and catalogued (catalog_document) before its contents are relied on.',
+    { entity_id: z.string().describe('Entity UUID') },
+    async ({ entity_id }) => text(await call('GET', `/api/catalog/${entity_id}/status`)))
+
+  // ─── Tool: catalog_document ───
+  server.tool('catalog_document',
+    'Catalogue a return PDF already stored as a document (list_documents): every page is matched to its IRS form and revision, and every box, check, statement row and worksheet line is stored with its line and page. Returns coverage only (no values). Re-running supersedes the previous catalog of that document; nothing is overwritten.',
+    {
+      document_id: z.string().describe('Document UUID'),
+      tax_year: z.number().optional().describe('Tax year, if the document row lacks it'),
+    },
+    async ({ document_id, tax_year }) => text(await call('POST', `/api/catalog/documents/${document_id}`, tax_year ? { tax_year } : {})))
+
+  // ─── Tool: catalog_upload ───
+  server.tool('catalog_upload',
+    'Store a filed return PDF (or an IRS transcript) for an entity and catalogue it in one step. Use this — not ingest_document — for returns: ingest_document runs the old partial extraction and creates another filed_import row. Returns coverage only.',
+    {
+      entity_id: z.string().describe('Entity UUID'),
+      tax_year: z.number().describe('Tax year of the return'),
+      filename: z.string().describe('File name, ending .pdf'),
+      content_base64: z.string().describe('The PDF, base64-encoded'),
+      doc_type: z.string().optional().describe('prior_return_1040 | prior_return_1120 | prior_return_1120s | prior_return_1065 | tax_transcript | irs_notice'),
+    },
+    async (params) => text(await call('POST', '/api/catalog/upload', params)))
+
+  // ─── Tool: run_review ───
+  server.tool('run_review',
+    'Run the FIXED review framework on an entity\'s catalogued returns for one or more tax years: catalog completeness and arithmetic, corporate status and elections, K-1 consistency, balance-sheet continuity, stock basis and distributions above basis, suspended losses, NIIT on nonpassive income, QBI/SSTB, loans, carryovers, information returns, the IRS account (transcripts, penalties, duplicates) and statute windows — plus AI judgement checks when ai=true. Every run is stored and diffed with the last: each new finding says WHY it is new (new document, new fact, framework change, or a miss). Use this instead of reviewing a return ad hoc; report what it returns, grouped by severity, with the dollar effects and deadlines, and ask the owner every fact in `asks` at once.',
+    {
+      entity_id: z.string().describe('Entity UUID'),
+      years: z.array(z.number()).describe('Tax years to review, e.g. [2022, 2023, 2024, 2025]'),
+      ai: z.boolean().optional().describe('Also run the AI judgement checks (slower; runs in the background — read with get_review)'),
+    },
+    async ({ entity_id, years, ai }) => text(await call('POST', `/api/review/${entity_id}/run`, { years, ai: !!ai })))
+
+  // ─── Tool: get_review ───
+  server.tool('get_review',
+    'The latest stored review of an entity, per tax year: findings and gaps by severity, each with evidence (the catalog lines it rests on), dollar effect, deadline, the facts to ask, whether it is new since the previous run and why, and any recorded resolution.',
+    {
+      entity_id: z.string().describe('Entity UUID'),
+      years: z.array(z.number()).optional().describe('Restrict to these years'),
+      include_passed: z.boolean().optional().describe('Include checks that passed'),
+    },
+    async ({ entity_id, years, include_passed }) => {
+      const qs = new URLSearchParams()
+      if (years?.length) qs.set('years', years.join(','))
+      if (include_passed) qs.set('include_passed', '1')
+      return text(await call('GET', `/api/review/${entity_id}${qs.toString() ? '?' + qs.toString() : ''}`))
+    })
+
+  // ─── Tool: review_summary ───
+  server.tool('review_summary',
+    'ONE list of everything to act on across all entities and years from their latest reviews — unresolved findings and gaps, most severe first, then by dollar effect and deadline — plus every fact to ask the owner. This is the closed list: anything not on it was checked and passed, or is not covered by the framework (say so).',
+    { entity_ids: z.array(z.string()).optional().describe('Limit to these entities') },
+    async ({ entity_ids }) => text(await call('GET', `/api/review/summary${entity_ids?.length ? '?entity_ids=' + entity_ids.join(',') : ''}`)))
+
+  // ─── Tool: resolve_finding ───
+  server.tool('resolve_finding',
+    'Record the owner\'s decision about a finding (fixed, accepted, not_an_issue, reopened) with a note. Keyed by the finding\'s fingerprint, so the decision carries into later runs; superseded, never overwritten.',
+    {
+      entity_id: z.string().describe('Entity UUID'),
+      fingerprint: z.string().describe('The finding fingerprint from get_review / review_summary'),
+      resolution: z.enum(['fixed', 'accepted', 'not_an_issue', 'reopened']),
+      note: z.string().optional().describe('Why — what was done or decided, and by whom'),
+    },
+    async ({ entity_id, ...rest }) => text(await call('POST', `/api/review/${entity_id}/resolve`, rest)))
 
   // ─── Tool: request_form ───
   // Response includes the live discovery status record inline (folds in the old check_form_status tool).

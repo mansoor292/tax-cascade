@@ -119,6 +119,9 @@ export interface CatalogSelector {
   line: string
   row?: string
   col?: string
+  /** K-1 coded boxes (1120-S box 16/17, 1065 box 19/20): the code whose
+   *  amount is meant — box 16 code D is distributions. */
+  code?: string
   note?: string
   /**
    * 'equals' (default): the line answers the fact, so a different value is a
@@ -355,11 +358,11 @@ export const FACT_DEFS: readonly FactDef[] = [
     affects: ['corporate', 'intercompany', 'state'],
     evidence: ['return_line', 'books'],
     catalog: [
-      { form: 'f1120s', section: 'Schedule B', line: '1', note: 'Check accounting method' },
-      { form: 'f1120', section: 'Schedule K', line: '1', note: 'Check accounting method' },
-      { form: 'f1065', line: 'H', note: 'Check accounting method' },
+      { form: 'f1120s', section: 'Schedule B', line: '1a', note: 'Accounting method: a. Cash (b. Accrual is 1b, c. Other is 1c)', relation: 'related' },
+      { form: 'f1120', section: 'Schedule K', line: '1a', note: 'Accounting method: a. Cash (b. Accrual is 1b, c. Other is 1c)', relation: 'related' },
+      { form: 'f1065', line: 'H(1)', note: 'Accounting method: (1) Cash (2 Accrual, 3 Other)', relation: 'related' },
     ],
-    derive_from_catalog: true,
+    derive_from_catalog: false, // three checkboxes on the return, compared by review, not derived
   },
   {
     key: 'entity.sstb_determination',
@@ -370,8 +373,8 @@ export const FACT_DEFS: readonly FactDef[] = [
     affects: ['qbi', 'k1'],
     evidence: ['owner_statement', 'books', 'return_line'],
     catalog: [
-      { form: 'f1120ssk', line: '17', row: 'V', note: '§199A statement SSTB indicator', relation: 'related' },
-      { form: 'f1065sk1', line: '20', row: 'Z', note: '§199A statement SSTB indicator', relation: 'related' },
+      { form: 'f1120ssk', section: 'Part III', line: '17', code: 'V', note: '§199A information (the SSTB indicator is on the attached statement)', relation: 'related' },
+      { form: 'f1065sk1', line: '20', code: 'Z', note: '§199A information (the SSTB indicator is on the attached statement)', relation: 'related' },
     ],
     counterpart: 'k1.sstb',
   },
@@ -391,9 +394,9 @@ export const FACT_DEFS: readonly FactDef[] = [
     affects: ['corporate', 'irs_account'],
     evidence: ['third_party_form', 'return_line'],
     catalog: [
-      { form: 'f1120s', line: 'H', row: '1', note: 'Final return' },
-      { form: 'f1120', line: 'E', row: '2', note: 'Final return' },
-      { form: 'f1065', line: 'G', row: '2', note: 'Final return' },
+      { form: 'f1120s', line: 'H(1)', note: 'Final return' },
+      { form: 'f1120', line: 'E(2)', note: 'Final return' },
+      { form: 'f1065', line: 'G(2)', note: 'Final return' },
     ],
     derive_from_catalog: true,
   },
@@ -457,7 +460,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     catalog: [
       { form: 'f1120s', line: 'I', note: 'Number of shareholders during any part of the year', aggregate: { op: 'count' } },
       { form: 'f1120s', section: 'Schedule B', line: '3', note: 'Shareholder that is a disregarded entity, trust, estate or nominee', relation: 'related' },
-      { form: 'f1120ssk', line: 'G', note: 'Current year allocation percentage', relation: 'related' },
+      { form: 'f1120ssk', section: 'Part II', line: 'G', note: 'Current year allocation percentage', relation: 'related' },
       { form: 'f1120', section: 'Schedule K', line: '10', note: 'Number of shareholders at year end', relation: 'related' },
       { form: 'f1065', line: 'I', note: 'Number of Schedules K-1 attached', aggregate: { op: 'count' }, relation: 'related' },
     ],
@@ -469,7 +472,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     why: 'K-1 item D reports it, and S-corp allocations are per share per day; a share count nobody recorded makes every K-1 percentage unprovable.',
     affects: ['k1', 'corporate'],
     evidence: ['agreement', 'books', 'return_line'],
-    catalog: [{ form: 'f1120ssk', line: 'D', col: 'beginning', note: 'Corporation\'s total number of shares' }],
+    catalog: [{ form: 'f1120ssk', section: 'Part I', line: 'D', col: 'beginning', note: 'Corporation\'s total number of shares' }],
     derive_from_catalog: true,
   },
   {
@@ -479,7 +482,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     why: 'K-1 item D reports it; a change from the start of the year means shares were issued or redeemed, which changes allocations and may be a sale someone must report.',
     affects: ['k1', 'corporate'],
     evidence: ['agreement', 'books', 'return_line'],
-    catalog: [{ form: 'f1120ssk', line: 'D', col: 'end', note: 'Corporation\'s total number of shares' }],
+    catalog: [{ form: 'f1120ssk', section: 'Part I', line: 'D', col: 'end', note: 'Corporation\'s total number of shares' }],
     derive_from_catalog: true,
   },
   {
@@ -489,7 +492,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     why: 'K-1 item H reports it, and the shares must add up to the corporation\'s total; percentages without share counts cannot be verified.',
     affects: ['k1', 'corporate'],
     evidence: ['agreement', 'books', 'return_line'],
-    catalog: [{ form: 'f1120ssk', line: 'H', col: 'beginning', note: 'Shareholder\'s number of shares' }],
+    catalog: [{ form: 'f1120ssk', section: 'Part II', line: 'H', col: 'beginning', note: 'Shareholder\'s number of shares' }],
     derive_from_catalog: true,
   },
   {
@@ -499,7 +502,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     why: 'K-1 item H reports it; a change during the year means a purchase, sale or redemption that changes the allocation and the shareholder\'s basis.',
     affects: ['k1', 'corporate'],
     evidence: ['agreement', 'books', 'return_line'],
-    catalog: [{ form: 'f1120ssk', line: 'H', col: 'end', note: 'Shareholder\'s number of shares' }],
+    catalog: [{ form: 'f1120ssk', section: 'Part II', line: 'H', col: 'end', note: 'Shareholder\'s number of shares' }],
     derive_from_catalog: true,
   },
   {
@@ -519,7 +522,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     affects: ['basis', 'balance_sheet'],
     evidence: ['bank_record', 'books'],
     catalog: [
-      { form: 'f1065sk1', line: 'L', row: 'Capital contributed during the year' },
+      { form: 'f1065sk1', section: 'Part II', line: 'L', row: 'Capital contributed during the year' },
     ],
     counterpart: 'k1.capital_contributions',
   },
@@ -531,8 +534,8 @@ export const FACT_DEFS: readonly FactDef[] = [
     affects: ['basis', 'k1'],
     evidence: ['books', 'bank_record', 'return_line'],
     catalog: [
-      { form: 'f1120ssk', line: '16', row: 'D', note: 'Distributions' },
-      { form: 'f1065sk1', line: '19', row: 'A', note: 'Cash distributions (property is code B/C)', relation: 'related' },
+      { form: 'f1120ssk', section: 'Part III', line: '16', code: 'D', note: 'Box 16 code D: distributions' },
+      { form: 'f1065sk1', line: '19', code: 'A', note: 'Box 19 code A: cash distributions (property is code B/C)', relation: 'related' },
       { form: 'f1120s', section: 'Schedule M-2', line: '7', col: 'a', note: 'Distributions, all shareholders', relation: 'related' },
     ],
     derive_from_catalog: true,
@@ -574,7 +577,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     affects: ['basis', 'loans', 'k1'],
     evidence: ['bank_record', 'agreement', 'books', 'return_line'],
     catalog: [
-      { form: 'f1120ssk', line: 'I', col: 'end', note: 'Loans from shareholder' },
+      { form: 'f1120ssk', section: 'Part II', line: 'I', col: 'end', note: 'Loans from shareholder' },
     ],
     derive_from_catalog: true,
     counterpart: 'k1.direct_loan_balance_end',
@@ -587,7 +590,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     affects: ['payroll', 'qbi'],
     evidence: ['third_party_form', 'books', 'return_line'],
     catalog: [
-      { form: 'f1125e', line: '1', col: 'f', note: 'Amount of compensation (this officer\'s row)', relation: 'related' },
+      { form: 'f1125e', line: '1', col: 'f', note: 'Amount of compensation (one row per officer: row = entry number)', relation: 'related' },
       { form: 'f1120s', line: '7', note: 'Compensation of officers, all officers', relation: 'related' },
       { form: 'f1120', line: '12', note: 'Compensation of officers, all officers', relation: 'related' },
     ],
@@ -624,7 +627,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     affects: ['basis', 'k1'],
     evidence: ['books', 'agreement', 'return_line'],
     catalog: [
-      { form: 'f1065sk1', line: 'K', note: 'Partner\'s share of liabilities', relation: 'related' },
+      { form: 'f1065sk1', section: 'Part II', line: 'K1', note: 'Partner\'s share of liabilities (rows: nonrecourse, qualified nonrecourse, recourse)', relation: 'related' },
     ],
     counterpart: 'k1.share_of_liabilities',
   },
@@ -768,7 +771,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     why: 'K-1 allocations must then be made per share per day (or on a closing of the books), and the change usually has a basis and gain consequence for someone.',
     affects: ['k1', 'basis', 'corporate'],
     evidence: ['agreement', 'books'],
-    catalog: [{ form: 'f1120ssk', line: 'H', note: 'Shareholder\'s number of shares, beginning vs end', relation: 'related' }],
+    catalog: [{ form: 'f1120ssk', section: 'Part II', line: 'H', note: 'Shareholder\'s number of shares, beginning vs end', relation: 'related' }],
   },
   {
     key: 'scorp.closing_of_books_election',
@@ -796,7 +799,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     why: 'PSC status is checked on page 1 (item A3) and brings the passive-activity rules and a calendar-year requirement with it.',
     affects: ['corporate'],
     evidence: ['owner_statement', 'return_line'],
-    catalog: [{ form: 'f1120', line: 'A', row: '3', note: 'Personal service corporation' }],
+    catalog: [{ form: 'f1120', line: 'A(3)', note: 'Personal service corporation' }],
     derive_from_catalog: true,
   },
   {
@@ -828,7 +831,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     why: 'K-1 item L must be reported on the tax basis; when the books use another method the difference has to be reconciled every year.',
     affects: ['k1', 'balance_sheet', 'basis'],
     evidence: ['books', 'agreement'],
-    catalog: [{ form: 'f1065sk1', line: 'L', note: 'Partner\'s capital account analysis', relation: 'related' }],
+    catalog: [{ form: 'f1065sk1', section: 'Part II', line: 'L', note: 'Partner\'s capital account analysis', relation: 'related' }],
   },
   {
     key: 'partnership.special_allocations',
@@ -887,7 +890,7 @@ export const FACT_DEFS: readonly FactDef[] = [
       { form: 'f1120s', section: 'Schedule L', line: '19', col: 'd', note: 'Loans from shareholders, end of year', aggregate: { op: 'sum', field: 'balance_end' } },
       { form: 'f1120', section: 'Schedule L', line: '19', col: 'd', note: 'Loans from shareholders, end of year', aggregate: { op: 'sum', field: 'balance_end' } },
       { form: 'f1065', section: 'Schedule L', line: '19a', col: 'd', note: 'Loans from partners (or persons related to partners)', relation: 'related' },
-      { form: 'f1120ssk', line: 'I', col: 'end', note: 'Loans from shareholder', relation: 'related' },
+      { form: 'f1120ssk', section: 'Part II', line: 'I', col: 'end', note: 'Loans from shareholder', relation: 'related' },
     ],
     required_when: { fact: 'loans.from_owners_exist', equals: true },
   },
@@ -1498,8 +1501,8 @@ export const FACT_DEFS: readonly FactDef[] = [
     affects: ['irs_account', 'statute', 'carryovers'],
     evidence: ['irs_transcript', 'return_line'],
     catalog: [
-      { form: 'f1120s', line: 'H', row: '4', note: 'Amended return', relation: 'related' },
-      { form: 'f1065', line: 'G', row: '5', note: 'Amended return', relation: 'related' },
+      { form: 'f1120s', line: 'H(4)', note: 'Amended return', relation: 'related' },
+      { form: 'f1065', line: 'G(5)', note: 'Amended return', relation: 'related' },
     ],
   },
   {
@@ -1606,7 +1609,7 @@ export const FACT_DEFS: readonly FactDef[] = [
     why: 'Distributions above your basis are taxable capital gain that the K-1 itself does not report — which is how excess distributions went unreported.',
     affects: ['basis', 'k1'],
     evidence: ['third_party_form', 'bank_record', 'return_line'],
-    catalog: [{ form: 'f7203', section: 'Part I', line: '5', note: 'Distributions (excluding dividends)' }],
+    catalog: [{ form: 'f7203', section: 'Part I', line: '6', note: 'Distributions (excluding dividend distributions)' }],
     derive_from_catalog: true,
     counterpart: 'owners.distributions',
   },

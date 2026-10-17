@@ -1,0 +1,106 @@
+/**
+ * Build a ReviewContext from catalogs, facts and documents.
+ *
+ * Linking is evidence-only: a 1040 is linked to an S corporation because its
+ * Schedule E row prints the same EIN the S corporation prints on its own
+ * return — never because two entities share an account (the MCP evidence
+ * rule: co-location is not a relationship).
+ */
+import type { CatalogView, EntityInfo, FactValue, FactView, LinkedEntity, ReviewContext, DocumentFact } from './types.js'
+import { filed, formEntries } from './lookup.js'
+import { scheduleERows } from './k1.js'
+
+const EIN_LINE: Record<string, { form: string; line: string }> = {
+  '1120S': { form: 'f1120s', line: 'D' },
+  '1120': { form: 'f1120', line: 'B' },
+  '1065': { form: 'f1065', line: 'D' },
+}
+
+/** The EIN an entity prints on its own returns (digits only). */
+export function einOf(entity: EntityInfo, catalogs: CatalogView[]): string | undefined {
+  const where = EIN_LINE[entity.form_type]
+  if (!where) return undefined
+  for (const c of [...catalogs].sort((a, b) => (b.tax_year ?? 0) - (a.tax_year ?? 0))) {
+    const e = formEntries(c, where.form).find(x => x.line === where.line && !x.section)
+    const d = String(e?.raw ?? '').replace(/\D/g, '')
+    if (d.length === 9) return d
+  }
+  return undefined
+}
+
+export interface EntityBundle { entity: EntityInfo; catalogs: CatalogView[] }
+
+export function linkEntities(self: EntityBundle, others: EntityBundle[], year: number): LinkedEntity[] {
+  const out: LinkedEntity[] = []
+  if (self.entity.form_type === '1040') {
+    const rows = scheduleERows(filed(self.catalogs, year))
+    for (const o of others) {
+      const ein = einOf(o.entity, o.catalogs)
+      const row = ein && rows.find(r => r.ein === ein)
+      if (row) {
+        out.push({
+          entity: { ...o.entity, meta: { ...(o.entity.meta ?? {}), ein_digits: ein } }, relation: 'k1_issuer',
+          evidence: `${year} Form 1040 Schedule E line 28 row ${row.row} prints this entity's EIN`, catalogs: o.catalogs,
+        })
+      }
+    }
+  } else {
+    const ein = einOf(self.entity, self.catalogs)
+    if (!ein) return out
+    for (const o of others.filter(x => x.entity.form_type === '1040')) {
+      const years = [...new Set(o.catalogs.map(c => c.tax_year).filter((y): y is number => y !== null))]
+      const y = years.find(yy => scheduleERows(filed(o.catalogs, yy)).some(r => r.ein === ein))
+      if (y !== undefined) {
+        out.push({ entity: o.entity, relation: 'k1_recipient', evidence: `${y} Form 1040 Schedule E prints this entity's EIN`, catalogs: o.catalogs })
+      }
+    }
+  }
+  return out
+}
+
+export interface StoredFactLike {
+  fact_key: string
+  tax_year: number | null
+  subject: string | null
+  value: unknown
+  status: 'answered' | 'unknown' | 'not_applicable'
+  source?: string
+  recorded_at?: string
+  superseded_by?: string | null
+}
+
+export function factView(rows: StoredFactLike[]): FactView {
+  const current = rows.filter(r => !r.superseded_by)
+  const norm = (s: string | null | undefined) => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  return {
+    get(key, opts = {}): FactValue | undefined {
+      const cands = current.filter(r => r.fact_key === key &&
+        (opts.year === undefined ? true : r.tax_year === opts.year || r.tax_year === null) &&
+        (opts.subject === undefined ? true : !r.subject || norm(r.subject) === norm(opts.subject) || norm(opts.subject).startsWith(norm(r.subject)) || norm(r.subject).startsWith(norm(opts.subject))))
+      // Prefer the year-specific answer over the all-years one.
+      const best = cands.sort((a, b) => (b.tax_year ?? 0) - (a.tax_year ?? 0))[0]
+      return best ? { value: best.value, status: best.status, source: best.source, recorded_at: best.recorded_at } : undefined
+    },
+  }
+}
+
+export function buildContext(args: {
+  self: EntityBundle
+  others: EntityBundle[]
+  year: number
+  facts: StoredFactLike[]
+  documents?: DocumentFact[]
+  factGaps?: ReviewContext['factGaps']
+  today?: Date
+}): ReviewContext {
+  return {
+    entity: args.self.entity,
+    year: args.year,
+    catalogs: args.self.catalogs,
+    linked: linkEntities(args.self, args.others, args.year),
+    facts: factView(args.facts),
+    documents: args.documents ?? [],
+    factGaps: args.factGaps,
+    today: args.today ?? new Date(),
+  }
+}

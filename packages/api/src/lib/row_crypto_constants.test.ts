@@ -13,6 +13,10 @@ import {
   RETURN_ENC_COLS,
   DOC_ENC_COLS,
   FACT_ENC_COLS,
+  ENCRYPTED_CATALOG_FIELDS,
+  CATALOG_ENC_COLS,
+  ENCRYPTED_REVIEW_FIELDS,
+  REVIEW_ENC_COLS,
   encCols,
 } from './row_crypto.js'
 
@@ -24,6 +28,8 @@ describe('encrypted field specs', () => {
     expect(RETURN_ENC_COLS).toBe(encCols(ENCRYPTED_RETURN_FIELDS))
     expect(DOC_ENC_COLS).toBe(encCols(ENCRYPTED_DOC_FIELDS))
     expect(FACT_ENC_COLS).toBe(encCols(ENCRYPTED_FACT_FIELDS))
+    expect(CATALOG_ENC_COLS).toBe(encCols(ENCRYPTED_CATALOG_FIELDS))
+    expect(REVIEW_ENC_COLS).toBe(encCols(ENCRYPTED_REVIEW_FIELDS))
   })
 
   it('covers the known encrypted columns', () => {
