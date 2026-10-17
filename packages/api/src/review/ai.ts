@@ -58,7 +58,10 @@ function pack(entries: Array<{ cat: Parameters<typeof cite>[0]; e: CatalogEntry 
         const question = parts.length > 1 ? parts.slice(0, -1).join(' — ') : e.label
         return { id: e.id, where: cite(cat, e), label: `☒ ${answer}: ${question.slice(-160)}`, value: `ticked: ${answer}` }
       }
-      return { id: e.id, where: cite(cat, e), label: e.label.slice(0, 140), value: maskIds(e.kind === 'row' ? e.raw.slice(0, 200) : e.value) }
+      // The IRS's full description of the box, not the shortened label: a
+      // short label once read "Credited … — Refunded" and the model took a
+      // refund for a credit.
+      return { id: e.id, where: cite(cat, e), label: (e.kind === 'row' ? e.label : e.desc || e.label).slice(0, 200), value: maskIds(e.kind === 'row' ? e.raw.slice(0, 200) : e.value) }
     })
 }
 
@@ -163,19 +166,41 @@ THIS YEAR (id, where, label, value):
 ${JSON.stringify(items)}
 PRIOR YEAR KEY AMOUNTS:
 ${JSON.stringify(prevItems)}
-Answer as JSON: {"issues": [{"title": string, "detail": string, "area": string, "severity": "high"|"medium"|"low", "dollar_effect": number|null, "cited": [ids]}]}`
+For each issue give "amount_involved" (the dollar amount on the return that is in question) and, only if you can estimate it, "tax_effect" (the change in federal tax if corrected: positive = more tax owed, negative = refund; null when unknown).
+Answer as JSON: {"issues": [{"title": string, "detail": string, "area": string, "severity": "high"|"medium"|"low", "amount_involved": number|null, "tax_effect": number|null, "cited": [ids]}]}`
       const got = await ask(prompt)
-      const res = (Array.isArray(got) ? { issues: got } : got) as { issues?: Array<{ title?: string; detail?: string; area?: string; severity?: string; dollar_effect?: number | null; cited?: string[] }> }
+      const res = (Array.isArray(got) ? { issues: got } : got) as { issues?: Array<{ title?: string; detail?: string; area?: string; severity?: string; amount_involved?: number | null; tax_effect?: number | null; cited?: string[] }> }
       const ids = new Set([...items.map(i => i.id), ...prevItems.map(i => i.id)])
-      const issues = grounded((res?.issues ?? []).map(i => ({ ...i, cited: citedOf(i) })), ids)
-      if (!issues.length) return [{ check: this.id, status: 'pass', severity: 'info', title: 'AI scan found nothing further', detail: '', evidence: [] }]
+      const candidates = grounded((res?.issues ?? []).map(i => ({ ...i, cited: citedOf(i) })), ids)
+      // Second pass: every candidate is checked against exactly the values it
+      // cites, and kept only if those values themselves show the problem.
+      // The first production run had three large claims out of four wrong
+      // (a refund read as a credit, a balanced balance sheet called out of
+      // balance, a related-company payable read as debt basis).
+      const byId = new Map([...items, ...prevItems].map(i => [i.id, i]))
+      let issues = candidates
+      if (candidates.length) {
+        const verifyPrompt = `You are checking another reviewer's claims about a US ${ctx.entity.form_type} return for ${ctx.year}. For each claim you get ONLY the return lines it cites (with the IRS's description of each line and the value printed there).
+Mark a claim "supported": true only if those exact values, read with their IRS descriptions, show the problem as stated. Mark it false if the values contradict it, if it rests on a misreading of a line (e.g. a refund box read as a credit, a balanced total read as unbalanced, an amount owed to a related company read as owed to the shareholder), or if it needs facts that are not in the cited lines. A real risk that the values plainly show (e.g. very low officer pay against large profit) is supported.
+CLAIMS:
+${JSON.stringify(candidates.map((c, i) => ({ index: i, title: c.title, detail: c.detail, cited: c.cited.map(id => byId.get(id)) })))}
+Answer as JSON: {"verdicts": [{"index": number, "supported": boolean, "reason": string}]}`
+        const v = unwrap(await ask(verifyPrompt)) as any
+        const verdicts: Array<{ index: number; supported: boolean; reason?: string }> = Array.isArray(v) ? v : (v?.verdicts ?? [])
+        const keep = new Set(verdicts.filter(x => x.supported === true).map(x => Number(x.index)))
+        issues = candidates.filter((_, i) => keep.has(i))
+      }
+      if (!issues.length) return [{ check: this.id, status: 'pass', severity: 'info', title: 'AI scan found nothing further (after verification)', detail: '', evidence: [] }]
       return issues.slice(0, 15).map((i, n): CheckResult => ({
         check: this.id, status: 'finding', key: `ai${n}:${(i.title ?? '').slice(0, 40)}`,
         severity: (SEVERITIES.includes(i.severity as Severity) ? i.severity : 'medium') as Severity,
         title: `${ctx.year}: ${i.title ?? 'Issue'} (AI)`,
-        detail: `${i.detail ?? ''}\nArea: ${(i.area as Area) ?? 'other'}. Raised by the AI scan — verify before acting.`,
+        detail: `${i.detail ?? ''}${typeof i.amount_involved === 'number' ? `\nAmount involved: ${Math.round(i.amount_involved).toLocaleString('en-US')}.` : ''}\nArea: ${(i.area as Area) ?? 'other'}. Raised by the AI scan and confirmed by a second AI pass against the cited lines — still verify before acting.`,
         evidence: i.cited.map(id => { const c = cat.entries.find(x => x.id === id) ? cat : prev!; const e = c.entries.find(x => x.id === id)!; return { where: cite(c, e), entry_id: id, catalog_id: c.id } }),
-        ...(typeof i.dollar_effect === 'number' ? { dollar_effect: i.dollar_effect } : {}),
+        // Only a TAX effect counts as the finding's dollar effect; the amount
+        // on the return in question is in the detail (the first production run
+        // ranked a 1.8M line item above a 185k tax exposure).
+        ...(typeof i.tax_effect === 'number' ? { dollar_effect: i.tax_effect } : {}),
       }))
     },
   }

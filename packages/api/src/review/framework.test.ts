@@ -9,7 +9,7 @@ import type { CatalogView, EntityInfo } from './types.js'
 import { buildContext } from './context.js'
 import { runFramework, diffRuns, type Finding } from './framework.js'
 import { basisRollforward } from './checks/passthrough.js'
-import { grounded } from './ai.js'
+import { grounded, aiChecks } from './ai.js'
 
 let n = 0
 function e(form: string, p: Partial<CatalogEntry>): CatalogEntry {
@@ -112,5 +112,22 @@ describe('review framework', () => {
   it('AI conclusions that cite nothing on the return are dropped', () => {
     const ids = new Set(['e1', 'e2'])
     expect(grounded([{ cited: ['e1', 'zz'] }, { cited: ['nope'] }, { cited: undefined }], ids)).toEqual([{ cited: ['e1'] }])
+  })
+
+  it('the AI scan keeps only claims a second pass confirms against the cited lines', async () => {
+    const scan = aiChecks(async (prompt: string) => {
+      if (prompt.includes("checking another reviewer")) return { verdicts: [{ index: 0, supported: true }, { index: 1, supported: false, reason: 'refund box, not a credit' }] }
+      const ids = [...prompt.matchAll(/"id":"(e\d+)"/g)].map(m => m[1])
+      return { issues: [
+        { title: 'Real problem', detail: 'd', area: 'x', severity: 'high', amount_involved: 1800000, tax_effect: 600000, cited: [ids[0]] },
+        { title: 'Misread credit', detail: 'd', area: 'x', severity: 'high', amount_involved: 147713, tax_effect: -147713, cited: [ids[1]] },
+        { title: 'Cites nothing real', detail: 'd', area: 'x', severity: 'high', cited: ['nope'] },
+      ] }
+    }).find(c => c.id === 'ai.framework_scan')!
+    const ctx = buildContext({ self: { entity: scorp, catalogs: SCORP_CATS }, others: [], year: 2023, facts: [] })
+    const out = await scan.run(ctx)
+    expect(out.map(o => o.title)).toEqual(['2023: Real problem (AI)'])
+    expect(out[0].dollar_effect).toBe(600000)
+    expect(out[0].detail).toMatch(/Amount involved: 1,800,000/)
   })
 })

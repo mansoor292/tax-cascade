@@ -204,7 +204,17 @@ export function decrypt(dek: Buffer, blob: Buffer): Buffer {
 
 export function decryptJson<T = any>(dek: Buffer, blob: Buffer | null | undefined): T | null {
   if (!blob || blob.length === 0) return null
-  return JSON.parse(decrypt(dek, blob).toString('utf8')) as T
+  const text = decrypt(dek, blob).toString('utf8')
+  // encrypt() stores a bare string as raw UTF-8, not JSON. A JSON column
+  // whose value is a string (a tax_fact answer of "cash" or "2021-10-25")
+  // written that way read back as null — the parse threw and hydrate fell
+  // back to the (empty) plaintext column. Writers now always store JSON
+  // (row_crypto encryptedFields); rows written before that are raw text.
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    return text as unknown as T
+  }
 }
 
 export function decryptString(dek: Buffer, blob: Buffer | null | undefined): string | null {

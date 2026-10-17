@@ -126,7 +126,9 @@ export async function encryptedFields(
   for (const f of jsonFields) {
     const v = payload[f]
     if (v !== undefined && v !== null) {
-      out[`${f}_enc`] = byteaWrite(encrypt(dek, v))
+      // Always JSON: encrypt() keeps a bare string as raw text, which a JSON
+      // column can't read back (see decryptJson).
+      out[`${f}_enc`] = byteaWrite(encrypt(dek, JSON.stringify(v)))
       if (!writePlaintext()) out[f] = null
     }
   }

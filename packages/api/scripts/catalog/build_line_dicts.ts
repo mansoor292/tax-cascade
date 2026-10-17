@@ -174,7 +174,10 @@ async function buildOne(slug: string, rev: string): Promise<LineDict | null> {
     const x = xfaByName.get(w.name.split('#')[0])
     const desc = (x?.desc ?? '').replace(/^Page\s+\d+\.\s*/i, '')
     const d = describe(x?.desc ?? '', x?.containers ?? [], ctx)
-    if (d.label.split(/\s+/).length <= 2 && d.line && d.line === lastQuestion.line && lastQuestion.label) {
+    // Check boxes only: a TEXT box with a short label ("37. Refunded. Amount")
+    // is its own thing — prefixing it labelled EV's 2024 refund as "Credited
+    // to 2025 estimated tax — Refunded", and the AI scan read it as a credit.
+    if (w.kind !== 'text' && d.label.split(/\s+/).length <= 2 && d.line && d.line === lastQuestion.line && lastQuestion.label) {
       d.label = `${lastQuestion.label} — ${d.label}`
     } else if (d.label.split(/\s+/).length > 2) {
       lastQuestion = { line: d.line, label: d.label.replace(/\s*(?:Yes|No)$/i, '').replace(/[.?]\s*$/, '') }
