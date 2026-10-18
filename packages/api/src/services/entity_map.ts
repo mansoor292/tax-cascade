@@ -17,7 +17,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { encryptedFields, hydrate, hydrateAll, ENCRYPTED_LINK_FIELDS, LINK_ENC_COLS } from '../lib/row_crypto.js'
 import type { EntityInfo, EntityLink, LinkKind, LinkNature, LinkSource } from '../review/types.js'
-import { listFacts } from './facts.js'
 import { byOwner, linksFor, suggestLinks, touches, unrecorded, type EntityBundle, type FactLike, type MapEntity } from '../review/map.js'
 
 export const LINK_KINDS: readonly LinkKind[] = ['owns', 'disregarded', 'intercompany']
@@ -183,12 +182,6 @@ export async function listLinks(supabase: SupabaseClient, userId: string, opts: 
   const rows = data ?? []
   await hydrateAll(supabase, rows, ENCRYPTED_LINK_FIELDS)
   return rows.map(publicRow)
-}
-
-/** Facts of every entity, for the suggestions that read facts. */
-export async function factsByEntity(supabase: SupabaseClient, userId: string, entityIds: string[]): Promise<Map<string, FactLike[]>> {
-  const lists = await Promise.all(entityIds.map(id => listFacts(supabase, userId, id)))
-  return new Map(entityIds.map((id, i) => [id, lists[i] as unknown as FactLike[]]))
 }
 
 /** The whole map for an account: entities, links, owners, what each entity

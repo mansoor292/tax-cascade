@@ -13,8 +13,8 @@ import type { CatalogView, DocumentFact, EntityInfo, FormType } from './types.js
 import { buildContext, type EntityBundle } from './context.js'
 import { runFramework, diffRuns, type Finding } from './framework.js'
 import type { AskJson } from './ai.js'
-import type { FactLike } from './map.js'
-import { listLinks, factsByEntity } from '../services/entity_map.js'
+import { withMapAnswers, type FactLike } from './map.js'
+import { listLinks } from '../services/entity_map.js'
 
 export async function loadBundles(supabase: SupabaseClient, userId: string): Promise<EntityBundle[]> {
   const { data: ents, error } = await supabase.from('tax_entity')
@@ -40,6 +40,13 @@ export async function loadBundles(supabase: SupabaseClient, userId: string): Pro
 }
 
 export interface MapInputs { links: Awaited<ReturnType<typeof listLinks>>; factsByEntity: Map<string, FactLike[]> }
+
+/** Current facts of every entity: map suggestions read some (disregarded
+ *  entities), and the cross-entity checks read the other side's answers. */
+export async function factsByEntity(supabase: SupabaseClient, userId: string, entityIds: string[]): Promise<Map<string, FactLike[]>> {
+  const lists = await Promise.all(entityIds.map(id => listFacts(supabase, userId, id)))
+  return new Map(entityIds.map((id, i) => [id, lists[i]]))
+}
 
 /** The account's entity map (recorded links) and every entity's facts, loaded
  *  once and shared by every run in a request. */
@@ -74,7 +81,8 @@ export async function runReview(
   const self = bundles.find(b => b.entity.id === entityId)
   if (!self) throw Object.assign(new Error('Entity not found'), { status: 404 })
   const map = opts.map ?? await loadMapInputs(supabase, userId, bundles)
-  const facts = await listFacts(supabase, userId, entityId)
+  const ents = bundles.map(b => ({ id: b.entity.id, name: b.entity.name, form_type: b.entity.form_type }))
+  const facts = withMapAnswers(await listFacts(supabase, userId, entityId), entityId, map.links, ents)
   // A newly recorded link is new information about the group, like a fact:
   // findings it brings are reported as caused by a new fact, not as a miss.
   const factsAt = [...facts.map(f => f.recorded_at), ...map.links.map(l => l.recorded_at)]

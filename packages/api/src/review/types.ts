@@ -151,6 +151,8 @@ export interface ReviewContext {
     links: EntityLink[]
     suggestions: import('./map.js').LinkSuggestion[]
     bundles: Array<{ entity: EntityInfo; catalogs: CatalogView[] }>
+    /** Every entity's current facts, so a check can read the other side's answer */
+    facts: Map<string, import('./map.js').FactLike[]>
   }
   today: Date
 }

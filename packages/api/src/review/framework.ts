@@ -13,10 +13,11 @@ import { continuityChecks } from './checks/continuity.js'
 import { irsChecks } from './checks/irs.js'
 import { entityChecks } from './checks/entity.js'
 import { entityMapChecks } from './checks/entity_map.js'
+import { crossEntityChecks } from './checks/cross_entity.js'
 import { aiChecks, type AskJson } from './ai.js'
 
 export function frameworkChecks(ask?: AskJson): Check[] {
-  return [...catalogChecks, ...entityChecks, ...entityMapChecks, ...passthroughChecks, ...continuityChecks, ...irsChecks, ...aiChecks(ask)]
+  return [...catalogChecks, ...entityChecks, ...entityMapChecks, ...crossEntityChecks, ...passthroughChecks, ...continuityChecks, ...irsChecks, ...aiChecks(ask)]
 }
 
 export function frameworkVersion(checks: Check[]): string {

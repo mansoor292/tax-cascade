@@ -221,12 +221,27 @@ The review reads the map:
 - the counterparty's matching revenue or expense and balance
 - the parent of a disregarded LLC
 
-Built next on top of the map:
-- intercompany checks: the fee expense equals the counterparty's revenue each year, and
-  the balances agree on both sides
-- controlled-group consistency (Schedule K line 28 / Schedule O against common
-  ownership)
-- a numeric multi-entity cascade
+Cross-entity checks read through the map (`review/checks/cross_entity.ts`), each raised once:
+- **`intercompany.fees_match`** (raised on the payer): for a services or rent link,
+  the payer's `intercompany.fee_expense` must equal the payee's
+  `intercompany.fee_revenue` for the year. A difference is a finding with the payee's
+  21% effect when the payee is a C corporation; a missing side is a gap that asks for it.
+- **`intercompany.balances_match`** (raised on the debtor): for a loan, settlement or
+  other balance link, what one side owes must equal what the other is owed. The amounts
+  come from `intercompany.balance_end` facts, else from a balance-sheet statement row on
+  each return naming the other company.
+- **`corporate.controlled_group_consistent`** (raised on each C corporation): from
+  ownership on December 31 (the Schedule O 50% identical-ownership test; S corporations
+  are excluded members; a corporation formed after December 31 is not a member), the
+  Schedule K answers ("member of a controlled group?", "subsidiary in a parent–subsidiary
+  group?") and the Schedule O member list must agree.
+
+The map also answers the registry's related-company questions
+(`intercompany.has_related_entities` / `.counterparties`, `mapFactAnswers`). It does so in
+fact gaps and in review, and a stored answer still wins, so the counterparty list is never
+typed twice.
+
+Still to build: a numeric multi-entity cascade (`compute_cascade` is stateless).
 
 ## Check catalogue (initial)
 

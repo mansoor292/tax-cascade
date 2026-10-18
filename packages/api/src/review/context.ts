@@ -130,6 +130,7 @@ export function buildContext(args: {
         links: args.links,
         suggestions: suggestLinks([args.self, ...args.others], args.factsByEntity),
         bundles: [args.self, ...args.others],
+        facts: args.factsByEntity ?? new Map(),
       },
     } : {}),
     today: args.today ?? new Date(),

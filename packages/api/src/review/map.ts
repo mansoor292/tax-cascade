@@ -106,7 +106,16 @@ export interface LinkSuggestion {
   evidence: string[]
 }
 
-export interface FactLike { fact_key: string; tax_year: number | null; value: unknown; status?: string; superseded_by?: string | null }
+export interface FactLike {
+  fact_key: string
+  tax_year: number | null
+  value: unknown
+  subject?: string | null
+  status?: 'answered' | 'unknown' | 'not_applicable'
+  source?: string
+  recorded_at?: string
+  superseded_by?: string | null
+}
 
 const SOURCE_RANK: Record<LinkSource, number> = { owner: 3, filed_return: 2, fact: 1, entity_record: 0 }
 
@@ -282,6 +291,58 @@ export function coveringLink(links: EntityLink[], s: LinkSuggestion, year?: numb
 /** Suggestions no recorded link answers. */
 export function unrecorded(links: EntityLink[], suggestions: LinkSuggestion[]): LinkSuggestion[] {
   return suggestions.filter(s => !coveringLink(links, s))
+}
+
+// ─── Registry questions the map answers ──────────────────────────────────────
+
+/**
+ * The fact registry asks every business "do you deal with related companies,
+ * and which?" (intercompany.has_related_entities / .counterparties). Once the
+ * map records intercompany links, the map IS the answer: the facts are
+ * derived from it rather than typed in a second time, so the two can never
+ * disagree. A stored answer still wins. Absence of links answers nothing:
+ * no link is not evidence of no dealings.
+ */
+export function mapFactAnswers(
+  entityId: string, links: EntityLink[], entities: Array<{ id: string; name: string; form_type: string }>,
+): Array<{ fact_key: string; value: unknown; source_note: string }> {
+  const ic = linksFor(links).filter(l => l.kind === 'intercompany' && (l.from_entity_id === entityId || l.to_entity_id === entityId))
+  if (!ic.length) return []
+  const ownersOf = (id: string | null) => linksFor(links).filter(l => l.kind === 'owns' && l.to_entity_id === id && l.subject).map(l => l.subject as string)
+  const mine = ownersOf(entityId)
+  const rows = new Map<string, { name: string; relationship: string; return_form: string; in_this_account: boolean }>()
+  for (const l of ic) {
+    const otherId = l.from_entity_id === entityId ? l.to_entity_id : l.from_entity_id
+    const other = entities.find(e => e.id === otherId)
+    const name = other?.name ?? l.to_name ?? ''
+    if (!name) continue
+    const common = mine.filter(p => ownersOf(otherId).some(q => samePerson(p, q)))
+    const prev = rows.get(name)
+    const natures = [...new Set([...(prev?.relationship.split(' (')[0].split(', ') ?? []), l.nature ?? 'other'])].filter(Boolean)
+    rows.set(name, {
+      name, relationship: `${natures.join(', ')}${common.length ? ` (common owner: ${common.join(', ')})` : ''}`,
+      return_form: other && ['1120', '1120S', '1065', '1040'].includes(other.form_type) ? other.form_type : 'other',
+      in_this_account: !!other,
+    })
+  }
+  const note = 'Derived from the entity map (entity_link): the intercompany links recorded for this entity.'
+  return [
+    { fact_key: 'intercompany.has_related_entities', value: true, source_note: note },
+    { fact_key: 'intercompany.counterparties', value: [...rows.values()], source_note: note },
+  ]
+}
+
+/** Stored facts plus the map's answers to the questions nobody answered. */
+export function withMapAnswers<T extends { fact_key: string; tax_year: number | null; superseded_by?: string | null }>(
+  facts: T[], entityId: string, links: EntityLink[], entities: Array<{ id: string; name: string; form_type: string }>,
+): T[] {
+  const answered = new Set(facts.filter(f => !f.superseded_by).map(f => f.fact_key))
+  const derived = mapFactAnswers(entityId, links, entities).filter(a => !answered.has(a.fact_key)).map(a => ({
+    id: `entity_map:${a.fact_key}`, entity_id: entityId, tax_year: null, subject: null, fact_key: a.fact_key, value: a.value,
+    status: 'answered', source: 'derived', source_note: a.source_note, evidence_document_id: null,
+    recorded_by: 'entity_map', recorded_at: '1970-01-01T00:00:00.000Z', superseded_by: null,
+  }))
+  return [...facts, ...(derived as unknown as T[])]
 }
 
 // ─── Reading the map ─────────────────────────────────────────────────────────

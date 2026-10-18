@@ -16,8 +16,8 @@
 import { Router } from 'express'
 import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
-import { loadBundles } from '../review/store.js'
-import { addLink, assembleMap, checkLinkComplete, checkLinkFields, factsByEntity, listLinks, updateLink } from '../services/entity_map.js'
+import { factsByEntity, loadBundles } from '../review/store.js'
+import { addLink, assembleMap, checkLinkComplete, checkLinkFields, listLinks, updateLink } from '../services/entity_map.js'
 
 const supabase = lazyServiceClient()
 const router = Router()

@@ -23,6 +23,8 @@
  * owner typed twice ("Jane  Doe" / "jane doe") must not become two owners.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { listLinks } from './entity_map.js'
+import { withMapAnswers } from '../review/map.js'
 import {
   FACT_DEFS, FACT_FORM_TYPES, FACT_SOURCES, FACT_STATUSES,
   evaluateRequired, factAppliesInYear, getFactDef, isFactDate,
@@ -621,7 +623,15 @@ export async function factGaps(
   entity: { id: string }, formType: FactFormType, taxYear: number,
   catalogLookup?: CatalogLookup,
 ): Promise<{ summary: FactGapSummary; gaps: FactGap[] }> {
-  const facts = await listFacts(supabase, userId, entity.id, { taxYear })
+  // The entity map answers the registry's related-company questions
+  // (review/map.ts mapFactAnswers); a stored answer still wins.
+  const [stored, links, { data: ents, error }] = await Promise.all([
+    listFacts(supabase, userId, entity.id, { taxYear }),
+    listLinks(supabase, userId),
+    supabase.from('tax_entity').select('id, name, form_type').eq('user_id', userId),
+  ])
+  if (error) throw new Error(error.message)
+  const facts = withMapAnswers(stored, entity.id, links, ents ?? [])
   const gaps = computeFactGaps({ formType, taxYear, facts, catalogLookup })
   return { summary: summarizeGaps(gaps), gaps }
 }
