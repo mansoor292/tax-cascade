@@ -11,10 +11,12 @@ import { isFactFormType } from '../services/facts.js'
 import type { CatalogEntry, CatalogCoverage } from '../catalog/types.js'
 import type { CatalogView, DocumentFact, EntityInfo, FormType } from './types.js'
 import { buildContext, type EntityBundle } from './context.js'
-import { runFramework, diffRuns, type Finding } from './framework.js'
+import { runFramework, diffRuns, tieCheckIds, type Finding } from './framework.js'
 import type { AskJson } from './ai.js'
 import { withMapAnswers, type FactLike } from './map.js'
 import { listLinks } from '../services/entity_map.js'
+import { listSets, versionRows } from '../services/versions.js'
+import { versionsForView, viewBundles, viewFacts, type VersionRow } from './versions.js'
 
 export async function loadBundles(supabase: SupabaseClient, userId: string): Promise<EntityBundle[]> {
   const { data: ents, error } = await supabase.from('tax_entity')
@@ -75,17 +77,24 @@ export interface RunReviewResult {
 
 export async function runReview(
   supabase: SupabaseClient, userId: string, entityId: string, year: number,
-  opts: { ai?: boolean; ask?: AskJson; bundles?: EntityBundle[]; map?: MapInputs } = {},
+  opts: { ai?: boolean; ask?: AskJson; bundles?: EntityBundle[]; map?: MapInputs; versionSet?: string; versions?: VersionRow[] } = {},
 ): Promise<RunReviewResult> {
-  const bundles = opts.bundles ?? await loadBundles(supabase, userId)
+  // The view under review: 'filed' (the filed returns plus every filed
+  // version set) or a draft set's label. A set is held to the tie checks
+  // only — it is a package of amendments, and the question is whether the
+  // package ties (review/versions.ts).
+  const view = opts.versionSet ?? 'filed'
+  const versions = versionsForView(opts.versions ?? versionRows(await listSets(supabase, userId)), view)
+  const bundles = viewBundles(opts.bundles ?? await loadBundles(supabase, userId), versions)
   const self = bundles.find(b => b.entity.id === entityId)
   if (!self) throw Object.assign(new Error('Entity not found'), { status: 404 })
   const map = opts.map ?? await loadMapInputs(supabase, userId, bundles)
   const ents = bundles.map(b => ({ id: b.entity.id, name: b.entity.name, form_type: b.entity.form_type }))
-  const facts = withMapAnswers(await listFacts(supabase, userId, entityId), entityId, map.links, ents)
-  // A newly recorded link is new information about the group, like a fact:
-  // findings it brings are reported as caused by a new fact, not as a miss.
-  const factsAt = [...facts.map(f => f.recorded_at), ...map.links.map(l => l.recorded_at)]
+  const ownFacts = viewFacts(new Map([[entityId, await listFacts(supabase, userId, entityId)]]), versions).get(entityId) ?? []
+  const facts = withMapAnswers(ownFacts, entityId, map.links, ents)
+  // A newly recorded link, or a changed version, is new information like a
+  // fact: findings it brings are reported as caused by a new fact, not a miss.
+  const factsAt = [...facts.map(f => f.recorded_at), ...map.links.map(l => l.recorded_at), ...versions.map(v => v.updated_at)]
     .reduce<string | null>((m, t) => (!m || t > m ? t : m), null)
   const formType = self.entity.form_type
   const gaps = isFactFormType(formType)
@@ -95,27 +104,28 @@ export async function runReview(
   const ctx = buildContext({
     self, others: bundles.filter(b => b !== self), year,
     facts: facts.map(f => ({ fact_key: f.fact_key, tax_year: f.tax_year, subject: f.subject, value: f.value, status: f.status, source: f.source, recorded_at: f.recorded_at, superseded_by: f.superseded_by })),
-    documents, factGaps: gaps, links: map.links, factsByEntity: map.factsByEntity,
+    documents, factGaps: gaps, links: map.links, factsByEntity: viewFacts(map.factsByEntity, versions),
   })
   const catalogIds = [...self.catalogs, ...ctx.linked.flatMap(l => l.catalogs)].map(c => c.id)
 
   const { data: run, error } = await supabase.from('review_run').insert({
     user_id: userId, entity_id: entityId, tax_year: year, framework_version: 'pending', status: 'running',
-    ai: !!opts.ai, catalog_ids: catalogIds, facts_at: factsAt,
+    ai: view === 'filed' && !!opts.ai, catalog_ids: catalogIds, facts_at: factsAt, version_set: view,
   }).select('id').single()
   if (error || !run) throw new Error(`could not start review run: ${error?.message}`)
 
   try {
-    const { version, findings } = await runFramework(ctx, { ai: !!opts.ai, ask: opts.ask })
+    const ai = view === 'filed' && !!opts.ai
+    const { version, findings } = await runFramework(ctx, { ai, ask: opts.ask, ...(view === 'filed' ? {} : { only: tieCheckIds() }) })
     const { data: prevRows } = await supabase.from('review_run')
       .select(`id, user_id, framework_version, catalog_ids, facts_at, findings, ${REVIEW_ENC_COLS}`)
-      .eq('entity_id', entityId).eq('tax_year', year).eq('status', 'done').neq('id', run.id)
+      .eq('entity_id', entityId).eq('tax_year', year).eq('version_set', view).eq('status', 'done').neq('id', run.id)
       .order('started_at', { ascending: false }).limit(1)
     const prev = prevRows?.[0]
     if (prev) await hydrate(supabase, prev, { ...ENCRYPTED_REVIEW_FIELDS, userId })
     const diffed = diffRuns({
       previous: prev ? { findings: (prev.findings as Finding[]) ?? [], catalog_ids: prev.catalog_ids ?? [], facts_at: prev.facts_at, version: prev.framework_version } : undefined,
-      current: { findings, catalog_ids: catalogIds, facts_at: factsAt, version, ai: !!opts.ai },
+      current: { findings, catalog_ids: catalogIds, facts_at: factsAt, version, ai },
     })
     const summary = summarize(diffed)
     const payload = { findings: diffed }
@@ -178,10 +188,10 @@ export async function resolveFinding(
   return { id: data.id }
 }
 
-export async function latestRuns(supabase: SupabaseClient, userId: string, entityId: string, years?: number[]): Promise<RunReviewResult[]> {
+export async function latestRuns(supabase: SupabaseClient, userId: string, entityId: string, years?: number[], view = 'filed'): Promise<RunReviewResult[]> {
   let q = supabase.from('review_run')
     .select(`id, user_id, tax_year, framework_version, summary, started_at, findings, ${REVIEW_ENC_COLS}`)
-    .eq('user_id', userId).eq('entity_id', entityId).eq('status', 'done').order('started_at', { ascending: false })
+    .eq('user_id', userId).eq('entity_id', entityId).eq('version_set', view).eq('status', 'done').order('started_at', { ascending: false })
   if (years?.length) q = q.in('tax_year', years)
   const { data, error } = await q
   if (error) throw new Error(error.message)
@@ -193,4 +203,59 @@ export async function latestRuns(supabase: SupabaseClient, userId: string, entit
     run_id: r.id, tax_year: r.tax_year, framework_version: r.framework_version, summary: r.summary,
     findings: ((r.findings as Finding[]) ?? []).map(f => ({ ...f, ...(resolutions.get(f.fingerprint) ? { resolution: resolutions.get(f.fingerprint) } : {}) })),
   }))
+}
+
+export interface BreakItem {
+  entity: string
+  entity_id: string
+  form_type: string
+  tax_year: number
+  fingerprint: string
+  check: string
+  severity: string
+  title: string
+  detail: string
+  dollar_effect?: number
+  evidence: unknown
+  /** For a draft set: the same break is in the filed returns too */
+  in_filed?: boolean
+}
+
+/** Breaks (tie findings still open) in one view, from its latest runs. */
+export async function viewBreaks(supabase: SupabaseClient, userId: string, ents: Array<{ id: string; name: string; form_type: string }>, view: string): Promise<{ breaks: BreakItem[]; covered: Set<string> }> {
+  const breaks: BreakItem[] = []
+  const covered = new Set<string>()
+  for (const e of ents) {
+    for (const r of await latestRuns(supabase, userId, e.id, undefined, view)) {
+      covered.add(`${e.id}|${r.tax_year}`)
+      for (const f of r.findings) {
+        if (!f.tie || f.status !== 'finding' || f.change === 'resolved' || (f.resolution && f.resolution.resolution !== 'reopened')) continue
+        breaks.push({
+          entity: e.name, entity_id: e.id, form_type: e.form_type, tax_year: r.tax_year, fingerprint: f.fingerprint, check: f.check,
+          severity: f.severity, title: f.title, detail: f.detail, ...(f.dollar_effect !== undefined ? { dollar_effect: f.dollar_effect } : {}), evidence: f.evidence,
+        })
+      }
+    }
+  }
+  return { breaks, covered }
+}
+
+/** A draft set against the filed returns: its breaks (each marked new or
+ *  inherited from filed) and the filed breaks it fixes. */
+export async function setBreaksReport(supabase: SupabaseClient, userId: string, ents: Array<{ id: string; name: string; form_type: string }>, label: string) {
+  const [filedView, setView] = await Promise.all([viewBreaks(supabase, userId, ents, 'filed'), viewBreaks(supabase, userId, ents, label)])
+  const key = (b: BreakItem) => `${b.entity_id}|${b.fingerprint}`
+  const inFiled = new Set(filedView.breaks.map(key))
+  const inSet = new Set(setView.breaks.map(key))
+  const breaks = setView.breaks.map(b => ({ ...b, in_filed: inFiled.has(key(b)) }))
+  const fixes = filedView.breaks.filter(b => setView.covered.has(`${b.entity_id}|${b.tax_year}`) && !inSet.has(key(b)))
+  return {
+    set: label,
+    reviewed_returns: setView.covered.size,
+    breaks_count: breaks.length,
+    new_breaks: breaks.filter(b => !b.in_filed),
+    inherited_breaks: breaks.filter(b => b.in_filed),
+    fixes,
+    ties: breaks.length === 0 && setView.covered.size > 0,
+  }
 }

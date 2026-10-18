@@ -13,6 +13,7 @@ const SCHED_L_LINES_1120 = [...SCHED_L_LINES_1120S.filter(l => !['22', '23', '24
 const openingBalances: Check = {
   id: 'balance_sheet.opening_equals_prior_close',
   version: 1,
+  tie: true,
   area: 'balance_sheet',
   title: 'Schedule L opens where last year closed',
   applies: ['1120S', '1120'],
@@ -57,6 +58,7 @@ const openingBalances: Check = {
 const capitalLossChain: Check = {
   id: 'carryovers.capital_loss_chain',
   version: 1,
+  tie: true,
   area: 'carryovers',
   title: 'Capital loss carryover carried forward correctly',
   applies: ['1040'],
@@ -88,6 +90,7 @@ const capitalLossChain: Check = {
 const nolChain: Check = {
   id: 'carryovers.nol_chain',
   version: 1,
+  tie: true,
   area: 'carryovers',
   title: 'NOL deduction is available and within the 80% limit',
   applies: ['1120'],

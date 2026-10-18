@@ -39,6 +39,7 @@ const num = (v: unknown): number | undefined => {
 const feesMatch: Check = {
   id: 'intercompany.fees_match',
   version: 1,
+  tie: true,
   area: 'intercompany',
   title: 'The fee one entity deducts is the revenue the other reports',
   applies: [...BUSINESS],
@@ -113,6 +114,7 @@ function namedBalance(ctx: ReviewContext, entity: EntityInfo, catalogs: Paramete
 const balancesMatch: Check = {
   id: 'intercompany.balances_match',
   version: 1,
+  tie: true,
   area: 'intercompany',
   title: 'What one entity owes a related company, the other says it is owed',
   applies: [...BUSINESS],
@@ -194,6 +196,7 @@ function formation(ctx: ReviewContext, b: { entity: EntityInfo }): string | unde
 const controlledGroup: Check = {
   id: 'corporate.controlled_group_consistent',
   version: 1,
+  tie: true,
   area: 'corporate',
   title: 'Controlled-group answers agree with who owns what',
   applies: ['1120'],

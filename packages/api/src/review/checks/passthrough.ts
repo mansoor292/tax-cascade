@@ -43,6 +43,7 @@ function issuerFor(ctx: ReviewContext, ein: string, name: string) {
 const niitPassive: Check = {
   id: 'niit.nonpassive_income_taxed',
   version: 1,
+  tie: true,
   area: 'niit',
   title: 'Business income from an activity you work in is not charged NIIT',
   applies: ['1040'],
@@ -247,6 +248,7 @@ const basisDistributions: Check = {
 const form7203: Check = {
   id: 'basis.form7203_matches_k1',
   version: 1,
+  tie: true,
   area: 'basis',
   title: 'Form 7203 carries the K-1 figures',
   applies: ['1040'],
@@ -321,6 +323,7 @@ function marginalRate(taxable: number): number {
 const sstbConsistency: Check = {
   id: 'qbi.sstb_position_consistent',
   version: 1,
+  tie: true,
   area: 'qbi',
   title: 'The SSTB position agrees on the K-1, the 1040 and the business code',
   applies: ['1040', '1120S'],
@@ -377,6 +380,7 @@ const sstbConsistency: Check = {
 const itemILoans: Check = {
   id: 'loans.k1_item_i_matches_schedule_l',
   version: 1,
+  tie: true,
   area: 'loans',
   title: 'K-1 item I shows only real loans from the shareholder',
   applies: ['1120S'],

@@ -243,6 +243,45 @@ typed twice.
 
 Still to build: a numeric multi-entity cascade (`compute_cascade` is stateless).
 
+### 8. Version sets: every set of returns must tie (added 2026-10-18)
+
+The owner's rule: every set of returns must tie internally. That covers what is filed
+with the IRS and each restatement package being prepared. A break is an open item.
+Before this, amendments were prepared one return at a time, as scenarios, and were
+deleted and restarted more than once. Nothing checked that a package agreed with the
+returns it left alone: amending EV's 2023 receipts without EZA's deduction only moves
+the break.
+
+The tables are `version_set` and `return_version` (`services/versions.ts`,
+`/api/version-sets`, and MCP `version_sets` / `create_version_set` /
+`put_return_version` / `remove_return_version` / `update_version_set` /
+`review_version_set`).
+- **A set** is a group-wide package labelled v1, v2, and so on. Its status is draft,
+  filed or abandoned. "filed" is not a row: it is the original filed returns plus every
+  filed set, applied in filing order.
+- **A version** is one amended return in a set, stored as the lines it changes: form
+  slug, section, line, column, the new value, and the reason. When a version is saved,
+  each change is checked against the return it amends. A line that is not there is
+  refused unless the change says it adds it, and the value replaced is recorded. A
+  change that moves an intercompany amount names the fact (`intercompany.fee_*` /
+  `balance_end`) and the related company, so the cross-entity ties see it.
+- **A view** is the filed catalogs with a set's changes applied (`review/versions.ts`).
+  Every check therefore runs on a version with no version-specific code, and an
+  incomplete change list shows up as an arithmetic break.
+- **Checks.** Each check now says whether it is a tie (`Check.tie`): arithmetic, opening
+  vs prior close, carryover chains, K-1 vs 7203/1040, K-1 item I vs Schedule L, NIIT
+  character, ownership vs returns, intercompany fees and balances, and controlled group.
+  A draft set is reviewed on the ties only (`review_run.version_set` = its label); the
+  filed view keeps the full review.
+- **Breaks.** A break is a tie finding. `review_summary.breaks` gives the filed count,
+  and for each draft set the breaks it adds, the ones it inherits from filed, and the
+  filed breaks it fixes. A draft set's new breaks are open items, titled with its
+  label. A filed break that a filed set fixes leaves the filed view, and so leaves the
+  list.
+- **Freezing.** A draft set's versions are working papers, edited in place. Filing or
+  abandoning a set freezes it. Filing re-runs the filed view for the returns the set
+  amends.
+
 ## Check catalogue (initial)
 
 **Corporate and entity**

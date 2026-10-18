@@ -164,6 +164,10 @@ export interface Check {
   title: string
   applies: FormType[]
   kind: 'rule' | 'ai' | 'fact'
+  /** A tie: one figure must agree with another (within a return, year to
+   *  year, or across returns). Its findings are BREAKS, and the tie checks
+   *  are what every version set is held to (review/versions.ts). */
+  tie?: boolean
   /** What it tests and why — this text IS the framework documentation */
   description: string
   run(ctx: ReviewContext): CheckResult[] | Promise<CheckResult[]>

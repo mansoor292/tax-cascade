@@ -42,6 +42,7 @@ export const catalogChecks: Check[] = [
   {
     id: 'catalog.arithmetic',
     version: 1,
+    tie: true,
     area: 'catalog',
     title: "The return's own arithmetic holds",
     applies: [...ALL],

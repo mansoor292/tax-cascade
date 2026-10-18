@@ -69,6 +69,7 @@ export type ExtractMethod =
   | 'geometry'   // text assigned to a blank's widget by position
   | 'acroform'   // live form-field value read directly
   | 'mark'       // drawn check mark found inside a check widget
+  | 'amendment'  // not read from a page: a line a version set changes (review/versions.ts)
   | 'row'        // statement / worksheet text line
   | 'manual'
 

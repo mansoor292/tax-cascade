@@ -79,6 +79,7 @@ const linksRecorded: Check = {
 const ownershipMatches: Check = {
   id: 'entity_map.ownership_matches_returns',
   version: 1,
+  tie: true,
   area: 'entity_map',
   title: 'Recorded ownership agrees with the returns',
   applies: [...ALL],

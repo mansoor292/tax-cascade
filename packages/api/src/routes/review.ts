@@ -15,7 +15,8 @@
 import { Router } from 'express'
 import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
-import { runReview, latestRuns, resolveFinding, loadBundles, loadMapInputs } from '../review/store.js'
+import { runReview, latestRuns, resolveFinding, loadBundles, loadMapInputs, setBreaksReport } from '../review/store.js'
+import { listSets } from '../services/versions.js'
 import { listNotes } from '../services/notes.js'
 
 const supabase = lazyServiceClient()
@@ -32,7 +33,7 @@ const SEV: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, i
 function compact(f: any) {
   return {
     fingerprint: f.fingerprint, check: f.check, area: f.area, kind: f.kind, tax_year: f.tax_year,
-    status: f.status, severity: f.severity, title: f.title, detail: f.detail,
+    status: f.status, severity: f.severity, title: f.title, detail: f.detail, ...(f.tie ? { tie: true } : {}),
     dollar_effect: f.dollar_effect, deadline: f.deadline, asks: f.asks, evidence: f.evidence,
     change: f.change, cause: f.cause, resolution: f.resolution,
   }
@@ -87,6 +88,17 @@ router.get('/summary', async (req, res) => {
         }
       }
     }
+    // Breaks: tie findings. The filed returns' breaks are already items. A
+    // draft version set's breaks that the filed returns do not have are open
+    // items too (the package does not tie yet), marked with the set's label.
+    const scopedEnts = (ents ?? []).filter(x => !wanted || wanted.includes(x.id))
+    const drafts = (await listSets(supabase, userId)).filter(s => s.status === 'draft')
+    const setReports = []
+    for (const s of drafts) {
+      const r = await setBreaksReport(supabase, userId, scopedEnts, s.label)
+      setReports.push({ set: s.label, title: s.title, ties: r.ties, reviewed_returns: r.reviewed_returns, new_breaks: r.new_breaks.length, inherited_breaks: r.inherited_breaks.length, fixes: r.fixes.map(f => ({ entity: f.entity, tax_year: f.tax_year, title: f.title })) })
+      for (const b of r.new_breaks) items.push({ ...b, status: 'finding', tie: true, version_set: s.label, title: `[${s.label}] ${b.title}` })
+    }
     items.sort((a, b) => SEV[a.severity] - SEV[b.severity] || Math.abs(b.dollar_effect ?? 0) - Math.abs(a.dollar_effect ?? 0) || String(a.deadline ?? '9').localeCompare(String(b.deadline ?? '9')))
     const asks = [...new Set(items.flatMap(i => i.asks ?? []))]
     // Open notes are the threads no check can see (services/notes.ts); the
@@ -95,7 +107,11 @@ router.get('/summary', async (req, res) => {
     const byId = new Map(scoped.map(e => [e.id, e]))
     const openNotes = (await listNotes(supabase, userId, scoped.map(e => e.id), { statuses: ['open'] }))
       .map(n => ({ entity: byId.get(n.entity_id)?.name, form_type: byId.get(n.entity_id)?.form_type, ...n }))
-    res.json({ count: items.length, items, facts_to_ask: asks, open_notes_count: openNotes.length, open_notes: openNotes })
+    const filedBreaks = items.filter(i => i.tie && i.status === 'finding' && !i.version_set).length
+    res.json({
+      count: items.length, items, facts_to_ask: asks, open_notes_count: openNotes.length, open_notes: openNotes,
+      breaks: { filed: filedBreaks, sets: setReports },
+    })
   } catch (e: any) {
     sendError(res, e)
   }

@@ -20,6 +20,11 @@ export function frameworkChecks(ask?: AskJson): Check[] {
   return [...catalogChecks, ...entityChecks, ...entityMapChecks, ...crossEntityChecks, ...passthroughChecks, ...continuityChecks, ...irsChecks, ...aiChecks(ask)]
 }
 
+/** The checks every version set is held to: the ties. */
+export function tieCheckIds(): string[] {
+  return frameworkChecks().filter(c => c.tie).map(c => c.id)
+}
+
 export function frameworkVersion(checks: Check[]): string {
   return createHash('sha256').update(checks.map(c => `${c.id}@${c.version}`).join('|')).digest('hex').slice(0, 12)
 }
@@ -36,6 +41,8 @@ export interface Finding extends CheckResult {
   area: string
   kind: 'rule' | 'ai' | 'fact'
   tax_year: number
+  /** From a tie check: a finding here is a break */
+  tie?: boolean
 }
 
 /** Run every applicable check. A check that throws is reported as status
@@ -56,7 +63,7 @@ export async function runFramework(ctx: ReviewContext, opts: RunOptions = {}): P
     }
     for (const r of results) {
       findings.push({
-        ...r, check_version: c.version, area: c.area, kind: c.kind, tax_year: ctx.year,
+        ...r, check_version: c.version, area: c.area, kind: c.kind, tax_year: ctx.year, ...(c.tie ? { tie: true } : {}),
         fingerprint: `${c.id}|${ctx.year}|${r.key ?? ''}`,
       })
     }

@@ -217,6 +217,10 @@ Everything still open about a return that is neither a registry fact nor a revie
 
 How the entities in an account are tied together is stored ONCE, in the entity map (entity_map / record_link / update_link), not re-derived each session. A link is one of: owns (an owner's return holds a percentage of an entity; subject names the person on a joint 1040), disregarded (an LLC whose income and payroll belong on a parent's return), intercompany (two businesses deal with each other: services fee, loan, rent, settlement). Each link has the years it holds, its source and its evidence. entity_map also lists "unrecorded" — evidence in the returns, facts or entity records that points to a link nobody has recorded — and for each entity what a change to its return touches. Before reasoning across entities (K-1 flow, basis, intercompany fees and balances, controlled groups), read the map. Record a link only from evidence or the owner's statement, never from inference; when the evidence is misleading, retire the link (update_link removed: true) or resolve the review item, and say why. The review checks the map against the returns every run, and through it compares each intercompany fee (one side's intercompany.fee_expense vs the other's intercompany.fee_revenue) and balance (intercompany.balance_end, or the balance-sheet rows naming each other) on both sides, and each C corporation's controlled-group answers with who owns what. The map also answers the registry's related-company questions (intercompany.has_related_entities / counterparties); do not record those separately.
 
+## Versions: every set of returns must tie
+
+Returns are versioned in group-wide SETS. "filed" is every return as filed with the IRS (plus any filed amendment package). v1, v2, … are restatement packages: each holds amended versions of some returns (put_return_version: the lines it changes, with the reason; a change that moves an intercompany amount names the fact and the related company), and leaves every other return as filed. Every set must TIE internally — the tie checks (arithmetic within each return, opening balances against the prior year, carryover chains, K-1 to 1040, K-1 item I to Schedule L, intercompany fees and balances on both sides, controlled-group answers, ownership against the returns) run on the set exactly as on the filed returns (review_version_set). A BREAK is a tie that fails; breaks in the filed returns and in every draft set are open items (review_summary breaks). Never prepare an amendment for one return alone: put it in a set with the returns it touches (entity_map shows them), review the set, and keep adding changes until review_version_set reports no new breaks. When the package is filed, update_version_set status filed — the filed view then includes it.
+
 ## Filed returns vs. computed returns — STRICT SEPARATION
 
 Returns live in two worlds. Don't cross them.
@@ -355,6 +359,12 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   entity_map:                 { title: 'Entity map: how the entities connect', ...RO },
   record_link:                { title: 'Record a link in the entity map', ...WRITE },
   update_link:                { title: 'Change or retire an entity-map link', ...WRITE },
+  version_sets:               { title: 'Version sets (restatement packages)', ...RO },
+  create_version_set:         { title: 'Start a version set', ...WRITE },
+  put_return_version:         { title: 'Add or replace an amended return in a set', ...WRITE },
+  remove_return_version:      { title: 'Remove an amended return from a draft set', ...WRITE },
+  update_version_set:         { title: 'Rename, file or abandon a version set', ...WRITE },
+  review_version_set:         { title: 'Check a version set ties (breaks)', ...WRITE },
 }
 
 function extractApiKey(req: Request): string | null {
@@ -1271,7 +1281,7 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
 
   // ─── Tool: review_summary ───
   server.tool('review_summary',
-    'ONE list of everything to act on across all entities and years from their latest reviews — unresolved findings and gaps, most severe first, then by dollar effect and deadline — plus every fact to ask the owner and every OPEN return note (open_notes: threads no check can see, each saying who it waits on). This is the closed list: anything not on it was checked and passed, or is not covered by the framework (say so).',
+    'ONE list of everything to act on across all entities and years from their latest reviews — unresolved findings and gaps, most severe first, then by dollar effect and deadline — plus every fact to ask the owner, every OPEN return note (open_notes: threads no check can see, each saying who it waits on), and BREAKS (breaks: tie findings — figures that must agree within a return, year to year or across returns — in the filed returns, and for each draft version set the breaks it adds, inherits and fixes; a draft set\'s new breaks are items too, titled with the set label). This is the closed list: anything not on it was checked and passed, or is not covered by the framework (say so).',
     { entity_ids: z.array(z.string()).optional().describe('Limit to these entities') },
     async ({ entity_ids }) => text(await call('GET', `/api/review/summary${entity_ids?.length ? '?entity_ids=' + entity_ids.join(',') : ''}`)))
 
@@ -1360,6 +1370,71 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
     'Change a link in the entity map — pass only what changes (e.g. to_year when a relationship ended, pct when ownership changed, removed: true for a link recorded in error, with detail saying why). A new version is written and the old one kept.',
     { link_key: z.string().describe('The link_key from entity_map'), ...linkFields },
     async ({ link_key, ...rest }) => text(await call('PATCH', `/api/entity-map/links/${link_key}`, rest)))
+
+  // ─── Version sets (services/versions.ts, review/versions.ts) ───
+  // Restatement packages across the group, each held to the tie checks. Before
+  // 2026-10-18 amendments were prepared one return at a time and nothing
+  // checked that a package tied with the returns it left alone.
+  const changeSchema = z.object({
+    form: z.string().optional().describe('Catalog form slug: f1120, f1120s, f1120ssk (K-1), f1040, f1040se, f1125a, f1125e, f1120so … (query_catalog shows the slug as the entry form)'),
+    section: z.string().optional().describe('Section as catalogued, e.g. "Schedule L", "Schedule K", "Part III"'),
+    line: z.string().optional().describe('Printed line, e.g. "1a", "28", "19"'),
+    col: z.string().optional().describe('Column, e.g. "d" for Schedule L end of year'),
+    row: z.string().optional().describe('Table row, e.g. "A"'),
+    instance: z.string().optional().describe('Repeated form instance (e.g. "k1:2"); omit for the first'),
+    to: z.union([z.number(), z.string(), z.boolean(), z.null()]).optional().describe('The line\'s value in the amended return'),
+    delta: z.number().optional().describe('For an intercompany-amount change with no line of its own: the amount it moves'),
+    reason: z.string().describe('Why this line changes'),
+    fact_key: z.enum(['intercompany.fee_expense', 'intercompany.fee_revenue', 'intercompany.balance_end']).optional().describe('The intercompany amount this change moves (so the cross-entity ties see it)'),
+    subject: z.string().optional().describe('With fact_key: the related company, as named in the entity map'),
+    add: z.boolean().optional().describe('true when the line is not on the filed return (the amendment adds it)'),
+  })
+  server.tool('version_sets',
+    'Every version set (restatement package): label, title, status (draft / filed / abandoned), and each amended return in it with its changed lines (from → to, reason). "filed" is not listed: it is the filed returns plus every filed set.',
+    {},
+    async () => text(await call('GET', '/api/version-sets')))
+
+  server.tool('create_version_set',
+    'Start a draft version set — a restatement package across the group (label v1, v2, …). Add amended returns with put_return_version; check it ties with review_version_set.',
+    {
+      label: z.string().describe('Short lowercase label, e.g. v1'),
+      title: z.string().optional().describe('What the package does, e.g. "Intercompany fee true-up 2023"'),
+      description: z.string().optional().describe('Why, decided by whom, and what it is expected to fix'),
+    },
+    async (args) => text(await call('POST', '/api/version-sets', args)))
+
+  server.tool('put_return_version',
+    'Add (or replace) one amended return in a draft set: the lines it changes. Each change is checked against the return it amends (the filed return plus filed sets); a line that is not there is refused unless add: true, and the value it replaces is recorded. List every line the amendment changes — totals included — or the arithmetic tie breaks. A change that moves an intercompany fee or balance names fact_key and subject so the cross-entity ties see it.',
+    {
+      label: z.string().describe('The draft set, e.g. v1'),
+      entity_id: z.string().describe('Entity UUID'),
+      tax_year: z.number().describe('Tax year of the return amended'),
+      form: z.string().optional().describe('The amended return, e.g. 1120-X, 1040-X, 1120-S (amended)'),
+      note: z.string().optional().describe('Anything a reviewer needs: what drove the amendment, what is still uncertain'),
+      changes: z.array(changeSchema).describe('The lines this version changes'),
+    },
+    async ({ label, ...rest }) => text(await call('PUT', `/api/version-sets/${encodeURIComponent(label)}/versions`, rest)))
+
+  server.tool('remove_return_version',
+    'Take one amended return out of a draft set (the return goes back to as filed in that set).',
+    { label: z.string(), entity_id: z.string().describe('Entity UUID'), tax_year: z.number() },
+    async ({ label, entity_id, tax_year }) => text(await call('DELETE', `/api/version-sets/${encodeURIComponent(label)}/versions/${entity_id}/${tax_year}`)))
+
+  server.tool('update_version_set',
+    'Rename or describe a draft set, or change its status: filed (the package was sent — give filed_on; the filed view then includes it and is re-reviewed) or abandoned (dropped; in no view). Filed and abandoned sets are frozen.',
+    {
+      label: z.string(),
+      title: z.string().nullable().optional(),
+      description: z.string().nullable().optional(),
+      status: z.enum(['filed', 'abandoned']).optional(),
+      filed_on: z.string().optional().describe('YYYY-MM-DD the package was filed'),
+    },
+    async ({ label, ...rest }) => text(await call('PATCH', `/api/version-sets/${encodeURIComponent(label)}`, rest)))
+
+  server.tool('review_version_set',
+    'Check that a set ties. For a draft set: runs the tie checks on every return as the set has it and reports its breaks — each marked new (the package caused or exposed it) or inherited (already in the filed returns) — and the filed breaks it fixes; ties: true means no breaks at all. For "filed": re-runs the full rules review of every filed return and lists its breaks. Report new breaks first: a package is not ready while it has any.',
+    { label: z.string().describe('A draft set label, or "filed"') },
+    async ({ label }) => text(await call('POST', `/api/version-sets/${encodeURIComponent(label)}/review`, {})))
 
   // ─── Tool: request_form ───
   // Response includes the live discovery status record inline (folds in the old check_form_status tool).
