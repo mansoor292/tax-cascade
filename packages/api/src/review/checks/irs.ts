@@ -22,6 +22,28 @@ const PENALTY_CODES: Record<string, string> = {
   '186': 'estimated tax penalty',
 }
 
+/** Each penalty is reduced or removed by the next transaction code (TC177
+ *  removes a TC176, TC277 a TC276, TC247 a TC246…). Without netting them,
+ *  EV's 2024 transcript — every penalty reversed the day it was assessed —
+ *  read as 6,223 of penalties owed (2026-10-18). */
+const REVERSES: Record<string, string> = Object.fromEntries(Object.keys(PENALTY_CODES).map(c => [String(Number(c) + 1), c]))
+
+type Tx = ReturnType<typeof transactions>[number]
+
+/** Penalties still standing: each assessment less the reversals of its code,
+ *  applied oldest assessment first. */
+export function standingPenalties(txs: Tx[]): { standing: Array<Tx & { gross: number }>; reversals: Tx[] } {
+  const reversals = txs.filter(x => REVERSES[x.code])
+  const left: Record<string, number> = {}
+  for (const r of reversals) left[REVERSES[r.code]] = (left[REVERSES[r.code]] ?? 0) + Math.abs(r.amount)
+  const standing = txs.filter(x => PENALTY_CODES[x.code] && x.amount > 0).map(p => {
+    const off = Math.min(p.amount, left[p.code] ?? 0)
+    left[p.code] = (left[p.code] ?? 0) - off
+    return { ...p, gross: p.amount, amount: Math.round((p.amount - off) * 100) / 100 }
+  }).filter(p => p.amount >= 0.5)
+  return { standing, reversals }
+}
+
 /** Original due date (calendar-year filers), and the extended one — each
  *  rolled past weekends and holidays (§7503). Without the roll a 1040 filed
  *  Mon 16 Oct 2023 (the 15th was a Sunday) was reported late. */
@@ -144,7 +166,7 @@ const statute: Check = {
 
 const transcriptAccount: Check = {
   id: 'irs.account_status',
-  version: 4,
+  version: 5,
   area: 'irs_account',
   title: 'What the IRS processed, duplicates, penalties and balance due',
   applies: ['1040', '1120', '1120S', '1065'],
@@ -187,21 +209,24 @@ const transcriptAccount: Check = {
         evidence: dups.map(cite),
       })
     }
-    const pens = txs.filter(x => PENALTY_CODES[x.code] && x.amount > 0)
+    const { standing: pens, reversals } = standingPenalties(txs)
     const { due, extended } = dueDates(ctx.entity.form_type, ctx.year)
     const ext = extensionOnFile(ctx, ctx.year)
     const dueUsed = ext.extended ? extended : due
     const ftfPens = pens.filter(p => FAILURE_TO_FILE.has(p.code))
     const relief = earlier && counted ? ftfPens.reduce((s, p) => s + reliefFromEarlierReceipt(p, dueUsed, counted, earlier.at!), 0) : 0
+    const reversedNote = reversals.length ? ` Already reduced by the IRS: ${reversals.map(r => `TC${r.code} ${money(Math.abs(r.amount))} on ${r.date}`).join('; ')}.` : ''
     if (pens.length) {
       const total = pens.reduce((s, p) => s + p.amount, 0)
       out.push({
         check: this.id, status: 'finding', severity: 'medium', key: 'penalties',
-        title: `${ctx.year}: penalties assessed ${money(total)} (${pens.map(p => `TC${p.code}`).join(', ')})${relief > 0 ? ` — ${money(relief)} of it is abatable on the earlier receipt` : ''}`,
-        detail: `${pens.map(p => `${PENALTY_CODES[p.code]} ${money(p.amount)} on ${p.date}`).join('; ')}. First-time abatement needs a clean prior three years; otherwise reasonable cause.${ftfPens.length && earlier ? ` A return received earlier (${earlier.d.date}) supports cutting the late-filing penalty to the months before that date: due ${iso(dueUsed)} (${ext.how}), ${monthsLate(dueUsed, earlier.at!)} month(s) late at ${earlier.d.date} against ${monthsLate(dueUsed, counted!)} at ${iso(counted!)}${relief > 0 ? ` — ${money(relief)} less` : ''}.` : ''}`,
-        evidence: pens.map(cite), asks: ['irs.penalties'],
+        title: `${ctx.year}: penalties assessed ${money(total)} (${pens.map(p => `TC${p.code}`).join(', ')})${reversals.length ? ' after reversals' : ''}${relief > 0 ? ` — ${money(relief)} of it is abatable on the earlier receipt` : ''}`,
+        detail: `${pens.map(p => `${PENALTY_CODES[p.code]} ${money(p.amount)}${p.gross !== p.amount ? ` (of ${money(p.gross)})` : ''} on ${p.date}`).join('; ')}.${reversedNote} First-time abatement needs a clean prior three years; otherwise reasonable cause.${ftfPens.length && earlier ? ` A return received earlier (${earlier.d.date}) supports cutting the late-filing penalty to the months before that date: due ${iso(dueUsed)} (${ext.how}), ${monthsLate(dueUsed, earlier.at!)} month(s) late at ${earlier.d.date} against ${monthsLate(dueUsed, counted!)} at ${iso(counted!)}${relief > 0 ? ` — ${money(relief)} less` : ''}.` : ''}`,
+        evidence: [...pens.map(p => cite({ ...p, amount: p.gross })), ...reversals.map(cite)], asks: ['irs.penalties'],
         ...(relief > 0 ? { dollar_effect: -relief } : {}),
       })
+    } else if (reversals.length) {
+      out.push({ check: this.id, status: 'pass', severity: 'info', key: 'penalties', title: `${ctx.year}: every penalty assessed was reversed by the IRS`, detail: reversedNote.trim(), evidence: reversals.map(cite) })
     }
     const bal = transcriptValue(t, 'Account', /^Account balance plus accruals|^Account balance$/i)
     if (bal && typeof bal.value === 'number' && bal.value > 0) {

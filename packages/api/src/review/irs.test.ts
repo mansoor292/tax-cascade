@@ -118,6 +118,29 @@ describe('IRS account checks', () => {
     expect(out.find(f => f.key === 'late')!.title).toMatch(/after the extended due date 2025-09-15$/)
   })
 
+  it('a penalty the IRS reversed is not owed (EV 2024: TC176/276 removed by TC177/277)', async () => {
+    const cats = [ret(2024, 100), tr(2024, { ti: 100, txs: [
+      tx('150', 'Tax return filed', '12-22-2025'), tx('460', 'Extension', '04-15-2025'),
+      tx('176', 'Penalty for not pre-paying tax', '12-22-2025', 2418.54), tx('276', 'Penalty for late payment of tax', '12-22-2025', 3804.48),
+      tx('277', 'Reduced or removed penalty for late payment of tax', '03-16-2026', -3804.48), tx('177', 'Reduced or removed penalty for not pre-paying tax', '03-16-2026', -2418.54),
+    ] })]
+    const out = await run(2024, cats, [], { ...scorp, form_type: '1120', entity_type: 'c_corp' })
+    const pen = out.find(f => f.key === 'penalties')!
+    expect(pen.status).toBe('pass')
+    expect(pen.title).toMatch(/every penalty assessed was reversed/)
+  })
+
+  it('a partial reversal leaves the remainder standing', async () => {
+    const cats = [ret(2022, 100), tr(2022, { ti: 100, txs: [
+      tx('150', 'Tax return filed', '12-11-2023'), tx('246', 'Failure to provide information penalty', '12-11-2023', 1980),
+      tx('247', 'Reduced or removed failure to provide information penalty', '05-01-2024', -990),
+    ] })]
+    const pen = (await run(2022, cats)).find(f => f.key === 'penalties')!
+    expect(pen.status).toBe('finding')
+    expect(pen.title).toMatch(/penalties assessed 990 \(TC246\) after reversals/)
+    expect(pen.detail).toMatch(/990 \(of 1,980\)/)
+  })
+
   it('a credit balance is money the IRS holds, and a returned refund is called out', async () => {
     const cats = [cat('t2023', 2023, [
       e('irs_transcript', { section: 'Header', line: 'Response Date', kind: 'text', value: '04-11-2026', raw: '' }),
