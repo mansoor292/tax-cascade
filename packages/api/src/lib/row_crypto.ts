@@ -57,6 +57,52 @@ export interface FieldSpec {
   json?:  string[]
   /** Plain text columns — encrypted payload is the UTF-8 string */
   text?:  string[]
+  /** JSONB columns kept readable, with every tax ID inside sealed in place */
+  sealed?: string[]
+}
+
+/**
+ * Tax IDs inside a readable JSON column.
+ *
+ * tax_entity.meta stays plain JSON because the accounting method, preparer and
+ * open items in it are read and merged all over the code. On 2026-10-18 it was
+ * found to hold the spouse's SSN, both owners' SSNs and a payer EIN in
+ * cleartext, right beside the encrypted EIN column.
+ *
+ * Each value under a tax-ID key, at any depth, is now sealed on write as
+ * `enc1:<base64 envelope>`, the Stripe-key format. hydrate() opens it again.
+ * The key names are the ones the MCP masks on output (tax-mcp.ts TAX_ID_KEY),
+ * plus `tin`.
+ */
+export const SEALED_PREFIX = 'enc1:'
+export const TAX_ID_KEY = /^(ein|ssn|spouse_ssn|ein_or_ssn|tin)$|_(ein|ssn|tin)$/
+
+/** Apply `fn` to every string held under a tax-ID key; returns a copy. */
+export function mapTaxIds(node: any, fn: (v: string) => string, key?: string): any {
+  if (typeof node === 'string') return key && TAX_ID_KEY.test(key) && node ? fn(node) : node
+  if (Array.isArray(node)) return node.map(v => mapTaxIds(v, fn, key))
+  if (node && typeof node === 'object') {
+    const out: Record<string, any> = {}
+    for (const [k, v] of Object.entries(node)) out[k] = mapTaxIds(v, fn, k)
+    return out
+  }
+  return node
+}
+
+export function sealTaxIds(dek: Buffer, node: any): any {
+  return mapTaxIds(node, v => v.startsWith(SEALED_PREFIX) ? v : SEALED_PREFIX + encrypt(dek, v).toString('base64'))
+}
+
+export function openTaxIds(dek: Buffer, node: any): any {
+  return mapTaxIds(node, v => {
+    if (!v.startsWith(SEALED_PREFIX)) return v
+    try {
+      return decryptString(dek, Buffer.from(v.slice(SEALED_PREFIX.length), 'base64')) ?? v
+    } catch (e: any) {
+      console.error(`openTaxIds: decrypt failed: ${e.message} — left sealed`)
+      return v
+    }
+  })
 }
 
 /**
@@ -69,7 +115,7 @@ export const ENCRYPTED_RETURN_FIELDS: FieldSpec = {
   json: ['input_data', 'computed_data', 'field_values', 'verification'],
 }
 export const ENCRYPTED_DOC_FIELDS: FieldSpec = { json: ['meta', 'textract_data'] }
-export const ENCRYPTED_ENTITY_FIELDS: FieldSpec = { text: ['ein'] }
+export const ENCRYPTED_ENTITY_FIELDS: FieldSpec = { text: ['ein'], sealed: ['meta'] }
 /**
  * tax_fact answers (services/facts.ts). The value is JSON because a fact can
  * be a date, a flag, an amount or a list of loan rows; the note is free text
@@ -120,9 +166,14 @@ export async function encryptedFields(
   const out: Record<string, any> = {}
   const jsonFields = fields.json || []
   const textFields = fields.text || []
-  const anyPresent = [...jsonFields, ...textFields].some(f => payload[f] !== undefined && payload[f] !== null)
+  const sealedFields = fields.sealed || []
+  const anyPresent = [...jsonFields, ...textFields, ...sealedFields].some(f => payload[f] !== undefined && payload[f] !== null)
   if (!anyPresent) return out
   const dek = await getDek(supabase, userId)
+  for (const f of sealedFields) {
+    const v = payload[f]
+    if (v && typeof v === 'object') out[f] = sealTaxIds(dek, v)
+  }
   for (const f of jsonFields) {
     const v = payload[f]
     if (v !== undefined && v !== null) {
@@ -162,8 +213,9 @@ export async function hydrate(
   if (!uid) return
   const jsonFields = fields.json || []
   const textFields = fields.text || []
+  const sealedFields = (fields.sealed || []).filter(f => row[f] && typeof row[f] === 'object' && JSON.stringify(row[f]).includes(SEALED_PREFIX))
   const anyEnc = [...jsonFields, ...textFields].some(f => row[`${f}_enc`])
-  if (!anyEnc) return
+  if (!anyEnc && !sealedFields.length) return
 
   let dek: Buffer
   try {
@@ -190,6 +242,7 @@ export async function hydrate(
       console.error(`hydrate: decryptString failed for ${f}: ${e.message} — using plaintext`)
     }
   }
+  for (const f of sealedFields) row[f] = openTaxIds(dek, row[f])
 }
 
 /**

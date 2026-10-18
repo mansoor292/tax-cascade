@@ -171,6 +171,9 @@ router.put('/:id', async (req, res) => {
       .select('meta').eq('id', req.params.id).eq('user_id', userId).single()
     updates.meta = { ...(existing?.meta || {}), ...meta_merge }
   }
+  // Every write of meta seals the tax IDs in it, including any an older
+  // write left readable (see SEALED_PREFIX in lib/row_crypto).
+  if (updates.meta) Object.assign(updates, await encryptedFields(supabase, userId, { meta: updates.meta }, ENCRYPTED_ENTITY_FIELDS))
 
   const { data, error } = await supabase.from('tax_entity')
     .update(updates).eq('id', req.params.id).eq('user_id', userId).select().single()

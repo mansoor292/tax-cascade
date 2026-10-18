@@ -38,6 +38,8 @@ describe('encrypted field specs', () => {
     )
     expect(new Set(ENCRYPTED_DOC_FIELDS.json)).toEqual(new Set(['meta', 'textract_data']))
     expect(ENCRYPTED_ENTITY_FIELDS.text).toEqual(['ein'])
+    // meta stays readable; the tax IDs inside it are sealed (row_crypto_sealed.test.ts).
+    expect(ENCRYPTED_ENTITY_FIELDS.sealed).toEqual(['meta'])
     // tax_fact: the answer itself and the provenance note both name people,
     // lenders and amounts (migration 20261017120000_tax_fact.sql).
     expect(ENCRYPTED_FACT_FIELDS.json).toEqual(['value'])
