@@ -66,8 +66,8 @@ export interface FieldSpec {
  *
  * tax_entity.meta stays plain JSON because the accounting method, preparer and
  * open items in it are read and merged all over the code. On 2026-10-18 it was
- * found to hold the spouse's SSN, both owners' SSNs and a payer EIN in
- * cleartext, right beside the encrypted EIN column.
+ * found to hold a spouse's full SSN and a payer EIN in cleartext (and owners'
+ * last-4 placeholders), right beside the encrypted EIN column.
  *
  * Each value under a tax-ID key, at any depth, is now sealed on write as
  * `enc1:<base64 envelope>`, the Stripe-key format. hydrate() opens it again.

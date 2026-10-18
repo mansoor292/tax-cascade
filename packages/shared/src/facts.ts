@@ -1485,6 +1485,15 @@ export const FACT_DEFS: readonly FactDef[] = [
     evidence: ['irs_transcript', 'irs_notice'],
   },
   {
+    key: 'irs.refund_received',
+    scope: 'return', applies_to: ALL, type: 'enum',
+    options: ['received', 'not_received', 'no_refund_due'],
+    question: 'If this return claimed a refund, did it actually arrive (check cashed or deposit landed)? If not, say so even when the IRS shows it as issued.',
+    why: 'An issued refund can come back undelivered and sit on the account as a credit; the 2023 joint 1040 refund was issued twice, came back both times, and nothing flagged it until the transcripts were read (2026-10-18).',
+    affects: ['irs_account'],
+    evidence: ['owner_statement', 'bank_record', 'irs_transcript'],
+  },
+  {
     key: 'irs.representative_on_file',
     scope: 'return', applies_to: ALL, type: 'enum',
     options: ['none', 'form_2848', 'form_8821', 'both'],

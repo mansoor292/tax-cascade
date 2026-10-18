@@ -1,8 +1,8 @@
 /**
  * Tax IDs inside tax_entity.meta are sealed on write and opened on read.
- * On 2026-10-18 the joint 1040's spouse SSN, both corporations' owner SSNs and
- * a brokerage payer EIN were found readable in meta, right beside the
- * encrypted EIN column. The IDs below are made up.
+ * On 2026-10-18 the joint 1040's spouse SSN and a brokerage payer EIN were
+ * found readable in meta, right beside the encrypted EIN column. The IDs
+ * below are made up.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { randomBytes } from 'node:crypto'
