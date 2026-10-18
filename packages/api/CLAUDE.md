@@ -87,7 +87,10 @@ offload for MCP context), `/api/intake` (Gemini gap-fill), `/api/calendar`,
 entities, resolutions), `/api/facts` (answers to the fact registry in
 `@taxengine/shared` facts.ts, table `tax_fact`, superseded never
 overwritten; `/:entity_id/gaps` is the per-return list every return of a
-type is held to — logic in services/facts.ts). `SKILL.md` documents the consumer workflow (entities → QBO →
+type is held to — logic in services/facts.ts), `/api/notes` (return notes —
+open threads that are neither a fact nor a finding, table `return_note`,
+versioned like facts; open ones ride on `/api/review/summary`; logic in
+services/notes.ts). `SKILL.md` documents the consumer workflow (entities → QBO →
 financials → validate → compute → scenarios → promote → PDF).
 
 Auth middleware (`server.ts` `/api` gate): static keys from `TAX_API_KEYS`

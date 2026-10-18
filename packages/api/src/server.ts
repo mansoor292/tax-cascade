@@ -47,6 +47,7 @@ import calendarRoutes from './routes/calendar.js'
 import factRoutes from './routes/facts.js'
 import catalogRoutes from './routes/catalog.js'
 import reviewRoutes from './routes/review.js'
+import noteRoutes from './routes/notes.js'
 import discoveryRoutes from './discovery/discovery_routes.js'
 import oauthRoutes from './routes/oauth.js'
 import wellknownRoutes from './routes/wellknown.js'
@@ -321,6 +322,7 @@ app.use('/api/calendar', calendarRoutes)
 app.use('/api/facts', factRoutes)
 app.use('/api/catalog', catalogRoutes)
 app.use('/api/review', reviewRoutes)
+app.use('/api/notes', noteRoutes)
 app.use('/api/discover', discoveryRoutes)
 
 // ─── Health ───

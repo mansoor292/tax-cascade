@@ -4,7 +4,8 @@
  *
  *   POST /api/review/:entity_id/run       run the framework for one or more years
  *   GET  /api/review/:entity_id           the latest run per year, with resolutions
- *   GET  /api/review/summary              one list across entities: everything to act on
+ *   GET  /api/review/summary              one list across entities: everything to act on,
+ *                                         including every open return note
  *   POST /api/review/:entity_id/resolve   record a decision about a finding
  *
  * A run with ai=true calls the model for the judgement checks and can take a
@@ -15,6 +16,7 @@ import { Router } from 'express'
 import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 import { runReview, latestRuns, resolveFinding, loadBundles } from '../review/store.js'
+import { listNotes } from '../services/notes.js'
 
 const supabase = lazyServiceClient()
 const router = Router()
@@ -86,7 +88,13 @@ router.get('/summary', async (req, res) => {
     }
     items.sort((a, b) => SEV[a.severity] - SEV[b.severity] || Math.abs(b.dollar_effect ?? 0) - Math.abs(a.dollar_effect ?? 0) || String(a.deadline ?? '9').localeCompare(String(b.deadline ?? '9')))
     const asks = [...new Set(items.flatMap(i => i.asks ?? []))]
-    res.json({ count: items.length, items, facts_to_ask: asks })
+    // Open notes are the threads no check can see (services/notes.ts); the
+    // summary is only "everything to act on" if it carries them too.
+    const scoped = (ents ?? []).filter(x => !wanted || wanted.includes(x.id))
+    const byId = new Map(scoped.map(e => [e.id, e]))
+    const openNotes = (await listNotes(supabase, userId, scoped.map(e => e.id), { statuses: ['open'] }))
+      .map(n => ({ entity: byId.get(n.entity_id)?.name, form_type: byId.get(n.entity_id)?.form_type, ...n }))
+    res.json({ count: items.length, items, facts_to_ask: asks, open_notes_count: openNotes.length, open_notes: openNotes })
   } catch (e: any) {
     sendError(res, e)
   }
@@ -100,11 +108,13 @@ router.get('/:entity_id', async (req, res) => {
     const years = req.query.years ? String(req.query.years).split(',').map(Number).filter(Number.isFinite) : undefined
     const runs = await latestRuns(supabase, userId, req.params.entity_id, years)
     const all = req.query.include_passed === '1'
+    const notes = await listNotes(supabase, userId, [req.params.entity_id], { years, statuses: all ? undefined : ['open', 'info'] })
     res.json({
       runs: runs.map(r => ({
         run_id: r.run_id, tax_year: r.tax_year, framework_version: r.framework_version, summary: r.summary,
         findings: r.findings.filter(f => all || ACT.has(f.status) || f.change === 'resolved').sort((a, b) => SEV[a.severity] - SEV[b.severity]).map(compact),
       })),
+      notes,
     })
   } catch (e: any) {
     sendError(res, e)

@@ -131,6 +131,38 @@ against the previous one, and every new or changed finding is attributed to its
 cause: a new document, a new fact, a framework change, or none. "None" means a
 genuine miss, and it is reported as one.
 
+### 6. Return notes (added 2026-10-18)
+
+The catalog, facts and review cover what the documents say, what every return must
+answer, and what the checks find. An audit on 2026-10-18 found a fourth kind of
+knowledge that had no home:
+- a payroll refund check whose receipt nobody had confirmed
+- refund interest the IRS might owe
+- the call a representative still had to make about a misposted return
+- whether a related company had filed at all
+
+All of it lived in conversation and was lost when a session ended.
+
+Table `return_note` (`services/notes.ts`, `/api/notes`, MCP `add_note` / `update_note` /
+`list_notes`) holds these threads.
+- **Scope.** Each note belongs to a return (entity + tax year), or to the entity when it
+  spans years.
+- **Status.** A note is `open`, `closed` or `info` (standing context). An open note must
+  say who it is waiting on: owner, IRS, preparer, agent or a third party.
+- **Links.** A note may point at the registry fact or review finding it concerns.
+- **Versions.** An edit writes a new version under the same `note_key`; nothing is
+  overwritten.
+- **Encryption.** Title and body are stored as ciphertext only.
+
+Open notes appear in `review_summary` beside the findings. That is what keeps it "one
+list of everything to act on". `get_review` returns a year's open and info notes with its
+findings.
+
+The boundaries:
+- A question every return of a type should answer belongs in the registry.
+- A decision about a finding is a resolution.
+- A note is everything else.
+
 ## Check catalogue (initial)
 
 **Corporate and entity**

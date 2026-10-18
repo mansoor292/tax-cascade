@@ -17,6 +17,8 @@ import {
   CATALOG_ENC_COLS,
   ENCRYPTED_REVIEW_FIELDS,
   REVIEW_ENC_COLS,
+  ENCRYPTED_NOTE_FIELDS,
+  NOTE_ENC_COLS,
   encCols,
 } from './row_crypto.js'
 
@@ -30,6 +32,7 @@ describe('encrypted field specs', () => {
     expect(FACT_ENC_COLS).toBe(encCols(ENCRYPTED_FACT_FIELDS))
     expect(CATALOG_ENC_COLS).toBe(encCols(ENCRYPTED_CATALOG_FIELDS))
     expect(REVIEW_ENC_COLS).toBe(encCols(ENCRYPTED_REVIEW_FIELDS))
+    expect(NOTE_ENC_COLS).toBe(encCols(ENCRYPTED_NOTE_FIELDS))
   })
 
   it('covers the known encrypted columns', () => {

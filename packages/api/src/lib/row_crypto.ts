@@ -130,6 +130,8 @@ export const ENCRYPTED_CATALOG_FIELDS: FieldSpec = { json: ['entries', 'pages'] 
  *  resolution notes are free text. */
 export const ENCRYPTED_REVIEW_FIELDS: FieldSpec = { json: ['findings'] }
 export const ENCRYPTED_RESOLUTION_FIELDS: FieldSpec = { text: ['note'] }
+/** return_note: the open threads about a return name people and amounts. */
+export const ENCRYPTED_NOTE_FIELDS: FieldSpec = { text: ['title', 'body'] }
 
 /**
  * Ciphertext sibling columns for selects that name columns explicitly.
@@ -149,6 +151,7 @@ export const DOC_ENC_COLS = 'meta_enc, textract_data_enc'
 export const FACT_ENC_COLS = 'value_enc, source_note_enc'
 export const CATALOG_ENC_COLS = 'entries_enc, pages_enc'
 export const REVIEW_ENC_COLS = 'findings_enc'
+export const NOTE_ENC_COLS = 'title_enc, body_enc'
 
 /**
  * Produce `*_enc` columns for any fields in `payload` that are set. Caller

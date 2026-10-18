@@ -209,6 +209,10 @@ Use record_tax_fact for values stated in conversation ("my W-2 wages were $150K"
 
 Facts that are not a document's box values — ownership and share counts, the S election and its acceptance, who lent money and from whose account, material participation, intercompany fees, state tax payment dates, IRS transcript events — are defined ONCE per return type in a registry, and every return of that type, every year, needs the same list. get_fact_gaps(entity_id, tax_year) returns that list with each fact answered, unknown, not applicable, missing or contradicted. Before preparing, reviewing or drawing a conclusion about a return, call it; ask the owner every missing and contradicted fact together in one message; record each answer with record_fact. Never fill a fact from inference. If you learn something a return needs that the list does not ask, say so — it belongs in the registry, not in entity meta or a note.
 
+## Open notes on a return
+
+Everything still open about a return that is neither a registry fact nor a review finding is a NOTE (add_note / update_note / list_notes). Examples: a refund check nobody has confirmed arriving, a call the representative still has to make, a related return whose filing is unconfirmed. Standing context a new session must know is also a note, with status info. Each open note says who it is waiting on, and review_summary lists every open note beside the findings. Before working on a return, read its notes (list_notes, or get_review, which carries them). When something is learned or settled, update the note in the same turn. An open item left only in the conversation is lost when the conversation ends.
+
 ## Filed returns vs. computed returns — STRICT SEPARATION
 
 Returns live in two worlds. Don't cross them.
@@ -341,6 +345,9 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   get_review:                 { title: 'Latest review findings', ...RO },
   review_summary:             { title: 'Everything to act on, all entities', ...RO },
   resolve_finding:            { title: 'Record a decision on a finding', ...WRITE },
+  add_note:                   { title: 'Add an open note to a return', ...WRITE },
+  update_note:                { title: 'Edit or close a return note', ...WRITE },
+  list_notes:                 { title: 'Open notes for a return', ...RO },
 }
 
 function extractApiKey(req: Request): string | null {
@@ -1242,7 +1249,7 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
 
   // ─── Tool: get_review ───
   server.tool('get_review',
-    'The latest stored review of an entity, per tax year: findings and gaps by severity, each with evidence (the catalog lines it rests on), dollar effect, deadline, the facts to ask, whether it is new since the previous run and why, and any recorded resolution.',
+    'The latest stored review of an entity, per tax year: findings and gaps by severity, each with evidence (the catalog lines it rests on), dollar effect, deadline, the facts to ask, whether it is new since the previous run and why, and any recorded resolution. Also returns the return notes for those years (open and info; closed too with include_passed) — read them before acting on the return.',
     {
       entity_id: z.string().describe('Entity UUID'),
       years: z.array(z.number()).optional().describe('Restrict to these years'),
@@ -1257,7 +1264,7 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
 
   // ─── Tool: review_summary ───
   server.tool('review_summary',
-    'ONE list of everything to act on across all entities and years from their latest reviews — unresolved findings and gaps, most severe first, then by dollar effect and deadline — plus every fact to ask the owner. This is the closed list: anything not on it was checked and passed, or is not covered by the framework (say so).',
+    'ONE list of everything to act on across all entities and years from their latest reviews — unresolved findings and gaps, most severe first, then by dollar effect and deadline — plus every fact to ask the owner and every OPEN return note (open_notes: threads no check can see, each saying who it waits on). This is the closed list: anything not on it was checked and passed, or is not covered by the framework (say so).',
     { entity_ids: z.array(z.string()).optional().describe('Limit to these entities') },
     async ({ entity_ids }) => text(await call('GET', `/api/review/summary${entity_ids?.length ? '?entity_ids=' + entity_ids.join(',') : ''}`)))
 
@@ -1271,6 +1278,46 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
       note: z.string().optional().describe('Why — what was done or decided, and by whom'),
     },
     async ({ entity_id, ...rest }) => text(await call('POST', `/api/review/${entity_id}/resolve`, rest)))
+
+  // ─── Return notes (services/notes.ts) ───
+  // The open threads about a return that are neither a fact nor a finding.
+  // Before 2026-10-18 they lived only in conversation and were lost with it.
+  const NOTE_RULES = 'Where things go: a question every return of this type should answer is a FACT (record_fact; if the registry has no key for it, say so — it needs adding); a decision about a review finding is resolve_finding; everything else still open about the return, or that a new session must know, is a NOTE. Never leave an open item only in the conversation.'
+  const noteFields = {
+    tax_year: z.number().nullable().optional().describe('The return year; null for the whole entity (a thread spanning years, e.g. a payroll refund)'),
+    title: z.string().optional().describe('One line saying what is open, with the amount if there is one, e.g. "ERC refund 19,919.70 reissued 5/4/2026 — not in the books; confirm deposited"'),
+    body: z.string().nullable().optional().describe('Everything a new session needs: what is known, from which document or person and when, what was tried, what settles it. Replaces the previous body (the old version is kept), so carry forward what still matters.'),
+    status: z.enum(['open', 'closed', 'info']).optional().describe('open = needs something (default); closed = settled — say in body what settled it; info = standing context a new session must know, nothing to do'),
+    waiting_on: z.enum(['owner', 'irs', 'preparer', 'agent', 'third_party']).nullable().optional().describe('Who must act next. Required while open. owner = the taxpayer or their representative; agent = this assistant/system'),
+    fact_key: z.string().nullable().optional().describe('The registry fact this note concerns, if any'),
+    finding_fingerprint: z.string().nullable().optional().describe('The review finding this note concerns, if any (from get_review / review_summary)'),
+    due_date: z.string().nullable().optional().describe('YYYY-MM-DD deadline, if any'),
+  }
+  server.tool('add_note',
+    `Add a note to a return (entity + tax year, or the whole entity). ${NOTE_RULES} Open notes appear in review_summary until closed.`,
+    { entity_id: z.string().describe('Entity UUID'), ...noteFields, title: z.string().describe(noteFields.title.description!) },
+    async ({ entity_id, ...rest }) => text(await call('POST', `/api/notes/${entity_id}`, rest)))
+
+  server.tool('update_note',
+    `Edit a note or close it — pass only what changes. A new version is written and the old one kept (list_notes include_history shows them). To close: status "closed" and a body that says what settled it. ${NOTE_RULES}`,
+    { entity_id: z.string().describe('Entity UUID'), note_key: z.string().describe('The note_key from add_note / list_notes'), ...noteFields },
+    async ({ entity_id, note_key, ...rest }) => text(await call('PATCH', `/api/notes/${entity_id}/${note_key}`, rest)))
+
+  server.tool('list_notes',
+    'The notes on a return: with tax_year, that year plus the entity-wide ones. Open and info notes by default — read them before working on the return; they hold what earlier sessions learned and what is still waiting on someone.',
+    {
+      entity_id: z.string().describe('Entity UUID'),
+      tax_year: z.number().optional().describe('Return year (entity-wide notes are always included)'),
+      include_closed: z.boolean().optional().describe('Also list closed notes'),
+      include_history: z.boolean().optional().describe('Also list superseded versions'),
+    },
+    async ({ entity_id, tax_year, include_closed, include_history }) => {
+      const qs = new URLSearchParams()
+      if (tax_year !== undefined) qs.set('year', String(tax_year))
+      if (!include_closed) qs.set('status', 'open,info')
+      if (include_history) qs.set('history', '1')
+      return text(await call('GET', `/api/notes/${entity_id}?${qs.toString()}`))
+    })
 
   // ─── Tool: request_form ───
   // Response includes the live discovery status record inline (folds in the old check_form_status tool).
