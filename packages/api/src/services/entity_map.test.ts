@@ -41,7 +41,7 @@ describe('link fields', () => {
     const ic = { kind: 'intercompany' as const, from_entity_id: SC, to_entity_id: CC }
     expect(checkLinkComplete(ic, ENTS)).toMatchObject({ ok: false, field: 'nature' })
     expect(checkLinkComplete({ ...ic, nature: 'services' }, ENTS).ok).toBe(true)
-    expect(checkLinkComplete({ ...ic, nature: 'loan', from_entity_id: IND }, ENTS)).toMatchObject({ ok: false, field: 'from_entity_id' })
+    expect(checkLinkComplete({ ...ic, nature: 'loan', from_entity_id: IND }, ENTS)).toMatchObject({ ok: false, field: 'from_entity_id', error: expect.stringMatching(/^an intercompany link joins businesses/) })
     expect(checkLinkComplete({ ...ic, nature: 'loan', to_entity_id: SC }, ENTS)).toMatchObject({ ok: false, field: 'to_entity_id' })
 
     expect(checkLinkComplete({ kind: 'disregarded', from_entity_id: SC, to_name: 'Example Payroll LLC' }, ENTS).ok).toBe(true)

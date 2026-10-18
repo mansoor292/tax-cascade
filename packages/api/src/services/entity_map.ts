@@ -119,7 +119,7 @@ export function checkLinkComplete(
   } else {
     if (link.pct !== null) return bad('pct', 'pct applies to ownership links only')
     if (link.subject !== null) return bad('subject', 'subject applies to ownership links only')
-    if (from.form_type === '1040' || to?.form_type === '1040') return bad('from_entity_id', `a ${link.kind} link joins businesses; an owner's loans and pay are facts on the owner's entity`)
+    if (from.form_type === '1040' || to?.form_type === '1040') return bad('from_entity_id', `${link.kind === 'intercompany' ? 'an' : 'a'} ${link.kind} link joins businesses; an owner's loans and pay are facts on the owner's entity`)
     if (link.kind === 'intercompany' && !link.nature) return bad('nature', `an intercompany link says how they deal: ${LINK_NATURES.join(', ')}`)
     if (link.kind === 'disregarded' && link.nature !== null) return bad('nature', 'nature applies to intercompany links only')
   }
