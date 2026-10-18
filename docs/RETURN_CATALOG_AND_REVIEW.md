@@ -163,6 +163,71 @@ The boundaries:
 - A decision about a finding is a resolution.
 - A note is everything else.
 
+### 7. Entity map (added 2026-10-18)
+
+The owner's model has three layers:
+1. Hard-coded data models for each source (filed form, IRS record, books), plus a map
+   of how the entities in an account depend on each other.
+2. A cheap model that fills those data models from documents in whatever layout.
+3. Claude, through the MCP, reading all of it.
+
+The catalog and the transcripts were the first layer's data models. The map is the
+part that did not exist. The review re-derived one kind of link (a K-1 on the 1040,
+matched by the EIN printed on Schedule E) on every run and threw it away. Everything
+else lived in conversation:
+- who owns the C corporations
+- the controlled group
+- the intercompany fee and balance
+- the disregarded payroll LLC
+
+Table `entity_link` (`services/entity_map.ts`, `/api/entity-map`, MCP `entity_map` /
+`record_link` / `update_link`) holds one row per relationship:
+- **`owns`:** the owner's return holds `pct` of an entity. On a joint 1040, `subject`
+  names the person.
+- **`disregarded`:** an LLC whose income and payroll belong on the parent's return. It
+  may have no return in the account (`to_name`).
+- **`intercompany`:** two businesses deal with each other. `nature` is services, loan,
+  rent, settlement or other. The from side pays or owes.
+
+Each link has `from_year`/`to_year`, a `source` (owner, filed return, fact or entity
+record) and its evidence. It is versioned like facts and notes. A link recorded in error
+is retired (`removed`), not deleted, so its evidence is not suggested again. Evidence
+and detail are stored as ciphertext only.
+
+`review/map.ts` reads the evidence, rule-based and with no AI:
+- Schedule E Part II rows carrying an account entity's EIN
+- K-1 items F/G
+- Form 1125-E officer stock percentages
+- statement rows naming another entity in the account ("Due to …", "Due from …")
+- the `entity.disregarded_entities` fact
+- entity-record owner lists
+
+Each piece of evidence becomes a suggestion. A suggestion is never a link; `entity_map`
+lists the ones no recorded link answers.
+
+The review reads the map:
+- K-1 links come from the map first and from printed EINs second. A map link carries
+  into years whose Schedule E lacks the row, which is exactly the year that needs
+  checking.
+- `entity_map.links_recorded` raises a gap for each piece of evidence the map does not
+  answer. It is raised on one return only: ownership on the owned entity, everything
+  else on the entity the link starts from.
+- `entity_map.ownership_matches_returns` compares recorded percentages with K-1 item G
+  and Form 1125-E. It raises a high finding when a pass-through entity the owner holds
+  is missing from that year's 1040 Schedule E.
+
+`entity_map` also says, for each entity, what a change to its return touches:
+- the owner's 1040, for K-1 income, basis and QBI
+- the counterparty's matching revenue or expense and balance
+- the parent of a disregarded LLC
+
+Built next on top of the map:
+- intercompany checks: the fee expense equals the counterparty's revenue each year, and
+  the balances agree on both sides
+- controlled-group consistency (Schedule K line 28 / Schedule O against common
+  ownership)
+- a numeric multi-entity cascade
+
 ## Check catalogue (initial)
 
 **Corporate and entity**

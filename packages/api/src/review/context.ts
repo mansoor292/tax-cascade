@@ -1,36 +1,43 @@
 /**
  * Build a ReviewContext from catalogs, facts and documents.
  *
- * Linking is evidence-only: a 1040 is linked to an S corporation because its
- * Schedule E row prints the same EIN the S corporation prints on its own
+ * Linking is evidence-only: a 1040 is linked to an S corporation because the
+ * entity map records the ownership (entity_link, with its evidence) or because
+ * its Schedule E row prints the same EIN the S corporation prints on its own
  * return — never because two entities share an account (the MCP evidence
  * rule: co-location is not a relationship).
  */
-import type { CatalogView, EntityInfo, FactValue, FactView, LinkedEntity, ReviewContext, DocumentFact } from './types.js'
-import { filed, formEntries } from './lookup.js'
+import type { EntityLink, FactValue, FactView, LinkedEntity, ReviewContext, DocumentFact } from './types.js'
+import { filed } from './lookup.js'
 import { scheduleERows } from './k1.js'
+import { einOf, linksFor, suggestLinks, type EntityBundle, type FactLike } from './map.js'
 
-const EIN_LINE: Record<string, { form: string; line: string }> = {
-  '1120S': { form: 'f1120s', line: 'D' },
-  '1120': { form: 'f1120', line: 'B' },
-  '1065': { form: 'f1065', line: 'D' },
-}
+export { einOf, type EntityBundle } from './map.js'
 
-/** The EIN an entity prints on its own returns (digits only). */
-export function einOf(entity: EntityInfo, catalogs: CatalogView[]): string | undefined {
-  const where = EIN_LINE[entity.form_type]
-  if (!where) return undefined
-  for (const c of [...catalogs].sort((a, b) => (b.tax_year ?? 0) - (a.tax_year ?? 0))) {
-    const e = formEntries(c, where.form).find(x => x.line === where.line && !x.section)
-    const d = String(e?.raw ?? '').replace(/\D/g, '')
-    if (d.length === 9) return d
+const PASS_THROUGH = ['1120S', '1065']
+
+/** K-1 links the entity map records for this year. */
+function mapLinks(self: EntityBundle, others: EntityBundle[], year: number, links: EntityLink[]): LinkedEntity[] {
+  const out: LinkedEntity[] = []
+  const owns = linksFor(links, year).filter(l => l.kind === 'owns')
+  const says = (l: EntityLink) => `entity map: ${l.subject ?? 'the owner'} owns ${l.pct !== null ? `${l.pct}%` : 'an interest'} (${l.source.replace('_', ' ')})`
+  if (self.entity.form_type === '1040') {
+    for (const l of owns.filter(x => x.from_entity_id === self.entity.id)) {
+      const o = others.find(b => b.entity.id === l.to_entity_id && PASS_THROUGH.includes(b.entity.form_type))
+      if (!o) continue
+      const ein = einOf(o.entity, o.catalogs)
+      out.push({ entity: { ...o.entity, meta: { ...(o.entity.meta ?? {}), ...(ein ? { ein_digits: ein } : {}) } }, relation: 'k1_issuer', evidence: says(l), catalogs: o.catalogs })
+    }
+  } else if (PASS_THROUGH.includes(self.entity.form_type)) {
+    for (const l of owns.filter(x => x.to_entity_id === self.entity.id)) {
+      const o = others.find(b => b.entity.id === l.from_entity_id && b.entity.form_type === '1040')
+      if (o) out.push({ entity: o.entity, relation: 'k1_recipient', evidence: says(l), catalogs: o.catalogs })
+    }
   }
-  return undefined
+  return out
 }
 
-export interface EntityBundle { entity: EntityInfo; catalogs: CatalogView[] }
-
-export function linkEntities(self: EntityBundle, others: EntityBundle[], year: number): LinkedEntity[] {
+function einLinks(self: EntityBundle, others: EntityBundle[], year: number): LinkedEntity[] {
   const out: LinkedEntity[] = []
   if (self.entity.form_type === '1040') {
     const rows = scheduleERows(filed(self.catalogs, year))
@@ -54,6 +61,19 @@ export function linkEntities(self: EntityBundle, others: EntityBundle[], year: n
         out.push({ entity: o.entity, relation: 'k1_recipient', evidence: `${y} Form 1040 Schedule E prints this entity's EIN`, catalogs: o.catalogs })
       }
     }
+  }
+  return out
+}
+
+/** K-1 links for a year: the entity map's first, then the ones the returns
+ *  themselves document (Schedule E prints the issuer's EIN). A link found
+ *  both ways carries both pieces of evidence. */
+export function linkEntities(self: EntityBundle, others: EntityBundle[], year: number, links: EntityLink[] = []): LinkedEntity[] {
+  const out = mapLinks(self, others, year, links)
+  for (const l of einLinks(self, others, year)) {
+    const same = out.find(x => x.entity.id === l.entity.id && x.relation === l.relation)
+    if (same) same.evidence = `${same.evidence}; ${l.evidence}`
+    else out.push(l)
   }
   return out
 }
@@ -89,6 +109,10 @@ export function buildContext(args: {
   others: EntityBundle[]
   year: number
   facts: StoredFactLike[]
+  /** The account's recorded links (entity_link, current versions) */
+  links?: EntityLink[]
+  /** Facts of every entity, for map suggestions (disregarded entities) */
+  factsByEntity?: Map<string, FactLike[]>
   documents?: DocumentFact[]
   factGaps?: ReviewContext['factGaps']
   today?: Date
@@ -97,10 +121,17 @@ export function buildContext(args: {
     entity: args.self.entity,
     year: args.year,
     catalogs: args.self.catalogs,
-    linked: linkEntities(args.self, args.others, args.year),
+    linked: linkEntities(args.self, args.others, args.year, args.links ?? []),
     facts: factView(args.facts),
     documents: args.documents ?? [],
     factGaps: args.factGaps,
+    ...(args.links ? {
+      map: {
+        links: args.links,
+        suggestions: suggestLinks([args.self, ...args.others], args.factsByEntity),
+        bundles: [args.self, ...args.others],
+      },
+    } : {}),
     today: args.today ?? new Date(),
   }
 }

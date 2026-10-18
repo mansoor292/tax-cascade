@@ -47,7 +47,8 @@ src/
 │                      passthrough = NIIT/basis/7203/SSTB/loans, continuity,
 │                      irs/statute), ai.ts (grounded Gemini judgement checks),
 │                      framework.ts (runner + run diff), store.ts (review_run,
-│                      review_resolution)
+│                      review_resolution), map.ts (the entity map: links
+│                      suggested by the returns vs links recorded)
 └── lib/               supabase.ts (serviceClient/anonClient/userClient/
                        requestUserId — THE clients, three on purpose;
                        module scope must use lazyServiceClient/lazyAnonClient
@@ -90,7 +91,9 @@ overwritten; `/:entity_id/gaps` is the per-return list every return of a
 type is held to — logic in services/facts.ts), `/api/notes` (return notes —
 open threads that are neither a fact nor a finding, table `return_note`,
 versioned like facts; open ones ride on `/api/review/summary`; logic in
-services/notes.ts). `SKILL.md` documents the consumer workflow (entities → QBO →
+services/notes.ts), `/api/entity-map` (the entity map — which entities own,
+disregard or deal with which, table `entity_link`, versioned; evidence read from
+the returns in review/map.ts, write path in services/entity_map.ts). `SKILL.md` documents the consumer workflow (entities → QBO →
 financials → validate → compute → scenarios → promote → PDF).
 
 Auth middleware (`server.ts` `/api` gate): static keys from `TAX_API_KEYS`

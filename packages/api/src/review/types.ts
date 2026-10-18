@@ -20,7 +20,7 @@ export type FormType = '1040' | '1120' | '1120S' | '1065'
 export type Area =
   | 'catalog' | 'corporate' | 'income' | 'k1' | 'balance_sheet' | 'basis' | 'niit'
   | 'qbi' | 'loans' | 'carryovers' | 'intercompany' | 'state' | 'irs_account'
-  | 'statute' | 'facts' | 'preparation'
+  | 'statute' | 'facts' | 'preparation' | 'entity_map'
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info'
 
@@ -97,6 +97,34 @@ export interface LinkedEntity {
   catalogs: CatalogView[]
 }
 
+export type LinkKind = 'owns' | 'disregarded' | 'intercompany'
+export type LinkNature = 'services' | 'loan' | 'rent' | 'settlement' | 'other'
+export type LinkSource = 'owner' | 'filed_return' | 'fact' | 'entity_record'
+
+/** One recorded relationship in the entity map (table entity_link; see
+ *  services/entity_map.ts for the write path and review/map.ts for how
+ *  evidence is read against it). */
+export interface EntityLink {
+  link_key: string
+  kind: LinkKind
+  /** owns: the owner's return; disregarded: the parent; intercompany: the side that pays or owes */
+  from_entity_id: string
+  to_entity_id: string | null
+  /** A party with no return in this account */
+  to_name: string | null
+  /** owns from a joint 1040: which person holds the interest */
+  subject: string | null
+  pct: number | null
+  nature: LinkNature | null
+  from_year: number | null
+  to_year: number | null
+  source: LinkSource
+  evidence: string | null
+  detail: string | null
+  /** A link recorded in error, retired (kept so the evidence is not re-suggested) */
+  removed: boolean
+}
+
 export interface DocumentFact {
   id: string
   doc_type: string
@@ -116,6 +144,14 @@ export interface ReviewContext {
   documents: DocumentFact[]
   /** Fact gaps from the registry for this return type/year, when available */
   factGaps?: Array<{ key: string; question: string; status: string }>
+  /** The account's entity map: recorded links (current versions, removed
+   *  ones included), what the evidence suggests, and every entity with its
+   *  catalogs. Absent when the caller did not load it. */
+  map?: {
+    links: EntityLink[]
+    suggestions: import('./map.js').LinkSuggestion[]
+    bundles: Array<{ entity: EntityInfo; catalogs: CatalogView[] }>
+  }
   today: Date
 }
 

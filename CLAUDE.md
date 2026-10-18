@@ -45,6 +45,10 @@ Since 2026-10-17 (docs/RETURN_CATALOG_AND_REVIEW.md — read it):
 - **Every return type is held to one fact list** (`@taxengine/shared` facts.ts,
   table `tax_fact`, `/api/facts`): what one return needed becomes a question for
   all of them.
+- **How the entities depend on each other is stored once** — the entity map
+  (`entity_link`, `/api/entity-map`, MCP `entity_map`): ownership, disregarded
+  entities, intercompany dealings, each with years and evidence. The review
+  checks it against the returns; nothing re-derives it per session.
 - **Every return goes through the same checks** (`src/review/`, `/api/review`,
   MCP `run_review`/`review_summary`): results are stored and each new finding
   says why it is new (document, fact, framework, or a miss).

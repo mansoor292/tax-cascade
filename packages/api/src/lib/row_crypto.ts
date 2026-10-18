@@ -132,6 +132,8 @@ export const ENCRYPTED_REVIEW_FIELDS: FieldSpec = { json: ['findings'] }
 export const ENCRYPTED_RESOLUTION_FIELDS: FieldSpec = { text: ['note'] }
 /** return_note: the open threads about a return name people and amounts. */
 export const ENCRYPTED_NOTE_FIELDS: FieldSpec = { text: ['title', 'body'] }
+/** entity_link: the evidence quotes returns and the detail names people. */
+export const ENCRYPTED_LINK_FIELDS: FieldSpec = { text: ['evidence', 'detail'] }
 
 /**
  * Ciphertext sibling columns for selects that name columns explicitly.
@@ -152,6 +154,7 @@ export const FACT_ENC_COLS = 'value_enc, source_note_enc'
 export const CATALOG_ENC_COLS = 'entries_enc, pages_enc'
 export const REVIEW_ENC_COLS = 'findings_enc'
 export const NOTE_ENC_COLS = 'title_enc, body_enc'
+export const LINK_ENC_COLS = 'evidence_enc, detail_enc'
 
 /**
  * Produce `*_enc` columns for any fields in `payload` that are set. Caller

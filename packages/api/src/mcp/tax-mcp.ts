@@ -180,7 +180,7 @@ For multi-step workflows on genuinely big datasets (full general ledger reconcil
 
 ## Entry point
 
-Call list_entities first. Figure out what the user needs from context — don't present a menu. Entities carry a \`source\` field on each return (filed_import / proforma / amendment / extension); filed PDFs live in list_documents (doc_type: prior_return_*), parsed line values live in tax_return. One filed return becomes one filed_import row when ingested — you'll see both.
+Call list_entities first, then entity_map for how the entities are tied together (who owns what, intercompany dealings, disregarded entities, and what a change to each return touches). Figure out what the user needs from context — don't present a menu. Entities carry a \`source\` field on each return (filed_import / proforma / amendment / extension); filed PDFs live in list_documents (doc_type: prior_return_*), parsed line values live in tax_return. One filed return becomes one filed_import row when ingested — you'll see both.
 
 Answer account-level and family-level questions ("what's on file?", "what's missing for 2024?") from list_entities + list_documents alone — they already carry every entity's returns, years, sources, and document types. Do NOT call get_entity once per entity for an overview; each call is a separate permission prompt for the user. get_entity is for drilling into ONE entity when you need what the summary omits (the Schedule K questionnaire, scenarios, full field detail).
 
@@ -198,7 +198,7 @@ This system holds financial records; users act on what you say. Before stating a
 
 Two failure modes that slipped through even after the rules above shipped — treat these as hard rules, not style:
 
-- **Co-location is not a relationship.** Entities in one account share nothing but the account. Never assert that an entity's K-1 "flows to" or "should surface on" an individual's return unless a document on file establishes the ownership (a K-1 naming them, a return schedule, an operating agreement). The compliant phrasing pattern: "No 2024 Partnership X return is present here. IF the individual has an ownership interest in Partnership X, a 2024 K-1 may also be relevant to her return — but this system currently contains no document establishing that relationship."
+- **Co-location is not a relationship.** Entities in one account share nothing but the account. Never assert that an entity's K-1 "flows to" or "should surface on" an individual's return unless the entity map records the link (with its evidence) or a document on file establishes the ownership (a K-1 naming them, a return schedule, an operating agreement). The compliant phrasing pattern: "No 2024 Partnership X return is present here. IF the individual has an ownership interest in Partnership X, a 2024 K-1 may also be relevant to her return — but this system currently contains no document establishing that relationship."
 - **This vault is not the world.** A return absent from this system is "not present here" — never "not filed" or "was never filed". Filing may have happened anywhere; absence here establishes only absence here. Same for "no activity": a missing return is not evidence the entity was dormant.
 - **Internal ids are plumbing, not citations.** The UUIDs in tool responses (entity_id, return_id, document id) exist so you can chain tool calls. Never surface them to the user — not even truncated. Refer to a record by entity name, form, and tax year ("the computed 2024 1120S for Harborlight"), which is what a person can act on.
 - **These rules constrain claims — they are not content to volunteer.** Apply them silently to whatever you were about to assert. Do NOT raise ownership, family relationships, K-1 flow, or filed-elsewhere caveats when neither the question nor your answer touches those topics: a user who asks for a plain entity list should get a plain entity list, with no unprompted disclaimer about what the account does not prove.
@@ -212,6 +212,10 @@ Facts that are not a document's box values — ownership and share counts, the S
 ## Open notes on a return
 
 Everything still open about a return that is neither a registry fact nor a review finding is a NOTE (add_note / update_note / list_notes). Examples: a refund check nobody has confirmed arriving, a call the representative still has to make, a related return whose filing is unconfirmed. Standing context a new session must know is also a note, with status info. Each open note says who it is waiting on, and review_summary lists every open note beside the findings. Before working on a return, read its notes (list_notes, or get_review, which carries them). When something is learned or settled, update the note in the same turn. An open item left only in the conversation is lost when the conversation ends.
+
+## The entity map
+
+How the entities in an account are tied together is stored ONCE, in the entity map (entity_map / record_link / update_link), not re-derived each session. A link is one of: owns (an owner's return holds a percentage of an entity; subject names the person on a joint 1040), disregarded (an LLC whose income and payroll belong on a parent's return), intercompany (two businesses deal with each other: services fee, loan, rent, settlement). Each link has the years it holds, its source and its evidence. entity_map also lists "unrecorded" — evidence in the returns, facts or entity records that points to a link nobody has recorded — and for each entity what a change to its return touches. Before reasoning across entities (K-1 flow, basis, intercompany fees and balances, controlled groups), read the map. Record a link only from evidence or the owner's statement, never from inference; when the evidence is misleading, retire the link (update_link removed: true) or resolve the review item, and say why. The review checks the map against the returns every run.
 
 ## Filed returns vs. computed returns — STRICT SEPARATION
 
@@ -348,6 +352,9 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   add_note:                   { title: 'Add an open note to a return', ...WRITE },
   update_note:                { title: 'Edit or close a return note', ...WRITE },
   list_notes:                 { title: 'Open notes for a return', ...RO },
+  entity_map:                 { title: 'Entity map: how the entities connect', ...RO },
+  record_link:                { title: 'Record a link in the entity map', ...WRITE },
+  update_link:                { title: 'Change or retire an entity-map link', ...WRITE },
 }
 
 function extractApiKey(req: Request): string | null {
@@ -1318,6 +1325,41 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
       if (include_history) qs.set('history', '1')
       return text(await call('GET', `/api/notes/${entity_id}?${qs.toString()}`))
     })
+
+  // ─── Entity map (services/entity_map.ts, review/map.ts) ───
+  // How the entities in one account are tied together, stored once. Before
+  // 2026-10-18 the review re-derived K-1 links from printed EINs each run and
+  // everything else (ownership of the C corporations, intercompany fees and
+  // balances, a disregarded payroll LLC) lived in conversation.
+  const linkFields = {
+    kind: z.enum(['owns', 'disregarded', 'intercompany']).optional().describe('owns: from (the owner\'s return) holds pct of to. disregarded: to is a disregarded entity of from. intercompany: from and to deal with each other; from is the side that pays or owes'),
+    from_entity_id: z.string().optional().describe('Entity UUID: the owner\'s return (owns), the parent (disregarded), or the paying/owing side (intercompany)'),
+    to_entity_id: z.string().nullable().optional().describe('Entity UUID of the other side, when it is in this account'),
+    to_name: z.string().nullable().optional().describe('Name of the other side when it has no return in this account (give this OR to_entity_id)'),
+    subject: z.string().nullable().optional().describe('owns from a joint 1040: the person who holds the interest, as named on the 1040'),
+    pct: z.number().nullable().optional().describe('owns: the percentage held (required for owns)'),
+    nature: z.enum(['services', 'loan', 'rent', 'settlement', 'other']).nullable().optional().describe('intercompany: how they deal (required for intercompany)'),
+    from_year: z.number().nullable().optional().describe('First tax year the link holds; null = from the start'),
+    to_year: z.number().nullable().optional().describe('Last tax year the link holds; null = still holds'),
+    source: z.enum(['owner', 'filed_return', 'fact', 'entity_record']).optional().describe('Where the link comes from (default owner = the owner said so)'),
+    evidence: z.string().nullable().optional().describe('Citation, e.g. "2025 Form 1120-S Schedule K-1 items F/G: Mansoor Razzaq, 100%". Required unless the source is the owner'),
+    detail: z.string().nullable().optional().describe('Anything a new session needs about the link: what the fee is for, who decided, open questions'),
+    removed: z.boolean().optional().describe('true retires a link recorded in error (kept, so its evidence is not suggested again)'),
+  }
+  server.tool('entity_map',
+    'The entity map of the account: every entity with the years on file and what a change to its return touches; every link (owns / disregarded / intercompany) with years, source and evidence; owners and what each holds (the controlled-group picture); and "unrecorded" — evidence on file of a link nobody has recorded. Read it before reasoning across entities.',
+    { include_history: z.boolean().optional().describe('Also return every version of every link') },
+    async ({ include_history }) => text(await call('GET', `/api/entity-map${include_history ? '?history=1' : ''}`)))
+
+  server.tool('record_link',
+    'Record a link in the entity map — from evidence (a filed return, a fact, an entity record) or the owner\'s statement, never from inference. Take the fields from entity_map\'s "unrecorded" list when the evidence is there; add the years the link holds.',
+    { ...linkFields, kind: linkFields.kind.unwrap(), from_entity_id: linkFields.from_entity_id.unwrap() },
+    async (args) => text(await call('POST', '/api/entity-map/links', args)))
+
+  server.tool('update_link',
+    'Change a link in the entity map — pass only what changes (e.g. to_year when a relationship ended, pct when ownership changed, removed: true for a link recorded in error, with detail saying why). A new version is written and the old one kept.',
+    { link_key: z.string().describe('The link_key from entity_map'), ...linkFields },
+    async ({ link_key, ...rest }) => text(await call('PATCH', `/api/entity-map/links/${link_key}`, rest)))
 
   // ─── Tool: request_form ───
   // Response includes the live discovery status record inline (folds in the old check_form_status tool).

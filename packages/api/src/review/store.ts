@@ -13,6 +13,8 @@ import type { CatalogView, DocumentFact, EntityInfo, FormType } from './types.js
 import { buildContext, type EntityBundle } from './context.js'
 import { runFramework, diffRuns, type Finding } from './framework.js'
 import type { AskJson } from './ai.js'
+import type { FactLike } from './map.js'
+import { listLinks, factsByEntity } from '../services/entity_map.js'
 
 export async function loadBundles(supabase: SupabaseClient, userId: string): Promise<EntityBundle[]> {
   const { data: ents, error } = await supabase.from('tax_entity')
@@ -37,6 +39,15 @@ export async function loadBundles(supabase: SupabaseClient, userId: string): Pro
   }))
 }
 
+export interface MapInputs { links: Awaited<ReturnType<typeof listLinks>>; factsByEntity: Map<string, FactLike[]> }
+
+/** The account's entity map (recorded links) and every entity's facts, loaded
+ *  once and shared by every run in a request. */
+export async function loadMapInputs(supabase: SupabaseClient, userId: string, bundles: EntityBundle[]): Promise<MapInputs> {
+  const [links, facts] = await Promise.all([listLinks(supabase, userId), factsByEntity(supabase, userId, bundles.map(b => b.entity.id))])
+  return { links, factsByEntity: facts }
+}
+
 async function loadDocuments(supabase: SupabaseClient, userId: string, entityId: string): Promise<DocumentFact[]> {
   const { data, error } = await supabase.from('document')
     .select('id, user_id, doc_type, tax_year, meta, meta_enc').eq('user_id', userId).eq('entity_id', entityId)
@@ -57,13 +68,17 @@ export interface RunReviewResult {
 
 export async function runReview(
   supabase: SupabaseClient, userId: string, entityId: string, year: number,
-  opts: { ai?: boolean; ask?: AskJson; bundles?: EntityBundle[] } = {},
+  opts: { ai?: boolean; ask?: AskJson; bundles?: EntityBundle[]; map?: MapInputs } = {},
 ): Promise<RunReviewResult> {
   const bundles = opts.bundles ?? await loadBundles(supabase, userId)
   const self = bundles.find(b => b.entity.id === entityId)
   if (!self) throw Object.assign(new Error('Entity not found'), { status: 404 })
+  const map = opts.map ?? await loadMapInputs(supabase, userId, bundles)
   const facts = await listFacts(supabase, userId, entityId)
-  const factsAt = facts.reduce<string | null>((m, f) => (!m || f.recorded_at > m ? f.recorded_at : m), null)
+  // A newly recorded link is new information about the group, like a fact:
+  // findings it brings are reported as caused by a new fact, not as a miss.
+  const factsAt = [...facts.map(f => f.recorded_at), ...map.links.map(l => l.recorded_at)]
+    .reduce<string | null>((m, t) => (!m || t > m ? t : m), null)
   const formType = self.entity.form_type
   const gaps = isFactFormType(formType)
     ? computeFactGaps({ formType, taxYear: year, facts }).map(g => ({ key: g.key, question: g.question, status: g.status }))
@@ -72,7 +87,7 @@ export async function runReview(
   const ctx = buildContext({
     self, others: bundles.filter(b => b !== self), year,
     facts: facts.map(f => ({ fact_key: f.fact_key, tax_year: f.tax_year, subject: f.subject, value: f.value, status: f.status, source: f.source, recorded_at: f.recorded_at, superseded_by: f.superseded_by })),
-    documents, factGaps: gaps,
+    documents, factGaps: gaps, links: map.links, factsByEntity: map.factsByEntity,
   })
   const catalogIds = [...self.catalogs, ...ctx.linked.flatMap(l => l.catalogs)].map(c => c.id)
 

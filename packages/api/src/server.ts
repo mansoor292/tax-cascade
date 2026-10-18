@@ -48,6 +48,7 @@ import factRoutes from './routes/facts.js'
 import catalogRoutes from './routes/catalog.js'
 import reviewRoutes from './routes/review.js'
 import noteRoutes from './routes/notes.js'
+import entityMapRoutes from './routes/entity_map.js'
 import discoveryRoutes from './discovery/discovery_routes.js'
 import oauthRoutes from './routes/oauth.js'
 import wellknownRoutes from './routes/wellknown.js'
@@ -323,6 +324,7 @@ app.use('/api/facts', factRoutes)
 app.use('/api/catalog', catalogRoutes)
 app.use('/api/review', reviewRoutes)
 app.use('/api/notes', noteRoutes)
+app.use('/api/entity-map', entityMapRoutes)
 app.use('/api/discover', discoveryRoutes)
 
 // ─── Health ───

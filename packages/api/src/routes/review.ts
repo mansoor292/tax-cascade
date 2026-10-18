@@ -15,7 +15,7 @@
 import { Router } from 'express'
 import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
-import { runReview, latestRuns, resolveFinding, loadBundles } from '../review/store.js'
+import { runReview, latestRuns, resolveFinding, loadBundles, loadMapInputs } from '../review/store.js'
 import { listNotes } from '../services/notes.js'
 
 const supabase = lazyServiceClient()
@@ -50,8 +50,9 @@ router.post('/:entity_id/run', async (req, res) => {
     const wait = req.body?.wait === true || !ai
     const work = async () => {
       const bundles = await loadBundles(supabase, userId)
+      const map = await loadMapInputs(supabase, userId, bundles)
       const out = []
-      for (const y of years) out.push(await runReview(supabase, userId, entityId, y, { ai, bundles }))
+      for (const y of years) out.push(await runReview(supabase, userId, entityId, y, { ai, bundles, map }))
       return out
     }
     if (wait) {
