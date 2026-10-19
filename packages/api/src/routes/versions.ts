@@ -9,6 +9,8 @@
  *   PUT    /api/version-sets/:label/versions         add or replace one amended return
  *                                                    {entity_id, tax_year, form, note, changes[]}
  *   DELETE /api/version-sets/:label/versions/:entity_id/:tax_year
+ *   GET    /api/version-sets/:label/breaks           the view's breaks from its latest runs,
+ *                                                    without running anything (the Group page)
  *   POST   /api/version-sets/:label/review           run the view and report its breaks:
  *                                                    a draft set's tie checks for every return,
  *                                                    each break marked new or inherited from
@@ -125,6 +127,28 @@ router.delete('/:label/versions/:entity_id/:tax_year', async (req, res) => {
     if (!out) return res.status(404).json({ error: 'Version set not found' })
     if (out.ok === false) return res.status(400).json({ error: out.error, field: out.field })
     res.json(out)
+  } catch (e: any) {
+    sendError(res, e)
+  }
+})
+
+// Read-only: what the last review of a view found. The Group page shows
+// this on every load, and a page load must not start a review of every
+// return (a run of the filed view takes minutes and writes review history).
+router.get('/:label/breaks', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+  const label = req.params.label
+  try {
+    const ents = await accountEntities(userId)
+    if (label === 'filed') {
+      const { breaks, covered } = await viewBreaks(supabase, userId, ents, 'filed')
+      return res.json({ set: 'filed', reviewed_returns: covered.size, breaks_count: breaks.length, breaks, ties: breaks.length === 0 && covered.size > 0 })
+    }
+    const set = (await listSets(supabase, userId)).find(s => s.label === label)
+    if (!set) return res.status(404).json({ error: 'Version set not found' })
+    if (set.status !== 'draft') return res.status(400).json({ error: `set ${label} is ${set.status}; its returns are part of ${set.status === 'filed' ? 'the filed view' : 'no view'}`, field: 'label' })
+    res.json(await setBreaksReport(supabase, userId, ents, label))
   } catch (e: any) {
     sendError(res, e)
   }

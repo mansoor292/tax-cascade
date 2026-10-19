@@ -19,11 +19,13 @@ src/
 │   ├── labels.ts        FORM_TYPE_LABEL, FORM_TYPE_OPTIONS,
 │   │                    COMPUTABLE_FORM_OPTIONS (≠ — engine has no calc1065),
 │   │                    LEGAL_FORMS, SOURCE_LABEL/VARIANT
-│   ├── mask.ts          maskTaxId — EINs/SSNs are never rendered raw
+│   ├── mask.ts          maskTaxId — EINs/SSNs are never rendered raw;
+│   │                    maskTaxIdsInText for prose that may quote one
 │   ├── auth.tsx         AuthProvider (Supabase session), toast.ts, supabase.ts
 ├── hooks/               one bespoke hook per resource (use-entities,
 │                        use-returns, use-documents, use-scenarios, use-qbo,
-│                        use-schema, use-calendar). Server state goes through
+│                        use-schema, use-calendar, use-entity-map, use-review).
+│                        Server state goes through
 │                        these — don't hand-roll fetch+useState in pages.
 │                        Hooks surface `error` + `reload`; consumers render
 │                        <LoadError onRetry> — a load failure must never
@@ -32,6 +34,10 @@ src/
 │                        consent screen both use it via useAuth), LoadError,
 │                        tabs/returns/ (ComputeDialog, YearDetail, groupByYear)
 ├── pages/compare/       FocusedCompare, LineByLineMatrix, YearRow + helpers
+├── pages/group/         the Group page's tabs (Map, Breaks, Open items) and
+│                        graph.ts (map layout, tested). Review text is prose that
+│                        quotes return headers: render it through
+│                        maskTaxIdsInText, never raw
 ├── pages/               route components
 ├── components/tabs/     the four EntityDetail tabs (Returns is the largest)
 ├── components/ui/       vendored shadcn primitives — treat as vendor code

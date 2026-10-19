@@ -14,6 +14,7 @@ import {
   Wrench,
   Bot,
   CalendarClock,
+  Network,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -91,6 +92,12 @@ export function AppSidebar() {
                 <SidebarMenuButton render={<NavLink to="/app/calendar" />}>
                   <CalendarClock className="shrink-0" />
                   <span>Calendar</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton render={<NavLink to="/app/group" />}>
+                  <Network className="shrink-0" />
+                  <span>Group</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>

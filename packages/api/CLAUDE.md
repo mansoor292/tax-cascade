@@ -96,7 +96,8 @@ disregard or deal with which, table `entity_link`, versioned; evidence read from
 the returns in review/map.ts, write path in services/entity_map.ts),
 `/api/version-sets` (restatement packages v1, v2 … across the group, each held to
 the tie checks; tables `version_set` / `return_version`; views in
-review/versions.ts, storage in services/versions.ts). `SKILL.md` documents the consumer workflow (entities → QBO →
+review/versions.ts, storage in services/versions.ts; `GET /:label/breaks` reads
+a view's last review without running one — the web Group page uses it). `SKILL.md` documents the consumer workflow (entities → QBO →
 financials → validate → compute → scenarios → promote → PDF).
 
 Auth middleware (`server.ts` `/api` gate): static keys from `TAX_API_KEYS`

@@ -7,6 +7,7 @@ import Login from '@/pages/Login'
 import Layout from '@/pages/Layout'
 import Dashboard from '@/pages/Dashboard'
 import Calendar from './pages/Calendar'
+import Group from '@/pages/Group'
 import Entities from '@/pages/Entities'
 import EntityDetail from '@/pages/EntityDetail'
 import Scenarios from '@/pages/Scenarios'
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/app" element={<Guard><Layout /></Guard>}>
             <Route index element={<Dashboard />} />
             <Route path="calendar" element={<Calendar />} />
+            <Route path="group" element={<Group />} />
             <Route path="scenarios" element={<Scenarios />} />
             <Route path="entities" element={<Entities />} />
             <Route path="entities/:id" element={<EntityDetail />} />

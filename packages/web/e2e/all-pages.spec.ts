@@ -23,6 +23,7 @@ type PageProbe = { path: string; expect?: RegExp; needsEntity?: boolean }
 const PAGES: PageProbe[] = [
   { path: '/app',                 expect: /Dashboard/i },
   { path: '/app/calendar',        expect: /Calendar/i },
+  { path: '/app/group',           expect: /Group/i },
   { path: '/app/entities',        expect: /Entit/i },
   { path: '/app/scenarios',       expect: /Scenario/i },
   { path: '/app/compute',         expect: /Comput/i },

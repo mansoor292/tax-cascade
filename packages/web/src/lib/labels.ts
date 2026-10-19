@@ -79,3 +79,29 @@ export const SOURCE_VARIANT: Record<ReturnSource, string> = {
   proforma:     'bg-blue-500/10 text-blue-400 border-blue-500/20',
   extension:    'bg-purple-500/10 text-purple-400 border-purple-500/20',
 }
+
+/** Entity-map link vocabulary (packages/api/src/services/entity_map.ts). */
+export const LINK_NATURE_LABEL: Record<string, string> = {
+  services: 'Services / fees',
+  loan: 'Loan',
+  rent: 'Rent',
+  settlement: 'Due to / due from',
+  other: 'Other dealings',
+}
+
+/** Where a link came from — how much weight it carries. */
+export const LINK_SOURCE_LABEL: Record<string, string> = {
+  owner: 'Owner said',
+  filed_return: 'Filed return',
+  fact: 'Recorded fact',
+  entity_record: 'Entity record',
+}
+
+/** Review finding severity, most severe first. */
+export const SEVERITY_LABEL: Record<string, string> = {
+  critical: 'Critical',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+  info: 'Info',
+}

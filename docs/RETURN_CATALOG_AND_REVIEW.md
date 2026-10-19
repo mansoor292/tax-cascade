@@ -282,6 +282,27 @@ The tables are `version_set` and `return_version` (`services/versions.ts`,
   abandoning a set freezes it. Filing re-runs the filed view for the returns the set
   amends.
 
+### 9. The Group page (added 2026-10-19)
+
+Sections 5–8 were built for Claude, through the API and MCP, and none of it was in the
+web app until the owner asked. `/app/group` (web `pages/Group.tsx`, `pages/group/`) now
+shows it in three tabs:
+- **Map:** the entity map drawn as people → businesses → names outside the account.
+  Ownership is labelled with owner and percentage. Two businesses' dealings are one arc
+  however many kinds they carry. Below the picture: the recorded links with their
+  evidence, and what a change to each return reaches.
+- **Breaks:** "filed" or any draft set, read from the last review of that view
+  (`GET /api/version-sets/:label/breaks`). For a draft set it shows new breaks, the
+  filed breaks the set fixes, and the ones it carries over.
+- **Open items:** the `review_summary` list (findings, gaps, breaks, open notes, the
+  questions for the owner) filtered by entity and kind.
+
+The page never starts a review; recording links, running reviews and building packages
+stay with Claude. Its one write is recording a relationship the returns already show
+(an unrecorded suggestion), as it stands. Every piece of free text goes through
+`maskTaxIdsInText` (web `lib/mask.ts`). The review's evidence quotes return headers,
+and on the day the page was built the summary carried 24 full EINs.
+
 ## Check catalogue (initial)
 
 **Corporate and entity**

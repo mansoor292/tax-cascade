@@ -53,6 +53,9 @@ Since 2026-10-17 (docs/RETURN_CATALOG_AND_REVIEW.md — read it):
   sets ("filed", then restatement packages v1, v2 …; `version_set`,
   `/api/version-sets`). Each set is held to the tie checks; a break is an
   open item.
+- **People see all three on the Group page** (`/app/group`): the map, the
+  breaks per set, and the open items, read from the stored results. The page
+  never starts a review.
 - **Every return goes through the same checks** (`src/review/`, `/api/review`,
   MCP `run_review`/`review_summary`): results are stored and each new finding
   says why it is new (document, fact, framework, or a miss).

@@ -27,3 +27,22 @@ export function maskTaxId(value: string | null | undefined): string {
     })
     .join('')
 }
+
+/**
+ * Mask every tax identifier inside free text.
+ *
+ * The review's evidence strings quote the return they read, header and all:
+ * on 2026-10-19 the Group page's open-items list carried 24 full EINs in
+ * text like "Schedule L statement, EDGEWATER VENTURES INC 12-3456789". A
+ * field holding only an identifier goes through maskTaxId; anything that is
+ * prose goes through this. SSN shape (3-2-4, dashes or spaces), EIN shape
+ * (2-7) and a bare nine-digit run are masked; amounts (with thousands
+ * separators), dates, phone numbers and IRS document locators are left alone.
+ */
+export function maskTaxIdsInText(text: string | null | undefined): string {
+  if (!text) return ''
+  return text
+    .replace(/(?<![\d-])\d{3}[- ]\d{2}[- ]\d{4}(?![\d-])/g, m => maskTaxId(m))
+    .replace(/(?<![\d-])\d{2}-\d{7}(?![\d-])/g, m => maskTaxId(m))
+    .replace(/(?<![\d.,-])\d{9}(?![\d,-]|\.\d)/g, m => maskTaxId(m))
+}
