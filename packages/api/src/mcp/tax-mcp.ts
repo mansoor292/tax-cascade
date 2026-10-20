@@ -365,6 +365,7 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   remove_return_version:      { title: 'Remove an amended return from a draft set', ...WRITE },
   update_version_set:         { title: 'Rename, file or abandon a version set', ...WRITE },
   review_version_set:         { title: 'Check a version set ties (breaks)', ...WRITE },
+  golden_view:                { title: 'One year across every source (golden view)', ...RO },
 }
 
 function extractApiKey(req: Request): string | null {
@@ -375,7 +376,7 @@ function extractApiKey(req: Request): string | null {
   return null
 }
 
-function createServer(apiKey: string): McpServer {
+export function createServer(apiKey: string): McpServer {
   const server = new McpServer(
     { name: 'Tax Preparation API', version: '0.1.0' },
     { instructions: INSTRUCTIONS },
