@@ -62,7 +62,9 @@ export const PDF_FIELD_MAP_1120: Record<string, string> = {
   'payments.L35_amount_owed':    'f1_48',  // XFA confirmed: line 35
   'payments.L36_overpayment':    'f1_49',  // XFA confirmed: line 36
   'payments.L37_refunded':       'f1_51',  // XFA confirmed: line 37 refunded
-  'meta.title':                  'f1_56',
+  // "Sign Here. Title" is f1_52; f1_56 is the paid preparer's "Firm's
+  // address" (IRS box descriptions; found by the golden schema 2026-10-20).
+  'meta.title':                  'f1_52',
 
   // ── Page 3: Schedule J (Tax Computation) ──
   'schedJ.J1a_income_tax':       'f3_1',
@@ -517,17 +519,22 @@ export const F1040_2024 = PDF_FIELD_MAP_1040
  * form_year_pairing.test.ts.
  */
 export const F1040_2022: Record<string, string> = {
-  'meta.first_name':          'f1_04',
-  'meta.last_name':           'f1_05',
-  'meta.ssn':                 'f1_06',
-  'meta.spouse_first':        'f1_07',
-  'meta.spouse_last':         'f1_08',
-  'meta.spouse_ssn':          'f1_09',
-  'meta.address':             'f1_10',
-  'meta.apt':                 'f1_11',
-  'meta.city':                'f1_12',
-  'meta.state':               'f1_13',
-  'meta.zip':                 'f1_14',
+  // The 2022 blank has no tax-year boxes at the top (the 2023 one added three),
+  // so the header starts two fields earlier: per the IRS's own description of
+  // each box, f1_02 is "Your first name", f1_04 "Your social security number".
+  // Copied from 2023 these were two boxes off — first name printed in the SSN
+  // box — until the golden schema's crosswalk caught it (2026-10-20).
+  'meta.first_name':          'f1_02',
+  'meta.last_name':           'f1_03',
+  'meta.ssn':                 'f1_04',
+  'meta.spouse_first':        'f1_05',
+  'meta.spouse_last':         'f1_06',
+  'meta.spouse_ssn':          'f1_07',
+  'meta.address':             'f1_08',
+  'meta.apt':                 'f1_09',
+  'meta.city':                'f1_10',
+  'meta.state':               'f1_11',
+  'meta.zip':                 'f1_12',
   'income.L1a_w2_wages':      'f1_28',
   'income.L1b_household':     'f1_29',
   'income.L1c_tips':          'f1_30',

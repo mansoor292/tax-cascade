@@ -75,10 +75,17 @@ describe('golden schema: one key per box, the same key every year', () => {
         expect(k === w.canonical || goldenKey(form, w.canonical) === k, `${form} ${d.rev} ${w.name}`).toBe(true)
       }
     }
-    // the two fill-map defects found 2026-10-20 are on record
-    const c = (form: string) => (index.forms[form].conflicts ?? []).map((x: { rev: string; map_says: string }) => `${x.rev} ${x.map_says}`)
-    expect(c('f1040')).toContain('2022 meta.first_name')
-    expect(c('f1120')).toContain('2024 meta.title')
+    // The two fill-map defects the crosswalk found on 2026-10-20 are fixed:
+    // the 2022 1040 header was two boxes off (first name in the SSN box) and
+    // the 2024 1120 title sat on the preparer's firm-address box. The only
+    // conflict left is the 2025 1040 line 1h split, where the map is kept.
+    const c = (form: string) => (index.forms[form].conflicts ?? []).filter((x: { kept?: string }) => x.kept !== 'map')
+    expect(c('f1040')).toEqual([])
+    expect(c('f1120')).toEqual([])
+    const box = (form: string, rev: string, name: string) => keyFor(form, rev, dicts(form).find(d => d.rev === rev)!.widgets.find(w => w.name.endsWith(name))!.name)
+    expect(box('f1040', '2022', '.f1_02[0]')).toBe('meta.first_name')
+    expect(box('f1040', '2022', '.f1_04[0]')).toBe('meta.ssn')
+    expect(box('f1120', '2024', '.f1_52[0]')).toBe('meta.title')
   })
 
   it('engine keys sit on the amount box of their line, never a check box', () => {

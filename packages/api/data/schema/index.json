@@ -25,7 +25,7 @@
    },
    "blind": {
     "compared": 209,
-    "agreed": 196,
+    "agreed": 207,
     "disagreements": [
      {
       "rev": "2024",
@@ -38,72 +38,6 @@
       "line": "30",
       "verified": "payments.L30_reserved",
       "matched": null
-     },
-     {
-      "rev": "2022",
-      "line": "",
-      "verified": "meta.first_name",
-      "matched": "meta.ssn"
-     },
-     {
-      "rev": "2022",
-      "line": "",
-      "verified": "meta.last_name",
-      "matched": "meta.spouse_first"
-     },
-     {
-      "rev": "2022",
-      "line": "",
-      "verified": "meta.ssn",
-      "matched": "meta.spouse_last"
-     },
-     {
-      "rev": "2022",
-      "line": "",
-      "verified": "meta.spouse_first",
-      "matched": "meta.spouse_ssn"
-     },
-     {
-      "rev": "2022",
-      "line": "",
-      "verified": "meta.spouse_last",
-      "matched": "meta.address"
-     },
-     {
-      "rev": "2022",
-      "line": "",
-      "verified": "meta.spouse_ssn",
-      "matched": "meta.apt"
-     },
-     {
-      "rev": "2022",
-      "line": "",
-      "verified": "meta.address",
-      "matched": "meta.city"
-     },
-     {
-      "rev": "2022",
-      "line": "",
-      "verified": "meta.apt",
-      "matched": "meta.state"
-     },
-     {
-      "rev": "2022",
-      "line": "",
-      "verified": "meta.city",
-      "matched": "meta.zip"
-     },
-     {
-      "rev": "2022",
-      "line": "",
-      "verified": "meta.state",
-      "matched": "f1040.hdr_foreign_country_name"
-     },
-     {
-      "rev": "2022",
-      "line": "",
-      "verified": "meta.zip",
-      "matched": "f1040.hdr_foreign_province_state_county"
      }
     ]
    },
@@ -115,83 +49,6 @@
      "map_says": "income.L1h_other_earned",
      "description_says": "f1040.L1h_earned_income_type",
      "kept": "map"
-    },
-    {
-     "rev": "2022",
-     "widget": "topmostSubform[0].Page1[0].YourSocial[0].f1_04[0]",
-     "line": "",
-     "map_says": "meta.first_name",
-     "description_says": "meta.ssn"
-    },
-    {
-     "rev": "2022",
-     "widget": "topmostSubform[0].Page1[0].f1_05[0]",
-     "line": "",
-     "map_says": "meta.last_name",
-     "description_says": "meta.spouse_first"
-    },
-    {
-     "rev": "2022",
-     "widget": "topmostSubform[0].Page1[0].f1_06[0]",
-     "line": "",
-     "map_says": "meta.ssn",
-     "description_says": "meta.spouse_last"
-    },
-    {
-     "rev": "2022",
-     "widget": "topmostSubform[0].Page1[0].SpousesSocial[0].f1_07[0]",
-     "line": "",
-     "map_says": "meta.spouse_first",
-     "description_says": "meta.spouse_ssn"
-    },
-    {
-     "rev": "2022",
-     "widget": "topmostSubform[0].Page1[0].Address[0].f1_08[0]",
-     "line": "",
-     "map_says": "meta.spouse_last",
-     "description_says": "meta.address"
-    },
-    {
-     "rev": "2022",
-     "widget": "topmostSubform[0].Page1[0].Address[0].f1_09[0]",
-     "line": "",
-     "map_says": "meta.spouse_ssn",
-     "description_says": "meta.apt"
-    },
-    {
-     "rev": "2022",
-     "widget": "topmostSubform[0].Page1[0].Address[0].f1_10[0]",
-     "line": "",
-     "map_says": "meta.address",
-     "description_says": "meta.city"
-    },
-    {
-     "rev": "2022",
-     "widget": "topmostSubform[0].Page1[0].Address[0].f1_11[0]",
-     "line": "",
-     "map_says": "meta.apt",
-     "description_says": "meta.state"
-    },
-    {
-     "rev": "2022",
-     "widget": "topmostSubform[0].Page1[0].Address[0].f1_12[0]",
-     "line": "",
-     "map_says": "meta.city",
-     "description_says": "meta.zip"
-    },
-    {
-     "rev": "2022",
-     "widget": "topmostSubform[0].Page1[0].Address[0].f1_13[0]",
-     "line": "",
-     "map_says": "meta.state",
-     "description_says": "f1040.hdr_foreign_country_name"
-    },
-    {
-     "rev": "2022",
-     "widget": "topmostSubform[0].Page1[0].Address[0].f1_14[0]",
-     "line": "",
-     "map_says": "meta.zip",
-     "description_says": "f1040.hdr_foreign_province_state_county"
     }
    ]
   },
@@ -579,25 +436,9 @@
    },
    "blind": {
     "compared": 146,
-    "agreed": 145,
-    "disagreements": [
-     {
-      "rev": "2024",
-      "line": "",
-      "verified": "meta.title",
-      "matched": "preparer.firm_address"
-     }
-    ]
-   },
-   "conflicts": [
-    {
-     "rev": "2024",
-     "widget": "topmostSubform[0].Page1[0].f1_56[0]",
-     "line": "",
-     "map_says": "meta.title",
-     "description_says": "preparer.firm_address"
-    }
-   ]
+    "agreed": 146,
+    "disagreements": []
+   }
   },
   "f1120s": {
    "title": "Form 1120-S",
