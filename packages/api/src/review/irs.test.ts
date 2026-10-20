@@ -155,4 +155,24 @@ describe('IRS account checks', () => {
     expect(c.title).toMatch(/holding 179,816.*the refund came back/)
     expect(c.detail).toMatch(/undelivered refund returned to the IRS 03-30-2026/)
   })
+
+  it('no return is missing for a year before the entity existed, or one not yet due (EZA 2018, 2026)', async () => {
+    const t = (year: number) => tr(year, { asOf: '10-20-2026', txs: [tx('960', 'Appointed representative', '06-08-2026')] })
+    const ent = { ...scorp, date_incorporated: '2021-10-25' }
+    const before = await run(2018, [t(2018)], [], ent)
+    expect(before.find(f => f.key === '150')).toMatchObject({ status: 'pass', severity: 'info' })
+    expect(before.find(f => f.key === '150')!.title).toContain('before the entity was incorporated')
+    const current = await run(2026, [t(2026)], [], ent)
+    expect(current.find(f => f.key === '150')!.title).toContain('no return is due yet')
+    expect((await run(2022, [t(2022)], [], ent)).find(f => f.key === '150')).toMatchObject({ status: 'finding', severity: 'high' })
+  })
+
+  it('a credit before the return posts is payments waiting for it, not money held back (1040 2025)', async () => {
+    const t = tr(2025, { asOf: '10-20-2026', txs: [tx('670', 'Payment', '04-15-2026', -450000)] })
+    t.entries.push(e('irs_transcript', { section: 'Account', line: 'Account balance', value: -450000, raw: 'Account balance: -$450,000.00' }))
+    const out = await run(2025, [t], [], indiv)
+    expect(out.find(f => f.key === 'credit')).toMatchObject({ status: 'pass', severity: 'info' })
+    t.entries.push(tx('150', 'Tax return filed', '11-30-2026', 400000))
+    expect((await run(2025, [t], [], indiv)).find(f => f.key === 'credit')).toMatchObject({ status: 'finding', severity: 'high' })
+  })
 })

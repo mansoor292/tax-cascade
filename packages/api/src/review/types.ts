@@ -65,6 +65,9 @@ export interface CatalogView {
   status: string
   coverage?: CatalogCoverage
   entries: CatalogEntry[]
+  /** IRS transcripts: which kind, and the IRS's response date (YYYY-MM-DD) */
+  transcript_type?: 'account' | 'return' | 'record_of_account' | 'wage_income' | 'other' | null
+  as_of?: string | null
 }
 
 export interface FactValue {

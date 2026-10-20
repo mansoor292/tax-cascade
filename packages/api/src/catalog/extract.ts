@@ -22,10 +22,17 @@ import { createHash } from 'node:crypto'
 import { readLayout, splitWords, type LayoutPage, type TextRun, type BBox } from './pdf_layout.js'
 import { candidateStages, pagesOf, type IndexedPage } from './dicts.js'
 import { isAmount, parseAmount } from './amount.js'
-import type { Catalog, CatalogEntry, CatalogPage, DictWidget } from './types.js'
-import { isTranscriptText, transcriptEntries, type TranscriptContext } from './transcript.js'
+import type { Catalog, CatalogEntry, CatalogPage, DictWidget, TranscriptMeta } from './types.js'
+import { isTranscriptText, transcriptEntries, taxYearOfPeriod, isoOfTranscriptDate, type TranscriptContext, type TranscriptType } from './transcript.js'
 
-export const EXTRACTOR_VERSION = 'catalog-1'
+const TRANSCRIPT_NAME: Record<TranscriptType, string> = {
+  account: 'account transcript', return: 'return transcript', record_of_account: 'record of account',
+  wage_income: 'wage and income transcript', other: 'transcript',
+}
+
+// catalog-2 (2026-10-20): return transcripts and records of account read as
+// structured lines; transcript type, period and IRS response date recorded.
+export const EXTRACTOR_VERSION = 'catalog-2'
 
 const POS_TOL = 2.5
 const MIN_SCORE = 0.55
@@ -547,11 +554,14 @@ export async function catalogPdf(bytes: Uint8Array, opts: CatalogOptions): Promi
 
   const tctx: TranscriptContext = { section: 'Header' }
   for (const p of layout) {
-    if (p.runs.length && isTranscriptText(p.runs.map(r => r.text).join(' '))) {
+    // Once page 1 has named the document a transcript, every later page is
+    // one too: a return transcript's middle pages carry no marker text, and
+    // were filed as statements under junk headings until 2026-10-20.
+    if (p.runs.length && (tctx.type || isTranscriptText(p.runs.map(r => r.text).join(' ')))) {
       const tl = pageLines(p).map(ws => ({ raw: ws.map(w => w.text).join(' '), bbox: lineBox(ws) }))
-      const te = transcriptEntries(tl, p.page, tctx)
+      const te = transcriptEntries(tl, p.page, tctx, p.width)
       entries.push(...te)
-      pages.push({ page: p.page, kind: 'transcript', heading: `IRS transcript${tctx.form ? ' Form ' + tctx.form : ''}${tctx.period ? ' period ending ' + tctx.period : ''}`, entries: te.length, residue: [] })
+      pages.push({ page: p.page, kind: 'transcript', heading: `IRS ${TRANSCRIPT_NAME[tctx.type ?? 'account']}${tctx.form ? ' Form ' + tctx.form : ''}${tctx.period ? ' period ending ' + tctx.period : ''}`, entries: te.length, residue: [] })
       continue
     }
     if (!p.runs.length) {
@@ -617,12 +627,19 @@ export async function catalogPdf(bytes: Uint8Array, opts: CatalogOptions): Promi
   // line. Pages kept as rows lose no data (every printed line is stored), so a
   // missing blank is a warning about structure, not a gap.
   coverage.complete = problems.length === 0
+  const transcript: TranscriptMeta | undefined = pages.some(p => p.kind === 'transcript') ? {
+    type: tctx.type ?? 'account', form: tctx.form ?? null, period: tctx.period ?? null,
+    tax_year: taxYearOfPeriod(tctx.period) ?? null, as_of: isoOfTranscriptDate(tctx.asOf) ?? null, no_record: !!tctx.noRecord,
+  } : undefined
 
   return {
     version: 1,
     extractor: EXTRACTOR_VERSION,
     source: { filename: opts.filename, sha256: createHash('sha256').update(bytes).digest('hex'), pages: layout.length },
-    ...(opts.taxYear ? { tax_year: opts.taxYear } : {}),
+    // A transcript's period is the IRS's own statement of the tax year; it
+    // outranks whatever year the uploader typed.
+    ...(transcript?.tax_year ?? opts.taxYear ? { tax_year: transcript?.tax_year ?? opts.taxYear } : {}),
+    ...(transcript ? { transcript } : {}),
     pages,
     entries,
     coverage,

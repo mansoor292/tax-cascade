@@ -155,11 +155,26 @@ export interface CatalogCoverage {
   warnings: string[]
 }
 
+/** What an IRS transcript is, so one golden copy of each kind can be kept
+ *  per entity and year (catalog/store.ts reconcileTranscripts). */
+export interface TranscriptMeta {
+  type: 'account' | 'return' | 'record_of_account' | 'wage_income' | 'other'
+  form: string | null
+  /** Tax period ending, MM-DD-YYYY as printed */
+  period: string | null
+  tax_year: number | null
+  /** The IRS's response date (YYYY-MM-DD): the newer transcript wins */
+  as_of: string | null
+  /** "No record of return filed" / "Requested data not found" */
+  no_record: boolean
+}
+
 export interface Catalog {
   version: number
   extractor: string
   source: { filename: string; sha256: string; pages: number }
   tax_year?: number
+  transcript?: TranscriptMeta
   pages: CatalogPage[]
   entries: CatalogEntry[]
   coverage: CatalogCoverage

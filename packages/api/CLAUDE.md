@@ -41,8 +41,10 @@ src/
 │                      extract (classify page → subtract template → assign to
 │                      widgets; substitute forms aligned by anchors + line
 │                      labels; statements/worksheets as rows; transcripts
-│                      parsed), ties (each form's own arithmetic), query,
-│                      store (table return_catalog, entries encrypted)
+│                      parsed — account, return, record of account), ties
+│                      (each form's own arithmetic), query, store (table
+│                      return_catalog, entries encrypted; one golden
+│                      transcript of each kind per entity-year)
 ├── review/            the fixed review framework: checks/ (catalog, entity,
 │                      passthrough = NIIT/basis/7203/SSTB/loans, continuity,
 │                      irs/statute), ai.ts (grounded Gemini judgement checks),

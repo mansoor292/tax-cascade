@@ -25,7 +25,7 @@ const bundles: Array<EntityBundle & { years: number[] }> = cfg.entities.map((e: 
   years: e.years,
   catalogs: e.catalogs.map((c: any): CatalogView => {
     const j = JSON.parse(readFileSync(c.file, 'utf8'))
-    return { id: c.file.split('/').pop(), kind: c.kind, tax_year: c.tax_year, source_filename: j.source?.filename, status: j.coverage?.complete ? 'complete' : 'incomplete', coverage: j.coverage, entries: j.entries }
+    return { id: c.file.split('/').pop(), kind: c.kind, tax_year: c.tax_year, source_filename: j.source?.filename, status: j.coverage?.complete ? 'complete' : 'incomplete', coverage: j.coverage, entries: j.entries, transcript_type: j.transcript?.type ?? null, as_of: j.transcript?.as_of ?? null }
   }),
 }))
 

@@ -76,6 +76,24 @@ use: 1125-A (2018), 1125-E (2016), Schedule G (2011), 7203 (2022).
   entries as encrypted JSON (`entries_enc`), plus an unencrypted index (forms,
   pages, coverage, status). The row links to `tax_return` and `document`. Filed
   catalogs are immutable, and a re-run writes a new version.
+- **IRS transcripts (revised 2026-10-20).** Three kinds arrive and all are read into
+  structured lines: the *account transcript* (header, balances, the return figures
+  "as adjusted", and every transaction code with cycle, date, amount and DLN —
+  entries of form `irs_transcript`), the *return transcript* (the IRS's own
+  line-by-line copy of the return as it processed it — form `irs_return_transcript`,
+  section = the IRS's heading such as `Income` or `Schedule L - Balance Sheets per
+  Books`, line = its label, a repeated schedule as instance `#2`, a blank field or
+  `00-00-0000` as "no data on file"), and the *record of account* (both, account part
+  first). A "No record of return filed" response is kept as such. The transcript's
+  own period sets the tax year; its response date is stored as `as_of`.
+- **One golden transcript of each kind per entity and year.** Owner's rule: the
+  newest account transcript and the newest return transcript, by the IRS's response
+  date (not the upload time), are current; every older pull, identical copy, or
+  record of account beaten by a dedicated transcript of the same date is superseded
+  (kept, never deleted). Enforced in `catalog/store.ts` `reconcileTranscripts`; the
+  review's `transcript()` / `returnTranscript()` read the golden copies. Before this,
+  the review took whichever transcript row came first, and return-transcript pages
+  after page 1 were filed as generic statements under junk headings.
 - **Questions are answered from the catalog.** `query_catalog` (REST and MCP) takes
   an entity, years, forms, lines, a canonical key or a label search, and returns the
   value with its provenance (form, line, page). The MCP instructions tell the model to
@@ -315,6 +333,8 @@ and on the day the page was built the summary carried 24 full EINs.
 - ownership and shares (K-1 D/H)
 - controlled groups (Schedule O on both returns)
 - amended, duplicate and H(4) flags vs IRS posting
+- the IRS's return transcript against the filed return, line by line; figures that
+  match another year's return name the misposting (`irs.return_transcript`, 2026-10-20)
 - preparer block
 - signature
 

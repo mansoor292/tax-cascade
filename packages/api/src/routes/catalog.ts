@@ -63,7 +63,8 @@ router.post('/documents/:id', async (req, res) => {
     const saved = await saveCatalog(supabase, userId, {
       entityId: doc.entity_id, taxYear: taxYear ?? null, documentId: doc.id, kind, catalog: cat,
     })
-    res.json(summary(saved.id, saved.status, cat))
+    if (saved.tax_year !== (doc.tax_year ?? null)) await supabase.from('document').update({ tax_year: saved.tax_year }).eq('id', doc.id).eq('user_id', userId)
+    res.json({ tax_year: saved.tax_year, ...(saved.transcript ? { transcript: saved.transcript } : {}), ...summary(saved.id, saved.status, cat) })
   } catch (e: any) {
     sendError(res, e)
   }
@@ -98,7 +99,8 @@ router.post('/upload', async (req, res) => {
     const saved = await saveCatalog(supabase, userId, {
       entityId: entity_id, taxYear: year, documentId: doc.id, kind: kindForDocType(doc_type), catalog: cat,
     })
-    res.json({ document_id: doc.id, ...summary(saved.id, saved.status, cat) })
+    if (saved.tax_year !== year) await supabase.from('document').update({ tax_year: saved.tax_year }).eq('id', doc.id).eq('user_id', userId)
+    res.json({ document_id: doc.id, tax_year: saved.tax_year, ...(saved.transcript ? { transcript: saved.transcript } : {}), ...summary(saved.id, saved.status, cat) })
   } catch (e: any) {
     sendError(res, e)
   }
@@ -125,6 +127,10 @@ router.get('/:entity_id/status', async (req, res) => {
   try {
     if (!(await ownsEntity(userId, entityId))) return res.status(404).json({ error: 'Entity not found' })
     const catalogs = await listCatalogs(supabase, userId, entityId)
+    // A transcript replaced by a newer pull keeps its catalog, superseded —
+    // that is history, not a gap (one golden copy per kind per year).
+    const all = await listCatalogs(supabase, userId, entityId, { all: true })
+    const supersededDoc = new Map(all.filter(c => c.document_id && c.superseded_by && c.kind === 'irs_transcript').map(c => [c.document_id!, c]))
     const { data: docs, error } = await supabase.from('document')
       .select('id, filename, doc_type, tax_year, file_type')
       .eq('user_id', userId).eq('entity_id', entityId)
@@ -134,17 +140,20 @@ router.get('/:entity_id/status', async (req, res) => {
     const years = new Map<number | 'unknown', any[]>()
     for (const d of returnDocs) {
       const c = byDoc.get(d.id)
+      const old = c ? undefined : supersededDoc.get(d.id)
       const row = {
         document_id: d.id, filename: d.filename, doc_type: d.doc_type,
-        catalogued: !!c, status: c?.status ?? 'not catalogued',
-        catalog_id: c?.id, problems: c?.coverage.problems ?? [], warnings: c?.coverage.warnings?.length ?? 0,
+        catalogued: !!(c ?? old), status: c?.status ?? (old ? 'superseded' : 'not catalogued'),
+        catalog_id: c?.id ?? old?.id, problems: c?.coverage.problems ?? [], warnings: c?.coverage.warnings?.length ?? 0,
+        ...((c ?? old)?.transcript_type ? { transcript_type: (c ?? old)!.transcript_type, as_of: (c ?? old)!.as_of, golden: !!c } : {}),
+        ...(old ? { superseded_by: old.superseded_by } : {}),
       }
-      const k = d.tax_year ?? 'unknown'
+      const k = (c ?? old)?.tax_year ?? d.tax_year ?? 'unknown'
       years.set(k, [...(years.get(k) ?? []), row])
     }
     const rows = [...years.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0])))
       .map(([year, documents]) => ({ tax_year: year, documents }))
-    const gaps = rows.flatMap(r => r.documents.filter((d: any) => d.status !== 'complete')
+    const gaps = rows.flatMap(r => r.documents.filter((d: any) => d.status !== 'complete' && d.status !== 'superseded')
       .map((d: any) => `${r.tax_year} ${d.doc_type}: ${d.status}`))
     res.json({ entity_id: entityId, complete: gaps.length === 0, gaps, years: rows })
   } catch (e: any) {

@@ -42,6 +42,11 @@ Since 2026-10-17 (docs/RETURN_CATALOG_AND_REVIEW.md — read it):
   page, located by the IRS's own line description (`data/line_dicts`, built from
   each blank's XFA `<speak>` text by `scripts/catalog/build_line_dicts.ts`). If
   the catalog can't answer, that is a catalog defect to fix.
+- **IRS transcripts are catalogued too, one golden copy of each kind per
+  entity and year** — the newest account transcript and the newest return
+  transcript by the IRS's response date; older pulls are superseded, not
+  deleted (`catalog/store.ts` reconcileTranscripts). Return transcripts are
+  structured lines (`irs_return_transcript`) checked against the filed return.
 - **Every return type is held to one fact list** (`@taxengine/shared` facts.ts,
   table `tax_fact`, `/api/facts`): what one return needed becomes a question for
   all of them.

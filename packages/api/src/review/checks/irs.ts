@@ -8,8 +8,8 @@
  * (TC166/176/246/270/276) and their first-time-abatement history decide what
  * to request; TC976 duplicates mean the IRS may have processed the wrong copy.
  */
-import type { Check, CheckResult, ReviewContext } from '../types.js'
-import { transcript, transactions, transcriptValue, parseDate, iso, money, filed, amount } from '../lookup.js'
+import type { Check, CheckResult, ReviewContext, CatalogView } from '../types.js'
+import { transcript, returnTranscript, returnLine, noRecord, transactions, transcriptValue, parseDate, iso, money, filed, amount, ev, type Sel } from '../lookup.js'
 import { nextBusinessDay } from '../../engine/tax_calendar.js'
 
 const PENALTY_CODES: Record<string, string> = {
@@ -166,7 +166,7 @@ const statute: Check = {
 
 const transcriptAccount: Check = {
   id: 'irs.account_status',
-  version: 5,
+  version: 6,
   area: 'irs_account',
   title: 'What the IRS processed, duplicates, penalties and balance due',
   applies: ['1040', '1120', '1120S', '1065'],
@@ -181,7 +181,15 @@ const transcriptAccount: Check = {
     const tc150 = txs.find(x => x.code === '150')
     const asOf = String(transcriptValue(t, 'Header', /^Response Date$/i)?.value ?? transcriptValue(t, 'Header', /^Request Date$/i)?.value ?? '')
     const asOfDate = parseDate(asOf)
-    if (!tc150) {
+    // Transcripts arrive for every year asked for, including years before
+    // the entity existed (EZA 2018–2020) and the current one (2026): no
+    // return is missing there.
+    const incorporated = Number(String(ctx.entity.date_incorporated ?? '').slice(0, 4)) || undefined
+    const notDue = dueDates(ctx.entity.form_type, ctx.year).due.getTime() > ctx.today.getTime()
+    const noReturnExpected = !tc150 && (notDue || (incorporated !== undefined && ctx.year < incorporated))
+    if (noReturnExpected) {
+      out.push({ check: this.id, status: 'pass', severity: 'info', key: '150', title: `${ctx.year}: no return ${notDue ? 'is due yet' : `expected — before the entity was incorporated (${ctx.entity.date_incorporated})`}`, detail: '', evidence: [{ where: `${ctx.year} IRS transcript${asOf ? ` dated ${asOf}` : ''}`, catalog_id: t.id }] })
+    } else if (!tc150) {
       // A transcript pulled before or soon after the return went in cannot
       // show it yet; that is a reason to pull a new one, not an unfiled year.
       const fdFact = ctx.facts.get('irs.filing_date', { year: ctx.year })
@@ -235,7 +243,12 @@ const transcriptAccount: Check = {
     // A credit balance is the IRS holding the taxpayer's money — the 2023
     // 1040 refund (181,409) was issued twice and came back both times
     // (TC841 cancelled, TC740 undelivered), and nothing flagged it.
-    if (bal && typeof bal.value === 'number' && bal.value < -1) {
+    // Before the return posts, a credit is the year's payments waiting for
+    // it (the 2025 1040: 493,626 paid, return filed 10/14/2026, not posted
+    // by 10/20) — not money the IRS is holding back.
+    if (bal && typeof bal.value === 'number' && bal.value < -1 && !tc150) {
+      out.push({ check: this.id, status: 'pass', severity: 'info', key: 'credit', title: `${ctx.year}: ${money(-bal.value)} paid, waiting for the return to post${asOf ? ` (as of ${asOf})` : ''}`, detail: 'Payments and credits for the year sit as a credit until the return is processed; the return then applies them.', evidence: [{ where: `${ctx.year} IRS transcript: ${bal.entry.raw}`, catalog_id: t.id, value: bal.value }] })
+    } else if (bal && typeof bal.value === 'number' && bal.value < -1) {
       const refunds = txs.filter(x => x.code === '846')
       const back = txs.filter(x => x.code === '740' || x.code === '841')
       const history = [...refunds.map(r => `refund issued ${r.date} ${money(r.amount)}`), ...back.map(b => `${b.code === '740' ? 'undelivered refund returned to the IRS' : 'refund cancelled'} ${b.date}`)].join('; ')
@@ -255,9 +268,13 @@ const transcriptAccount: Check = {
     // Does the processed return match the catalogued one? If it matches
     // ANOTHER year's return, the IRS posted that return to this period —
     // EZA's 2023 return posted to 2024 and its 2024 return to 2025.
+    // A return transcript settles it line by line (irs.return_transcript);
+    // repeating it here from the one taxable-income figure would list the
+    // same misposting twice.
     const ti = transcriptValue(t, 'Return information', /^Taxable Income$/i)
     const ours = returnTaxable(ctx, ctx.year)
-    if (ti && typeof ti.value === 'number' && ours !== undefined && Math.abs(ours - ti.value) > 1) {
+    const rt = returnTranscript(ctx.catalogs, ctx.year)
+    if (ti && typeof ti.value === 'number' && ours !== undefined && Math.abs(ours - ti.value) > 1 && !(rt && !noRecord(rt))) {
       const posted = postedFrom(ctx, ctx.year)
       const where = { where: `${ctx.year} IRS transcript: ${ti.entry.raw}`, catalog_id: t.id }
       out.push(posted !== undefined
@@ -268,4 +285,102 @@ const transcriptAccount: Check = {
   },
 }
 
-export const irsChecks: Check[] = [statute, transcriptAccount]
+/** Lines of the IRS's return transcript and where the filed return prints
+ *  them. Labels are the IRS's own (Form 1120S/1120/1040 Tax Return
+ *  Transcript, 2022–2025 pulls); the line numbers move with the form year. */
+type Compared = { label: string; section: RegExp; line: RegExp; form: string; sel: Sel }
+// Page-1 lines are pinned to section '': EV 2023 left officer pay (line 12)
+// blank, and an unpinned lookup answered with Schedule K line 12 (37,329).
+export function comparedLines(formType: string, year: number): Compared[] {
+  const schL = (form: string): Compared => ({ label: 'Total assets, end of year', section: /^Indicators, Codes/i, line: /^Total Assets( at End of Year)?$/i, form, sel: { section: 'Schedule L', line: '15', col: 'd' } })
+  if (formType === '1120S') return [
+    { label: 'Gross receipts', section: /^Income$/i, line: /^Gross Receipts$/i, form: 'f1120s', sel: { section: '', line: '1a' } },
+    { label: 'Total income', section: /^Income$/i, line: /^Total Income$/i, form: 'f1120s', sel: { section: '', line: '6' } },
+    { label: 'Compensation of officers', section: /^Deductions$/i, line: /^Compensation of Officers$/i, form: 'f1120s', sel: { section: '', line: '7' } },
+    { label: 'Total deductions', section: /^Deductions$/i, line: /^Total Deductions$/i, form: 'f1120s', sel: { section: '', line: year >= 2023 ? '21' : '20' } },
+    { label: 'Ordinary business income', section: /^Deductions$/i, line: /^Ordinary Income\/Loss$/i, form: 'f1120s', sel: { section: '', line: year >= 2023 ? '22' : '21' } },
+    schL('f1120s'),
+  ]
+  if (formType === '1120') return [
+    { label: 'Gross receipts', section: /^Income$/i, line: /^Gross Receipts or Sales$/i, form: 'f1120', sel: { section: '', line: '1a' } },
+    { label: 'Total income', section: /^Income$/i, line: /^Total Income$/i, form: 'f1120', sel: { section: '', line: '11' } },
+    { label: 'Compensation of officers', section: /^Deductions$/i, line: /^Compensation of Officers$/i, form: 'f1120', sel: { section: '', line: '12' } },
+    { label: 'Total deductions', section: /^Deductions$/i, line: /^Total Deductions$/i, form: 'f1120', sel: { section: '', line: '27' } },
+    { label: 'Taxable income', section: /^Tax and Payments$/i, line: /^Taxable Income Per Computer$/i, form: 'f1120', sel: { section: '', line: '30' } },
+    { label: 'Total tax', section: /^Tax and Payments$/i, line: /^Tax Shown on Return$/i, form: 'f1120', sel: { section: '', line: '31' } },
+    schL('f1120'),
+  ]
+  if (formType === '1040') return [
+    { label: 'Total income', section: /^Income$/i, line: /^Total income$/i, form: 'f1040', sel: { section: '', line: '9' } },
+    { label: 'Adjusted gross income', section: /^Adjustments to Income$/i, line: /^Adjusted gross income$/i, form: 'f1040', sel: { section: '', line: '11' } },
+    { label: 'Taxable income', section: /^Tax and Credits$/i, line: /^Taxable income$/i, form: 'f1040', sel: { section: '', line: '15' } },
+    { label: 'Total tax', section: /^Other Taxes$/i, line: /^Total tax liability taxpayer figures$/i, form: 'f1040', sel: { section: '', line: '24' } },
+    { label: 'Total payments', section: /^Payments$/i, line: /^Total payments$/i, form: 'f1040', sel: { section: '', line: '33' } },
+  ]
+  return []
+}
+
+/** Each compared line: what the IRS processed and what a filed return prints. */
+function lineup(ctx: ReviewContext, rt: CatalogView, year: number, returnYear: number) {
+  const cat = filed(ctx.catalogs, returnYear)
+  return comparedLines(ctx.entity.form_type, returnYear).map(c => {
+    const irs = returnLine(rt, c.section, c.line)
+    return { c, irs, irsValue: typeof irs?.value === 'number' ? irs.value : undefined, filedValue: cat ? amount(cat, c.form, c.sel) : undefined, cat }
+  }).filter(x => x.irsValue !== undefined && x.filedValue !== undefined)
+}
+
+const returnTranscriptCheck: Check = {
+  id: 'irs.return_transcript',
+  version: 1,
+  area: 'irs_account',
+  title: 'The return the IRS processed, line by line, against the filed return',
+  applies: ['1040', '1120', '1120S'],
+  kind: 'rule',
+  description: 'Reads the IRS return transcript (its own copy of the return as processed) and compares gross receipts, income, deductions, taxable income, tax and assets with the catalogued filed return. When the figures match ANOTHER year\'s return, the IRS posted that return to this period — EZA\'s 2024 period holds its 2023 return and its 2025 period its 2024 return.',
+  run(ctx) {
+    const rt = returnTranscript(ctx.catalogs, ctx.year)
+    if (!rt) return [{ check: this.id, status: 'n/a', severity: 'info', title: `No ${ctx.year} IRS return transcript catalogued`, detail: '', evidence: [] }]
+    const asOf = rt.as_of ? ` dated ${rt.as_of}` : ''
+    const own = filed(ctx.catalogs, ctx.year)
+    if (noRecord(rt)) {
+      return [own
+        ? { check: this.id, status: 'gap', severity: 'low', key: 'no_record', title: `${ctx.year}: the IRS return transcript${asOf} shows no return processed; a filed return is on file here`, detail: 'Expected for a return filed in the last few months. Otherwise the IRS has not processed it, or posted it to another period — pull a fresh transcript and compare.', evidence: [{ where: `${ctx.year} IRS return transcript${asOf}: No record of return filed`, catalog_id: rt.id }], asks: ['irs.filing_date'] }
+        : { check: this.id, status: 'pass', severity: 'info', key: 'no_record', title: `${ctx.year}: the IRS has no return on record${asOf}`, detail: '', evidence: [{ where: `${ctx.year} IRS return transcript${asOf}: No record of return filed`, catalog_id: rt.id }] }]
+    }
+    const dln = returnLine(rt, /^Return$/, /^Document Locator Number$/i)?.value
+    const received = returnLine(rt, /^Return$/, /^Received Date$/i)?.value
+    const about = `${dln ? `DLN ${dln}` : ''}${dln && received ? ', ' : ''}${received ? `received ${received}` : ''}`
+    const irsCite = (x: { c: Compared; irsValue?: number; irs?: { raw: string; id: string } }) => ({ where: `${ctx.year} IRS return transcript${asOf}: ${x.irs?.raw ?? x.c.label}`, catalog_id: rt.id, entry_id: x.irs?.id, value: x.irsValue })
+    const rows = lineup(ctx, rt, ctx.year, ctx.year)
+    if (!own || !rows.length) {
+      return [{ check: this.id, status: 'gap', severity: 'medium', key: 'no_filed', title: `${ctx.year}: the IRS processed a return${about ? ` (${about})` : ''}, but no filed ${ctx.year} return is catalogued to compare it with`, detail: 'Upload the filed return so the IRS\'s figures can be checked against it.', evidence: [{ where: `${ctx.year} IRS return transcript${asOf}`, catalog_id: rt.id }] }]
+    }
+    const off = rows.filter(r => Math.abs(r.irsValue! - r.filedValue!) > 1)
+    if (!off.length) {
+      return [{ check: this.id, status: 'pass', severity: 'info', key: 'agrees', title: `${ctx.year}: the IRS processed the return as filed (${rows.length} figures agree${about ? `; ${about}` : ''})`, detail: '', evidence: rows.map(irsCite) }]
+    }
+    // Do the IRS's figures belong to another year's return?
+    const posted = [ctx.year - 1, ctx.year + 1, ctx.year - 2, ctx.year + 2].find(y => {
+      const other = lineup(ctx, rt, ctx.year, y)
+      return other.length >= 2 && other.every(r => Math.abs(r.irsValue! - r.filedValue!) <= 1) && other.some(r => r.irsValue !== 0)
+    })
+    const table = off.map(r => `${r.c.label}: IRS ${money(r.irsValue!)}, filed ${money(r.filedValue!)}`).join('; ')
+    const evidence = [...off.map(irsCite), ...off.map(r => ev(own, r.c.form, r.c.sel)).filter((x): x is NonNullable<typeof x> => !!x)]
+    if (posted !== undefined) {
+      return [{
+        check: this.id, status: 'finding', severity: 'high', key: 'misposted',
+        title: `${ctx.year}: the IRS holds the ${posted} return in the ${ctx.year} period${about ? ` (${about})` : ''} — the ${ctx.year} return is not processed`,
+        detail: `Every figure the IRS processed for ${ctx.year} matches the filed ${posted} return, not the ${ctx.year} one (${table}). Ask the IRS to move that return to ${posted} and process the ${ctx.year} return. Until then a ${ctx.year} return sent in is set aside as a duplicate (TC976), and ${ctx.year}'s penalties and statute dates run on the wrong return.`,
+        evidence: [...evidence, ...lineup(ctx, rt, ctx.year, posted).map(r => ev(r.cat, r.c.form, r.c.sel)).filter((x): x is NonNullable<typeof x> => !!x)],
+      }]
+    }
+    return [{
+      check: this.id, status: 'finding', severity: 'high', key: 'differs',
+      title: `${ctx.year}: the IRS processed figures that differ from the filed return on ${off.length} line(s)`,
+      detail: `${table}. The IRS processed another version (an amendment, a duplicate copy, or a math-error adjustment), or keyed the return wrongly. Find out which before relying on the ${ctx.year} figures.${about ? ` The processed return: ${about}.` : ''}`,
+      evidence,
+    }]
+  },
+}
+
+export const irsChecks: Check[] = [statute, transcriptAccount, returnTranscriptCheck]

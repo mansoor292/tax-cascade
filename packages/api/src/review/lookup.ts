@@ -4,6 +4,7 @@
  */
 import type { CatalogEntry } from '../catalog/types.js'
 import { parseAmount } from '../catalog/amount.js'
+import { transcriptParts } from '../catalog/transcript.js'
 import type { CatalogView, Evidence, ReviewContext } from './types.js'
 
 export interface Sel {
@@ -21,8 +22,39 @@ export function filed(catalogs: CatalogView[], year: number): CatalogView | unde
   return c.find(x => x.status === 'complete') ?? c[0]
 }
 
+/** The golden transcript carrying `part` for a year: the newest by the IRS's
+ *  response date, the dedicated transcript before a record of account of the
+ *  same date. Storage keeps one golden copy of each kind current
+ *  (catalog/store.ts reconcileTranscripts); choosing here too keeps a check
+ *  deterministic if two ever coexist — it used to take whichever row came
+ *  first, so a return transcript could stand in for the account transcript. */
+function goldenOf(catalogs: CatalogView[], year: number, part: 'account' | 'return'): CatalogView | undefined {
+  return catalogs
+    .filter(c => c.kind === 'irs_transcript' && c.tax_year === year && transcriptParts(c.transcript_type).includes(part))
+    .sort((a, b) => (b.as_of ?? '').localeCompare(a.as_of ?? '') ||
+      Number((a.transcript_type ?? 'account') !== part) - Number((b.transcript_type ?? 'account') !== part))[0]
+}
+
+/** The year's account transcript (an account transcript or record of account). */
 export function transcript(catalogs: CatalogView[], year: number): CatalogView | undefined {
-  return catalogs.find(c => c.kind === 'irs_transcript' && c.tax_year === year)
+  return goldenOf(catalogs, year, 'account')
+}
+
+/** The year's return transcript (a return transcript or record of account):
+ *  the IRS's line-by-line copy of the return it processed, entries of form
+ *  'irs_return_transcript', section = the IRS's heading. */
+export function returnTranscript(catalogs: CatalogView[], year: number): CatalogView | undefined {
+  return goldenOf(catalogs, year, 'return')
+}
+
+/** A line of a return transcript, by heading and label. */
+export function returnLine(cat: CatalogView | undefined, section: RegExp, line: RegExp): CatalogEntry | undefined {
+  return cat?.entries.find(e => e.form === 'irs_return_transcript' && section.test(e.section) && line.test(e.line) && !e.instance && !e.row)
+}
+
+/** "No record of return filed": the IRS has no return for the period. */
+export function noRecord(cat: CatalogView | undefined): boolean {
+  return !!cat?.entries.some(e => e.section === 'Header' && e.line === 'No record')
 }
 
 /** Entries of one form in a catalog, first printed copy only. */

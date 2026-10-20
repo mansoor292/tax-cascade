@@ -1244,7 +1244,7 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
 
   // ─── Tool: catalog_upload ───
   server.tool('catalog_upload',
-    'Store a filed return PDF (or an IRS transcript) for an entity and catalogue it in one step. Use this — not ingest_document — for returns: ingest_document runs the old partial extraction and creates another filed_import row. Returns coverage only.',
+    'Store a filed return PDF (or an IRS transcript) for an entity and catalogue it in one step. Use this — not ingest_document — for returns: ingest_document runs the old partial extraction and creates another filed_import row. Returns coverage only. IRS transcripts (doc_type tax_transcript): account transcripts, return transcripts and records of account are all read into structured lines (query_catalog forms irs_transcript = account part, irs_return_transcript = the IRS\'s line-by-line copy of the return, section = its heading). The transcript\'s own period sets the tax year, and ONE golden account transcript and ONE golden return transcript are kept per entity and year: the newest by the IRS response date supersedes the older (the response says whether this one is golden).',
     {
       entity_id: z.string().describe('Entity UUID'),
       tax_year: z.number().describe('Tax year of the return'),
