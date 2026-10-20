@@ -47,6 +47,7 @@ import calendarRoutes from './routes/calendar.js'
 import factRoutes from './routes/facts.js'
 import catalogRoutes from './routes/catalog.js'
 import reviewRoutes from './routes/review.js'
+import goldenRoutes from './routes/golden.js'
 import noteRoutes from './routes/notes.js'
 import entityMapRoutes from './routes/entity_map.js'
 import versionRoutes from './routes/versions.js'
@@ -324,6 +325,7 @@ app.use('/api/calendar', calendarRoutes)
 app.use('/api/facts', factRoutes)
 app.use('/api/catalog', catalogRoutes)
 app.use('/api/review', reviewRoutes)
+app.use('/api/golden', goldenRoutes)
 app.use('/api/notes', noteRoutes)
 app.use('/api/entity-map', entityMapRoutes)
 app.use('/api/version-sets', versionRoutes)

@@ -45,6 +45,12 @@ src/
 │                      (each form's own arithmetic), query, store (table
 │                      return_catalog, entries encrypted; one golden
 │                      transcript of each kind per entity-year)
+├── schema/            the golden schema: crosswalk (one key per box across
+│                      revisions, from data/line_dicts), index (keyFor /
+│                      goldenKey / keyEntries — applied on read), transcript_map
+│                      (IRS return-transcript lines → keys), golden (the
+│                      side-by-side view behind /api/golden). Rebuild with
+│                      `npx tsx scripts/schema/build_schema.ts`
 ├── review/            the fixed review framework: checks/ (catalog, entity,
 │                      passthrough = NIIT/basis/7203/SSTB/loans, continuity,
 │                      irs/statute), ai.ts (grounded Gemini judgement checks),
@@ -66,6 +72,10 @@ data/line_dicts/       one gz JSON per IRS form revision: every widget with its
                        irs.gov/pub/irs-prior (blanks cached, not committed);
                        add a form to scripts/catalog/blanks_manifest.ts when a
                        catalog reports a page it could not classify
+data/schema/           the golden schema: <form>.json.gz (keys + per-revision
+                       box → key), index.json (build report, fill-map
+                       conflicts), transcript/<type>.json (curated IRS
+                       return-transcript line → box)
 data/field_maps/       Textract-verified JSON maps (per form per year)
 data/irs_forms/        blank IRS PDFs, 2020–2025 — loadBlankForm() reads
                        these at runtime; they MUST be committed
@@ -96,7 +106,8 @@ versioned like facts; open ones ride on `/api/review/summary`; logic in
 services/notes.ts), `/api/entity-map` (the entity map — which entities own,
 disregard or deal with which, table `entity_link`, versioned; evidence read from
 the returns in review/map.ts, write path in services/entity_map.ts),
-`/api/version-sets` (restatement packages v1, v2 … across the group, each held to
+`/api/golden` (one return year side by side on the golden schema: filed,
+IRS, stored returns — src/schema/golden.ts), `/api/version-sets` (restatement packages v1, v2 … across the group, each held to
 the tie checks; tables `version_set` / `return_version`; views in
 review/versions.ts, storage in services/versions.ts; `GET /:label/breaks` reads
 a view's last review without running one — the web Group page uses it). `SKILL.md` documents the consumer workflow (entities → QBO →

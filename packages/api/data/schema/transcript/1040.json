@@ -1,0 +1,338 @@
+{
+ "form_type": "1040",
+ "main_form": "f1040",
+ "note": "Curated 2026-10-20 from the Edgewater pull (1120-S 2022-2025, 1120 2022-2024, 1040 2022-2024). Each line of the IRS Tax Return Transcript names the box it reports, by its location on the newest form (form|section|line|column); the golden key comes from data/schema. 'irs_computed' lines are the IRS's own recomputation ('Per Computer'). 'sign': -1 marks lines the IRS prints as a credit (negative) where the form shows a positive amount. Lines not listed here are IRS processing fields with no box (registration numbers, merchant-card totals, credit-transfer elections...). Proved on the years the IRS processed as filed: every listed line equals the filed box.",
+ "lines": {
+  "Income|Form W-2 wages": {
+   "variant": "as_filed",
+   "box": "f1040||1a|"
+  },
+  "Income|Total wages": {
+   "variant": "as_filed",
+   "box": "f1040||1z|"
+  },
+  "Income|Tax-exempt interest": {
+   "variant": "as_filed",
+   "box": "f1040||2a|"
+  },
+  "Income|Taxable interest income (Schedule B)": {
+   "variant": "as_filed",
+   "box": "f1040||2b|"
+  },
+  "Income|Qualified dividends": {
+   "variant": "as_filed",
+   "box": "f1040||3a|"
+  },
+  "Income|Ordinary dividend income (Schedule B)": {
+   "variant": "as_filed",
+   "box": "f1040||3b|"
+  },
+  "Income|Total IRA distributions": {
+   "variant": "as_filed",
+   "box": "f1040||4a|"
+  },
+  "Income|Taxable IRA distributions": {
+   "variant": "as_filed",
+   "box": "f1040||4b|"
+  },
+  "Income|Total pensions and annuities": {
+   "variant": "as_filed",
+   "box": "f1040||5a|"
+  },
+  "Income|Taxable pension/annuity amount": {
+   "variant": "as_filed",
+   "box": "f1040||5b|"
+  },
+  "Income|Total Social Security benefits": {
+   "variant": "as_filed",
+   "box": "f1040||6a|"
+  },
+  "Income|Taxable Social Security benefits": {
+   "variant": "as_filed",
+   "box": "f1040||6b|"
+  },
+  "Income|Capital gain or loss (Schedule D)": {
+   "variant": "as_filed",
+   "box": "f1040||7a|"
+  },
+  "Income|Capital gains or loss (Schedule D) per computer": {
+   "variant": "irs_computed",
+   "box": "f1040||7a|"
+  },
+  "Income|Additional income": {
+   "variant": "as_filed",
+   "box": "f1040||8|"
+  },
+  "Income|Additional income per computer": {
+   "variant": "irs_computed",
+   "box": "f1040||8|"
+  },
+  "Income|Total income": {
+   "variant": "as_filed",
+   "box": "f1040||9|"
+  },
+  "Income|Total income per computer": {
+   "variant": "irs_computed",
+   "box": "f1040||9|"
+  },
+  "Adjustments to Income|Total adjustments": {
+   "variant": "as_filed",
+   "box": "f1040||10|"
+  },
+  "Adjustments to Income|Total adjustments per computer": {
+   "variant": "irs_computed",
+   "box": "f1040||10|"
+  },
+  "Adjustments to Income|Adjusted gross income": {
+   "variant": "as_filed",
+   "box": "f1040||11a|"
+  },
+  "Adjustments to Income|Adjusted gross income per computer": {
+   "variant": "irs_computed",
+   "box": "f1040||11a|"
+  },
+  "Income|Qualified business income deduction": {
+   "variant": "as_filed",
+   "box": "f1040||13a|"
+  },
+  "Tax and Credits|Taxable income": {
+   "variant": "as_filed",
+   "box": "f1040||15|"
+  },
+  "Tax and Credits|Taxable income per computer": {
+   "variant": "irs_computed",
+   "box": "f1040||15|"
+  },
+  "Other Taxes|Total tax liability taxpayer figures": {
+   "variant": "as_filed",
+   "box": "f1040||24|"
+  },
+  "Other Taxes|Total tax liability taxpayer figures per computer": {
+   "variant": "irs_computed",
+   "box": "f1040||24|"
+  },
+  "Other Taxes|Total other taxes": {
+   "variant": "as_filed",
+   "box": "f1040||23|"
+  },
+  "Other Taxes|Total other taxes per computer": {
+   "variant": "irs_computed",
+   "box": "f1040||23|"
+  },
+  "Payments|Federal income tax withheld": {
+   "variant": "as_filed",
+   "box": "f1040||25d|"
+  },
+  "Payments|Estimated tax payments": {
+   "variant": "as_filed",
+   "form": "f1040",
+   "key": "payments.L26_estimated"
+  },
+  "Payments|Total payments": {
+   "variant": "as_filed",
+   "box": "f1040||33|"
+  },
+  "Payments|Total payments per computer": {
+   "variant": "irs_computed",
+   "box": "f1040||33|"
+  },
+  "Refund or Amount Owed|Refund amount": {
+   "variant": "as_filed",
+   "box": "f1040||35a|",
+   "sign": -1
+  },
+  "Refund or Amount Owed|Estimated tax credit applied to next year": {
+   "variant": "as_filed",
+   "box": "f1040||36|"
+  },
+  "Refund or Amount Owed|Estimated tax penalty": {
+   "variant": "as_filed",
+   "box": "f1040||38|"
+  },
+  "Income|Rent/royalty/partnership/estate (Schedule E)": {
+   "variant": "as_filed",
+   "box": "f1040s1|Part I|5|"
+  },
+  "Income|Rent/royalty/partnership/estate (Schedule E) per computer": {
+   "variant": "irs_computed",
+   "box": "f1040s1|Part I|5|"
+  },
+  "Other Taxes|Self employment tax": {
+   "variant": "as_filed",
+   "form": "f1040s2",
+   "key": "sched2.L4_se_tax"
+  },
+  "Other Taxes|Form 8959 additional Medicare tax": {
+   "variant": "as_filed",
+   "box": "f1040s2|Part II|11|"
+  },
+  "Other Taxes|Form 8960 net investment income tax": {
+   "variant": "as_filed",
+   "box": "f1040s2|Part II|12|"
+  },
+  "Payments|Amount paid with Form 4868": {
+   "variant": "as_filed",
+   "box": "f1040s3|Part II|10|"
+  },
+  "Payments|Excess Social Security & Railroad Retirement Tax Act (RRTA) tax withheld": {
+   "variant": "as_filed",
+   "box": "f1040s3|Part II|11|"
+  },
+  "Interest and Dividends|Taxable interest income": {
+   "variant": "as_filed",
+   "box": "f1040sb|Part I|4|"
+  },
+  "Interest and Dividends|Dividend income": {
+   "variant": "as_filed",
+   "box": "f1040sb|Part II|6|"
+  },
+  "Schedule D - Capital Gains and Losses|Short term Schedule K-1 amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|5|"
+  },
+  "Schedule D - Capital Gains and Losses|Net short-term gain/loss": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|7|"
+  },
+  "Schedule D - Capital Gains and Losses|Long term schedule K-1 amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|12|"
+  },
+  "Schedule D - Capital Gains and Losses|Capital gain distributions (PR)": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|13|"
+  },
+  "Schedule D - Capital Gains and Losses|Net long-term gain/loss": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|15|"
+  },
+  "Schedule D - Capital Gains and Losses|Short term basis no adjustments sale amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|1a|d"
+  },
+  "Schedule D - Capital Gains and Losses|Short term basis no adjustments cost amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|1a|e"
+  },
+  "Schedule D - Capital Gains and Losses|Short term basis sale amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|1b|d"
+  },
+  "Schedule D - Capital Gains and Losses|Short term basis cost amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|1b|e"
+  },
+  "Schedule D - Capital Gains and Losses|Short term basis adjustments": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|1b|g"
+  },
+  "Schedule D - Capital Gains and Losses|Short term no basis sale amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|2|d"
+  },
+  "Schedule D - Capital Gains and Losses|Short term no basis cost amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|2|e"
+  },
+  "Schedule D - Capital Gains and Losses|Short term no basis adjustments": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|2|g"
+  },
+  "Schedule D - Capital Gains and Losses|Short term no 1099-B sale amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|3|d"
+  },
+  "Schedule D - Capital Gains and Losses|Short term no 1099-B cost amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|3|e"
+  },
+  "Schedule D - Capital Gains and Losses|Short term no 1099-B adjustments": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part I|3|g"
+  },
+  "Schedule D - Capital Gains and Losses|Long term basis no adjustments sale amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|8a|d"
+  },
+  "Schedule D - Capital Gains and Losses|Long term basis no adjustments cost amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|8a|e"
+  },
+  "Schedule D - Capital Gains and Losses|Long term basis sale amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|8b|d"
+  },
+  "Schedule D - Capital Gains and Losses|Long term basis cost amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|8b|e"
+  },
+  "Schedule D - Capital Gains and Losses|Long term basis adjustments": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|8b|g"
+  },
+  "Schedule D - Capital Gains and Losses|Long term no basis sale amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|9|d"
+  },
+  "Schedule D - Capital Gains and Losses|Long term no basis cost amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|9|e"
+  },
+  "Schedule D - Capital Gains and Losses|Long term no basis adjustments": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|9|g"
+  },
+  "Schedule D - Capital Gains and Losses|Long term no 1099-B sale amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|10|d"
+  },
+  "Schedule D - Capital Gains and Losses|Long term no 1099-B cost amount": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|10|e"
+  },
+  "Schedule D - Capital Gains and Losses|Long term no 1099-B adjustments": {
+   "variant": "as_filed",
+   "box": "f1040sd|Part II|10|g"
+  },
+  "Schedule E--Supplemental Income and Loss|Total rents received": {
+   "variant": "as_filed",
+   "box": "f1040se|Part I|23a|"
+  },
+  "Schedule E--Supplemental Income and Loss|Total royalties received": {
+   "variant": "as_filed",
+   "box": "f1040se|Part I|23b|"
+  },
+  "Schedule E--Supplemental Income and Loss|Total mortgage interest all properties": {
+   "variant": "as_filed",
+   "box": "f1040se|Part I|23c|"
+  },
+  "Schedule E--Supplemental Income and Loss|Total depreciation or depletion for all properties": {
+   "variant": "as_filed",
+   "box": "f1040se|Part I|23d|"
+  },
+  "Schedule E--Supplemental Income and Loss|Total expenses for all properties": {
+   "variant": "as_filed",
+   "box": "f1040se|Part I|23e|"
+  },
+  "Schedule E--Supplemental Income and Loss|Rent & royalty income": {
+   "variant": "as_filed",
+   "box": "f1040se|Part I|24|"
+  },
+  "Schedule E--Supplemental Income and Loss|Rent & royalty losses": {
+   "variant": "as_filed",
+   "box": "f1040se|Part I|25|"
+  },
+  "Schedule E--Supplemental Income and Loss|Total rental real estate and royalty income or loss": {
+   "variant": "as_filed",
+   "box": "f1040se|Part I|26|"
+  },
+  "Schedule E--Supplemental Income and Loss|Partnership income": {
+   "variant": "as_filed",
+   "box": "f1040se|Part II|30|"
+  },
+  "Schedule E--Supplemental Income and Loss|Partnership loss": {
+   "variant": "as_filed",
+   "box": "f1040se|Part II|31|"
+  }
+ }
+}

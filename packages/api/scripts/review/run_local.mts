@@ -15,6 +15,7 @@ import { buildContext, type EntityBundle } from '../../src/review/context.js'
 import { runFramework } from '../../src/review/framework.js'
 import { computeFactGaps } from '../../src/services/facts.js'
 import type { CatalogView } from '../../src/review/types.js'
+import { keyEntries } from '../../src/schema/index.js'
 
 const [cfgPath, outPath] = process.argv.slice(2).filter(a => !a.startsWith('--'))
 const ai = process.argv.includes('--ai')
@@ -25,7 +26,7 @@ const bundles: Array<EntityBundle & { years: number[] }> = cfg.entities.map((e: 
   years: e.years,
   catalogs: e.catalogs.map((c: any): CatalogView => {
     const j = JSON.parse(readFileSync(c.file, 'utf8'))
-    return { id: c.file.split('/').pop(), kind: c.kind, tax_year: c.tax_year, source_filename: j.source?.filename, status: j.coverage?.complete ? 'complete' : 'incomplete', coverage: j.coverage, entries: j.entries, transcript_type: j.transcript?.type ?? null, as_of: j.transcript?.as_of ?? null }
+    return { id: c.file.split('/').pop(), kind: c.kind, tax_year: c.tax_year, source_filename: j.source?.filename, status: j.coverage?.complete ? 'complete' : 'incomplete', coverage: j.coverage, entries: keyEntries(j.entries), transcript_type: j.transcript?.type ?? null, as_of: j.transcript?.as_of ?? null }
   }),
 }))
 

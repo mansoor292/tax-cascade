@@ -321,6 +321,48 @@ stay with Claude. Its one write is recording a relationship the returns already 
 `maskTaxIdsInText` (web `lib/mask.ts`). The review's evidence quotes return headers,
 and on the day the page was built the summary carried 24 full EINs.
 
+### 10. The golden schema (added 2026-10-20)
+
+Owner's question: do the filed return, the IRS's record, proformas, amendments,
+scenarios and QuickBooks all map to one schema for apples-to-apples comparison?
+Before this, only the boxes the PDF builder fills carried a key — 893 of 40,448
+boxes (2.2%) — and the IRS renumbers lines from year to year.
+
+- **One key per box, every year** (`src/schema/crosswalk.ts`, built by
+  `scripts/schema/build_schema.ts` into `data/schema/<form>.json.gz`, committed).
+  All 62 catalogued forms, 307 revisions. Keys are anchored on the newest
+  revision and carried back year by year by matching boxes on the IRS's own
+  description (XFA text), not the line number: same line and description;
+  the same description on another line (renumbering — 1120-S ordinary income
+  is line 21 in 2022 and 22 from 2023: one key); a split line (1040 line 11 →
+  11a in 2025); then position on the page. A verified fill-map key always
+  names its box; an engine key (`f7203.L3a_…`) is adopted for the amount box
+  of its line; anything else gets `<prefix>.L<line>_<words>`. Other engine and
+  fill-map names for the same box are kept as **aliases** (`goldenKey`).
+- **Blind check**: where two years' fill maps name a box alike, matching alone
+  picks the same box 436 of 450 times; the 14 others are fill-map defects
+  (the 2022 1040 header map is two boxes off; the 2024 1120 map puts the
+  signer's title on the preparer's firm-address box) and the 2025 1040 line 1h
+  split. Conflicts are recorded in `data/schema/index.json`.
+- **Applied on read** (`keyEntries`): stored catalogs get golden keys when
+  loaded, so all 12 filed returns are keyed box for box (from 0–57%).
+- **IRS return transcripts** map onto the same keys through a curated table per
+  return type (`data/schema/transcript/<1120S|1120|1040>.json`): each IRS line
+  names its box by place on the newest form; "Per Computer" lines are the IRS's
+  recomputation; `sign: -1` for credits the IRS prints negative. Proved on the
+  years the IRS processed as filed: every mapped line equals the filed box
+  (1040 101/101; the rest are real differences in how the IRS keyed a figure).
+- **The golden view** (`src/schema/golden.ts`, `GET /api/golden/:entity_id?year=`,
+  MCP `golden_view`): every key with the filed value, the IRS's value (as filed
+  and recomputed) and the stored returns' values, a status and the golden
+  value — the IRS figure where its transcript holds this year's return,
+  otherwise the filed one. Amounts only unless asked.
+- The review's `irs.return_transcript` check reads the golden view: headline
+  differences are high, other figures the IRS keyed differently are low,
+  recomputations are information.
+- Not yet: QuickBooks and scenarios (next step), and `validateFieldValues`
+  still warns rather than rejects.
+
 ## Check catalogue (initial)
 
 **Corporate and entity**

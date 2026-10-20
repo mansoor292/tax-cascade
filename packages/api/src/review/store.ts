@@ -14,6 +14,7 @@ import { buildContext, type EntityBundle } from './context.js'
 import { runFramework, diffRuns, tieCheckIds, type Finding } from './framework.js'
 import type { AskJson } from './ai.js'
 import { withMapAnswers, type FactLike } from './map.js'
+import { keyEntries } from '../schema/index.js'
 import { listLinks } from '../services/entity_map.js'
 import { listSets, versionRows } from '../services/versions.js'
 import { versionsForView, viewBundles, viewFacts, type VersionRow } from './versions.js'
@@ -32,7 +33,7 @@ export async function loadBundles(supabase: SupabaseClient, userId: string): Pro
     const v: CatalogView = {
       id: r.id, kind: r.kind, tax_year: r.tax_year, source_filename: r.source_filename, status: r.status,
       transcript_type: r.transcript_type ?? null, as_of: r.as_of ?? null,
-      coverage: r.coverage as CatalogCoverage, entries: (r.entries as CatalogEntry[] | null) ?? [],
+      coverage: r.coverage as CatalogCoverage, entries: keyEntries((r.entries as CatalogEntry[] | null) ?? []),
     }
     byEntity.set(r.entity_id, [...(byEntity.get(r.entity_id) ?? []), v])
   }

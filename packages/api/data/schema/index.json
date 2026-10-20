@@ -1,0 +1,1564 @@
+{
+ "built": "2026-10-20",
+ "engine_keys": 546,
+ "forms": {
+  "f1040": {
+   "title": "Form 1040",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 234,
+   "widgets": 746,
+   "by": {
+    "verified": 70,
+    "engine": 0,
+    "same_line": 473,
+    "renumbered": 6,
+    "similar": 29,
+    "by_name": 3,
+    "generated": 165,
+    "renamed": 7
+   },
+   "blind": {
+    "compared": 209,
+    "agreed": 196,
+    "disagreements": [
+     {
+      "rev": "2024",
+      "line": "1h",
+      "verified": "income.L1h_other_earned",
+      "matched": "f1040.L1h_earned_income_type"
+     },
+     {
+      "rev": "2024",
+      "line": "30",
+      "verified": "payments.L30_reserved",
+      "matched": null
+     },
+     {
+      "rev": "2022",
+      "line": "",
+      "verified": "meta.first_name",
+      "matched": "meta.ssn"
+     },
+     {
+      "rev": "2022",
+      "line": "",
+      "verified": "meta.last_name",
+      "matched": "meta.spouse_first"
+     },
+     {
+      "rev": "2022",
+      "line": "",
+      "verified": "meta.ssn",
+      "matched": "meta.spouse_last"
+     },
+     {
+      "rev": "2022",
+      "line": "",
+      "verified": "meta.spouse_first",
+      "matched": "meta.spouse_ssn"
+     },
+     {
+      "rev": "2022",
+      "line": "",
+      "verified": "meta.spouse_last",
+      "matched": "meta.address"
+     },
+     {
+      "rev": "2022",
+      "line": "",
+      "verified": "meta.spouse_ssn",
+      "matched": "meta.apt"
+     },
+     {
+      "rev": "2022",
+      "line": "",
+      "verified": "meta.address",
+      "matched": "meta.city"
+     },
+     {
+      "rev": "2022",
+      "line": "",
+      "verified": "meta.apt",
+      "matched": "meta.state"
+     },
+     {
+      "rev": "2022",
+      "line": "",
+      "verified": "meta.city",
+      "matched": "meta.zip"
+     },
+     {
+      "rev": "2022",
+      "line": "",
+      "verified": "meta.state",
+      "matched": "f1040.hdr_foreign_country_name"
+     },
+     {
+      "rev": "2022",
+      "line": "",
+      "verified": "meta.zip",
+      "matched": "f1040.hdr_foreign_province_state_county"
+     }
+    ]
+   },
+   "conflicts": [
+    {
+     "rev": "2024",
+     "widget": "topmostSubform[0].Page1[0].f1_39[0]",
+     "line": "1h",
+     "map_says": "income.L1h_other_earned",
+     "description_says": "f1040.L1h_earned_income_type",
+     "kept": "map"
+    },
+    {
+     "rev": "2022",
+     "widget": "topmostSubform[0].Page1[0].YourSocial[0].f1_04[0]",
+     "line": "",
+     "map_says": "meta.first_name",
+     "description_says": "meta.ssn"
+    },
+    {
+     "rev": "2022",
+     "widget": "topmostSubform[0].Page1[0].f1_05[0]",
+     "line": "",
+     "map_says": "meta.last_name",
+     "description_says": "meta.spouse_first"
+    },
+    {
+     "rev": "2022",
+     "widget": "topmostSubform[0].Page1[0].f1_06[0]",
+     "line": "",
+     "map_says": "meta.ssn",
+     "description_says": "meta.spouse_last"
+    },
+    {
+     "rev": "2022",
+     "widget": "topmostSubform[0].Page1[0].SpousesSocial[0].f1_07[0]",
+     "line": "",
+     "map_says": "meta.spouse_first",
+     "description_says": "meta.spouse_ssn"
+    },
+    {
+     "rev": "2022",
+     "widget": "topmostSubform[0].Page1[0].Address[0].f1_08[0]",
+     "line": "",
+     "map_says": "meta.spouse_last",
+     "description_says": "meta.address"
+    },
+    {
+     "rev": "2022",
+     "widget": "topmostSubform[0].Page1[0].Address[0].f1_09[0]",
+     "line": "",
+     "map_says": "meta.spouse_ssn",
+     "description_says": "meta.apt"
+    },
+    {
+     "rev": "2022",
+     "widget": "topmostSubform[0].Page1[0].Address[0].f1_10[0]",
+     "line": "",
+     "map_says": "meta.address",
+     "description_says": "meta.city"
+    },
+    {
+     "rev": "2022",
+     "widget": "topmostSubform[0].Page1[0].Address[0].f1_11[0]",
+     "line": "",
+     "map_says": "meta.apt",
+     "description_says": "meta.state"
+    },
+    {
+     "rev": "2022",
+     "widget": "topmostSubform[0].Page1[0].Address[0].f1_12[0]",
+     "line": "",
+     "map_says": "meta.city",
+     "description_says": "meta.zip"
+    },
+    {
+     "rev": "2022",
+     "widget": "topmostSubform[0].Page1[0].Address[0].f1_13[0]",
+     "line": "",
+     "map_says": "meta.state",
+     "description_says": "f1040.hdr_foreign_country_name"
+    },
+    {
+     "rev": "2022",
+     "widget": "topmostSubform[0].Page1[0].Address[0].f1_14[0]",
+     "line": "",
+     "map_says": "meta.zip",
+     "description_says": "f1040.hdr_foreign_province_state_county"
+    }
+   ]
+  },
+  "f1040es": {
+   "title": "Form 1040-ES",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025",
+    "2026"
+   ],
+   "keys": 275,
+   "widgets": 691,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 0,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 416,
+    "generated": 275,
+    "renamed": 0
+   }
+  },
+  "f1040s1": {
+   "title": "Form 1040 Schedule 1",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 77,
+   "widgets": 338,
+   "by": {
+    "verified": 0,
+    "engine": 5,
+    "same_line": 241,
+    "renumbered": 11,
+    "similar": 9,
+    "by_name": 0,
+    "generated": 72,
+    "renamed": 0
+   }
+  },
+  "f1040s2": {
+   "title": "Form 1040 Schedule 2",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 69,
+   "widgets": 254,
+   "by": {
+    "verified": 0,
+    "engine": 6,
+    "same_line": 171,
+    "renumbered": 1,
+    "similar": 13,
+    "by_name": 0,
+    "generated": 63,
+    "renamed": 0
+   }
+  },
+  "f1040s3": {
+   "title": "Form 1040 Schedule 3",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 52,
+   "widgets": 195,
+   "by": {
+    "verified": 0,
+    "engine": 3,
+    "same_line": 132,
+    "renumbered": 2,
+    "similar": 9,
+    "by_name": 0,
+    "generated": 49,
+    "renamed": 0
+   }
+  },
+  "f1040s8": {
+   "title": "Form 1040 Schedule 8812",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 112,
+   "widgets": 235,
+   "by": {
+    "verified": 0,
+    "engine": 11,
+    "same_line": 113,
+    "renumbered": 0,
+    "similar": 10,
+    "by_name": 0,
+    "generated": 101,
+    "renamed": 0
+   }
+  },
+  "f1040sa": {
+   "title": "Form 1040 Schedule A",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 38,
+   "widgets": 181,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 136,
+    "renumbered": 0,
+    "similar": 7,
+    "by_name": 0,
+    "generated": 38,
+    "renamed": 0
+   }
+  },
+  "f1040sb": {
+   "title": "Form 1040 Schedule B",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 76,
+   "widgets": 361,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 253,
+    "renumbered": 0,
+    "similar": 5,
+    "by_name": 27,
+    "generated": 76,
+    "renamed": 0
+   }
+  },
+  "f1040sc": {
+   "title": "Form 1040 Schedule C",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 106,
+   "widgets": 525,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 417,
+    "renumbered": 2,
+    "similar": 0,
+    "by_name": 0,
+    "generated": 106,
+    "renamed": 0
+   }
+  },
+  "f1040sd": {
+   "title": "Form 1040 Schedule D",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 55,
+   "widgets": 275,
+   "by": {
+    "verified": 0,
+    "engine": 11,
+    "same_line": 186,
+    "renumbered": 0,
+    "similar": 34,
+    "by_name": 0,
+    "generated": 44,
+    "renamed": 0
+   }
+  },
+  "f1040se": {
+   "title": "Form 1040 Schedule E",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 185,
+   "widgets": 925,
+   "by": {
+    "verified": 0,
+    "engine": 13,
+    "same_line": 727,
+    "renumbered": 0,
+    "similar": 13,
+    "by_name": 0,
+    "generated": 172,
+    "renamed": 0
+   }
+  },
+  "f1040sse": {
+   "title": "Form 1040 Schedule SE",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 27,
+   "widgets": 135,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 89,
+    "renumbered": 0,
+    "similar": 19,
+    "by_name": 0,
+    "generated": 27,
+    "renamed": 0
+   }
+  },
+  "f1040v": {
+   "title": "Form 1040-V",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 15,
+   "widgets": 75,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 59,
+    "renumbered": 0,
+    "similar": 1,
+    "by_name": 0,
+    "generated": 15,
+    "renamed": 0
+   }
+  },
+  "f1040x": {
+   "title": "Form 1040-X",
+   "revisions": [
+    "2010",
+    "2011",
+    "2012",
+    "2013",
+    "2014",
+    "2016",
+    "2017",
+    "2018",
+    "2019",
+    "2020",
+    "2021",
+    "2024",
+    "2025"
+   ],
+   "keys": 512,
+   "widgets": 1836,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 851,
+    "renumbered": 20,
+    "similar": 378,
+    "by_name": 75,
+    "generated": 512,
+    "renamed": 0
+   }
+  },
+  "f1065": {
+   "title": "Form 1065",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 458,
+   "widgets": 2092,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 1574,
+    "renumbered": 21,
+    "similar": 36,
+    "by_name": 3,
+    "generated": 458,
+    "renamed": 0
+   }
+  },
+  "f1065sk1": {
+   "title": "Form 1065 Schedule K-1",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 201,
+   "widgets": 605,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 382,
+    "renumbered": 0,
+    "similar": 22,
+    "by_name": 0,
+    "generated": 201,
+    "renamed": 0
+   }
+  },
+  "f1116": {
+   "title": "Form 1116",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 151,
+   "widgets": 596,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 397,
+    "renumbered": 0,
+    "similar": 45,
+    "by_name": 3,
+    "generated": 151,
+    "renamed": 0
+   }
+  },
+  "f1120": {
+   "title": "Form 1120",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 497,
+   "widgets": 2297,
+   "by": {
+    "verified": 167,
+    "engine": 7,
+    "same_line": 1735,
+    "renumbered": 5,
+    "similar": 55,
+    "by_name": 5,
+    "generated": 323,
+    "renamed": 4
+   },
+   "blind": {
+    "compared": 146,
+    "agreed": 145,
+    "disagreements": [
+     {
+      "rev": "2024",
+      "line": "",
+      "verified": "meta.title",
+      "matched": "preparer.firm_address"
+     }
+    ]
+   },
+   "conflicts": [
+    {
+     "rev": "2024",
+     "widget": "topmostSubform[0].Page1[0].f1_56[0]",
+     "line": "",
+     "map_says": "meta.title",
+     "description_says": "preparer.firm_address"
+    }
+   ]
+  },
+  "f1120s": {
+   "title": "Form 1120-S",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 400,
+   "widgets": 1895,
+   "by": {
+    "verified": 182,
+    "engine": 3,
+    "same_line": 1451,
+    "renumbered": 16,
+    "similar": 24,
+    "by_name": 4,
+    "generated": 215,
+    "renamed": 5
+   },
+   "blind": {
+    "compared": 95,
+    "agreed": 95,
+    "disagreements": []
+   }
+  },
+  "f1120sg": {
+   "title": "Form 1120 Schedule G",
+   "revisions": [
+    "2010",
+    "2011"
+   ],
+   "keys": 92,
+   "widgets": 184,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 0,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 92,
+    "generated": 92,
+    "renamed": 0
+   }
+  },
+  "f1120sh": {
+   "title": "Form 1120 Schedule H",
+   "revisions": [
+    "2011"
+   ],
+   "keys": 45,
+   "widgets": 45,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 0,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 0,
+    "generated": 45,
+    "renamed": 0
+   }
+  },
+  "f1120so": {
+   "title": "Form 1120 Schedule O",
+   "revisions": [
+    "2010",
+    "2011",
+    "2012",
+    "2018"
+   ],
+   "keys": 648,
+   "widgets": 1036,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 2,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 386,
+    "generated": 648,
+    "renamed": 0
+   }
+  },
+  "f1120ssd": {
+   "title": "Form 1120-S Schedule D",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 53,
+   "widgets": 265,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 178,
+    "renumbered": 0,
+    "similar": 34,
+    "by_name": 0,
+    "generated": 53,
+    "renamed": 0
+   }
+  },
+  "f1120ssk": {
+   "title": "Form 1120-S Schedule K-1",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 114,
+   "widgets": 561,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 446,
+    "renumbered": 1,
+    "similar": 0,
+    "by_name": 0,
+    "generated": 114,
+    "renamed": 0
+   }
+  },
+  "f1120w": {
+   "title": "Form 1120-W",
+   "revisions": [
+    "2021",
+    "2022"
+   ],
+   "keys": 213,
+   "widgets": 426,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 213,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 0,
+    "generated": 213,
+    "renamed": 0
+   }
+  },
+  "f1120x": {
+   "title": "Form 1120-X",
+   "revisions": [
+    "2011",
+    "2016",
+    "2025"
+   ],
+   "keys": 215,
+   "widgets": 240,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 5,
+    "renumbered": 0,
+    "similar": 2,
+    "by_name": 18,
+    "generated": 215,
+    "renamed": 0
+   }
+  },
+  "f1125a": {
+   "title": "Form 1125-A",
+   "revisions": [
+    "2011",
+    "2012",
+    "2016",
+    "2018",
+    "2024"
+   ],
+   "keys": 63,
+   "widgets": 145,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 62,
+    "renumbered": 0,
+    "similar": 18,
+    "by_name": 2,
+    "generated": 63,
+    "renamed": 0
+   }
+  },
+  "f1125e": {
+   "title": "Form 1125-E",
+   "revisions": [
+    "2011",
+    "2012",
+    "2013",
+    "2016"
+   ],
+   "keys": 248,
+   "widgets": 500,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 250,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 2,
+    "generated": 248,
+    "renamed": 0
+   }
+  },
+  "f2210": {
+   "title": "Form 2210",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 208,
+   "widgets": 995,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 109,
+    "renumbered": 0,
+    "similar": 678,
+    "by_name": 0,
+    "generated": 208,
+    "renamed": 0
+   }
+  },
+  "f2220": {
+   "title": "Form 2220",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 425,
+   "widgets": 1610,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 1065,
+    "renumbered": 0,
+    "similar": 117,
+    "by_name": 3,
+    "generated": 425,
+    "renamed": 0
+   }
+  },
+  "f2441": {
+   "title": "Form 2441",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 82,
+   "widgets": 365,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 260,
+    "renumbered": 2,
+    "similar": 21,
+    "by_name": 0,
+    "generated": 82,
+    "renamed": 0
+   }
+  },
+  "f2553": {
+   "title": "Form 2553",
+   "revisions": [
+    "2013",
+    "2017"
+   ],
+   "keys": 182,
+   "widgets": 201,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 14,
+    "renumbered": 1,
+    "similar": 4,
+    "by_name": 0,
+    "generated": 182,
+    "renamed": 0
+   }
+  },
+  "f2848": {
+   "title": "Form 2848",
+   "revisions": [
+    "2011",
+    "2012",
+    "2014",
+    "2015",
+    "2018",
+    "2020",
+    "2021"
+   ],
+   "keys": 201,
+   "widgets": 553,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 304,
+    "renumbered": 1,
+    "similar": 40,
+    "by_name": 7,
+    "generated": 201,
+    "renamed": 0
+   }
+  },
+  "f3800": {
+   "title": "Form 3800",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 3043,
+   "widgets": 5832,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 2201,
+    "renumbered": 2,
+    "similar": 586,
+    "by_name": 0,
+    "generated": 3043,
+    "renamed": 0
+   }
+  },
+  "f4506": {
+   "title": "Form 4506",
+   "revisions": [
+    "2010",
+    "2011",
+    "2012",
+    "2013",
+    "2015",
+    "2025"
+   ],
+   "keys": 88,
+   "widgets": 158,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 50,
+    "renumbered": 0,
+    "similar": 12,
+    "by_name": 8,
+    "generated": 88,
+    "renamed": 0
+   }
+  },
+  "f4562": {
+   "title": "Form 4562",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 284,
+   "widgets": 1321,
+   "by": {
+    "verified": 0,
+    "engine": 19,
+    "same_line": 1017,
+    "renumbered": 2,
+    "similar": 18,
+    "by_name": 0,
+    "generated": 265,
+    "renamed": 0
+   }
+  },
+  "f4626": {
+   "title": "Form 4626",
+   "revisions": [
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 826,
+   "widgets": 2265,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 1414,
+    "renumbered": 3,
+    "similar": 22,
+    "by_name": 0,
+    "generated": 826,
+    "renamed": 0
+   }
+  },
+  "f4797": {
+   "title": "Form 4797",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 182,
+   "widgets": 910,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 712,
+    "renumbered": 0,
+    "similar": 16,
+    "by_name": 0,
+    "generated": 182,
+    "renamed": 0
+   }
+  },
+  "f4868": {
+   "title": "Form 4868",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 19,
+   "widgets": 85,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 64,
+    "renumbered": 1,
+    "similar": 1,
+    "by_name": 0,
+    "generated": 19,
+    "renamed": 0
+   }
+  },
+  "f4952": {
+   "title": "Form 4952",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 17,
+   "widgets": 85,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 68,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 0,
+    "generated": 17,
+    "renamed": 0
+   }
+  },
+  "f6251": {
+   "title": "Form 6251",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 63,
+   "widgets": 306,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 219,
+    "renumbered": 0,
+    "similar": 24,
+    "by_name": 0,
+    "generated": 63,
+    "renamed": 0
+   }
+  },
+  "f6781": {
+   "title": "Form 6781",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 71,
+   "widgets": 355,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 284,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 0,
+    "generated": 71,
+    "renamed": 0
+   }
+  },
+  "f7004": {
+   "title": "Form 7004",
+   "revisions": [
+    "2011",
+    "2012",
+    "2016",
+    "2017",
+    "2018",
+    "2025"
+   ],
+   "keys": 80,
+   "widgets": 160,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 60,
+    "renumbered": 0,
+    "similar": 15,
+    "by_name": 5,
+    "generated": 80,
+    "renamed": 0
+   }
+  },
+  "f7203": {
+   "title": "Form 7203",
+   "revisions": [
+    "2021",
+    "2022"
+   ],
+   "keys": 270,
+   "widgets": 369,
+   "by": {
+    "verified": 0,
+    "engine": 19,
+    "same_line": 90,
+    "renumbered": 3,
+    "similar": 5,
+    "by_name": 1,
+    "generated": 251,
+    "renamed": 0
+   }
+  },
+  "f8283": {
+   "title": "Form 8283",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2025"
+   ],
+   "keys": 176,
+   "widgets": 476,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 292,
+    "renumbered": 1,
+    "similar": 7,
+    "by_name": 0,
+    "generated": 176,
+    "renamed": 0
+   }
+  },
+  "f843": {
+   "title": "Form 843",
+   "revisions": [
+    "2010",
+    "2011",
+    "2024"
+   ],
+   "keys": 142,
+   "widgets": 168,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 0,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 26,
+    "generated": 142,
+    "renamed": 0
+   }
+  },
+  "f8582": {
+   "title": "Form 8582",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 205,
+   "widgets": 1025,
+   "by": {
+    "verified": 0,
+    "engine": 17,
+    "same_line": 818,
+    "renumbered": 0,
+    "similar": 2,
+    "by_name": 0,
+    "generated": 188,
+    "renamed": 0
+   }
+  },
+  "f8606": {
+   "title": "Form 8606",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 48,
+   "widgets": 225,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 131,
+    "renumbered": 0,
+    "similar": 45,
+    "by_name": 1,
+    "generated": 48,
+    "renamed": 0
+   }
+  },
+  "f8825": {
+   "title": "Form 8825",
+   "revisions": [
+    "2025"
+   ],
+   "keys": 221,
+   "widgets": 221,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 0,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 0,
+    "generated": 221,
+    "renamed": 0
+   }
+  },
+  "f8829": {
+   "title": "Form 8829",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 64,
+   "widgets": 290,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 224,
+    "renumbered": 0,
+    "similar": 2,
+    "by_name": 0,
+    "generated": 64,
+    "renamed": 0
+   }
+  },
+  "f8879": {
+   "title": "Form 8879",
+   "revisions": [
+    "2021"
+   ],
+   "keys": 20,
+   "widgets": 20,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 0,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 0,
+    "generated": 20,
+    "renamed": 0
+   }
+  },
+  "f8879c": {
+   "title": "Form 8879-C",
+   "revisions": [
+    "2010",
+    "2011",
+    "2012",
+    "2013",
+    "2014",
+    "2015",
+    "2016",
+    "2017",
+    "2018",
+    "2019",
+    "2020",
+    "2021"
+   ],
+   "keys": 39,
+   "widgets": 192,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 116,
+    "renumbered": 0,
+    "similar": 13,
+    "by_name": 24,
+    "generated": 39,
+    "renamed": 0
+   }
+  },
+  "f8879s": {
+   "title": "Form 8879-S",
+   "revisions": [
+    "2010",
+    "2011",
+    "2012",
+    "2013",
+    "2014",
+    "2015",
+    "2016",
+    "2017",
+    "2018",
+    "2019",
+    "2020",
+    "2021"
+   ],
+   "keys": 38,
+   "widgets": 192,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 110,
+    "renumbered": 0,
+    "similar": 21,
+    "by_name": 23,
+    "generated": 38,
+    "renamed": 0
+   }
+  },
+  "f8889": {
+   "title": "Form 8889",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 27,
+   "widgets": 135,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 101,
+    "renumbered": 0,
+    "similar": 7,
+    "by_name": 0,
+    "generated": 27,
+    "renamed": 0
+   }
+  },
+  "f8915f": {
+   "title": "Form 8915-F",
+   "revisions": [
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 123,
+   "widgets": 372,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 184,
+    "renumbered": 1,
+    "similar": 64,
+    "by_name": 0,
+    "generated": 123,
+    "renamed": 0
+   }
+  },
+  "f8916a": {
+   "title": "Form 8916-A",
+   "revisions": [
+    "2019"
+   ],
+   "keys": 140,
+   "widgets": 140,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 0,
+    "renumbered": 0,
+    "similar": 0,
+    "by_name": 0,
+    "generated": 140,
+    "renamed": 0
+   }
+  },
+  "f8949": {
+   "title": "Form 8949",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 250,
+   "widgets": 1178,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 918,
+    "renumbered": 0,
+    "similar": 10,
+    "by_name": 0,
+    "generated": 250,
+    "renamed": 0
+   }
+  },
+  "f8959": {
+   "title": "Form 8959",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 26,
+   "widgets": 130,
+   "by": {
+    "verified": 0,
+    "engine": 13,
+    "same_line": 97,
+    "renumbered": 0,
+    "similar": 7,
+    "by_name": 0,
+    "generated": 13,
+    "renamed": 0
+   }
+  },
+  "f8960": {
+   "title": "Form 8960",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 38,
+   "widgets": 190,
+   "by": {
+    "verified": 0,
+    "engine": 14,
+    "same_line": 150,
+    "renumbered": 0,
+    "similar": 2,
+    "by_name": 0,
+    "generated": 24,
+    "renamed": 0
+   }
+  },
+  "f8995": {
+   "title": "Form 8995",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 33,
+   "widgets": 165,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 131,
+    "renumbered": 0,
+    "similar": 1,
+    "by_name": 0,
+    "generated": 33,
+    "renamed": 0
+   }
+  },
+  "f8995a": {
+   "title": "Form 8995-A",
+   "revisions": [
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025"
+   ],
+   "keys": 115,
+   "widgets": 555,
+   "by": {
+    "verified": 0,
+    "engine": 23,
+    "same_line": 415,
+    "renumbered": 0,
+    "similar": 25,
+    "by_name": 0,
+    "generated": 92,
+    "renamed": 0
+   }
+  },
+  "f941": {
+   "title": "Form 941",
+   "revisions": [
+    "2011",
+    "2012",
+    "2013",
+    "2014",
+    "2015",
+    "2016",
+    "2017",
+    "2018",
+    "2019",
+    "2023",
+    "2024",
+    "2025",
+    "2026"
+   ],
+   "keys": 314,
+   "widgets": 1545,
+   "by": {
+    "verified": 0,
+    "engine": 0,
+    "same_line": 1051,
+    "renumbered": 56,
+    "similar": 80,
+    "by_name": 44,
+    "generated": 314,
+    "renamed": 0
+   }
+  }
+ }
+}

@@ -23,6 +23,7 @@ import { readLayout, splitWords, type LayoutPage, type TextRun, type BBox } from
 import { candidateStages, pagesOf, type IndexedPage } from './dicts.js'
 import { isAmount, parseAmount } from './amount.js'
 import type { Catalog, CatalogEntry, CatalogPage, DictWidget, TranscriptMeta } from './types.js'
+import { keyFor } from '../schema/index.js'
 import { isTranscriptText, transcriptEntries, taxYearOfPeriod, isoOfTranscriptDate, type TranscriptContext, type TranscriptType } from './transcript.js'
 
 const TRANSCRIPT_NAME: Record<TranscriptType, string> = {
@@ -387,7 +388,7 @@ function formPage(p: LayoutPage, cand: IndexedPage, instance: string, aligned = 
   const base = (w: DictWidget) => ({
     form: dict.form, title: dict.title, rev: dict.rev, instance, page: p.page,
     section: w.section, line: w.line, ...(w.row ? { row: w.row } : {}), ...(w.col ? { col: w.col } : {}),
-    label: w.label, desc: w.desc, widget: w.name, ...(w.canonical ? { canonical: w.canonical } : {}),
+    label: w.label, desc: w.desc, widget: w.name, ...((keyFor(dict.form, dict.rev, w.name) ?? w.canonical) ? { canonical: keyFor(dict.form, dict.rev, w.name) ?? w.canonical } : {}),
     id: `${dict.form}--${dict.rev}:${instance}:${short(w.name)}`,
   })
   for (const w of widgets) {

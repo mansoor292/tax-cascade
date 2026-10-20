@@ -8,6 +8,7 @@ import { encryptedFields, hydrateAll, ENCRYPTED_CATALOG_FIELDS } from '../lib/ro
 import type { Catalog, CatalogEntry, TranscriptMeta } from './types.js'
 import type { CatalogSource } from './query.js'
 import { transcriptParts } from './transcript.js'
+import { keyEntries } from '../schema/index.js'
 
 export type CatalogKind = 'filed_return' | 'computed_return' | 'irs_transcript' | 'irs_notice' | 'other'
 
@@ -187,7 +188,7 @@ export async function loadSources(
   supabase: SupabaseClient, userId: string, entityId: string, years?: number[], kinds?: CatalogKind[],
 ): Promise<CatalogSource[]> {
   let q = supabase.from('return_catalog')
-    .select('id, user_id, tax_year, kind, source_filename, entries, entries_enc')
+    .select('id, user_id, tax_year, kind, status, transcript_type, as_of, source_filename, entries, entries_enc')
     .eq('user_id', userId).eq('entity_id', entityId).is('superseded_by', null)
   if (years?.length) q = q.in('tax_year', years)
   if (kinds?.length) q = q.in('kind', kinds)
@@ -198,6 +199,9 @@ export async function loadSources(
     catalog_id: r.id as string,
     tax_year: (r.tax_year as number | null) ?? null,
     source_filename: r.source_filename as string | null,
-    entries: ((r.entries as CatalogEntry[] | null) ?? []),
+    kind: r.kind as string, status: r.status as string,
+    transcript_type: (r.transcript_type as string | null) ?? null, as_of: (r.as_of as string | null) ?? null,
+    // golden keys applied on read: a schema improvement reaches stored catalogs
+    entries: keyEntries((r.entries as CatalogEntry[] | null) ?? []),
   }))
 }

@@ -1,0 +1,304 @@
+{
+ "form_type": "1120S",
+ "main_form": "f1120s",
+ "note": "Curated 2026-10-20 from the Edgewater pull (1120-S 2022-2025, 1120 2022-2024, 1040 2022-2024). Each line of the IRS Tax Return Transcript names the box it reports, by its location on the newest form (form|section|line|column); the golden key comes from data/schema. 'irs_computed' lines are the IRS's own recomputation ('Per Computer'). 'sign': -1 marks lines the IRS prints as a credit (negative) where the form shows a positive amount. Lines not listed here are IRS processing fields with no box (registration numbers, merchant-card totals, credit-transfer elections...). Proved on the years the IRS processed as filed: every listed line equals the filed box.",
+ "lines": {
+  "Indicators, Codes, and Miscellaneous Information|Total Assets at End of Year": {
+   "variant": "as_filed",
+   "box": "f1120s||F|"
+  },
+  "Indicators, Codes, and Miscellaneous Information|Number of Shareholders": {
+   "variant": "as_filed",
+   "box": "f1120s||I|"
+  },
+  "Indicators, Codes, and Miscellaneous Information|Schedule M-2: Balance at Beginning of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120s|Schedule M-2|1|a"
+  },
+  "Income|Gross Receipts": {
+   "variant": "as_filed",
+   "box": "f1120s||1a|"
+  },
+  "Income|Returns and Allowances": {
+   "variant": "as_filed",
+   "box": "f1120s||1b|"
+  },
+  "Form 5884B New Hire Retention Credit|Net Receipts Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120s||1c|"
+  },
+  "Income|Cost of Goods Sold": {
+   "variant": "as_filed",
+   "box": "f1120s||2|"
+  },
+  "Income|Gross Profit Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120s||3|"
+  },
+  "Income|Net Gain or Loss": {
+   "variant": "as_filed",
+   "box": "f1120s||4|"
+  },
+  "Income|Other Income": {
+   "variant": "as_filed",
+   "box": "f1120s||5|"
+  },
+  "Income|Total Income": {
+   "variant": "as_filed",
+   "box": "f1120s||6|"
+  },
+  "Income|Total Income Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120s||6|"
+  },
+  "Deductions|Compensation of Officers": {
+   "variant": "as_filed",
+   "box": "f1120s||7|"
+  },
+  "Deductions|Salary and Wages Less Jobs Credit": {
+   "variant": "as_filed",
+   "box": "f1120s||8|"
+  },
+  "Deductions|Repairs and Maintenance": {
+   "variant": "as_filed",
+   "box": "f1120s||9|"
+  },
+  "Deductions|Bad Debts": {
+   "variant": "as_filed",
+   "box": "f1120s||10|"
+  },
+  "Deductions|Rents": {
+   "variant": "as_filed",
+   "box": "f1120s||11|"
+  },
+  "Deductions|Taxes and Licenses": {
+   "variant": "as_filed",
+   "box": "f1120s||12|"
+  },
+  "Deductions|Interest": {
+   "variant": "as_filed",
+   "box": "f1120s||13|"
+  },
+  "Deductions|Depreciation (Net)": {
+   "variant": "as_filed",
+   "box": "f1120s||14|"
+  },
+  "Deductions|Depletion": {
+   "variant": "as_filed",
+   "box": "f1120s||15|"
+  },
+  "Deductions|Advertising": {
+   "variant": "as_filed",
+   "box": "f1120s||16|"
+  },
+  "Deductions|Pension/Profit Share Plans": {
+   "variant": "as_filed",
+   "box": "f1120s||17|"
+  },
+  "Deductions|Employee Benefit Programs": {
+   "variant": "as_filed",
+   "box": "f1120s||18|"
+  },
+  "Deductions|F7205 Energy Efficient Commercial Building Deduction": {
+   "variant": "as_filed",
+   "box": "f1120s||19|"
+  },
+  "Deductions|Other Deductions": {
+   "variant": "as_filed",
+   "box": "f1120s||20|"
+  },
+  "Deductions|Total Deductions": {
+   "variant": "as_filed",
+   "box": "f1120s||21|"
+  },
+  "Deductions|Total Deductions Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120s||21|"
+  },
+  "Deductions|Ordinary Income/Loss": {
+   "variant": "as_filed",
+   "box": "f1120s||22|"
+  },
+  "Deductions|Ordinary Income/Loss Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120s||22|"
+  },
+  "Tax and Payments|Total Income Tax": {
+   "variant": "as_filed",
+   "box": "f1120s||23c|"
+  },
+  "Tax and Payments|Total Income Tax Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120s||23c|"
+  },
+  "Tax and Payments|Tax Shown on Return": {
+   "variant": "as_filed",
+   "box": "f1120s||23c|"
+  },
+  "Tax and Payments|Estimated Tax Credit": {
+   "variant": "as_filed",
+   "box": "f1120s||24a|"
+  },
+  "Tax and Payments|Tax Deposited from 7004": {
+   "variant": "as_filed",
+   "box": "f1120s||24b|"
+  },
+  "Tax and Payments|Total Payments": {
+   "variant": "as_filed",
+   "box": "f1120s||24z|"
+  },
+  "Tax and Payments|Total Payments Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120s||24z|"
+  },
+  "Tax and Payments|Estimated Tax Penalty": {
+   "variant": "as_filed",
+   "box": "f1120s||25|"
+  },
+  "Tax and Payments|Tax Due": {
+   "variant": "as_filed",
+   "box": "f1120s||26|"
+  },
+  "Tax and Payments|Credit Next Year Estimated Tax": {
+   "variant": "as_filed",
+   "form": "f1120s",
+   "key": "refund.L28_credited"
+  },
+  "Schedule A - Cost of Goods Sold|Inventory at Beginning of Year": {
+   "variant": "as_filed",
+   "box": "f1125a||1|"
+  },
+  "Schedule A - Cost of Goods Sold|Inventory at End of Year": {
+   "variant": "as_filed",
+   "box": "f1125a||7|"
+  },
+  "Schedule K - Shareholders' Shares of Income, Credits, Deductions, Etc|Portfolio Interest Income": {
+   "variant": "as_filed",
+   "box": "f1120s|Schedule K|4|"
+  },
+  "Schedule K - Shareholders' Shares of Income, Credits, Deductions, Etc|Total Property Distribution": {
+   "variant": "as_filed",
+   "box": "f1120s|Schedule K|16d|"
+  },
+  "Schedule K - Shareholders' Shares of Income, Credits, Deductions, Etc|Income (Loss)": {
+   "variant": "as_filed",
+   "box": "f1120s|Schedule K|18|"
+  },
+  "Schedule L - Balance Sheets per Books|Loans to Shareholders End of Year": {
+   "variant": "as_filed",
+   "box": "f1120s|Schedule L|7|d"
+  },
+  "Schedule L - Balance Sheets per Books|Total Assets Beginning of Year": {
+   "variant": "as_filed",
+   "box": "f1120s|Schedule L|15|b"
+  },
+  "Schedule L - Balance Sheets per Books|Loans for Shareholders End of Year": {
+   "variant": "as_filed",
+   "box": "f1120s|Schedule L|19|d"
+  },
+  "Schedule L - Balance Sheets per Books|Capital Stock End of Year": {
+   "variant": "as_filed",
+   "box": "f1120s|Schedule L|22|d"
+  },
+  "Schedule L - Balance Sheets per Books|Additional Paid-In Capital End of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120s|Schedule L|23|d"
+  },
+  "Schedule L - Balance Sheets per Books|Retained Earnings End of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120s|Schedule L|24|d"
+  },
+  "Schedule D - Capital Gains and Losses|Short-Term Totals Form 1099-B or Form 1099-DA Proceeds (Sales Price)": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part I|1a|d"
+  },
+  "Schedule D - Capital Gains and Losses|Short-Term Totals Form 1099-B or Form 1099-DA Cost (Or Other Basis)": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part I|1a|e"
+  },
+  "Schedule D - Capital Gains and Losses|Short-Term Price Totals - Box A or Box G": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part I|1b|d"
+  },
+  "Schedule D - Capital Gains and Losses|Short-Term Cost or Other Basis Totals - Box A or Box G": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part I|1b|e"
+  },
+  "Schedule D - Capital Gains and Losses|Short-Term Adjustment Totals - Box A or Box G": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part I|1b|g"
+  },
+  "Schedule D - Capital Gains and Losses|Short-Term Price Totals - Box B or Box H": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part I|2|d"
+  },
+  "Schedule D - Capital Gains and Losses|Short-Term Cost or Other Basis Totals - Box B or Box H": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part I|2|e"
+  },
+  "Schedule D - Capital Gains and Losses|Short-Term Adjustment Totals - Box B or Box H": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part I|2|g"
+  },
+  "Schedule D - Capital Gains and Losses|Short-Term Price Totals - Box C or Box I": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part I|3|d"
+  },
+  "Schedule D - Capital Gains and Losses|Short-Term Cost or Other Basis Totals - Box C or Box I": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part I|3|e"
+  },
+  "Schedule D - Capital Gains and Losses|Short-Term Adjustment Totals - Box C or Box I": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part I|3|g"
+  },
+  "Schedule D - Capital Gains and Losses|Long-Term Totals Form 1099-B or Form 1099-DA Proceeds (Sales Price)": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|8a|d"
+  },
+  "Schedule D - Capital Gains and Losses|Long-Term Totals Form 1099-B - or Form 1099-DA Cost (Or Other Basis)": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|8a|e"
+  },
+  "Schedule D - Capital Gains and Losses|Long-Term Price Totals - Box D or Box J": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|8b|d"
+  },
+  "Schedule D - Capital Gains and Losses|Long-Term Cost or Other Basis Totals - Box D or Box J": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|8b|e"
+  },
+  "Schedule D - Capital Gains and Losses|Long-Term Adjustment Totals - Box D or Box J": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|8b|g"
+  },
+  "Schedule D - Capital Gains and Losses|Long-Term Price Totals - Box E or Box K": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|9|d"
+  },
+  "Schedule D - Capital Gains and Losses|Long-Term Cost or Other Basis Totals - Box E or Box K": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|9|e"
+  },
+  "Schedule D - Capital Gains and Losses|Long-Term Adjustment Totals - Box E or Box K": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|9|g"
+  },
+  "Schedule D - Capital Gains and Losses|Long-Term Price Totals - Box F or Box L": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|10|d"
+  },
+  "Schedule D - Capital Gains and Losses|Long-Term Cost or Other Basis Totals - Box F or Box L": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|10|e"
+  },
+  "Schedule D - Capital Gains and Losses|Long-Term Adjustment Totals - Box F or Box L": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|10|g"
+  },
+  "Schedule D - Capital Gains and Losses|Capital Gain Distributions": {
+   "variant": "as_filed",
+   "box": "f1120ssd|Part II|13|"
+  }
+ }
+}

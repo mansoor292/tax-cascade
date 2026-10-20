@@ -12,6 +12,7 @@ import { buildContext } from './context.js'
 import { irsChecks } from './checks/irs.js'
 import { transcript, returnTranscript } from './lookup.js'
 import { goldenTranscripts } from '../catalog/store.js'
+import { resolveBox } from '../schema/transcript_map.js'
 
 let n = 0
 function e(form: string, p: Partial<CatalogEntry>): CatalogEntry {
@@ -23,14 +24,15 @@ function e(form: string, p: Partial<CatalogEntry>): CatalogEntry {
 function cat(id: string, year: number, entries: CatalogEntry[], kind: CatalogView['kind'], extra: Partial<CatalogView> = {}): CatalogView {
   return { id, kind, tax_year: year, status: 'complete', entries, ...extra }
 }
-/** A filed 1120-S with the lines the comparison reads. */
+/** A filed 1120-S with the lines the comparison reads, keyed as the golden
+ *  schema keys them. */
+const K = (ref: string) => { const r = resolveBox(ref); if ('error' in r) throw new Error(r.error); return r.key }
 function filed1120s(year: number, f: { gr: number; ti: number; off: number; ded: number; obi: number; assets: number }): CatalogView {
-  const ded = year >= 2023 ? '21' : '20'
-  const obi = year >= 2023 ? '22' : '21'
   return cat(`f${year}`, year, [
-    e('f1120s', { line: '1a', value: f.gr }), e('f1120s', { line: '6', value: f.ti }), e('f1120s', { line: '7', value: f.off }),
-    e('f1120s', { line: ded, value: f.ded }), e('f1120s', { line: obi, value: f.obi }),
-    e('f1120s', { section: 'Schedule L', line: '15', col: 'd', value: f.assets }),
+    e('f1120s', { line: '1a', value: f.gr, canonical: K('f1120s||1a|') }), e('f1120s', { line: '6', value: f.ti, canonical: K('f1120s||6|') }),
+    e('f1120s', { line: '7', value: f.off, canonical: K('f1120s||7|') }), e('f1120s', { line: '21', value: f.ded, canonical: K('f1120s||21|') }),
+    e('f1120s', { line: '22', value: f.obi, canonical: K('f1120s||22|') }),
+    e('f1120s', { section: 'Schedule L', line: '15', col: 'd', value: f.assets, canonical: K('f1120s|Schedule L|15|d') }),
   ], 'filed_return')
 }
 const rl = (section: string, line: string, value: number | string | null, kind: CatalogEntry['kind'] = 'amount') =>
@@ -55,7 +57,7 @@ describe('IRS return transcript against the filed return', () => {
   it('agrees when the IRS processed the return as filed', async () => {
     const out = await check.run(ctxOf(2023, [filed1120s(2023, y23), retr(2023, y23)])) as R
     expect(out[0].key).toBe('agrees')
-    expect(out[0].title).toContain('6 figures agree')
+    expect(out[0].title).toMatch(/\d+ figures agree/)
   })
 
   it('names the year whose return sits in this period (EZA 2024 holds 2023)', async () => {
@@ -69,7 +71,13 @@ describe('IRS return transcript against the filed return', () => {
   it('reports a plain difference when no other year matches', async () => {
     const out = await check.run(ctxOf(2024, [filed1120s(2024, y24), retr(2024, { ...y24, obi: 90_000, ded: 1_410_000 })])) as R
     expect(out[0].key).toBe('differs')
-    expect(out[0].title).toContain('2 line(s)')
+    expect(out[0].title).toContain('2 headline line(s)')
+  })
+
+  it('a secondary figure the IRS keyed differently is a low finding, not a headline one', async () => {
+    const out = await check.run(ctxOf(2024, [filed1120s(2024, y24), retr(2024, { ...y24, off: 70_000 })])) as R
+    expect(out.find(f => f.key === 'agrees')).toBeTruthy()
+    expect(out.find(f => f.key === 'differs_other')).toMatchObject({ severity: 'low' })
   })
 
   it('a "No record of return filed" response is absence, not a mismatch', async () => {
@@ -94,12 +102,14 @@ describe('page-1 lines are read from page 1', () => {
   it('a blank officer-pay line is not answered by Schedule K line 12 (EV 2023)', async () => {
     const ccorp: EntityInfo = { id: 'c', name: 'Example C Corp', form_type: '1120', entity_type: 'c_corp' }
     const f = cat('f2023', 2023, [
-      e('f1120', { section: '', line: '1a', value: 2_000_000 }), e('f1120', { section: 'Schedule K', line: '12', value: 37_329 }),
-      e('f1120', { section: '', line: '30', value: 900_000 }),
+      e('f1120', { section: '', line: '1a', value: 2_000_000, canonical: K('f1120||1a|') }), e('f1120', { section: 'Schedule K', line: '12', value: 37_329, canonical: K('f1120|Schedule K|12|') }),
+      e('f1120', { section: '', line: '11', value: 1_900_000, canonical: K('f1120||11|') }),
     ], 'filed_return')
-    const rt = cat('rt', 2023, [rl('Income', 'Gross Receipts or Sales', 2_000_000), rl('Deductions', 'Compensation of Officers', 0), rl('Tax and Payments', 'Taxable Income Per Computer', 900_000)], 'irs_transcript', { transcript_type: 'return', as_of: '2026-10-20' })
+    const rt = cat('rt', 2023, [rl('Income', 'Gross Receipts or Sales', 2_000_000), rl('Deductions', 'Compensation of Officers', 0), rl('Income', 'Total Income', 1_900_000)], 'irs_transcript', { transcript_type: 'return', as_of: '2026-10-20' })
     const ctx = buildContext({ self: { entity: ccorp, catalogs: [f, rt] }, others: [], year: 2023, facts: [], today: new Date('2026-10-20T00:00:00Z') })
-    expect((await check.run(ctx) as R)[0].key).toBe('agrees')
+    const out = await check.run(ctx) as R
+    expect(out[0].key).toBe('agrees')
+    expect(out.some(x => x.key === 'differs_other')).toBe(false)
   })
 })
 

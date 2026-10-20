@@ -1254,6 +1254,16 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
     },
     async (params) => text(await call('POST', '/api/catalog/upload', params)))
 
+  // ─── Tool: golden_view ───
+  server.tool('golden_view',
+    'One return year, every box side by side on the golden schema: the filed return, the IRS\'s record of it (return transcript — the figure as filed and the IRS\'s recomputation) and the returns stored here (filed import, proforma, amendment), each row with the golden value and whether the sources agree (agrees / differs / irs_only / irs_recomputed / filed_only / returns_only). Headline rows (income, deductions, taxable income, tax, payments) come first. When the IRS holds another year\'s return in this period, sources.irs_return_transcript.holds_return_of says which, and those figures are never golden. Amounts only unless include_text is true. Use this for any "does X match Y" question across sources — it replaces comparing PDFs or transcripts by hand.',
+    {
+      entity_id: z.string().describe('Entity UUID'),
+      tax_year: z.number().describe('Tax year'),
+      include_text: z.boolean().optional().describe('Also compare text and check boxes (names, addresses, Yes/No answers). Default false.'),
+    },
+    async ({ entity_id, tax_year, include_text }) => text(await call('GET', `/api/golden/${entity_id}?year=${tax_year}${include_text ? '&text=1' : ''}`)))
+
   // ─── Tool: run_review ───
   server.tool('run_review',
     'Run the FIXED review framework on an entity\'s catalogued returns for one or more tax years: catalog completeness and arithmetic, corporate status and elections, K-1 consistency, balance-sheet continuity, stock basis and distributions above basis, suspended losses, NIIT on nonpassive income, QBI/SSTB, loans, carryovers, information returns, the IRS account (transcripts, penalties, duplicates) and statute windows — plus AI judgement checks when ai=true. Every run is stored and diffed with the last: each new finding says WHY it is new (new document, new fact, framework change, or a miss). Use this instead of reviewing a return ad hoc; report what it returns, grouped by severity, with the dollar effects and deadlines, and ask the owner every fact in `asks` at once.',

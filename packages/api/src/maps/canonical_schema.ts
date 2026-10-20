@@ -67,6 +67,9 @@ const FIELD_VALUE_SECTION_PREFIXES = new Set([
   'preparer',
 ])
 
+/** IRS form codes as the line dictionaries name them (f1120s, f1040se, f8995a …). */
+const FORM_PREFIX = /^f\d{3,4}[a-z0-9]*$/
+
 /** Sectioned keys must NOT match these patterns — these are the descriptive
  *  shapes that used to coexist with sectioned in field_values. If validation
  *  rejects one of these, a writer is still emitting the old shape and needs
@@ -94,7 +97,9 @@ export function validateFieldValues(
       continue
     }
     const prefix = k.split('.', 1)[0]
-    if (!FIELD_VALUE_SECTION_PREFIXES.has(prefix)) {
+    // A form's own code is a prefix too: the golden schema keys every box of
+    // every catalogued form (src/schema), `f1120ssk.L1_…`, `f1125a.L7_…`.
+    if (!FIELD_VALUE_SECTION_PREFIXES.has(prefix) && !FORM_PREFIX.test(prefix)) {
       errors.push(`${k}: unknown section prefix '${prefix}'`)
       continue
     }

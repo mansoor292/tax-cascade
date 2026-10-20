@@ -9,7 +9,8 @@
  * to request; TC976 duplicates mean the IRS may have processed the wrong copy.
  */
 import type { Check, CheckResult, ReviewContext, CatalogView } from '../types.js'
-import { transcript, returnTranscript, returnLine, noRecord, transactions, transcriptValue, parseDate, iso, money, filed, amount, ev, type Sel } from '../lookup.js'
+import { transcript, returnTranscript, returnLine, noRecord, transactions, transcriptValue, parseDate, iso, money, filed, amount } from '../lookup.js'
+import { goldenRows, heldYear, type GoldenRow } from '../../schema/golden.js'
 import { nextBusinessDay } from '../../engine/tax_calendar.js'
 
 const PENALTY_CODES: Record<string, string> = {
@@ -285,58 +286,14 @@ const transcriptAccount: Check = {
   },
 }
 
-/** Lines of the IRS's return transcript and where the filed return prints
- *  them. Labels are the IRS's own (Form 1120S/1120/1040 Tax Return
- *  Transcript, 2022–2025 pulls); the line numbers move with the form year. */
-type Compared = { label: string; section: RegExp; line: RegExp; form: string; sel: Sel }
-// Page-1 lines are pinned to section '': EV 2023 left officer pay (line 12)
-// blank, and an unpinned lookup answered with Schedule K line 12 (37,329).
-export function comparedLines(formType: string, year: number): Compared[] {
-  const schL = (form: string): Compared => ({ label: 'Total assets, end of year', section: /^Indicators, Codes/i, line: /^Total Assets( at End of Year)?$/i, form, sel: { section: 'Schedule L', line: '15', col: 'd' } })
-  if (formType === '1120S') return [
-    { label: 'Gross receipts', section: /^Income$/i, line: /^Gross Receipts$/i, form: 'f1120s', sel: { section: '', line: '1a' } },
-    { label: 'Total income', section: /^Income$/i, line: /^Total Income$/i, form: 'f1120s', sel: { section: '', line: '6' } },
-    { label: 'Compensation of officers', section: /^Deductions$/i, line: /^Compensation of Officers$/i, form: 'f1120s', sel: { section: '', line: '7' } },
-    { label: 'Total deductions', section: /^Deductions$/i, line: /^Total Deductions$/i, form: 'f1120s', sel: { section: '', line: year >= 2023 ? '21' : '20' } },
-    { label: 'Ordinary business income', section: /^Deductions$/i, line: /^Ordinary Income\/Loss$/i, form: 'f1120s', sel: { section: '', line: year >= 2023 ? '22' : '21' } },
-    schL('f1120s'),
-  ]
-  if (formType === '1120') return [
-    { label: 'Gross receipts', section: /^Income$/i, line: /^Gross Receipts or Sales$/i, form: 'f1120', sel: { section: '', line: '1a' } },
-    { label: 'Total income', section: /^Income$/i, line: /^Total Income$/i, form: 'f1120', sel: { section: '', line: '11' } },
-    { label: 'Compensation of officers', section: /^Deductions$/i, line: /^Compensation of Officers$/i, form: 'f1120', sel: { section: '', line: '12' } },
-    { label: 'Total deductions', section: /^Deductions$/i, line: /^Total Deductions$/i, form: 'f1120', sel: { section: '', line: '27' } },
-    { label: 'Taxable income', section: /^Tax and Payments$/i, line: /^Taxable Income Per Computer$/i, form: 'f1120', sel: { section: '', line: '30' } },
-    { label: 'Total tax', section: /^Tax and Payments$/i, line: /^Tax Shown on Return$/i, form: 'f1120', sel: { section: '', line: '31' } },
-    schL('f1120'),
-  ]
-  if (formType === '1040') return [
-    { label: 'Total income', section: /^Income$/i, line: /^Total income$/i, form: 'f1040', sel: { section: '', line: '9' } },
-    { label: 'Adjusted gross income', section: /^Adjustments to Income$/i, line: /^Adjusted gross income$/i, form: 'f1040', sel: { section: '', line: '11' } },
-    { label: 'Taxable income', section: /^Tax and Credits$/i, line: /^Taxable income$/i, form: 'f1040', sel: { section: '', line: '15' } },
-    { label: 'Total tax', section: /^Other Taxes$/i, line: /^Total tax liability taxpayer figures$/i, form: 'f1040', sel: { section: '', line: '24' } },
-    { label: 'Total payments', section: /^Payments$/i, line: /^Total payments$/i, form: 'f1040', sel: { section: '', line: '33' } },
-  ]
-  return []
-}
-
-/** Each compared line: what the IRS processed and what a filed return prints. */
-function lineup(ctx: ReviewContext, rt: CatalogView, year: number, returnYear: number) {
-  const cat = filed(ctx.catalogs, returnYear)
-  return comparedLines(ctx.entity.form_type, returnYear).map(c => {
-    const irs = returnLine(rt, c.section, c.line)
-    return { c, irs, irsValue: typeof irs?.value === 'number' ? irs.value : undefined, filedValue: cat ? amount(cat, c.form, c.sel) : undefined, cat }
-  }).filter(x => x.irsValue !== undefined && x.filedValue !== undefined)
-}
-
 const returnTranscriptCheck: Check = {
   id: 'irs.return_transcript',
-  version: 1,
+  version: 2,
   area: 'irs_account',
   title: 'The return the IRS processed, line by line, against the filed return',
   applies: ['1040', '1120', '1120S'],
   kind: 'rule',
-  description: 'Reads the IRS return transcript (its own copy of the return as processed) and compares gross receipts, income, deductions, taxable income, tax and assets with the catalogued filed return. When the figures match ANOTHER year\'s return, the IRS posted that return to this period — EZA\'s 2024 period holds its 2023 return and its 2025 period its 2024 return.',
+  description: 'Reads the IRS return transcript (its own copy of the return as processed) and compares every line it carries with the filed return through the golden schema (src/schema/golden.ts): income, deductions, tax and payments first, then the balance sheet and schedules. When the headline figures match ANOTHER year\'s return, the IRS posted that return to this period — EZA\'s 2024 period holds its 2023 return and its 2025 period its 2024 return.',
   run(ctx) {
     const rt = returnTranscript(ctx.catalogs, ctx.year)
     if (!rt) return [{ check: this.id, status: 'n/a', severity: 'info', title: `No ${ctx.year} IRS return transcript catalogued`, detail: '', evidence: [] }]
@@ -350,36 +307,46 @@ const returnTranscriptCheck: Check = {
     const dln = returnLine(rt, /^Return$/, /^Document Locator Number$/i)?.value
     const received = returnLine(rt, /^Return$/, /^Received Date$/i)?.value
     const about = `${dln ? `DLN ${dln}` : ''}${dln && received ? ', ' : ''}${received ? `received ${received}` : ''}`
-    const irsCite = (x: { c: Compared; irsValue?: number; irs?: { raw: string; id: string } }) => ({ where: `${ctx.year} IRS return transcript${asOf}: ${x.irs?.raw ?? x.c.label}`, catalog_id: rt.id, entry_id: x.irs?.id, value: x.irsValue })
-    const rows = lineup(ctx, rt, ctx.year, ctx.year)
-    if (!own || !rows.length) {
+    const byYear = new Map<number, CatalogView['entries']>()
+    for (let y = ctx.year - 2; y <= ctx.year + 2; y++) { const f = filed(ctx.catalogs, y); if (f) byYear.set(y, f.entries) }
+    const held = heldYear(ctx.entity.form_type, ctx.year, rt.entries, byYear)
+    const rows = goldenRows({ formType: ctx.entity.form_type, year: ctx.year, filed: own ? { id: own.id, entries: own.entries } : undefined, transcript: { id: rt.id, entries: rt.entries, as_of: rt.as_of, ...(held !== undefined ? { holdsYear: held } : {}) } })
+    const compared = rows.filter(r => r.filed && r.irs)
+    if (!own || !compared.length) {
       return [{ check: this.id, status: 'gap', severity: 'medium', key: 'no_filed', title: `${ctx.year}: the IRS processed a return${about ? ` (${about})` : ''}, but no filed ${ctx.year} return is catalogued to compare it with`, detail: 'Upload the filed return so the IRS\'s figures can be checked against it.', evidence: [{ where: `${ctx.year} IRS return transcript${asOf}`, catalog_id: rt.id }] }]
     }
-    const off = rows.filter(r => Math.abs(r.irsValue! - r.filedValue!) > 1)
-    if (!off.length) {
-      return [{ check: this.id, status: 'pass', severity: 'info', key: 'agrees', title: `${ctx.year}: the IRS processed the return as filed (${rows.length} figures agree${about ? `; ${about}` : ''})`, detail: '', evidence: rows.map(irsCite) }]
-    }
-    // Do the IRS's figures belong to another year's return?
-    const posted = [ctx.year - 1, ctx.year + 1, ctx.year - 2, ctx.year + 2].find(y => {
-      const other = lineup(ctx, rt, ctx.year, y)
-      return other.length >= 2 && other.every(r => Math.abs(r.irsValue! - r.filedValue!) <= 1) && other.some(r => r.irsValue !== 0)
-    })
-    const table = off.map(r => `${r.c.label}: IRS ${money(r.irsValue!)}, filed ${money(r.filedValue!)}`).join('; ')
-    const evidence = [...off.map(irsCite), ...off.map(r => ev(own, r.c.form, r.c.sel)).filter((x): x is NonNullable<typeof x> => !!x)]
-    if (posted !== undefined) {
+    const cite = (r: GoldenRow) => [
+      ...(r.irs ? [{ where: r.irs.where, catalog_id: rt.id, value: r.irs.value as number }] : []),
+      ...(r.filed ? [{ where: r.filed.where, catalog_id: own.id, value: r.filed.value as number }] : []),
+    ]
+    const line = (r: GoldenRow) => `${r.label.split('.')[0].slice(0, 60)} (${r.section ? r.section + ' ' : ''}line ${r.line}${r.col ? ' ' + r.col : ''}): IRS ${typeof r.irs?.value === 'number' ? money(r.irs.value) : '—'}, filed ${typeof r.filed?.value === 'number' ? money(r.filed.value) : '—'}`
+    const head = compared.filter(r => r.headline)
+    if (held !== undefined) {
+      const otherRows = goldenRows({ formType: ctx.entity.form_type, year: held, filed: { id: filed(ctx.catalogs, held)!.id, entries: byYear.get(held)! }, transcript: { id: rt.id, entries: rt.entries } }).filter(r => r.headline && r.filed && r.irs)
       return [{
         check: this.id, status: 'finding', severity: 'high', key: 'misposted',
-        title: `${ctx.year}: the IRS holds the ${posted} return in the ${ctx.year} period${about ? ` (${about})` : ''} — the ${ctx.year} return is not processed`,
-        detail: `Every figure the IRS processed for ${ctx.year} matches the filed ${posted} return, not the ${ctx.year} one (${table}). Ask the IRS to move that return to ${posted} and process the ${ctx.year} return. Until then a ${ctx.year} return sent in is set aside as a duplicate (TC976), and ${ctx.year}'s penalties and statute dates run on the wrong return.`,
-        evidence: [...evidence, ...lineup(ctx, rt, ctx.year, posted).map(r => ev(r.cat, r.c.form, r.c.sel)).filter((x): x is NonNullable<typeof x> => !!x)],
+        title: `${ctx.year}: the IRS holds the ${held} return in the ${ctx.year} period${about ? ` (${about})` : ''} — the ${ctx.year} return is not processed`,
+        detail: `The figures the IRS processed for ${ctx.year} match the filed ${held} return, not the ${ctx.year} one (${head.map(line).join('; ')}). Ask the IRS to move that return to ${held} and process the ${ctx.year} return. Until then a ${ctx.year} return sent in is set aside as a duplicate (TC976), and ${ctx.year}'s penalties and statute dates run on the wrong return.`,
+        evidence: [...head.flatMap(cite), ...otherRows.flatMap(r => r.filed ? [{ where: r.filed.where, value: r.filed.value as number }] : [])],
       }]
     }
-    return [{
-      check: this.id, status: 'finding', severity: 'high', key: 'differs',
-      title: `${ctx.year}: the IRS processed figures that differ from the filed return on ${off.length} line(s)`,
-      detail: `${table}. The IRS processed another version (an amendment, a duplicate copy, or a math-error adjustment), or keyed the return wrongly. Find out which before relying on the ${ctx.year} figures.${about ? ` The processed return: ${about}.` : ''}`,
-      evidence,
-    }]
+    const out: CheckResult[] = []
+    const diffs = rows.filter(r => r.status === 'differs')
+    const headDiffs = diffs.filter(r => r.headline)
+    const minor = [...diffs.filter(r => !r.headline), ...rows.filter(r => r.status === 'irs_only')]
+    const recomputed = rows.filter(r => r.status === 'irs_recomputed')
+    if (headDiffs.length) {
+      out.push({ check: this.id, status: 'finding', severity: 'high', key: 'differs', title: `${ctx.year}: the IRS processed figures that differ from the filed return on ${headDiffs.length} headline line(s)`, detail: `${headDiffs.map(line).join('; ')}. The IRS processed another version (an amendment, a duplicate copy, or a math-error adjustment), or keyed the return wrongly. Find out which before relying on the ${ctx.year} figures.${about ? ` The processed return: ${about}.` : ''}`, evidence: headDiffs.flatMap(cite) })
+    } else {
+      out.push({ check: this.id, status: 'pass', severity: 'info', key: 'agrees', title: `${ctx.year}: the IRS processed the return as filed (${compared.filter(r => r.status === 'agrees').length} figures agree${about ? `; ${about}` : ''})`, detail: '', evidence: head.flatMap(cite) })
+    }
+    if (minor.length) {
+      out.push({ check: this.id, status: 'finding', severity: 'low', key: 'differs_other', title: `${ctx.year}: the IRS recorded ${minor.length} other figure(s) differently from the filed return`, detail: `${minor.map(line).join('; ')}. These are balance-sheet and schedule figures as the IRS keyed them; they do not change the tax, but they are what the IRS holds on record.`, evidence: minor.flatMap(cite) })
+    }
+    if (recomputed.length) {
+      out.push({ check: this.id, status: 'pass', severity: 'info', key: 'recomputed', title: `${ctx.year}: the IRS recomputed ${recomputed.length} line(s)`, detail: recomputed.map(r => `${r.label.split('.')[0].slice(0, 60)}: filed ${typeof r.filed?.value === 'number' ? money(r.filed.value) : '—'}, IRS computed ${typeof r.irs_computed?.value === 'number' ? money(r.irs_computed.value) : '—'}`).join('; '), evidence: recomputed.flatMap(r => [...(r.irs_computed ? [{ where: r.irs_computed.where, catalog_id: rt.id }] : []), ...(r.filed ? [{ where: r.filed.where, catalog_id: own.id }] : [])]) })
+    }
+    return out
   },
 }
 

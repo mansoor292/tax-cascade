@@ -36,6 +36,10 @@ export interface CatalogSource {
   tax_year: number | null
   source_filename?: string | null
   entries: CatalogEntry[]
+  kind?: string
+  status?: string
+  transcript_type?: string | null
+  as_of?: string | null
 }
 
 export interface QueryHit extends CatalogEntry {

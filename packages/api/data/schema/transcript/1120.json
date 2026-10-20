@@ -1,0 +1,289 @@
+{
+ "form_type": "1120",
+ "main_form": "f1120",
+ "note": "Curated 2026-10-20 from the Edgewater pull (1120-S 2022-2025, 1120 2022-2024, 1040 2022-2024). Each line of the IRS Tax Return Transcript names the box it reports, by its location on the newest form (form|section|line|column); the golden key comes from data/schema. 'irs_computed' lines are the IRS's own recomputation ('Per Computer'). 'sign': -1 marks lines the IRS prints as a credit (negative) where the form shows a positive amount. Lines not listed here are IRS processing fields with no box (registration numbers, merchant-card totals, credit-transfer elections...). Proved on the years the IRS processed as filed: every listed line equals the filed box.",
+ "lines": {
+  "Indicators, Codes, and Miscellaneous Information|Total Assets": {
+   "variant": "as_filed",
+   "box": "f1120||D|"
+  },
+  "Indicators, Codes, and Miscellaneous Information|Schedule K Net Operating Loss Carryover Prior Tax Years": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule K|12|"
+  },
+  "Income|Gross Receipts or Sales": {
+   "variant": "as_filed",
+   "box": "f1120||1a|"
+  },
+  "Income|Returns and Allowances": {
+   "variant": "as_filed",
+   "box": "f1120||1b|"
+  },
+  "Income|Net Receipts Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||1c|"
+  },
+  "Income|Cost of Goods Sold": {
+   "variant": "as_filed",
+   "box": "f1120||2|"
+  },
+  "Income|Cost of Goods Sold Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||2|"
+  },
+  "Income|Gross Profit Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||3|"
+  },
+  "Income|Dividends Income": {
+   "variant": "as_filed",
+   "box": "f1120||4|"
+  },
+  "Income|Interest Income": {
+   "variant": "as_filed",
+   "box": "f1120||5|"
+  },
+  "Income|Gross Rents": {
+   "variant": "as_filed",
+   "box": "f1120||6|"
+  },
+  "Income|Gross Royalties": {
+   "variant": "as_filed",
+   "box": "f1120||7|"
+  },
+  "Income|Capital Gain Net Income": {
+   "variant": "as_filed",
+   "box": "f1120||8|"
+  },
+  "Income|Net Gain Or Loss": {
+   "variant": "as_filed",
+   "box": "f1120||9|"
+  },
+  "Income|Other Income": {
+   "variant": "as_filed",
+   "box": "f1120||10|"
+  },
+  "Income|Total Income": {
+   "variant": "as_filed",
+   "box": "f1120||11|"
+  },
+  "Income|Total Income Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||11|"
+  },
+  "Deductions|Compensation of Officers": {
+   "variant": "as_filed",
+   "box": "f1120||12|"
+  },
+  "Deductions|Salaries And Wages": {
+   "variant": "as_filed",
+   "box": "f1120||13|"
+  },
+  "Deductions|Repairs": {
+   "variant": "as_filed",
+   "box": "f1120||14|"
+  },
+  "Deductions|Bad Debts": {
+   "variant": "as_filed",
+   "box": "f1120||15|"
+  },
+  "Deductions|Rents": {
+   "variant": "as_filed",
+   "box": "f1120||16|"
+  },
+  "Deductions|Taxes and Licenses": {
+   "variant": "as_filed",
+   "box": "f1120||17|"
+  },
+  "Deductions|Interest": {
+   "variant": "as_filed",
+   "box": "f1120||18|"
+  },
+  "Deductions|Charitable Contributions": {
+   "variant": "as_filed",
+   "box": "f1120||19|"
+  },
+  "Deductions|Charitable Contributions Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||19|"
+  },
+  "Deductions|Net Depreciation": {
+   "variant": "as_filed",
+   "box": "f1120||20|"
+  },
+  "Deductions|Depletion": {
+   "variant": "as_filed",
+   "box": "f1120||21|"
+  },
+  "Deductions|Advertising": {
+   "variant": "as_filed",
+   "box": "f1120||22|"
+  },
+  "Deductions|Pension Plans": {
+   "variant": "as_filed",
+   "box": "f1120||23|"
+  },
+  "Deductions|Employee Benefits": {
+   "variant": "as_filed",
+   "box": "f1120||24|"
+  },
+  "Deductions|F7205 Energy Efficient Commercial Building Deduction": {
+   "variant": "as_filed",
+   "box": "f1120||25|"
+  },
+  "Deductions|Other Deductions": {
+   "variant": "as_filed",
+   "box": "f1120||26|"
+  },
+  "Deductions|Total Deductions": {
+   "variant": "as_filed",
+   "box": "f1120||27|"
+  },
+  "Deductions|Total Deductions Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||27|"
+  },
+  "Deductions|Net Income Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||28|"
+  },
+  "Deductions|Net Operating Loss Deduction": {
+   "variant": "as_filed",
+   "box": "f1120||29a|"
+  },
+  "Deductions|Special Deductions": {
+   "variant": "as_filed",
+   "box": "f1120||29b|"
+  },
+  "Deductions|Special Deductions Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||29b|"
+  },
+  "Tax and Payments|Taxable Income Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||30|"
+  },
+  "Tax and Payments|Total Income Tax": {
+   "variant": "as_filed",
+   "box": "f1120||31|"
+  },
+  "Tax and Payments|Total Income Tax Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||31|"
+  },
+  "Tax and Payments|Tax Shown on Return": {
+   "variant": "as_filed",
+   "box": "f1120||31|"
+  },
+  "Tax and Payments|Total Payments And Refundable Credits": {
+   "variant": "as_filed",
+   "box": "f1120||33|"
+  },
+  "Tax and Payments|Total Payments Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||33|"
+  },
+  "Tax and Payments|Estimated Tax Penalty": {
+   "variant": "as_filed",
+   "box": "f1120||34|"
+  },
+  "Tax and Payments|Tax Due": {
+   "variant": "as_filed",
+   "box": "f1120||35|"
+  },
+  "Tax and Payments|Tax Due Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||35|"
+  },
+  "Tax and Payments|Overpayment": {
+   "variant": "as_filed",
+   "box": "f1120||36|",
+   "sign": -1
+  },
+  "Tax and Payments|Overpayment Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1120||36|",
+   "sign": -1
+  },
+  "Tax and Payments|Credit Elect Amount": {
+   "variant": "as_filed",
+   "box": "f1120||37a|"
+  },
+  "Schedule A - Cost of Goods Sold|Inventory at Beginning of Year": {
+   "variant": "as_filed",
+   "box": "f1125a||1|"
+  },
+  "Schedule A - Cost of Goods Sold|Total Cost of Sales": {
+   "variant": "as_filed",
+   "box": "f1125a||6|"
+  },
+  "Schedule A - Cost of Goods Sold|Inventory at End of Year": {
+   "variant": "as_filed",
+   "box": "f1125a||7|"
+  },
+  "Schedule A - Cost of Goods Sold|Cost of Goods Sold Per Computer": {
+   "variant": "irs_computed",
+   "box": "f1125a||8|"
+  },
+  "Schedule J - Tax Computation|Income Tax": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule J|1a|"
+  },
+  "Schedule J - Tax Computation|Prior Year Credit to Current": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule J|13|"
+  },
+  "Schedule J - Tax Computation|Current Year Est Tax Payment": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule J|14|"
+  },
+  "Schedule J - Tax Computation|Current Year Refund F4466": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule J|15|"
+  },
+  "Schedule J - Tax Computation|Tax Deposited (7004)": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule J|17|"
+  },
+  "Schedule J - Tax Computation|Withholding": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule J|18|"
+  },
+  "Schedule L - Balance Sheets per Books|Trade Notes and Accounts Receivable End of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule L|2a|c"
+  },
+  "Schedule L - Balance Sheets per Books|Total Assets Beginning of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule L|15|b"
+  },
+  "Schedule L - Balance Sheets per Books|Total Assets End of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule L|15|d"
+  },
+  "Schedule L - Balance Sheets per Books|Loans to Shareholders End of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule L|7|d"
+  },
+  "Schedule L - Balance Sheets per Books|Other Current Liabilities End of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule L|18|d"
+  },
+  "Schedule L - Balance Sheets per Books|Loans from Shareholders End of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule L|19|d"
+  },
+  "Schedule L - Balance Sheets per Books|Other Liabilities End of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule L|21|d"
+  },
+  "Schedule L - Balance Sheets per Books|Retained Earnings Beginning of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule L|25|b"
+  },
+  "Schedule L - Balance Sheets per Books|Total Liabilities and Stock Equity End of Tax Year": {
+   "variant": "as_filed",
+   "box": "f1120|Schedule L|28|d"
+  }
+ }
+}
