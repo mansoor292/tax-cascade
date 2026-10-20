@@ -262,6 +262,14 @@ function overlap(a: DictWidget['rect'], b: DictWidget['rect']): number {
 
 const revNum = (r: string) => Number(r) || 0
 
+/** Engine names that sit under another form's prefix than their box, so the
+ *  line-token match cannot find them (the 1040 alias table files Schedule 2's
+ *  additional Medicare tax and NIIT under `tax.`). form → { engine name: key }. */
+export const EXPLICIT_ALIASES: Record<string, Record<string, string>> = {
+  f1040: { 'result.L37_balance_due': 'owed.L37_amount_owed' },
+  f1040s2: { 'tax.L11_addl_medicare': 'sched2.L11_additional_medicare', 'tax.L12_niit': 'sched2.L12_niit' },
+}
+
 /** Build one form's schema from all its revisions. `engineKeys` are the keys
  *  the engine writes under this form's prefix. */
 export function buildFormSchema(form: string, dicts: LineDict[], engineKeys: string[] = [], opts: { blind?: boolean } = {}): FormSchema {
@@ -406,6 +414,7 @@ export function buildFormSchema(form: string, dicts: LineDict[], engineKeys: str
       if (extra.length) keys.get(k)!.aliases = [...new Set([...(keys.get(k)!.aliases ?? []), ...extra])]
     }
   }
+  for (const [name, key] of Object.entries(EXPLICIT_ALIASES[form] ?? {})) if (keys.has(key)) alias(key, name)
   for (const k of keys.values()) {
     k.revs.sort((a, b) => revNum(a) - revNum(b))
     // the newest revision's wording describes the key

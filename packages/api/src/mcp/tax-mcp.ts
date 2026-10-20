@@ -1256,13 +1256,14 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
 
   // ─── Tool: golden_view ───
   server.tool('golden_view',
-    'One return year, every box side by side on the golden schema: the filed return, the IRS\'s record of it (return transcript — the figure as filed and the IRS\'s recomputation) and the returns stored here (filed import, proforma, amendment), each row with the golden value and whether the sources agree (agrees / differs / irs_only / irs_recomputed / filed_only / returns_only). Headline rows (income, deductions, taxable income, tax, payments) come first. When the IRS holds another year\'s return in this period, sources.irs_return_transcript.holds_return_of says which, and those figures are never golden. Amounts only unless include_text is true. Use this for any "does X match Y" question across sources — it replaces comparing PDFs or transcripts by hand.',
+    'One return year, every box side by side on the golden schema: the filed return, the IRS\'s record of it (return transcript — the figure as filed and the IRS\'s recomputation) and the returns stored here (filed import, proforma, amendment), the books (QuickBooks classified to return lines before any tax computation, with the accounts behind each line — corporations only; books_differs marks a line the books do not support) and the year\'s scenarios, each row with the golden value and whether the sources agree (agrees / differs / irs_only / irs_recomputed / filed_only / returns_only). Headline rows (income, deductions, taxable income, tax, payments) come first. When the IRS holds another year\'s return in this period, sources.irs_return_transcript.holds_return_of says which, and those figures are never golden. Amounts only unless include_text is true. Use this for any "does X match Y" question across sources — it replaces comparing PDFs or transcripts by hand.',
     {
       entity_id: z.string().describe('Entity UUID'),
       tax_year: z.number().describe('Tax year'),
       include_text: z.boolean().optional().describe('Also compare text and check boxes (names, addresses, Yes/No answers). Default false.'),
+      include_books: z.boolean().optional().describe('Include the QuickBooks books column (corporations). Default true; false skips the QuickBooks read.'),
     },
-    async ({ entity_id, tax_year, include_text }) => text(await call('GET', `/api/golden/${entity_id}?year=${tax_year}${include_text ? '&text=1' : ''}`)))
+    async ({ entity_id, tax_year, include_text, include_books }) => text(await call('GET', `/api/golden/${entity_id}?year=${tax_year}${include_text ? '&text=1' : ''}${include_books === false ? '&books=0' : ''}`)))
 
   // ─── Tool: run_review ───
   server.tool('run_review',

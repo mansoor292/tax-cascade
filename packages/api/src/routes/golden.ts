@@ -1,12 +1,15 @@
 /**
  * The golden view of a return year (src/schema/golden.ts):
  *
- *   GET /api/golden/:entity_id?year=2024[&text=1]
+ *   GET /api/golden/:entity_id?year=2024[&text=1][&books=0]
  *
  * Every golden key with its value from each source side by side — the filed
  * return, the IRS's record of it (as filed and as the IRS recomputed it), and
- * the returns stored here (filed import, proforma, amendment) — with the
- * golden value and whether the sources agree. Amounts only unless text=1:
+ * the returns stored here (filed import, proforma, amendment), the books
+ * (QuickBooks classified to return lines, before any tax computation — for
+ * corporations with a QuickBooks connection; books=0 skips it) and the
+ * scenarios computed for the year — with the golden value and whether the
+ * sources agree. Amounts only unless text=1:
  * names, addresses and identification numbers stay out of the default answer.
  */
 import { Router } from 'express'
@@ -18,6 +21,8 @@ import { loadSources } from '../catalog/store.js'
 import type { CatalogSource } from '../catalog/query.js'
 import { goldenRows, heldYear, summarize } from '../schema/golden.js'
 import { transcriptParts } from '../catalog/transcript.js'
+import { booksToGolden } from '../schema/books.js'
+import { booksPacket } from '../services/books.js'
 
 const supabase = lazyServiceClient()
 const router = Router()
@@ -51,11 +56,33 @@ router.get('/:entity_id', async (req, res) => {
     if (e2) return sendDbError(res, e2)
     for (const r of rets ?? []) await hydrate(supabase, r, { ...ENCRYPTED_RETURN_FIELDS, userId })
     const returns = (rets ?? []).map(r => ({ id: r.id as string, label: `${r.source ?? 'return'}${r.computed_at ? ' ' + String(r.computed_at).slice(0, 10) : ''} (${String(r.id).slice(0, 8)})`, field_values: r.field_values as Record<string, unknown> }))
+    // the books: only corporations have them here; a QuickBooks failure is
+    // reported in sources, never fails the view
+    let books: { label: string; lines: ReturnType<typeof booksToGolden>['lines'] } | undefined
+    let booksSource: Record<string, unknown> | null = null
+    if ((ent.form_type === '1120' || ent.form_type === '1120S') && req.query.books !== '0') {
+      try {
+        const b = await booksPacket(userId, ent.id, year, ent.form_type)
+        if (b) {
+          const v = booksToGolden(ent.form_type, b.packet)
+          books = { label: `${year} books (QuickBooks, P&L as of ${b.sources.pnl_as_of ?? '?'})`, lines: v.lines }
+          booksSource = { ...b.sources, lines: v.lines.length, unplaced: v.unplaced, dropped: b.packet.dropped.length, warnings: b.packet.warnings.map(w => w.code) }
+        } else booksSource = { available: false, why: 'no QuickBooks P&L for the year (not connected, or no data)' }
+      } catch (e: any) {
+        booksSource = { available: false, why: String(e?.message ?? e).slice(0, 200) }
+      }
+    }
+    const { data: scs, error: e3 } = await supabase.from('scenario')
+      .select('id, name, computed_result').eq('entity_id', ent.id).eq('user_id', userId).eq('tax_year', year)
+    if (e3) return sendDbError(res, e3)
+    const scenarios = (scs ?? []).filter(x => x.computed_result?.field_values).map(x => ({ id: x.id as string, label: x.name as string, field_values: x.computed_result.field_values as Record<string, unknown> }))
     const rows = goldenRows({
       formType: ent.form_type, year, includeText: req.query.text === '1',
       ...(filed ? { filed: { id: filed.catalog_id, entries: filed.entries } } : {}),
       ...(transcript ? { transcript: { id: transcript.catalog_id, entries: transcript.entries, as_of: transcript.as_of, ...(held !== undefined ? { holdsYear: held } : {}) } } : {}),
       returns,
+      ...(books ? { books } : {}),
+      scenarios,
     })
     const order = { differs: 0, irs_only: 1, irs_recomputed: 2, agrees: 3, filed_only: 4, returns_only: 5 } as const
     rows.sort((a, b) => Number(!!b.headline) - Number(!!a.headline) || order[a.status] - order[b.status] || a.form.localeCompare(b.form) || a.key.localeCompare(b.key))
@@ -65,6 +92,8 @@ router.get('/:entity_id', async (req, res) => {
         filed_return: filed ? { catalog_id: filed.catalog_id, filename: filed.source_filename } : null,
         irs_return_transcript: transcript ? { catalog_id: transcript.catalog_id, type: transcript.transcript_type, as_of: transcript.as_of, ...(held !== undefined ? { holds_return_of: held, note: `The IRS has the ${held} return in the ${year} period; its figures are shown but are not golden.` } : {}) } : null,
         returns: returns.map(r => ({ id: r.id, label: r.label })),
+        books: booksSource,
+        scenarios: scenarios.map(x => ({ id: x.id, label: x.label })),
       },
       summary: summarize(rows),
       rows,

@@ -174,3 +174,66 @@ describe('the golden view', () => {
     expect(keyed.canonical).toBe('tax.L22_ordinary_income')
   })
 })
+
+describe('the books and scenarios on the golden schema', () => {
+  // flat P&L in the shape flattenReport produces
+  const pnl = {
+    'Income > Consulting': 1_000_000,
+    'COGS > Subcontractors': 200_000,
+    'Expenses > Salaries & Wages': 150_000,
+    'Expenses > Rent': 24_000,
+    'Expenses > Advertising': 60_000,
+    'Expenses > Software': 6_000,
+    'OtherIncome > Interest Earned': 1_200,
+  }
+  it('every classified account lands on its golden key, with the accounts behind it', async () => {
+    const { buildCorporateInputsFromQbo } = await import('../maps/qbo_to_inputs.js')
+    const { booksToGolden } = await import('./books.js')
+    const packet = buildCorporateInputsFromQbo({ pnl, form_type: '1120S' })
+    const v = booksToGolden('1120S', packet)
+    const at = (ref: string) => { const k = resolveBox(ref); return 'error' in k ? undefined : v.lines.find(l => l.form === k.form && l.key === k.key) }
+    expect(at('f1120s||1a|')?.value).toBe(1_000_000)
+    expect(at('f1120s||1a|')?.accounts?.[0].account).toContain('Consulting')
+    expect(at('f1120s||8|')?.value).toBe(150_000)
+    expect(at('f1120s||20|')?.value).toBe(6_000) // no rule → other deductions, never dropped
+    expect(at('f1120s|Schedule K|4|')?.value).toBe(1_200) // portfolio interest goes to Schedule K on an S corp
+    expect(at('f1120s||21|')).toMatchObject({ value: 240_000, summed: true })
+    expect(at('f1120s||22|')).toMatchObject({ value: 1_000_000 - 200_000 - 240_000, summed: true })
+    expect(v.unplaced).toEqual([])
+  })
+
+  it('a 1120 places interest income on page 1 (line 5), not Schedule K', async () => {
+    const { buildCorporateInputsFromQbo } = await import('../maps/qbo_to_inputs.js')
+    const { booksToGolden } = await import('./books.js')
+    const v = booksToGolden('1120', buildCorporateInputsFromQbo({ pnl, form_type: '1120' }))
+    const k5 = resolveBox('f1120||5|')
+    expect(v.lines.find(l => 'key' in k5 && l.key === k5.key)?.value).toBe(1_200)
+    expect(v.unplaced).toEqual([])
+  })
+
+  it('every key the engine writes is a schema key or alias (scenarios and proformas never fall off the view)', async () => {
+    const { getEngineToCanonicalMap, CANONICAL_ALIAS_1120, CANONICAL_ALIAS_1120S, CANONICAL_ALIAS_1040 } = await import('../maps/engine_to_pdf.js')
+    const { calc1120, calc1120S, calc1040 } = await import('../engine/tax_engine.js')
+    const { formOfKey } = await import('./golden.js')
+    const inp = { tax_year: 2025, gross_receipts: 1_000_000, cost_of_goods_sold: 200_000, officer_compensation: 100_000, salaries_wages: 50_000, other_deductions: 20_000, wages: 100_000, filing_status: 'mfj' }
+    for (const [ft, al, calc] of [['1120', CANONICAL_ALIAS_1120, calc1120], ['1120S', CANONICAL_ALIAS_1120S, calc1120S], ['1040', CANONICAL_ALIAS_1040, calc1040]] as const) {
+      const keys = new Set([...Object.values(getEngineToCanonicalMap(ft)), ...Object.values(al), ...Object.keys((calc as (x: object) => { field_values?: object })(inp).field_values ?? {})])
+      expect([...keys].filter(k => !formOfKey(ft, k)), ft).toEqual([])
+    }
+  })
+
+  it('books and scenarios sit on the same row as the filed and IRS figures', () => {
+    const K = (ref: string) => { const r = resolveBox(ref); if ('error' in r) throw new Error(r.error); return r.key }
+    const rows = goldenRows({
+      formType: '1120S', year: 2025,
+      filed: { id: 'f', entries: [{ id: 'x', form: 'f1120s', title: '', rev: '2025', instance: '', page: 1, section: '', line: '22', label: '', desc: '', kind: 'amount', value: 500_000, raw: '', method: 'geometry', canonical: K('f1120s||22|') }] },
+      books: { label: '2025 books', lines: [{ form: 'f1120s', key: K('f1120s||22|'), value: 560_000, summed: true }] },
+      scenarios: [{ id: 's1234567', label: 'pay officer more', field_values: { 'tax.L22_ordinary_income': 440_000 } }],
+    })
+    const r = rows.find(x => x.key === 'tax.L22_ordinary_income')!
+    expect(r.filed?.value).toBe(500_000)
+    expect(r.books).toMatchObject({ value: 560_000, summed: true })
+    expect(r.books_differs).toBe(true)
+    expect(r.scenarios?.['pay officer more'].value).toBe(440_000)
+  })
+})

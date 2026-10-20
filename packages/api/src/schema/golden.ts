@@ -15,6 +15,7 @@ import type { CatalogEntry } from '../catalog/types.js'
 import { parseAmount } from '../catalog/amount.js'
 import { formSchema, goldenKey, keyInfo } from './index.js'
 import { resolveBox, transcriptKey } from './transcript_map.js'
+import type { BooksLine } from './books.js'
 
 export type GoldenValue = number | string | boolean | null
 export interface Cell { value: GoldenValue; where: string }
@@ -33,6 +34,12 @@ export interface GoldenRow {
   irs_computed?: Cell
   /** stored returns by label ("proforma", "amendment 2026-10-14" …) */
   returns?: Record<string, Cell>
+  /** the books (QuickBooks, classified to this line, before any tax computation) */
+  books?: Cell & { summed?: boolean; accounts?: Array<{ account: string; amount: number; rule: string }> }
+  /** scenarios by name */
+  scenarios?: Record<string, Cell>
+  /** books differ from the golden value by more than a dollar */
+  books_differs?: boolean
   golden?: GoldenValue
   golden_from?: 'irs' | 'filed' | 'return'
   status: RowStatus
@@ -45,6 +52,8 @@ export interface GoldenInput {
   filed?: { id: string; entries: CatalogEntry[] }
   transcript?: { id: string; entries: CatalogEntry[]; as_of?: string | null; holdsYear?: number }
   returns?: Array<{ id: string; label: string; field_values: Record<string, unknown> | null | undefined }>
+  books?: { label: string; lines: BooksLine[] }
+  scenarios?: Array<{ id: string; label: string; field_values: Record<string, unknown> | null | undefined }>
   includeText?: boolean
 }
 
@@ -129,6 +138,20 @@ export function goldenRows(input: GoldenInput): GoldenRow[] {
       r.returns = { ...(r.returns ?? {}), [ret.label]: { value: val, where: `${ret.label} (return ${ret.id.slice(0, 8)}), ${k}` } }
     }
   }
+  // the books
+  for (const b of input.books?.lines ?? []) {
+    const r = row(b.form, b.key)
+    r.books = { value: b.value, where: `${input.books!.label}${b.summed ? ' (sum of the lines mapped from the books)' : ''}`, ...(b.summed ? { summed: true } : {}), ...(b.accounts?.length ? { accounts: b.accounts } : {}) }
+  }
+  // scenarios (engine field_values, canonical keys)
+  for (const sc of input.scenarios ?? []) {
+    for (const [k, v] of Object.entries(sc.field_values ?? {})) {
+      const form = formOfKey(input.formType, k)
+      if (!form || typeof v !== 'number' || !Number.isFinite(v)) continue
+      const r = row(form, goldenKey(form, k))
+      r.scenarios = { ...(r.scenarios ?? {}), [sc.label]: { value: v, where: `scenario "${sc.label}" (${sc.id.slice(0, 8)}), ${k}` } }
+    }
+  }
   const head = headlineKeys(input.formType)
   const misposted = input.transcript?.holdsYear !== undefined
   for (const r of rows.values()) {
@@ -140,13 +163,14 @@ export function goldenRows(input: GoldenInput): GoldenRow[] {
     else if (r.irs) r.status = irsVal === 0 ? 'agrees' : 'irs_only'
     else if (r.filed && r.irs_computed && !same(r.filed.value, r.irs_computed.value ?? null)) r.status = 'irs_recomputed'
     else if (r.filed) r.status = 'filed_only'
-    else r.status = 'returns_only'
+    else r.status = 'returns_only'  // stored returns, books or scenarios only
     if (r.irs && !misposted) { r.golden = r.irs.value; r.golden_from = 'irs' }
     else if (r.filed) { r.golden = r.filed.value; r.golden_from = 'filed' }
     else if (r.returns) { const first = Object.values(r.returns)[0]; r.golden = first.value; r.golden_from = 'return' }
+    if (r.books && isNum(r.golden) && !same(r.books.value, r.golden)) r.books_differs = true
   }
   // an IRS line reported as 0 with no box on the filed return says nothing
-  return [...rows.values()].filter(r => !(r.status === 'agrees' && !r.filed && !r.returns))
+  return [...rows.values()].filter(r => !(r.status === 'agrees' && !r.filed && !r.returns && !r.books && !r.scenarios))
 }
 
 /** Does the transcript hold another year's return? Its headline figures all
@@ -175,5 +199,8 @@ export function heldYear(formType: string, year: number, transcriptEntries: Cata
 export function summarize(rows: GoldenRow[]) {
   const by: Record<RowStatus, number> = { agrees: 0, differs: 0, irs_only: 0, filed_only: 0, irs_recomputed: 0, returns_only: 0 }
   for (const r of rows) by[r.status]++
-  return { keys: rows.length, ...by, headline_differs: rows.filter(r => r.headline && r.status === 'differs').length }
+  return {
+    keys: rows.length, ...by, headline_differs: rows.filter(r => r.headline && r.status === 'differs').length,
+    books_lines: rows.filter(r => r.books).length, books_differ_from_golden: rows.filter(r => r.books_differs).length,
+  }
 }

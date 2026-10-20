@@ -724,48 +724,22 @@ router.get('/:entity_id/qbo-to-tax-inputs', async (req, res) => {
   }
 
   try {
-    // Pull current + prior year financials in parallel, plus entity meta.
-    const [finResp, priorFinResp, entityRow] = await Promise.all([
-      getFinancials(entityId, taxYear, { userId }).catch(() => null),
-      getFinancials(entityId, taxYear - 1, { userId }).catch(() => null),
-      (async () => {
-        try {
-          const r = await supabase.from('tax_entity').select('meta').eq('id', entityId).eq('user_id', userId).single()
-          return r.data
-        } catch { return null }
-      })(),
-    ])
-
-    const pnl = finResp?.profit_and_loss?.items
-    const bs = finResp?.balance_sheet?.items
-    const priorBs = priorFinResp?.balance_sheet?.items
-    if (!pnl) {
+    const { booksPacket } = await import('../services/books.js')
+    const books = await booksPacket(userId, entityId, taxYear, formType as '1120' | '1120S')
+    if (!books) {
       return res.status(404).json({
         error: 'QBO P&L not available — entity may not be connected or no data for this year',
         hint: 'Run /api/qbo/:entity_id/status to check connection.',
       })
     }
-
-    const { buildCorporateInputsFromQbo } = await import('../maps/qbo_to_inputs.js')
-    const packet = buildCorporateInputsFromQbo({
-      pnl, bs, priorBs,
-      form_type: formType as '1120' | '1120S',
-      business_code: entityRow?.meta?.business_code,
-    })
-
     res.json({
       entity_id: entityId,
       tax_year: taxYear,
       form_type: formType,
-      inputs: packet.inputs,
-      audit: packet.audit,
-      warnings: packet.warnings,
-      sources: {
-        pnl_as_of: finResp?.profit_and_loss?.fetched_at || null,
-        bs_as_of: finResp?.balance_sheet?.fetched_at || null,
-        prior_bs_as_of: priorFinResp?.balance_sheet?.fetched_at || null,
-        business_code: entityRow?.meta?.business_code || null,
-      },
+      inputs: books.packet.inputs,
+      audit: books.packet.audit,
+      warnings: books.packet.warnings,
+      sources: books.sources,
       note: 'Inspect audit entries to see per-field provenance + confidence. Edit inputs in place and pass the entire packet to POST /api/returns/compute as `inputs` (the extra audit/warnings/sources keys are ignored by compute).',
     })
   } catch (e: any) {

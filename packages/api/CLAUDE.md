@@ -48,7 +48,8 @@ src/
 ├── schema/            the golden schema: crosswalk (one key per box across
 │                      revisions, from data/line_dicts), index (keyFor /
 │                      goldenKey / keyEntries — applied on read), transcript_map
-│                      (IRS return-transcript lines → keys), golden (the
+│                      (IRS return-transcript lines → keys), books
+│                      (QuickBooks accounts → keys), golden (the
 │                      side-by-side view behind /api/golden). Rebuild with
 │                      `npx tsx scripts/schema/build_schema.ts`
 ├── review/            the fixed review framework: checks/ (catalog, entity,

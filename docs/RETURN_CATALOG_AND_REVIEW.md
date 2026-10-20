@@ -360,8 +360,18 @@ boxes (2.2%) — and the IRS renumbers lines from year to year.
 - The review's `irs.return_transcript` check reads the golden view: headline
   differences are high, other figures the IRS keyed differently are low,
   recomputations are information.
-- Not yet: QuickBooks and scenarios (next step), and `validateFieldValues`
-  still warns rather than rejects.
+- **The books and scenarios (step 3, same day).** `src/schema/books.ts` places
+  every QuickBooks account the mapper classified (`services/books.ts`, the
+  same code path as `/api/qbo/:id/qbo-to-tax-inputs`) on the golden key of its
+  line, with the accounts behind each figure; headline totals are only sums of
+  the mapped lines (`summed`). This is the books before any tax computation.
+  Scenarios contribute their engine `field_values`. Both are columns of the
+  golden view (`books`, `scenarios`; `books_differs` marks a line the books do
+  not support). Every key the engine writes resolves in the schema — a test
+  holds that closed (three 1040 names filed under the wrong form are explicit
+  aliases, `EXPLICIT_ALIASES`).
+- Not yet: `validateFieldValues` still warns rather than rejects; the 1040 has
+  no books source.
 
 ## Check catalogue (initial)
 
