@@ -1,0 +1,26 @@
+{
+ "note": "Keys the engine writes into field_values that are not boxes on any form: carryforwards to next year, answers the form prints as a Yes/No pair, and K-1/return header data used to build other forms. They are part of the golden model without a box. Anything else not in data/schema is rejected from field_values (src/schema/validate.ts). Inventory of prod rows and the engine source, 2026-10-20.",
+ "all": {
+  "nol.carryover_next_year": "NOL carried to the next year (worksheet, not a box)",
+  "schedD.carryover_next_lt": "Long-term capital loss carryover to next year (worksheet)",
+  "schedD.carryover_next_st": "Short-term capital loss carryover to next year (worksheet)",
+  "schedD.loss_carryover": "Capital loss carryover used this year (worksheet)",
+  "f7203.excess_distribution_gain": "Distributions above stock basis, taxed as gain (7203 worksheet result)",
+  "schedB.L7a_foreign_account": "Schedule B 7a answer (the form prints it as a Yes/No pair)",
+  "meta.owners": "Shareholder list used to issue K-1s",
+  "meta.other_deductions": "Other-deductions statement detail",
+  "meta.s_election_date": "S election effective date (header data)",
+  "meta.irs_center": "IRS center where the return was filed (K-1 item C)",
+  "meta.alloc_pct": "K-1 allocation percentage",
+  "meta.shareholder_name": "K-1 shareholder name",
+  "meta.shareholder_id": "K-1 shareholder TIN",
+  "meta.scorp_name": "K-1 issuing corporation name",
+  "meta.scorp_ein": "K-1 issuing corporation EIN",
+  "meta.corp_ein": "K-1 corporation EIN",
+  "meta.corp_name_addr": "K-1 corporation name and address",
+  "meta.name": "Name line",
+  "meta.business_activity": "Business activity description",
+  "meta.product_service": "Product or service description",
+  "dep.L42_amortization": "Form 4562 line 42 amortization for this year, all rows (the form prints a row per cost)"
+ }
+}

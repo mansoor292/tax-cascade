@@ -105,3 +105,13 @@ export const SEVERITY_LABEL: Record<string, string> = {
   low: 'Low',
   info: 'Info',
 }
+
+/** How a golden-view row's sources compare (API src/schema/golden.ts). */
+export const GOLDEN_STATUS_LABEL: Record<string, string> = {
+  agrees: 'Agrees',
+  differs: 'Differs',
+  irs_only: 'IRS only',
+  irs_recomputed: 'IRS recomputed',
+  filed_only: 'Filed only',
+  returns_only: 'Not on the filed return',
+}

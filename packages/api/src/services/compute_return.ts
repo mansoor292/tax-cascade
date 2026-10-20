@@ -13,6 +13,7 @@
  * comments; in particular filed_import rows are never written, and
  * `inputs:{}` is a no-op merge over the seeded row.
  */
+import { mergeDocuments, SUPPORTED_DOC_TYPES } from './document_merge.js'
 import { calc1120, calc1120X, form1120XColumn, calc1120S, calc1040, calcExtension, calc4562, calc8594, calcScheduleE, type ExtensionType, type Form4562_Inputs, type Form8594_Inputs, type ScheduleE_Inputs } from '../engine/tax_engine.js'
 import { TAX_TABLES } from '../engine/tax_tables.js'
 import { encryptedFields, hydrate, ENCRYPTED_RETURN_FIELDS, ENCRYPTED_ENTITY_FIELDS, ENCRYPTED_DOC_FIELDS, RETURN_ENC_COLS, DOC_ENC_COLS } from '../lib/row_crypto.js'
@@ -188,17 +189,6 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     // (SSTB_SUSPECTED, OFFICER_COMP_UNSPLIT, CONTINGENCY_IN_REVENUE, ...)
     const qboWarnings: Array<{ code: string; message: string; fix_hint?: string }> = []
 
-    const sum = (docs: any[], ...keys: string[]): number => {
-      let total = 0
-      for (const d of docs) {
-        const kv = d.meta?.key_values || {}
-        for (const k of keys) {
-          const v = parseFloat(String(kv[k] ?? '').replace(/[$,]/g, '')) || 0
-          if (v) { total += v; break }  // first matching key wins per doc
-        }
-      }
-      return Math.round(total)
-    }
     // Caller-provided values (even 0) always win over auto-merge. Only fill
     // when the caller left the field undefined/null. Previously used `!x`
     // which incorrectly treated explicit 0 as unset — e.g. passing
@@ -266,12 +256,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     }
 
     if (entity_id) {
-      const supportedTypes = [
-        'w2', 'k1',
-        '1099', '1099_int', '1099_div', '1099_b', '1099_r',
-        '1099_misc', '1099_nec', '1099_k', '1099_g', '1099_sa', '1099_oid',
-        '1098', '1098_e',
-      ]
+      const supportedTypes = SUPPORTED_DOC_TYPES
       // The _enc twins + hydrate are LOAD-BEARING: post-cutover the
       // plaintext meta/textract_data columns are null, and this query read
       // them bare — auto-merge silently saw zero key_values on every
@@ -288,123 +273,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       }
       if (docs?.length) {
         supportingDocs = docs
-        const byType = (t: string) => docs.filter(d => d.doc_type === t)
-        const isIndividual = form_type === '1040'
-
-        if (isIndividual) {
-          // W-2s → wages, withholding
-          const w2s = byType('w2')
-          setIfUnset('wages',       sum(w2s, 'wages', 'box_1'),      'W-2', w2s.length)
-          setIfUnset('withholding', sum(w2s, 'federal_tax', 'box_2'), 'W-2', w2s.length)
-
-          // 1099-INT → interest. Generic '1099' docs contribute only via an
-          // explicit 'interest' key, never 'box_1': before the classifier
-          // knew 1098s, a mortgage-interest 1098 landed as generic '1099'
-          // and its box 1 ($22k of mortgage interest PAID) would have been
-          // summed into taxable interest INCOME.
-          const int99 = byType('1099_int')
-          const gen99 = byType('1099')
-          setIfUnset('taxable_interest',
-            sum(int99, 'interest', 'box_1') + sum(gen99, 'interest'),
-            '1099-INT', int99.length + gen99.length)
-
-          // 1098-E → student loan interest deduction
-          const e1098 = byType('1098_e')
-          setIfUnset('student_loan_interest',
-            sum(e1098, 'student_loan_interest', 'student_loan_interest_received', 'box_1'),
-            '1098-E', e1098.length)
-          // 1098 (mortgage interest) is deliberately NOT auto-placed: whether
-          // it belongs on Schedule A (home) or Schedule E (rental) is a human
-          // decision, so it only surfaces in the log as unplaced context.
-          const m1098 = byType('1098')
-          const mortgageInt = sum(m1098, 'mortgage_interest', 'box_1')
-          if (mortgageInt) {
-            autoMergeLog.push({
-              field: 'itemized_deductions',
-              value: 0,
-              sources: [`${m1098.length} × 1098 NOT auto-placed — $${mortgageInt.toLocaleString()} mortgage interest needs a human call (Schedule A home vs Schedule E rental)`],
-            })
-          }
-
-          // 1099-DIV → dividends
-          const div99 = [...byType('1099_div'), ...byType('1099')]
-          setIfUnset('ordinary_dividends', sum(div99, 'ordinary_dividends', 'box_1a'), '1099-DIV', div99.length)
-          setIfUnset('qualified_dividends', sum(div99, 'qualified_dividends', 'box_1b'), '1099-DIV', div99.length)
-
-          // 1099-B → capital gains (proceeds or gain/loss aggregation is complex — punt to net)
-          const b99 = byType('1099_b')
-          setIfUnset('capital_gains', sum(b99, 'net_gain_loss', 'gain_loss', 'proceeds'), '1099-B', b99.length)
-
-          // 1099-R → IRA / pension distributions
-          const r99 = byType('1099_r')
-          setIfUnset('ira_distributions', sum(r99.filter(d => (d.meta?.key_values?.distribution_code || '').match(/[147]/)),
-                                                'gross_distribution', 'box_1'), '1099-R (IRA)', r99.length)
-          setIfUnset('pensions_annuities', sum(r99.filter(d => !(d.meta?.key_values?.distribution_code || '').match(/[147]/)),
-                                                 'gross_distribution', 'box_1'), '1099-R (pension)', r99.length)
-
-          // 1099-NEC → self-employment income (Schedule C)
-          const nec99 = byType('1099_nec')
-          setIfUnset('net_se_income', sum(nec99, 'nonemployee_comp', 'box_1'), '1099-NEC', nec99.length)
-
-          // 1099-MISC → rents, royalties, other → schedule1_income aggregate.
-          // Suppressed if caller supplied structured schedule_e: Schedule E's
-          // L41 total is injected into schedule1_income downstream, so the
-          // 1099-MISC rental amounts already round-trip through that path.
-          const misc99 = byType('1099_misc')
-          if (!mergedInputs.schedule_e) {
-            const miscIncome = sum(misc99, 'rents', 'box_1') + sum(misc99, 'royalties', 'box_2')
-                             + sum(misc99, 'other_income', 'box_3')
-            setIfUnset('schedule1_income', miscIncome, '1099-MISC', misc99.length)
-          } else if (misc99.length) {
-            autoMergeLog.push({
-              field: 'schedule1_income',
-              value: 0,
-              sources: [`${misc99.length} × 1099-MISC skipped — schedule_e provided; fold rental/royalty totals into schedule_e.rental_properties to avoid double count`],
-            })
-          }
-
-          // K-1 → ordinary_income, w2_wages
-          const k1s = byType('k1')
-          const k1Total = sum(k1s, 'ordinary_income', 'box_1')
-          const k1W2 = sum(k1s, 'w2_wages')
-          if (k1Total && !mergedInputs.k1_ordinary_income) {
-            mergedInputs.k1_ordinary_income = k1Total
-            autoMergeLog.push({ field: 'k1_ordinary_income', value: k1Total, sources: [`${k1s.length} × K-1`] })
-          }
-          if (k1Total && !mergedInputs.schedule1_income) {
-            mergedInputs.schedule1_income = (mergedInputs.schedule1_income || 0) + k1Total
-          }
-          setIfUnset('k1_w2_wages', k1W2, 'K-1', k1s.length)
-        }
-
-        // 1120/1120-S: corps that hold brokerage accounts or receive 1099s
-        // (e.g. an S-Corp with a treasury/contingency account) get portfolio
-        // income reported on Schedule K lines 4, 5a, 7, 8a, 10, 16a.
-        if (!isIndividual) {
-          const int99  = [...byType('1099_int'), ...byType('1099')]
-          const div99  = [...byType('1099_div'), ...byType('1099')]
-          const oid99  = byType('1099_oid')
-          const b99    = byType('1099_b')
-
-          // Portfolio interest — 1099-INT Box 1 + 1099-OID Box 1 + §1276 recharacterized AMD
-          const intBox1    = sum(int99, 'box1_interest', 'interest', 'box_1')
-          const oidBox1    = sum(oid99, 'box1_oid', 'oid', 'box_1')
-          const amd1276    = sum(b99,   'amd_recharacterized_per_1276')
-          const interestTotal = intBox1 + oidBox1 + amd1276
-
-          if (form_type === '1120S') {
-            setIfUnset('schedule_k_interest',             interestTotal,                                               '1099-INT/OID/B', int99.length + oid99.length + b99.length)
-            setIfUnset('schedule_k_dividends_ordinary',   sum(div99, 'box1a_ordinary_dividends', 'ordinary_dividends'), '1099-DIV',       div99.length)
-            setIfUnset('schedule_k_dividends_qualified',  sum(div99, 'box1b_qualified_dividends', 'qualified_dividends'), '1099-DIV',     div99.length)
-            // Net short/long-term gain — fact provides `net_short_term_gain_loss` (can be negative)
-            setIfUnset('schedule_k_st_cap_gain', sum(b99, 'net_short_term_gain_loss_short', 'net_short_term_gain_loss'), '1099-B', b99.length)
-            setIfUnset('schedule_k_lt_cap_gain', sum(b99, 'net_long_term_gain_loss'),                                    '1099-B', b99.length)
-          } else if (form_type === '1120') {
-            setIfUnset('interest_income', interestTotal,                                                  '1099-INT/OID/B', int99.length + oid99.length + b99.length)
-            setIfUnset('dividends',       sum(div99, 'box1a_ordinary_dividends', 'ordinary_dividends'),   '1099-DIV',       div99.length)
-            setIfUnset('capital_gains',   sum(b99,   'net_short_term_gain_loss_short', 'net_short_term_gain_loss'), '1099-B', b99.length)
-          }
-        }
+        mergeDocuments(docs, form_type, { mergedInputs, setIfUnset, autoMergeLog })
       }
     }
 
@@ -763,6 +632,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     }
 
     let taxReturn = null
+    let schemaRejectedKeys: string[] = []
     if (save !== false && entity_id) {
       const isExtension = ['4868', '7004', '8868'].includes(form_type)
       // Merge schedule field_values from engine result into the field_values column.
@@ -812,11 +682,18 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       // no preserve-seed gate — the field_values shape is canonical
       // (sectioned IRS-line keys per maps/canonical_schema.ts) on every
       // writer, so naive merge is correct.
-      const mergedFieldValues = { ...existingFieldValues, ...scheduleFieldValues }
+      // field_values is the golden model (src/schema): a key the golden
+      // schema does not know is rejected from it — moved to
+      // computed_data.schema_rejected, kept and reported, never blocking a
+      // compute. A parent return seeded from an old import is the usual source.
+      const { splitBySchema } = await import('../schema/validate.js')
+      const { kept: mergedFieldValues, rejected: schemaRejected } = splitBySchema({ ...existingFieldValues, ...scheduleFieldValues }, form_type)
+      schemaRejectedKeys = Object.keys(schemaRejected)
+      if (Object.keys(schemaRejected).length) {
+        console.warn(`[compute] ${Object.keys(schemaRejected).length} field_values key(s) not in the golden schema on ${form_type} moved to computed_data.schema_rejected:`, Object.keys(schemaRejected).slice(0, 10))
+      }
 
-      // Validate before persist. Catches any writer that drifts back to
-      // the old descriptive shape before bad data hits the DB. Logs and
-      // continues — never blocks a compute on a schema warning.
+      // Shape check (descriptive keys that should have been translated at the boundary).
       const { validateFieldValues } = await import('../maps/canonical_schema.js')
       const fvCheck = validateFieldValues(mergedFieldValues, form_type)
       if (!fvCheck.ok) {
@@ -827,8 +704,9 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       // every flat metric maps to a sectioned field_values line via
       // @taxengine/shared metrics. Keep citations / k1s / qbo_warnings for
       // debug + scenario structural data.
-      const { computed: _computed, ...computedDataPayload } = (engineResult ?? {}) as any
+      const { computed: _computed, ...engineData } = (engineResult ?? {}) as any
       void _computed
+      const computedDataPayload = Object.keys(schemaRejected).length ? { ...engineData, schema_rejected: schemaRejected } : engineData
       const rawPayload = {
         entity_id,
         tax_year,
@@ -1087,6 +965,9 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       // Warnings from the QBO → inputs mapper (SSTB_SUSPECTED,
       // OFFICER_COMP_UNSPLIT, CONTINGENCY_IN_REVENUE, etc.). Non-blocking.
       qbo_warnings: qboWarnings.length > 0 ? qboWarnings : undefined,
+      // field_values keys the golden schema does not know, moved to
+      // computed_data.schema_rejected instead of being stored as lines.
+      schema_rejected: schemaRejectedKeys.length > 0 ? schemaRejectedKeys : undefined,
       // Schedule M-1 line 8 is labelled "Income (loss) (Schedule K, line 18)".
       // When the reconciling items do not bridge book income to that total,
       // say so rather than forcing the number and hiding it.

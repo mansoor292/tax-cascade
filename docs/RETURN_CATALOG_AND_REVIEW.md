@@ -370,8 +370,25 @@ boxes (2.2%) — and the IRS renumbers lines from year to year.
   not support). Every key the engine writes resolves in the schema — a test
   holds that closed (three 1040 names filed under the wrong form are explicit
   aliases, `EXPLICIT_ALIASES`).
-- Not yet: `validateFieldValues` still warns rather than rejects; the 1040 has
-  no books source.
+- **The source documents (same day).** `src/schema/documents.ts` places what the
+  W-2s, 1099s, 1098s and K-1s on file say on the return's lines, through the
+  very merge the compute path uses (`services/document_merge.ts`, moved there
+  verbatim), run on empty inputs; like for like (a W-2's box 1 on 1040 line 1a,
+  box 2 on 25a). For a 1040 the K-1s the group's own S corporations issued are
+  added from their filed returns through the entity map's ownership (box 1 →
+  Schedule E line 32, box 16 code D → Form 7203 line 6), unless K-1 documents
+  are on file too. A `documents` column in the golden view.
+- **field_values hold only golden keys.** `src/schema/validate.ts`: a key must be
+  a schema key or alias of a form in the return's family, an old descriptive
+  name the alias tables translate, or a documented non-box value
+  (`data/schema/derived.json`: carryforwards, header data). The compute persist
+  path moves anything else to `computed_data.schema_rejected` and reports it as
+  `schema_rejected` — kept, never silently dropped, never blocking. Inventory of
+  every stored key on prod (2026-10-20): all resolve except two legacy Schedule
+  L names (a column line 11a does not have).
+- **On screen:** Compare → "All sources, one year" (`?view=sources&year=`) shows
+  the golden view: differences first, every source a column, a row opening to
+  where each figure came from.
 
 ## Check catalogue (initial)
 

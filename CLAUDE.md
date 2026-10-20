@@ -49,9 +49,11 @@ Since 2026-10-17 (docs/RETURN_CATALOG_AND_REVIEW.md — read it):
   structured lines (`irs_return_transcript`) checked against the filed return.
 - **One golden schema keys every box of every form, every year**
   (`src/schema/`, `data/schema/`; docs §10): the filed return, the IRS return
-  transcript, stored returns, the QuickBooks books and scenarios line up on
-  it, and `/api/golden` (MCP `golden_view`) shows them side by side. Compare
-  through it, never by hand.
+  transcript, stored returns, the QuickBooks books, the source documents
+  (W-2s, 1099s, group K-1s) and scenarios line up on it, and `/api/golden`
+  (MCP `golden_view`, Compare → "All sources") shows them side by side.
+  Compare through it, never by hand. field_values hold only golden keys —
+  anything else is moved to computed_data.schema_rejected on persist.
 - **Every return type is held to one fact list** (`@taxengine/shared` facts.ts,
   table `tax_fact`, `/api/facts`): what one return needed becomes a question for
   all of them.

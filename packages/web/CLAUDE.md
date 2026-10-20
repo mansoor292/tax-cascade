@@ -33,7 +33,10 @@ src/
 ├── components/          AuthForm (THE sign-in/up form — Login and the OAuth
 │                        consent screen both use it via useAuth), LoadError,
 │                        tabs/returns/ (ComputeDialog, YearDetail, groupByYear)
-├── pages/compare/       FocusedCompare, LineByLineMatrix, YearRow + helpers
+├── pages/compare/       FocusedCompare, LineByLineMatrix, YearRow + helpers;
+│                        SourcesView (one year across every source on the
+│                        golden schema, ?view=sources — use-golden hook) +
+│                        sources.ts (tested helpers)
 ├── pages/group/         the Group page's tabs (Map, Breaks, Open items) and
 │                        graph.ts (map layout, tested). Review text is prose that
 │                        quotes return headers: render it through

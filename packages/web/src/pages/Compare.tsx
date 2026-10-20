@@ -1,5 +1,8 @@
 /**
- * Multi-year Filed vs Amended line-by-line comparison for an entity.
+ * Multi-year Filed vs Amended line-by-line comparison for an entity, and —
+ * second tab, ?view=sources&year=YYYY — one year across every source on the
+ * golden schema (compare/SourcesView.tsx: filed, IRS, books, stored returns,
+ * scenarios).
  *
  * Three layers:
  *   1. Summary card — 3-year filed vs amended tax total + refund Δ
@@ -30,6 +33,8 @@ import {
 import { fmtMoney, fmtDelta as fmtDeltaBase } from '@/lib/format'
 import { COMPARE_METRICS, COMPARE_METRIC_LABELS, readMetric } from '@taxengine/shared'
 import FocusedCompare from './compare/FocusedCompare'
+import SourcesView from './compare/SourcesView'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import YearRow from './compare/YearRow'
 
 // Derived from the API's own COMPARE_METRICS so a row can't exist that the
@@ -43,9 +48,13 @@ const fmtDelta = (n: number) => fmtDeltaBase(n, '±$0')
 
 export default function Compare() {
   const { entityId } = useParams<{ entityId: string }>()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const view = searchParams.get('view') === 'sources' ? 'sources' : 'years'
   const focusYearRaw = searchParams.get('year')
-  const focusYear = focusYearRaw ? Number(focusYearRaw) : null
+  // ?year= opens the focused filed-vs-amended view on the Year-over-year tab;
+  // on the Sources tab it picks the year.
+  const focusYear = focusYearRaw && view !== 'sources' ? Number(focusYearRaw) : null
+  const sourcesYear = view === 'sources' && focusYearRaw ? Number(focusYearRaw) : null
   const focusAmendmentId = searchParams.get('amendment_id')
   const nav = useNavigate()
   const { entity } = useEntity(entityId)
@@ -87,6 +96,14 @@ export default function Compare() {
       }))
       .sort((a, b) => a.year - b.year)
   }, [data])
+
+  // Years offered on the Sources tab: those with stored returns, plus the
+  // last four tax years (a filed return or transcript may exist without one).
+  const sourceYears = useMemo(() => {
+    const now = new Date().getFullYear()
+    return [...new Set([...(data?.years ?? []), now - 1, now - 2, now - 3, now - 4])].sort((a, b) => b - a)
+  }, [data])
+  const setView = (v: string) => setSearchParams(v === 'sources' ? { view: 'sources', ...(sourcesYear ? { year: String(sourcesYear) } : { year: String(sourceYears[0]) }) } : {}, { replace: true })
 
   const refundSummary = useMemo(() => {
     let filedTax = 0, amendTax = 0, years = 0
@@ -188,7 +205,7 @@ export default function Compare() {
           <div className="flex items-center gap-2 mb-0.5">
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
             <h1 className="text-xl sm:text-2xl font-semibold tracking-tight truncate">
-              {entity?.name || data.entity?.name || 'Entity'} — Year over year
+              {entity?.name || data.entity?.name || 'Entity'} — Compare
             </h1>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -197,6 +214,18 @@ export default function Compare() {
         </div>
       </div>
 
+      <Tabs value={view} onValueChange={v => setView(String(v))} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="years">Year over year</TabsTrigger>
+          <TabsTrigger value="sources">All sources, one year</TabsTrigger>
+        </TabsList>
+        <TabsContent value="sources">
+          {entityId && view === 'sources' && (
+            <SourcesView entityId={entityId} years={sourceYears} year={sourcesYear}
+              onYear={y => setSearchParams({ view: 'sources', year: String(y) }, { replace: true })} />
+          )}
+        </TabsContent>
+        <TabsContent value="years" className="space-y-6">
       {/* Refund summary if there are amendments */}
       {refundSummary.years > 0 && (
         <Card>
@@ -305,6 +334,8 @@ export default function Compare() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

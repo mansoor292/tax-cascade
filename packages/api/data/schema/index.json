@@ -198,12 +198,12 @@
    "widgets": 361,
    "by": {
     "verified": 0,
-    "engine": 0,
+    "engine": 3,
     "same_line": 253,
     "renumbered": 0,
     "similar": 5,
     "by_name": 27,
-    "generated": 76,
+    "generated": 73,
     "renamed": 0
    }
   },
@@ -599,12 +599,12 @@
    "widgets": 240,
    "by": {
     "verified": 0,
-    "engine": 0,
+    "engine": 15,
     "same_line": 5,
     "renumbered": 0,
     "similar": 2,
     "by_name": 18,
-    "generated": 215,
+    "generated": 200,
     "renamed": 0
    }
   },
@@ -621,12 +621,12 @@
    "widgets": 145,
    "by": {
     "verified": 0,
-    "engine": 0,
+    "engine": 8,
     "same_line": 62,
     "renumbered": 0,
     "similar": 18,
     "by_name": 2,
-    "generated": 63,
+    "generated": 55,
     "renamed": 0
    }
   },

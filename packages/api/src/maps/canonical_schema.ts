@@ -67,6 +67,8 @@ const FIELD_VALUE_SECTION_PREFIXES = new Set([
   'preparer',
 ])
 
+import { classifyKey } from '../schema/validate.js'
+
 /** IRS form codes as the line dictionaries name them (f1120s, f1040se, f8995a …). */
 const FORM_PREFIX = /^f\d{3,4}[a-z0-9]*$/
 
@@ -107,9 +109,13 @@ export function validateFieldValues(
       errors.push(`${k}: descriptive shape — should be sectioned IRS-line (translate at boundary)`)
     }
   }
-  // form_type unused for now but kept on signature so per-form tightening
-  // (e.g. require specific keys for a 1120) is a one-line change later.
-  void form_type
+  // Every key must resolve to the golden schema (src/schema/validate.ts): a
+  // box of a form in the return's family, an alias of one, or a documented
+  // non-box value. The persist path moves the rest out of field_values.
+  for (const k of Object.keys(fv)) {
+    if (errors.some(e => e.startsWith(`${k}:`))) continue
+    if (classifyKey(form_type, k) === 'rejected' && ['1120', '1120S', '1040'].includes(form_type)) errors.push(`${k}: not in the golden schema`)
+  }
   return { ok: errors.length === 0, errors }
 }
 

@@ -100,9 +100,9 @@ describe('golden schema: one key per box, the same key every year', () => {
     expect(fresh.revisions).toEqual(formSchema('f1120ssk')!.revisions)
   })
 
-  it('generated keys pass the field_values validator', () => {
-    const keys = ['f1120s', 'f1040se', 'f1120ssk', 'f1125a'].flatMap(f => formSchema(f)!.keys.map(k => k.key))
-    const bad = keys.filter(k => !validateFieldValues({ [k]: 1 }, '1120S').ok)
+  it('generated keys pass the field_values validator for their return type', () => {
+    const bad = [['1120S', ['f1120s', 'f1120ssk', 'f1125a']], ['1040', ['f1040', 'f1040se', 'f8995a']], ['1120', ['f1120', 'f1120x', 'f4562']]]
+      .flatMap(([ft, forms]) => (forms as string[]).flatMap(f => formSchema(f)!.keys.map(k => k.key)).filter(k => !validateFieldValues({ [k]: 1 }, ft as string).ok).map(k => `${ft} ${k}`))
     expect(bad).toEqual([])
     expect(generatedKey('f1120ssk', { section: 'Part III', line: '1', label: 'Ordinary business income (loss)', kind: 'text' })).toBe('f1120ssk.L1_ordinary_business_income_loss')
   })
@@ -235,5 +235,72 @@ describe('the books and scenarios on the golden schema', () => {
     expect(r.books).toMatchObject({ value: 560_000, summed: true })
     expect(r.books_differs).toBe(true)
     expect(r.scenarios?.['pay officer more'].value).toBe(440_000)
+  })
+})
+
+describe('field_values hold only golden keys', () => {
+  it('a key resolves as a box, an alias, an old descriptive name or a documented non-box value — or is rejected', async () => {
+    const { classifyKey, resolveKey, splitBySchema } = await import('./validate.js')
+    expect(classifyKey('1120S', 'tax.L22_ordinary_income')).toBe('golden')
+    expect(classifyKey('1120S', 'income.gross_receipts')).toBe('golden') // old descriptive import name
+    expect(resolveKey('1120S', 'income.gross_receipts')?.key).toBe('income.L1a_gross_receipts')
+    expect(resolveKey('1120', 'dep.L23_263a')?.key).toBe('dep.L23a_assets_shown_part_iii') // 2025 split line 23
+    expect(resolveKey('1040', 'payments.w2_withholding')?.key).toBe('payments.L25a_w2')
+    expect(resolveKey('1040', 'tax.L12_niit')).toEqual({ form: 'f1040s2', key: 'sched2.L12_niit' })
+    expect(classifyKey('1120', 'nol.carryover_next_year')).toBe('derived')
+    expect(classifyKey('1120', 'schedL.L11_depletable_boy_b')).toBe('rejected') // no such column on line 11a
+    const { kept, rejected } = splitBySchema({ 'tax.L22_ordinary_income': 5, 'bogus.L1_thing': 7, 'nol.carryover_next_year': 3 }, '1120S')
+    expect(kept).toEqual({ 'tax.L22_ordinary_income': 5, 'nol.carryover_next_year': 3 })
+    expect(rejected).toEqual({ 'bogus.L1_thing': 7 })
+    expect(splitBySchema({ 'anything.at_all': 1 }, '1065').rejected).toEqual({}) // no 1065 engine: left alone
+    expect(validateFieldValues({ 'income.L99_no_such_line': 1 }, '1120S').errors).toEqual(['income.L99_no_such_line: not in the golden schema'])
+  })
+
+  it('the return header the persist path writes resolves for every return type', async () => {
+    const { entityIdentityFields } = await import('../builders/entity_identity.js')
+    const { classifyKey } = await import('./validate.js')
+    const ent = { name: 'Example Co', ein: '00-0000000', address: '1 Main St', city: 'Town', state: 'FL', zip: '33000', first_name: 'Pat', last_name: 'Example', ssn: '000-00-0000' }
+    for (const ft of ['1120', '1120S', '1040']) {
+      const keys = Object.keys(entityIdentityFields(ent as never, ft, {}))
+      expect(keys.filter(k => classifyKey(ft, k) === 'rejected'), ft).toEqual([])
+    }
+  })
+})
+
+describe('the source documents on the golden schema', () => {
+  const doc = (doc_type: string, key_values: Record<string, string | number>) => ({ doc_type, meta: { key_values } })
+  it('W-2s and 1099s land like for like on the 1040 (box 1 on line 1a, box 2 on 25a)', async () => {
+    const { documentsToGolden } = await import('./documents.js')
+    const v = documentsToGolden('1040', [doc('w2', { box_1: 120000, box_2: 9000 }), doc('1099_int', { box_1: 1500 }), doc('1099_div', { box_1a: 800, box_1b: 600 }), doc('1098', { box_1: 22000 })])
+    const at = (ref: string) => { const k = resolveBox(ref); return 'error' in k ? undefined : v.lines.find(l => l.form === k.form && l.key === k.key) }
+    expect(at('f1040||1a|')).toMatchObject({ value: 120000, sources: ['1 × W-2'] })
+    expect(at('f1040||25a|')?.value).toBe(9000)
+    expect(at('f1040||2b|')?.value).toBe(1500)
+    expect(at('f1040||3b|')?.value).toBe(800)
+    expect(at('f1040||3a|')?.value).toBe(600)
+    expect(v.notes.join(' ')).toContain('NOT auto-placed') // the 1098 is a human call
+    expect(v.unplaced).toEqual([])
+  })
+
+  it('a group S corporation\'s K-1 lands on the owner\'s 1040, box 16 code D on Form 7203', async () => {
+    const { k1ToGolden } = await import('./documents.js')
+    const e = (line: string, value: number | string, kind: CatalogEntry['kind'] = 'amount'): CatalogEntry => ({ id: `k${line}${value}`, form: 'f1120ssk', title: 'K-1', rev: '2025', instance: '', page: 1, section: 'Part III', line, label: '', desc: '', kind, value, raw: String(value), method: 'geometry' })
+    const lines = k1ToGolden([e('1', 1_306_476), e('4', 32_943), e('5a', 511), e('7', 147), e('16', 'C', 'text'), e('16', 4_491), e('16', 'D', 'text'), e('16', 965_784)], 'Example S Corp')
+    const at = (ref: string) => { const k = resolveBox(ref); return 'error' in k ? undefined : lines.find(l => l.form === k.form && l.key === k.key) }
+    expect(at('f1040se|Part II|32|')).toMatchObject({ value: 1_306_476, sources: ['K-1 from Example S Corp, box 1'] })
+    expect(at('f1040||2b|')?.value).toBe(32_943)
+    expect(at('f1040sd|Part I|5|')?.value).toBe(147)
+    expect(at('f7203|Part I|6|')?.value).toBe(965_784) // code D, not the code C amount
+  })
+
+  it('documents sit on the same row as the filed figure, flagged when they do not support it', () => {
+    const rows = goldenRows({
+      formType: '1040', year: 2025,
+      filed: { id: 'f', entries: [{ id: 'x', form: 'f1040', title: '', rev: '2025', instance: '', page: 1, section: '', line: '1a', label: '', desc: '', kind: 'amount', value: 100_000, raw: '', method: 'geometry', canonical: 'income.L1a_w2_wages' }] },
+      documents: { label: '2025 documents on file', lines: [{ form: 'f1040', key: 'income.L1a_w2_wages', value: 120_000, sources: ['1 × W-2'] }] },
+    })
+    const r = rows.find(x => x.key === 'income.L1a_w2_wages')!
+    expect(r.documents).toMatchObject({ value: 120_000, sources: ['1 × W-2'] })
+    expect(r.documents_differs).toBe(true)
   })
 })

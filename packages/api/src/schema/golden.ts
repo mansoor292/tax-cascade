@@ -16,6 +16,8 @@ import { parseAmount } from '../catalog/amount.js'
 import { formSchema, goldenKey, keyInfo } from './index.js'
 import { resolveBox, transcriptKey } from './transcript_map.js'
 import type { BooksLine } from './books.js'
+import type { DocLine } from './documents.js'
+import { resolveKey } from './validate.js'
 
 export type GoldenValue = number | string | boolean | null
 export interface Cell { value: GoldenValue; where: string }
@@ -36,8 +38,12 @@ export interface GoldenRow {
   returns?: Record<string, Cell>
   /** the books (QuickBooks, classified to this line, before any tax computation) */
   books?: Cell & { summed?: boolean; accounts?: Array<{ account: string; amount: number; rule: string }> }
+  /** the source documents (W-2s, 1099s, K-1s) placed on the line, before any computation */
+  documents?: Cell & { sources?: string[] }
   /** scenarios by name */
   scenarios?: Record<string, Cell>
+  /** documents differ from the golden value by more than a dollar */
+  documents_differs?: boolean
   /** books differ from the golden value by more than a dollar */
   books_differs?: boolean
   golden?: GoldenValue
@@ -53,6 +59,7 @@ export interface GoldenInput {
   transcript?: { id: string; entries: CatalogEntry[]; as_of?: string | null; holdsYear?: number }
   returns?: Array<{ id: string; label: string; field_values: Record<string, unknown> | null | undefined }>
   books?: { label: string; lines: BooksLine[] }
+  documents?: { label: string; lines: DocLine[] }
   scenarios?: Array<{ id: string; label: string; field_values: Record<string, unknown> | null | undefined }>
   includeText?: boolean
 }
@@ -60,7 +67,7 @@ export interface GoldenInput {
 /** Forms whose keys can appear in a return's field_values, main form first. */
 const FAMILY: Record<string, string[]> = {
   '1120S': ['f1120s', 'f1125a', 'f1125e', 'f1120ssd', 'f1120ssk', 'f4562', 'f8825', 'f4797', 'f7004'],
-  '1120': ['f1120', 'f1125a', 'f1125e', 'f4562', 'f1120sg', 'f1120so', 'f2220', 'f4797', 'f7004'],
+  '1120': ['f1120', 'f1125a', 'f1125e', 'f4562', 'f1120sg', 'f1120so', 'f2220', 'f4797', 'f7004', 'f1120x'],
   '1040': ['f1040', 'f1040s1', 'f1040s2', 'f1040s3', 'f1040sa', 'f1040sb', 'f1040sc', 'f1040sd', 'f1040se', 'f1040sse', 'f1040s8', 'f7203', 'f8582', 'f8959', 'f8960', 'f8995', 'f8995a', 'f4562', 'f2210', 'f8949', 'f4868'],
 }
 
@@ -127,14 +134,14 @@ export function goldenRows(input: GoldenInput): GoldenRow[] {
     if (m.variant === 'as_filed' && !r.irs) r.irs = cell
     if (m.variant === 'irs_computed' && !r.irs_computed) r.irs_computed = cell
   }
-  // returns stored here (canonical keys)
+  // returns stored here (canonical keys; older rows' descriptive names resolve too)
   for (const ret of input.returns ?? []) {
     for (const [k, v] of Object.entries(ret.field_values ?? {})) {
-      const form = formOfKey(input.formType, k)
-      if (!form) continue
+      const at = resolveKey(input.formType, k)
+      if (!at) continue
       const val: GoldenValue = typeof v === 'number' || typeof v === 'boolean' ? v : typeof v === 'string' ? (parseAmount(v) ?? v) : null
       if (val === null || (!isNum(val) && !wantText)) continue
-      const r = row(form, goldenKey(form, k))
+      const r = row(at.form, at.key)
       r.returns = { ...(r.returns ?? {}), [ret.label]: { value: val, where: `${ret.label} (return ${ret.id.slice(0, 8)}), ${k}` } }
     }
   }
@@ -143,12 +150,17 @@ export function goldenRows(input: GoldenInput): GoldenRow[] {
     const r = row(b.form, b.key)
     r.books = { value: b.value, where: `${input.books!.label}${b.summed ? ' (sum of the lines mapped from the books)' : ''}`, ...(b.summed ? { summed: true } : {}), ...(b.accounts?.length ? { accounts: b.accounts } : {}) }
   }
+  // the source documents
+  for (const d of input.documents?.lines ?? []) {
+    const r = row(d.form, d.key)
+    r.documents = { value: d.value, where: `${input.documents!.label}: ${d.sources.join('; ')}`, sources: d.sources }
+  }
   // scenarios (engine field_values, canonical keys)
   for (const sc of input.scenarios ?? []) {
     for (const [k, v] of Object.entries(sc.field_values ?? {})) {
-      const form = formOfKey(input.formType, k)
-      if (!form || typeof v !== 'number' || !Number.isFinite(v)) continue
-      const r = row(form, goldenKey(form, k))
+      const at = resolveKey(input.formType, k)
+      if (!at || typeof v !== 'number' || !Number.isFinite(v)) continue
+      const r = row(at.form, at.key)
       r.scenarios = { ...(r.scenarios ?? {}), [sc.label]: { value: v, where: `scenario "${sc.label}" (${sc.id.slice(0, 8)}), ${k}` } }
     }
   }
@@ -168,9 +180,10 @@ export function goldenRows(input: GoldenInput): GoldenRow[] {
     else if (r.filed) { r.golden = r.filed.value; r.golden_from = 'filed' }
     else if (r.returns) { const first = Object.values(r.returns)[0]; r.golden = first.value; r.golden_from = 'return' }
     if (r.books && isNum(r.golden) && !same(r.books.value, r.golden)) r.books_differs = true
+    if (r.documents && isNum(r.golden) && !same(r.documents.value, r.golden)) r.documents_differs = true
   }
   // an IRS line reported as 0 with no box on the filed return says nothing
-  return [...rows.values()].filter(r => !(r.status === 'agrees' && !r.filed && !r.returns && !r.books && !r.scenarios))
+  return [...rows.values()].filter(r => !(r.status === 'agrees' && !r.filed && !r.returns && !r.books && !r.documents && !r.scenarios))
 }
 
 /** Does the transcript hold another year's return? Its headline figures all
@@ -202,5 +215,6 @@ export function summarize(rows: GoldenRow[]) {
   return {
     keys: rows.length, ...by, headline_differs: rows.filter(r => r.headline && r.status === 'differs').length,
     books_lines: rows.filter(r => r.books).length, books_differ_from_golden: rows.filter(r => r.books_differs).length,
+    documents_lines: rows.filter(r => r.documents).length, documents_differ_from_golden: rows.filter(r => r.documents_differs).length,
   }
 }

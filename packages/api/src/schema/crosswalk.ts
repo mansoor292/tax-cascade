@@ -70,6 +70,9 @@ export interface CrosswalkReport {
 const FORM_PREFIX: Record<string, string> = {
   f1040s1: 'sched1', f1040s2: 'sched2', f1040s3: 'sched3', f1040sc: 'schedC', f1040sd: 'schedD',
   f1040se: 'schedE', f1040s8: 'f8812', f4562: 'dep',
+  // the engine writes Form 1125-A as cogs.*, the 1040's Schedule B as schedB.*
+  // and Form 1120-X as amended.*
+  f1125a: 'cogs', f1040sb: 'schedB', f1120x: 'amended',
 }
 const SECTION_PREFIX: Record<string, string> = {
   'Schedule B': 'schedB', 'Schedule C': 'schedC', 'Schedule J': 'schedJ', 'Schedule K': 'schedK',
@@ -121,8 +124,12 @@ export function slugOf(label: string, max = 4): string {
 export function generatedKey(form: string, w: Pick<DictWidget, 'section' | 'line' | 'row' | 'col' | 'label' | 'kind' | 'export'>): string {
   // a numbered line on a main form's page 1 with no fill-map name: the
   // form's own prefix (meta. is the page header)
-  const prefix = MAIN.has(form) && w.section === '' && w.line ? form : prefixFor(form, w.section)
+  let prefix = MAIN.has(form) && w.section === '' && w.line ? form : prefixFor(form, w.section)
   const tok = lineToken(prefix, w.line, w.row)
+  // income./cogs./deductions./tax./payments. keys always carry a line number
+  // (canonical_schema rejects the old descriptive shape without one): a header
+  // box on those forms takes the form's own prefix
+  if (!tok && ['income', 'cogs', 'deductions', 'tax', 'payments'].includes(prefix)) prefix = form
   const col = w.col ? `_${w.col.replace(/[^A-Za-z0-9]/g, '').toLowerCase()}` : ''
   // A Yes/No pair shares its description; the export value tells them apart.
   const exp = w.kind !== 'text' && w.export && /^[A-Za-z0-9]{1,8}$/.test(w.export) ? `_x${w.export.toLowerCase()}` : ''
@@ -266,8 +273,24 @@ const revNum = (r: string) => Number(r) || 0
  *  line-token match cannot find them (the 1040 alias table files Schedule 2's
  *  additional Medicare tax and NIIT under `tax.`). form → { engine name: key }. */
 export const EXPLICIT_ALIASES: Record<string, Record<string, string>> = {
-  f1040: { 'result.L37_balance_due': 'owed.L37_amount_owed' },
+  f1040: {
+    'result.L37_balance_due': 'owed.L37_amount_owed',
+    // older 1040 proformas stored descriptive names (inventory of prod rows, 2026-10-20)
+    'income.w2_wages': 'income.L1a_w2_wages', 'deductions.total': 'deductions.L14_total',
+    'deductions.taxable_income': 'tax.L15_taxable_income', 'tax.add_16_17': 'tax.L18_add_16_17',
+    'tax.other_taxes': 'tax.L23_other_taxes', 'payments.w2_withholding': 'payments.L25a_w2',
+    'payments.total_withholding': 'payments.L25d_total', 'payments.estimated': 'payments.L26_estimated',
+    'payments.total_payments': 'payments.L33_total', 'result.penalty': 'penalty.L38_est_penalty',
+    'preparer.phone': 'preparer.firm_phone',
+  },
+  f1040s1: { 'schedule1.k1_income': 'sched1.L5_rental_partnership_scorp' },
   f1040s2: { 'tax.L11_addl_medicare': 'sched2.L11_additional_medicare', 'tax.L12_niit': 'sched2.L12_niit' },
+  f8959: { 'f8959.L10_wages_from_L4': 'f8959.L10_box' },
+  // 2025 split 4562 line 23 into 23a/23b; the builder fills the engine's line-23 figure into 23a (f2_3)
+  f4562: { 'dep.L23_263a': 'dep.L23a_assets_shown_part_iii' },
+  // one box, two names across the fill maps and the engine
+  f1120: { 'meta.business_code': 'meta.business_activity_code', 'preparer.firm_phone': 'preparer.phone' },
+  f1120s: { 'meta.business_activity_code': 'meta.business_code', 'preparer.firm_phone': 'preparer.phone' },
 }
 
 /** Build one form's schema from all its revisions. `engineKeys` are the keys

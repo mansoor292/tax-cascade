@@ -23,6 +23,10 @@ import { goldenRows, heldYear, summarize } from '../schema/golden.js'
 import { transcriptParts } from '../catalog/transcript.js'
 import { booksToGolden } from '../schema/books.js'
 import { booksPacket } from '../services/books.js'
+import { documentsToGolden, k1ToGolden, type DocLine } from '../schema/documents.js'
+import { SUPPORTED_DOC_TYPES } from '../services/document_merge.js'
+import { ENCRYPTED_DOC_FIELDS } from '../lib/row_crypto.js'
+import { listLinks } from '../services/entity_map.js'
 
 const supabase = lazyServiceClient()
 const router = Router()
@@ -72,6 +76,34 @@ router.get('/:entity_id', async (req, res) => {
         booksSource = { available: false, why: String(e?.message ?? e).slice(0, 200) }
       }
     }
+    // the source documents on file for the year, and for a 1040 the K-1s the
+    // group's own S corporations issued (entity map ownership, filed catalogs)
+    const { data: docRows, error: e4 } = await supabase.from('document')
+      .select('*').eq('entity_id', ent.id).eq('user_id', userId).eq('tax_year', year).in('doc_type', SUPPORTED_DOC_TYPES)
+    if (e4) return sendDbError(res, e4)
+    for (const d of docRows ?? []) await hydrate(supabase, d, { ...ENCRYPTED_DOC_FIELDS, userId })
+    const docView = documentsToGolden(ent.form_type, docRows ?? [])
+    const docLines: DocLine[] = [...docView.lines]
+    const k1From: string[] = []
+    if (ent.form_type === '1040') {
+      const hasK1Docs = (docRows ?? []).some(d => d.doc_type === 'k1')
+      const links = (await listLinks(supabase, userId)).filter(l => l.kind === 'owns' && l.from_entity_id === ent.id && l.to_entity_id &&
+        (!l.from_year || l.from_year <= year) && (!l.to_year || l.to_year >= year))
+      for (const l of links) {
+        const { data: issuer } = await supabase.from('tax_entity').select('id, name, form_type').eq('id', l.to_entity_id!).eq('user_id', userId).maybeSingle()
+        if (!issuer || issuer.form_type !== '1120S') continue
+        if (hasK1Docs) { docView.notes.push(`K-1 documents are on file, so ${issuer.name}'s K-1 is not added again from its return`); continue }
+        if (l.pct !== null && l.pct !== undefined && l.pct < 100) { docView.notes.push(`${issuer.name}: ${l.pct}% owned — its return's K-1s are not matched to a shareholder yet`); continue }
+        const src = pick(await loadSources(supabase, userId, issuer.id, [year], ['filed_return']), year).filed
+        if (!src) continue
+        const add = k1ToGolden(src.entries, issuer.name)
+        for (const a of add) {
+          const cur = docLines.find(x => x.form === a.form && x.key === a.key)
+          if (cur) { cur.value += a.value; cur.sources.push(...a.sources) } else docLines.push(a)
+        }
+        if (add.length) k1From.push(issuer.name)
+      }
+    }
     const { data: scs, error: e3 } = await supabase.from('scenario')
       .select('id, name, computed_result').eq('entity_id', ent.id).eq('user_id', userId).eq('tax_year', year)
     if (e3) return sendDbError(res, e3)
@@ -82,6 +114,7 @@ router.get('/:entity_id', async (req, res) => {
       ...(transcript ? { transcript: { id: transcript.catalog_id, entries: transcript.entries, as_of: transcript.as_of, ...(held !== undefined ? { holdsYear: held } : {}) } } : {}),
       returns,
       ...(books ? { books } : {}),
+      ...(docLines.length ? { documents: { label: `${year} documents on file`, lines: docLines } } : {}),
       scenarios,
     })
     const order = { differs: 0, irs_only: 1, irs_recomputed: 2, agrees: 3, filed_only: 4, returns_only: 5 } as const
@@ -93,6 +126,7 @@ router.get('/:entity_id', async (req, res) => {
         irs_return_transcript: transcript ? { catalog_id: transcript.catalog_id, type: transcript.transcript_type, as_of: transcript.as_of, ...(held !== undefined ? { holds_return_of: held, note: `The IRS has the ${held} return in the ${year} period; its figures are shown but are not golden.` } : {}) } : null,
         returns: returns.map(r => ({ id: r.id, label: r.label })),
         books: booksSource,
+        documents: { count: (docRows ?? []).length, types: [...new Set((docRows ?? []).map(d => d.doc_type))], lines: docLines.length, k1s_from_group_returns: k1From, unplaced: docView.unplaced, notes: docView.notes },
         scenarios: scenarios.map(x => ({ id: x.id, label: x.label })),
       },
       summary: summarize(rows),

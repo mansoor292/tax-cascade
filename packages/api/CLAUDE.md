@@ -49,7 +49,10 @@ src/
 │                      revisions, from data/line_dicts), index (keyFor /
 │                      goldenKey / keyEntries — applied on read), transcript_map
 │                      (IRS return-transcript lines → keys), books
-│                      (QuickBooks accounts → keys), golden (the
+│                      (QuickBooks accounts → keys), documents (W-2/1099/K-1
+│                      → keys, via services/document_merge — the compute
+│                      path's own merge), validate (every field_values key
+│                      golden or rejected on persist), golden (the
 │                      side-by-side view behind /api/golden). Rebuild with
 │                      `npx tsx scripts/schema/build_schema.ts`
 ├── review/            the fixed review framework: checks/ (catalog, entity,
@@ -76,7 +79,8 @@ data/line_dicts/       one gz JSON per IRS form revision: every widget with its
 data/schema/           the golden schema: <form>.json.gz (keys + per-revision
                        box → key), index.json (build report, fill-map
                        conflicts), transcript/<type>.json (curated IRS
-                       return-transcript line → box)
+                       return-transcript line → box), derived.json (the
+                       non-box keys field_values may hold)
 data/field_maps/       Textract-verified JSON maps (per form per year)
 data/irs_forms/        blank IRS PDFs, 2020–2025 — loadBlankForm() reads
                        these at runtime; they MUST be committed
