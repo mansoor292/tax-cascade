@@ -45,7 +45,7 @@ function fixture(entityId: string, year: number) {
       scenarios: [{ id: 's1', label: 'Pay officer more' }],
       documents: { count: 2, types: ['w2', '1099_int'], lines: 1, k1s_from_group_returns: [], unplaced: [], notes: [] },
     },
-    summary: { keys: 7, agrees: 1, differs: 1, irs_only: 1, filed_only: 3, irs_recomputed: 1, returns_only: 0, headline_differs: 1, books_lines: 4, books_differ_from_golden: 3 },
+    summary: { keys: 10, agrees: 1, differs: 1, irs_only: 1, filed_only: 3, irs_recomputed: 1, returns_only: 0, headline_differs: 1, books_lines: 4, books_differ_from_golden: 3 },
     // the API sends headline rows first; the page prints them in the form's order
     rows: [
       {
@@ -84,6 +84,14 @@ function fixture(entityId: string, year: number) {
         irs_computed: { value: 5171913, where: where('IRS return transcript: Income — Gross Profit Per Computer') },
         golden: 1516138, golden_from: 'filed', status: 'irs_recomputed',
       },
+      {
+        form: 'f1120s', key: 'schedK.L5a_dividends', label: 'Dividends: a. Ordinary dividends', section: 'Schedule K', line: '5a', key_line: true,
+        filed: { value: 516, where: where('filed return, Schedule K line 5a') }, books: { value: 516, where: '2024 books' }, golden: 516, golden_from: 'filed', status: 'filed_only',
+      },
+      // a zero no other source speaks to: never shown
+      { form: 'f1120s', key: 'schedM2.L8_end_balance', label: 'Balance at end of tax year', section: 'Schedule M-2', line: '8', col: 'a', key_line: true, filed: { value: 0, where: where('filed return, M-2 line 8') }, golden: 0, golden_from: 'filed', status: 'filed_only' },
+      // the same page printed twice in the PDF: the second copy is not a key line
+      { form: 'f1120s', key: 'tax.L22_ordinary_income', instance: '#2', label: 'Ordinary business income (loss). Subtract line 21 from line 6', section: '', line: '22', filed: { value: 162007, where: where('filed return, line 22, page 40') }, golden: 162007, golden_from: 'filed', status: 'filed_only' },
       {
         form: 'f1120s', key: 'deductions.L16_advertising', label: 'Advertising', section: '', line: '16', key_line: true,
         filed: { value: 600000, where: where('filed return, line 16') },
@@ -143,8 +151,9 @@ test.describe('Compare — all sources, one year', () => {
     await expect(table.locator('thead th')).toHaveText(['Line', 'Filed return (base)', 'IRS', 'Books', 'Against base'])
 
     // key lines, as the form prints them
-    await expect(page.getByRole('button', { name: 'Key lines (6)' })).toBeVisible()
-    await expect(page.getByTestId('line-ref')).toHaveText(['1120-S line 1a', '1120-S line 3', '1120-S line 8', '1120-S line 16', '1120-S line 22', '1120-S Schedule L line 7 (d)'])
+    await expect(page.getByRole('button', { name: 'Key lines (7)' })).toBeVisible()
+    await expect(page.getByTestId('line-ref')).toHaveText(['1120-S line 1a', '1120-S line 3', '1120-S line 8', '1120-S line 16', '1120-S line 22', '1120-S Schedule K line 5a', '1120-S Schedule L line 7 (d)'])
+    await expect(page.locator('[data-key="schedK.L5a_dividends"]')).toContainText('Dividends: a. Ordinary dividends')
 
     const obi = page.locator('[data-key="tax.L22_ordinary_income"]')
     await expect(obi).toContainText('$3,044,422')
@@ -164,8 +173,10 @@ test.describe('Compare — all sources, one year', () => {
     await expect(page.getByTestId('source-row')).toHaveCount(5)
     await expect(page.locator('[data-key="deductions.L16_advertising"]')).toHaveCount(0)
     await expect(page.locator('[data-key="cogs.L1_inventory"]')).toHaveCount(1)
-    await page.getByRole('button', { name: 'All lines (7)' }).click()
-    await expect(page.getByTestId('source-row')).toHaveCount(7)
+    await page.getByRole('button', { name: 'All lines (9)' }).click()
+    await expect(page.getByTestId('source-row')).toHaveCount(9)
+    await expect(page.locator('[data-key="schedM2.L8_end_balance"]')).toHaveCount(0)
+    await expect(page.getByTestId('line-ref').filter({ hasText: 'copy 2' })).toHaveText('1120-S line 22 · copy 2')
 
     // a row opens to its provenance; the EIN in an account name is masked
     await page.locator('[data-key="deductions.L8_salaries"]').click()

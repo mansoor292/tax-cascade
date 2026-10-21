@@ -29,14 +29,18 @@ export function formTitle(form: string): string {
   return suffix ? `${num}-${suffix.toUpperCase()}` : num
 }
 
-/** Where a row sits: "1120-S Schedule L line 24 (d)". */
-export function lineRef(r: Pick<GoldenRow, 'form' | 'section' | 'line' | 'col'>): string {
-  return `${formTitle(r.form)}${r.section ? ` ${r.section}` : ''}${r.line ? ` line ${r.line}` : ''}${r.col ? ` (${r.col})` : ''}`
+/** Where a row sits: "1120-S Schedule L line 24 (d)"; a second copy of a form
+ *  in the PDF (the 1040's Schedule E printed twice) says so. */
+export function lineRef(r: Pick<GoldenRow, 'form' | 'section' | 'line' | 'col'> & { instance?: string }): string {
+  const copy = /^#(\d+)$/.exec(r.instance ?? '')?.[1] ?? /^k1:(\d+)$/.exec(r.instance ?? '')?.[1]
+  const which = !copy ? '' : r.instance!.startsWith('k1:') ? ` · K-1 ${copy}` : copy !== '1' ? ` · copy ${copy}` : ''
+  return `${formTitle(r.form)}${r.section ? ` ${r.section}` : ''}${r.line ? ` line ${r.line}` : ''}${r.col ? ` (${r.col})` : ''}${which}`
 }
 
-/** The IRS's description up to its first sentence. */
+/** The IRS's description up to its first sentence — not at an item letter
+ *  ("Dividends: a. Ordinary dividends" stays whole). */
 export function shortLabel(label: string): string {
-  const first = label.split(/(?<=[a-z)])\. /)[0]
+  const first = label.split(/(?<=[a-z]{2}|\))\. /)[0]
   return first.length > 90 ? `${first.slice(0, 89)}…` : first
 }
 
@@ -115,7 +119,8 @@ export function versusBase(r: GoldenRow, base: Source, others: Source[]): { stat
   const b = cellOf(r, base).value
   const vals = others.map(s => [s, cellOf(r, s).value] as const).filter(([, v]) => has(v))
   if (!has(b)) return { state: vals.some(([, v]) => v !== 0) ? 'not_in_base' : 'none', differ: [] }
-  if (!vals.length) return { state: 'only_base', differ: [] }
+  // a zero no other source speaks to says nothing
+  if (!vals.length) return { state: b === 0 ? 'none' : 'only_base', differ: [] }
   const differ = vals.filter(([, v]) => !near(v, b)).map(([s]) => s)
   return { state: differ.length ? 'differs' : 'matches', differ }
 }

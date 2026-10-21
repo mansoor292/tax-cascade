@@ -197,6 +197,12 @@ describe('the golden view', () => {
     expect(rows.find(r => r.form === 'f1040')?.key_line).toBe(true)
     expect(rows.find(r => r.form === 'f1040se')?.key_line).toBe(true)
     expect(rows.find(r => r.form === 'f1040s1')?.key_line).toBeUndefined()
+    // a schedule printed twice in the PDF: only the first copy is a key line
+    const twice = goldenRows({ formType: '1040', year: 2023, filed: { id: 'f', entries: [
+      e({ form: 'f1040se', rev: '2023', section: 'Part II', line: '32', value: 9, canonical: K('f1040se|Part II|32|') }),
+      e({ form: 'f1040se', rev: '2023', section: 'Part II', line: '32', value: 9, canonical: K('f1040se|Part II|32|'), instance: '#2' }),
+    ] } })
+    expect(twice.map(r => [r.instance ?? '', !!r.key_line])).toEqual([['', true], ['#2', false]])
     for (const t of ['1120S', '1120', '1040']) for (const ref of keyLineRefs(t)) {
       const [form, section, line] = ref.split('|')
       expect(formSchema(form)?.keys.some(k => k.section === section && k.line === line && k.kind === 'text'), ref).toBe(true)

@@ -24,10 +24,14 @@ describe('all-sources view helpers', () => {
     expect(formTitle('f1040se')).toBe('Schedule E')
     expect(formTitle('f4562')).toBe('4562')
     expect(lineRef({ form: 'f1120s', section: 'Schedule L', line: '24', col: 'd' })).toBe('1120-S Schedule L line 24 (d)')
+    expect(lineRef({ form: 'f1040se', section: 'Part II', line: '32', instance: '#2' })).toBe('Schedule E Part II line 32 · copy 2')
+    expect(lineRef({ form: 'f1120ssk', section: 'Part III', line: '1', instance: 'k1:1' })).toBe('Schedule K-1 (1120-S) Part III line 1 · K-1 1')
   })
 
   it('shortens the IRS description and the source labels', () => {
     expect(shortLabel('Ordinary business income (loss). Subtract line 21 from line 6')).toBe('Ordinary business income (loss)')
+    expect(shortLabel('Dividends: a. Ordinary dividends')).toBe('Dividends: a. Ordinary dividends')
+    expect(shortLabel('Taxable interest. Attach Sch. B if required')).toBe('Taxable interest')
     expect(sourceLabel('proforma 2026-10-15 (815a9144)')).toBe('Proforma 10/15/2026')
     expect(sourceLabel('filed_import 2026-10-14 (0a1b2c3d)')).toBe('Filed import 10/14/2026')
   })
@@ -53,6 +57,7 @@ describe('all-sources view helpers', () => {
     expect(d.state).toBe('differs')
     expect(d.differ.map(s => s.id)).toEqual(['books'])
     expect(versusBase(row({ filed: { value: 600000, where: '' } }), base, others).state).toBe('only_base')
+    expect(versusBase(row({ filed: { value: 0, where: '' } }), base, others).state).toBe('none')
     expect(versusBase(row({ irs: { value: 3070386, where: '' } }), base, others).state).toBe('not_in_base')
     expect(versusBase(row({ irs: { value: 0, where: '' } }), base, others).state).toBe('none')
     // a source not chosen says nothing

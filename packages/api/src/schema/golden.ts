@@ -201,7 +201,8 @@ export function goldenRows(input: GoldenInput): GoldenRow[] {
   for (const e of input.filed?.entries ?? []) if (e.rev && !revOf.has(e.form)) revOf.set(e.form, e.rev)
   for (const r of rows.values()) {
     if (head.has(`${r.form}|${r.key}`)) r.headline = true
-    if (r.headline || isKeyLine(input.formType, r)) r.key_line = true
+    // a key line is the first copy of its form (a PDF can print a schedule twice)
+    if ((r.headline || isKeyLine(input.formType, r)) && (!r.instance || /(^#|:)1$/.test(r.instance))) r.key_line = true
     // Rows are keyed on the newest form; print the line and words of the
     // form this year was filed on (2023's AGI is line 11, not 2025's 11a).
     const p = placeIn(r.form, r.key, revOf.get(r.form) ?? revForYear(r.form, input.year))
