@@ -56,8 +56,9 @@ test.describe('deployed engine golden numbers', () => {
   })
 
   test('1040: TY2025 MFJ standard deduction and 12% bracket', async ({ request, baseURL }) => {
-    // 100,000 wages − 30,000 std deduction = 70,000 TI;
-    // 2,385 + 0.12 × (70,000 − 23,850) = 7,923.
+    // 100,000 wages − 31,500 std deduction = 68,500 TI (31,500, not Rev.
+    // Proc. 2024-40's 30,000: the One Big Beautiful Bill Act §70102 raised
+    // the 2025 amount retroactively); 2,385 + 0.12 × (68,500 − 23,850) = 7,743.
     const res = await request.post(`${baseURL}/api/compute/1040`, {
       headers: H(),
       data: { tax_year: 2025, filing_status: 'mfj', wages: 100_000 },
@@ -65,8 +66,8 @@ test.describe('deployed engine golden numbers', () => {
     expect(res.status()).toBe(200)
     const r = (await res.json()).result
     expect(r.computed.agi).toBe(100_000)
-    expect(r.computed.taxable_income).toBe(70_000)
-    expect(r.computed.income_tax).toBe(7_923)
+    expect(r.computed.taxable_income).toBe(68_500)
+    expect(r.computed.income_tax).toBe(7_743)
   })
 
   test('cascade: S-corp income lands on the shareholder 1040', async ({ request, baseURL }) => {
@@ -105,8 +106,9 @@ test.describe('deployed engine golden numbers', () => {
     expect(res.status()).toBe(200)
     const t = await res.json()
     const body = JSON.stringify(t)
-    // TY2025 MFJ standard deduction (Rev. Proc. 2024-40) and the 37% top rate.
-    expect(body).toContain('30000')
+    // TY2025 MFJ standard deduction (OBBBA §70102) and the 37% top rate. Read
+    // the field itself: '31500' is also a substring of the 315,000 thresholds.
+    expect(t.standard_deduction?.mfj).toBe(31_500)
     expect(body).toMatch(/0\.37|37/)
   })
 
