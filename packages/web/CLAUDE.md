@@ -83,6 +83,13 @@ style: every spec pins a bug that actually shipped (blank-page states, SPA
 fallback swallowing /auth, OAuth discovery served as HTML, RLS isolation).
 Keep that discipline — a fixed bug gets a spec.
 
+Who the UI is for, and the journeys each person takes, are in
+`docs/USER_PERSONAS.md` (business owner, tax preparer, day-one owner, outside
+reviewer, Claude). A new page or view needs at least one spec that reaches it
+by clicking from that persona's starting page, not by `page.goto` of its URL:
+Compare → All sources shipped unreachable for exactly that reason
+(2026-10-21).
+
 ## Env
 
 `VITE_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — the first
