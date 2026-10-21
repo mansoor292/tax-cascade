@@ -124,6 +124,23 @@ test.describe('Compare — all sources, one year', () => {
     expect(problems).toEqual([])
   })
 
+  // 2026-10-21: the view shipped behind a "Compare years" button shown only
+  // when a year had an amendment — none of the owner's entities has one, so
+  // nobody could reach it without typing the URL. The other tests here open
+  // the URL directly, which is how that went unseen.
+  test('reached from the entity page: Returns → Compare opens all sources', async ({ page }) => {
+    const problems = watch(page)
+    await signInThroughUi(page, email)
+    await expect(page).toHaveURL(/\/app/, { timeout: 20_000 })
+    await page.goto(`/app/entities/${entityId}`)
+    await page.getByRole('button', { name: 'Compare sources' }).click()
+    await expect(page).toHaveURL(new RegExp(`/app/compare/${entityId}\\?view=sources&year=\\d{4}`))
+    await expect(page.getByRole('tab', { name: 'All sources, one year' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByTestId('sources-view')).toBeVisible()
+    await expect(page.getByTestId('sources-empty')).toContainText('Nothing is on file', { timeout: 20_000 })
+    expect(problems).toEqual([])
+  })
+
   const open = async (page: Page, query: string, asked: string[] = []) => {
     await page.route('**/api/golden/**', async route => {
       const url = new URL(route.request().url())

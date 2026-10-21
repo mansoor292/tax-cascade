@@ -154,6 +154,15 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-lg font-medium">Tax Returns</h3>
         <div className="flex items-center gap-2">
+          {/* Always shown: the all-sources view reads the filed PDF, the IRS
+              transcripts and the books, so it needs no stored return. It once
+              sat only behind "Compare years" (amendments only) and no entity
+              had one, so nobody could reach it (2026-10-21). */}
+          <Button variant="outline" size="sm" className="gap-2"
+            onClick={() => nav(`/app/compare/${entityId}?view=sources&year=${Math.max(new Date().getFullYear() - 1, ...grouped.map(g => g.year))}`)}>
+            <BarChart3 className="h-4 w-4" />
+            Compare sources
+          </Button>
           {grouped.some(g => g.filed && g.amendments.length > 0) && (
             <Button variant="outline" size="sm" onClick={() => nav(`/app/compare/${entityId}`)} className="gap-2">
               <BarChart3 className="h-4 w-4" />
