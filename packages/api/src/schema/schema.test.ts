@@ -10,9 +10,9 @@ import { gunzipSync } from 'node:zlib'
 import { join } from 'node:path'
 import type { CatalogEntry, LineDict } from '../catalog/types.js'
 import { buildFormSchema, normLabel, generatedKey, parseEngineKey } from './crosswalk.js'
-import { SCHEMA_DIR, formSchema, keyFor, goldenKey, keyEntries } from './index.js'
+import { SCHEMA_DIR, formSchema, keyFor, goldenKey, keyEntries, placeIn, revForYear } from './index.js'
 import { auditTable, resolveBox, transcriptKey } from './transcript_map.js'
-import { goldenRows, heldYear } from './golden.js'
+import { goldenRows, heldYear, keyLineRefs } from './golden.js'
 import { validateFieldValues } from '../maps/canonical_schema.js'
 
 const DICTS = join(SCHEMA_DIR, '..', 'line_dicts')
@@ -166,6 +166,41 @@ describe('the golden view', () => {
     expect(heldYear('1120S', 2023, t, byYear)).toBeUndefined()
     const rows = goldenRows({ formType: '1120S', year: 2024, filed: { id: 'f', entries: byYear.get(2024)! }, transcript: { id: 't', entries: t, holdsYear: 2023 } })
     expect(rows.find(r => r.key === 'tax.L22_ordinary_income')).toMatchObject({ golden: 100_000, golden_from: 'filed', status: 'differs' })
+  })
+
+  it('prints the line and words of the form the year was filed on', () => {
+    const agi = K('f1040||11a|') // the 2025 form's line 11a
+    expect(placeIn('f1040', agi, '2023')).toMatchObject({ line: '11' })
+    expect(placeIn('f1040', agi, '2025')).toMatchObject({ line: '11a' })
+    expect(revForYear('f7203', 2023)).toBe('2022') // revised irregularly
+    expect(revForYear('f1040', 2019)).toBe('2021') // older than any revision: the oldest
+    const rows = goldenRows({
+      formType: '1040', year: 2023,
+      filed: { id: 'f', entries: [e({ form: 'f1040', rev: '2023', line: '11', value: 3_440_652, canonical: agi }), e({ form: 'f1040', rev: '2023', line: '26', value: 1_250_000, canonical: 'payments.L26_estimated' })] },
+      // a row no filed box names takes the year's revision too
+      documents: { label: 'docs', lines: [{ form: 'f1040', key: K('f1040||13a|'), value: 501_393, sources: [] }] },
+    })
+    expect(rows.find(r => r.key === agi)).toMatchObject({ line: '11', headline: true })
+    expect(rows.find(r => r.key === 'payments.L26_estimated')?.label).toMatch(/^2023 estimated tax payments/)
+    expect(rows.find(r => r.key === K('f1040||13a|'))?.line).toBe('13')
+  })
+
+  it('marks the key lines: the main form\'s numbered lines and the listed schedule lines', () => {
+    const rows = goldenRows({
+      formType: '1040', year: 2025,
+      documents: { label: 'docs', lines: [
+        { form: 'f1040', key: K('f1040||1a|'), value: 1, sources: [] },
+        { form: 'f1040se', key: K('f1040se|Part II|32|'), value: 2, sources: [] },
+        { form: 'f1040s1', key: K('f1040s1|Part I|1|'), value: 3, sources: [] },
+      ] },
+    })
+    expect(rows.find(r => r.form === 'f1040')?.key_line).toBe(true)
+    expect(rows.find(r => r.form === 'f1040se')?.key_line).toBe(true)
+    expect(rows.find(r => r.form === 'f1040s1')?.key_line).toBeUndefined()
+    for (const t of ['1120S', '1120', '1040']) for (const ref of keyLineRefs(t)) {
+      const [form, section, line] = ref.split('|')
+      expect(formSchema(form)?.keys.some(k => k.section === section && k.line === line && k.kind === 'text'), ref).toBe(true)
+    }
   })
 
   it('stored catalogs get golden keys on read, overriding older keys', () => {

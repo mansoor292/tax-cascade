@@ -13,7 +13,7 @@
  */
 import type { CatalogEntry } from '../catalog/types.js'
 import { parseAmount } from '../catalog/amount.js'
-import { formSchema, goldenKey, keyInfo } from './index.js'
+import { formSchema, goldenKey, keyInfo, placeIn, revForYear } from './index.js'
 import { resolveBox, transcriptKey } from './transcript_map.js'
 import type { BooksLine } from './books.js'
 import type { DocLine } from './documents.js'
@@ -50,6 +50,9 @@ export interface GoldenRow {
   golden_from?: 'irs' | 'filed' | 'return'
   status: RowStatus
   headline?: boolean
+  /** one of the lines a reader checks first (the "Key lines" view): the main
+   *  form's numbered lines and the schedule lines in KEY_LINES */
+  key_line?: boolean
 }
 
 export interface GoldenInput {
@@ -79,6 +82,33 @@ const HEADLINE: Record<string, string[]> = {
 }
 export function headlineKeys(formType: string): Set<string> {
   return new Set((HEADLINE[formType] ?? []).map(resolveBox).filter((r): r is { form: string; key: string } => !('error' in r)).map(r => `${r.form}|${r.key}`))
+}
+
+/** The main form of a return type, whose numbered lines are all key lines. */
+const MAIN: Record<string, string> = { '1120S': 'f1120s', '1120': 'f1120', '1040': 'f1040' }
+/** The schedule lines a reader checks first besides the main form's: income
+ *  items, distributions, tax, and the balance-sheet lines a misposting or a
+ *  books gap shows on. Newest-form locations, form|section|line, any column. */
+const KEY_LINES: Record<string, string[]> = {
+  '1120S': [
+    ...['1', '2', '3c', '4', '5a', '5b', '6', '7', '8a', '9', '10', '11', '12a', '16c', '16d', '17a', '18'].map(l => `f1120s|Schedule K|${l}`),
+    ...['1', '7', '15', '19', '24', '27'].map(l => `f1120s|Schedule L|${l}`),
+    'f1120s|Schedule M-2|1', 'f1120s|Schedule M-2|8',
+  ],
+  '1120': [
+    'f1120|Schedule J|1a', 'f1120|Schedule J|2', 'f1120|Schedule J|11',
+    ...['1', '7', '15', '25', '28'].map(l => `f1120|Schedule L|${l}`),
+  ],
+  '1040': [
+    'f1040s1|Part I|5', 'f1040s1|Part I|10', 'f1040s1|Part II|26', 'f1040s2|Part I|3', 'f1040s2|Part II|11', 'f1040s2|Part II|12', 'f1040s2|Part II|21',
+    'f1040s3|Part I|8', 'f1040s3|Part II|15', 'f1040sd|Part I|7', 'f1040sd|Part II|15', 'f1040sd|Part III|16', 'f1040se|Part II|32', 'f1040se|Part V|41',
+    'f7203|Part I|6', 'f7203|Part I|15',
+  ],
+}
+export function keyLineRefs(formType: string): string[] { return KEY_LINES[formType] ?? [] }
+function isKeyLine(formType: string, r: Pick<GoldenRow, 'form' | 'section' | 'line'>): boolean {
+  if (r.form === MAIN[formType] && !r.section && /^\d/.test(r.line)) return true
+  return (KEY_LINES[formType] ?? []).includes(`${r.form}|${r.section}|${r.line}`)
 }
 
 /** Which form a field_values key belongs to, for a return type. */
@@ -166,8 +196,16 @@ export function goldenRows(input: GoldenInput): GoldenRow[] {
   }
   const head = headlineKeys(input.formType)
   const misposted = input.transcript?.holdsYear !== undefined
+  // the revision each form was filed on (else the one the year is filed on)
+  const revOf = new Map<string, string>()
+  for (const e of input.filed?.entries ?? []) if (e.rev && !revOf.has(e.form)) revOf.set(e.form, e.rev)
   for (const r of rows.values()) {
     if (head.has(`${r.form}|${r.key}`)) r.headline = true
+    if (r.headline || isKeyLine(input.formType, r)) r.key_line = true
+    // Rows are keyed on the newest form; print the line and words of the
+    // form this year was filed on (2023's AGI is line 11, not 2025's 11a).
+    const p = placeIn(r.form, r.key, revOf.get(r.form) ?? revForYear(r.form, input.year))
+    if (p) { r.section = p.section; r.line = p.line; r.label = p.label; if (p.col) r.col = p.col; else delete r.col }
     // a recomputation of 0 against a real figure is the IRS not computing it
     if (r.irs_computed && r.irs_computed.value === 0 && isNum(r.filed?.value) && r.filed!.value !== 0) delete r.irs_computed
     const irsVal = r.irs?.value

@@ -387,8 +387,30 @@ boxes (2.2%) — and the IRS renumbers lines from year to year.
   every stored key on prod (2026-10-20): all resolve except two legacy Schedule
   L names (a column line 11a does not have).
 - **On screen:** Compare → "All sources, one year" (`?view=sources&year=`) shows
-  the golden view: differences first, every source a column, a row opening to
-  where each figure came from.
+  the golden view, a row opening to where each figure came from.
+- **A base and what to compare it with (2026-10-21).** The owner read a
+  three-column breakdown (filed · IRS · books) and asked for it on screen, with a
+  way to pick the base return and choose what sits beside it. The view now has a
+  **Base** (any source: the filed return, the IRS's record, the books, the
+  documents, a stored return, a scenario) and a **Compare with** set, kept in the
+  URL (`&base=filed&with=irs,books`; stored returns and scenarios as
+  `ret:<id8>` / `sc:<id8>`). The default is the filed return against the IRS and
+  the books (the documents for a return with no books). Each figure shows its
+  difference from the base; a blank is not a difference (the transcript, the
+  documents and imported returns carry only some lines). The IRS column falls
+  back to the IRS's own calculation, marked ¹.
+- **Key lines and the year's own line numbers (same day).** Rows carry
+  `key_line` — the main form's numbered lines plus the schedule lines in
+  `KEY_LINES` (golden.ts: Schedule K income items and distributions, Schedule L
+  cash/loans/total assets/retained earnings, Schedule J tax, the 1040's Schedule
+  1–3/D/E totals and Form 7203) — and the page opens on them, in the order the
+  form prints them. Keys are anchored on the newest form, so a 2023 view used to
+  print 2025 line numbers and words (AGI "line 11a", "2025 estimated tax
+  payments"). The schema build now records where each key sits on every older
+  revision when that differs (`SchemaKey.at`, 2,319 keys), and the golden view
+  labels each row from the revision the year was filed on (`placeIn`,
+  `revForYear`). Review findings that quote a line (irs.return_transcript) get
+  the year's numbering too.
 
 ## Check catalogue (initial)
 

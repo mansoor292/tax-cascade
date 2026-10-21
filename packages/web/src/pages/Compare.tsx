@@ -222,7 +222,7 @@ export default function Compare() {
         <TabsContent value="sources">
           {entityId && view === 'sources' && (
             <SourcesView entityId={entityId} years={sourceYears} year={sourcesYear}
-              onYear={y => setSearchParams({ view: 'sources', year: String(y) }, { replace: true })} />
+              onYear={y => setSearchParams(p => { const n = new URLSearchParams(p); n.set('view', 'sources'); n.set('year', String(y)); return n }, { replace: true })} />
           )}
         </TabsContent>
         <TabsContent value="years" className="space-y-6">

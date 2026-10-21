@@ -44,7 +44,13 @@ export interface SchemaKey {
   source: KeySource
   /** Other names the engine writes for the same box */
   aliases?: string[]
+  /** Where the box sits on an older revision, when that differs from the
+   *  newest (the 2023 1040 prints AGI on line 11; the 2025 form on 11a). A
+   *  year's view prints that year's line and words, not the newest form's. */
+  at?: Record<string, KeyPlace>
 }
+
+export interface KeyPlace { section: string; line: string; col?: string; label: string }
 
 export interface FormSchema {
   form: string
@@ -444,6 +450,20 @@ export function buildFormSchema(form: string, dicts: LineDict[], engineKeys: str
     const newest = revs.find(d => d.rev === k.revs[k.revs.length - 1])
     const w = newest?.widgets.find(x => revisions[newest.rev][x.name] === k.key)
     if (w) Object.assign(k, { section: w.section, line: w.line, label: w.label })
+  }
+  // where each key sits on the older revisions, when that differs
+  const widgetOf = new Map<string, Map<string, DictWidget>>()
+  for (const d of revs) {
+    const m = new Map<string, DictWidget>()
+    for (const w of d.widgets) { const k = revisions[d.rev][w.name]; if (k && !m.has(k)) m.set(k, w) }
+    widgetOf.set(d.rev, m)
+  }
+  for (const k of keys.values()) {
+    for (const rev of k.revs) {
+      const w = widgetOf.get(rev)?.get(k.key)
+      if (!w || (w.section === k.section && w.line === k.line && (w.col ?? '') === (k.col ?? '') && w.label === k.label)) continue
+      k.at = { ...(k.at ?? {}), [rev]: { section: w.section, line: w.line, ...(w.col ? { col: w.col } : {}), label: w.label } }
+    }
   }
   return {
     form, title: revs[0]?.title ?? form,

@@ -32,6 +32,8 @@ export interface GoldenRow {
   golden_from?: 'irs' | 'filed' | 'return'
   status: RowStatus
   headline?: boolean
+  /** one of the lines a reader checks first (the "Key lines" view) */
+  key_line?: boolean
 }
 
 export interface GoldenView {

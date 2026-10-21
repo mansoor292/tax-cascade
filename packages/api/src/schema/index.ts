@@ -12,7 +12,7 @@ import { gunzipSync } from 'node:zlib'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { CatalogEntry } from '../catalog/types.js'
-import type { SchemaKey } from './crosswalk.js'
+import type { KeyPlace, SchemaKey } from './crosswalk.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 export const SCHEMA_DIR = join(HERE, '..', '..', 'data', 'schema')
@@ -53,6 +53,22 @@ export function keyInfo(form: string, key: string): SchemaKey | undefined {
   const s = formSchema(form)
   if (!s) return undefined
   return s.byKey.get(key) ?? s.byKey.get(s.aliasOf.get(key) ?? '')
+}
+
+/** The revision of a form a tax year is filed on: the newest one not after
+ *  the year (1125-A's 2018 revision serves 2023), else the oldest. */
+export function revForYear(form: string, year: number): string | undefined {
+  const revs = Object.keys(formSchema(form)?.revisions ?? {}).sort((a, b) => Number(a) - Number(b))
+  return [...revs].reverse().find(r => Number(r) <= year) ?? revs[0]
+}
+
+/** Where a key sits on one revision of its form — that year's section, line,
+ *  column and words. Undefined when the box is not on that revision. */
+export function placeIn(form: string, key: string, rev: string | undefined): KeyPlace | undefined {
+  const k = keyInfo(form, key)
+  if (!k || !rev) return undefined
+  if (k.at?.[rev]) return k.at[rev]
+  return k.revs.includes(rev) ? { section: k.section, line: k.line, ...(k.col ? { col: k.col } : {}), label: k.label } : undefined
 }
 
 /** The golden key for a name that may be an alias (an older fill-map or
