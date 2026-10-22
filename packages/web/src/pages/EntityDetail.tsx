@@ -112,7 +112,10 @@ export default function EntityDetail() {
 
   const currentBasis = readBasis(entity)
 
-  if (loading) {
+  // Skeleton on the first load only. A refresh after a change (a new
+  // amendment, an edit) used to blank the page and remount the tabs, so the
+  // year you had open closed under you.
+  if (loading && (!entity || entity.id !== id)) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />

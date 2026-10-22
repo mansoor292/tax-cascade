@@ -95,14 +95,15 @@ scripts/               deploy-reload.sh + load-ssm-env.sh are LOAD-BEARING
 
 Mounted in `server.ts` (~line 217): `/auth` (signup/signin/me/API keys),
 `/api/scenarios`, `/api/documents`, `/api/returns` (the big one — compute,
-compute_from_qbo, amend, validate, PDF, extensions), `/api/entities`,
+compute_from_qbo, amend, validate, PDF, extensions; `POST /amendments` starts
+one from the filed return, services/amendment_base.ts), `/api/entities`,
 `/api/schema` (self-describing form specs — clients should read this instead
 of hardcoding), `/api/qbo` (OAuth, reports, transactions, AI
 recategorization, bank reconciliation), `/api/stripe`, `/api/scratch` (KV
 offload for MCP context), `/api/intake` (Gemini gap-fill), `/api/calendar`,
 `/api/discover`, `/api/catalog` (catalogue a return PDF, status, query),
 `/api/review` (run the framework, latest findings, one summary across
-entities, resolutions), `/api/facts` (answers to the fact registry in
+entities, resolutions; `GET /filing` = filed and IRS-accepted per year, review/filing.ts), `/api/facts` (answers to the fact registry in
 `@taxengine/shared` facts.ts, table `tax_fact`, superseded never
 overwritten; `/:entity_id/gaps` is the per-return list every return of a
 type is held to — logic in services/facts.ts), `/api/notes` (return notes —

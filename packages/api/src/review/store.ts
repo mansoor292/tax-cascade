@@ -9,7 +9,7 @@ import { encryptedFields, hydrate, hydrateAll, ENCRYPTED_REVIEW_FIELDS, ENCRYPTE
 import { listFacts, computeFactGaps } from '../services/facts.js'
 import { isFactFormType } from '../services/facts.js'
 import type { CatalogEntry, CatalogCoverage } from '../catalog/types.js'
-import type { CatalogView, DocumentFact, EntityInfo, FormType } from './types.js'
+import type { CatalogView, DocumentFact, EntityInfo, FormType, ReviewContext } from './types.js'
 import { buildContext, type EntityBundle } from './context.js'
 import { runFramework, diffRuns, tieCheckIds, type Finding } from './framework.js'
 import type { AskJson } from './ai.js'
@@ -19,13 +19,17 @@ import { listLinks } from '../services/entity_map.js'
 import { listSets, versionRows } from '../services/versions.js'
 import { versionsForView, viewBundles, viewFacts, type VersionRow } from './versions.js'
 
-export async function loadBundles(supabase: SupabaseClient, userId: string): Promise<EntityBundle[]> {
-  const { data: ents, error } = await supabase.from('tax_entity')
+export async function loadBundles(supabase: SupabaseClient, userId: string, entityIds?: string[]): Promise<EntityBundle[]> {
+  let eq = supabase.from('tax_entity')
     .select('id, name, form_type, entity_type, date_incorporated, meta').eq('user_id', userId)
+  if (entityIds) eq = eq.in('id', entityIds)
+  const { data: ents, error } = await eq
   if (error) throw new Error(error.message)
-  const { data: cats, error: e2 } = await supabase.from('return_catalog')
+  let cq = supabase.from('return_catalog')
     .select('id, user_id, entity_id, tax_year, kind, transcript_type, as_of, source_filename, status, coverage, entries, entries_enc')
     .eq('user_id', userId).is('superseded_by', null)
+  if (entityIds) cq = cq.in('entity_id', entityIds)
+  const { data: cats, error: e2 } = await cq
   if (e2) throw new Error(e2.message)
   const rows = await hydrateAll(supabase, cats ?? [], { json: ['entries'] })
   const byEntity = new Map<string, CatalogView[]>()
@@ -69,6 +73,23 @@ async function loadDocuments(supabase: SupabaseClient, userId: string, entityId:
     .map(r => ({ id: r.id, doc_type: r.doc_type, tax_year: r.tax_year, key_values: ((r.meta as any)?.key_values ?? {}) as Record<string, unknown>, summary: (r.meta as any)?.summary }))
 }
 
+/** Extensions stored here, and the first year with any record: a filed
+ *  return, a stored return or a source document (not a transcript alone). */
+async function loadFiling(supabase: SupabaseClient, entityId: string, catalogs: CatalogView[], documents: DocumentFact[]): Promise<NonNullable<ReviewContext['filing']>> {
+  const { data, error } = await supabase.from('tax_return').select('tax_year, source').eq('entity_id', entityId)
+  if (error) throw new Error(error.message)
+  const rows = data ?? []
+  const years = [
+    ...rows.map(r => r.tax_year as number),
+    ...catalogs.filter(c => c.kind === 'filed_return' && c.tax_year).map(c => c.tax_year as number),
+    ...documents.map(d => d.tax_year).filter((y): y is number => typeof y === 'number'),
+  ].filter(y => Number.isFinite(y))
+  return {
+    extended_years: rows.filter(r => r.source === 'extension').map(r => r.tax_year as number),
+    ...(years.length ? { first_record_year: Math.min(...years) } : {}),
+  }
+}
+
 export interface RunReviewResult {
   run_id: string
   tax_year: number
@@ -103,10 +124,11 @@ export async function runReview(
     ? computeFactGaps({ formType, taxYear: year, facts }).map(g => ({ key: g.key, question: g.question, status: g.status }))
     : undefined
   const documents = await loadDocuments(supabase, userId, entityId)
+  const filing = await loadFiling(supabase, entityId, self.catalogs, documents)
   const ctx = buildContext({
     self, others: bundles.filter(b => b !== self), year,
     facts: facts.map(f => ({ fact_key: f.fact_key, tax_year: f.tax_year, subject: f.subject, value: f.value, status: f.status, source: f.source, recorded_at: f.recorded_at, superseded_by: f.superseded_by })),
-    documents, factGaps: gaps, links: map.links, factsByEntity: viewFacts(map.factsByEntity, versions),
+    documents, factGaps: gaps, links: map.links, factsByEntity: viewFacts(map.factsByEntity, versions), filing,
   })
   const catalogIds = [...self.catalogs, ...ctx.linked.flatMap(l => l.catalogs)].map(c => c.id)
 

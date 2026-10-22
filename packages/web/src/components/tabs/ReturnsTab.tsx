@@ -20,6 +20,8 @@ import { fmtMoney, fmtDelta } from '@/lib/format'
 import { SOURCE_LABEL, SOURCE_VARIANT } from '@/lib/labels'
 import { keyMetric as keyMetricShared } from '@taxengine/shared'
 import { groupByYear } from './returns/helpers'
+import { useFiling } from '@/hooks/use-filing'
+import AcceptedBadge from './returns/AcceptedBadge'
 import ComputeDialog from './returns/ComputeDialog'
 import YearDetail from './returns/YearDetail'
 import LoadError from '@/components/LoadError'
@@ -49,7 +51,10 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
   const [gapFilling, setGapFilling] = useState<string | null>(null)
   const [creatingAmendment, setCreatingAmendment] = useState<string | null>(null)
   const [recomputing, setRecomputing] = useState<string | null>(null)
-  const grouped = useMemo(() => groupByYear(returns), [returns])
+  const [editing, setEditing] = useState<TaxReturn | null>(null)
+  const { entities: filingEntities } = useFiling(entityId)
+  const filing = filingEntities[0]?.years
+  const grouped = useMemo(() => groupByYear(returns, filing), [returns, filing])
 
   // Pick the column label off whichever form-type is dominant for this entity.
   // Single-entity view almost always has one form_type anyway.
@@ -70,14 +75,18 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
     setDownloading(null)
   }
 
-  const handleCreateAmendment = async (filed: TaxReturn) => {
-    // SOP-03 finding: one accidental click created a blank amendment and the
-    // year row read as a −$34k tax change. Creation now confirms, like delete.
-    if (!confirm(`Create an amendment for the filed ${filed.tax_year} ${filed.form_type}? It starts blank — the year row will show it alongside the filed return until you compute it.`)) return
-    setCreatingAmendment(filed.id)
+  const handleCreateAmendment = async (year: number) => {
+    // SOP-03 finding: one accidental click created a blank amendment. It
+    // confirms, and now starts from the filed figures rather than blank.
+    if (!confirm(`Start a ${year} amendment from the filed return? It begins with the filed figures; then change the lines that need changing.`)) return
+    setCreatingAmendment(String(year))
     try {
-      await createAmendment(filed)
-      toast.success(`Amendment for ${filed.tax_year} ${filed.form_type} created`)
+      const r = await createAmendment(entityId, year)
+      const n = r.differs_from_base.length
+      toast.success(`${year} amendment started from ${r.base.label}.` + (n
+        ? ` ${n} ${n === 1 ? 'line computes' : 'lines compute'} differently from how ${n === 1 ? 'it was' : 'they were'} filed — check them in Compare vs filed.`
+        : ' It matches the filed return line for line.'))
+      setExpandedYear(year)
       onUpdate()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Create amendment failed')
@@ -127,8 +136,12 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
     setRecomputing(null)
   }
 
+  // The amendment beside the filed return and the books, every line labelled
+  // by the IRS (the Sources view). The old amendment-vs-filed page printed
+  // internal keys and each line twice (UI audit #24).
   const handleCompareAmendment = (amendment: TaxReturn) => {
-    nav(`/app/compare/${entityId}?amendment_id=${amendment.id}`)
+    const q = new URLSearchParams({ view: 'sources', year: String(amendment.tax_year), base: 'filed', with: `ret:${amendment.id.slice(0, 8)},books` })
+    nav(`/app/compare/${entityId}?${q}`)
   }
 
   const handleDelete = async (r: TaxReturn) => {
@@ -178,7 +191,7 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
         </div>
       </div>
 
-      {returns.length === 0 ? (
+      {grouped.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <FileText className="h-10 w-10 text-muted-foreground/50 mb-3" />
@@ -250,11 +263,12 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
                         </div>
                       </TableCell>
                       <TableCell>
-                        {g.filed ? (
+                        {g.filed || g.filing?.filed ? (
                           <div className="space-y-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.filed_import}`}>Filed</Badge>
-                              <span className="text-sm font-mono">{fmt(filedTax)}</span>
+                              {g.filed && <span className="text-sm font-mono">{fmt(filedTax)}</span>}
+                              {g.filing && <AcceptedBadge filing={g.filing} />}
                             </div>
                             {gapStats && typeof gapStats.gaps_total === 'number' && (
                               <p className="text-xs text-muted-foreground">
@@ -287,15 +301,15 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
                               </Badge>
                             )}
                           </div>
-                        ) : g.filed ? (
+                        ) : g.filed || g.filing?.filed ? (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={e => { e.stopPropagation(); handleCreateAmendment(g.filed!) }}
-                            disabled={creatingAmendment === g.filed.id}
+                            onClick={e => { e.stopPropagation(); handleCreateAmendment(g.year) }}
+                            disabled={creatingAmendment === String(g.year)}
                             className="gap-1 text-xs h-7"
                           >
-                            {creatingAmendment === g.filed.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitBranch className="h-3 w-3" />}
+                            {creatingAmendment === String(g.year) ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitBranch className="h-3 w-3" />}
                             Create
                           </Button>
                         ) : (
@@ -329,12 +343,14 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
                       <TableRow className="bg-muted/20 hover:bg-muted/20">
                         <TableCell colSpan={5} className="py-3">
                           <YearDetail
+                            entityId={entityId}
                             group={g}
                             onPdf={handlePdf}
                             onDelete={handleDelete}
                             onFillGaps={handleFillGaps}
                             onRecompute={handleRecompute}
                             onCompareAmendment={handleCompareAmendment}
+                            onEditLines={setEditing}
                             downloading={downloading}
                             gapFilling={gapFilling}
                             recomputing={recomputing}
@@ -348,6 +364,21 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
             </TableBody>
           </Table>
         </Card>
+      )}
+
+      {/* Edit an amendment's lines: its inputs, prefilled, recomputed in place */}
+      {editing && (
+        <ComputeDialog
+          key={editing.id}
+          open
+          onOpenChange={o => { if (!o) setEditing(null) }}
+          entityId={entityId}
+          defaultFormType={editing.form_type}
+          edit={{ returnId: editing.id, taxYear: editing.tax_year, inputs: (editing.input_data || {}) as Record<string, unknown> }}
+          compute={compute}
+          validate={validate}
+          onComputed={onUpdate}
+        />
       )}
 
       {/* Compute dialog */}

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Building2, Plus } from 'lucide-react'
 import { useEntities } from '@/hooks/use-entities'
+import { useFiling } from '@/hooks/use-filing'
+import { filingCounts } from '@/lib/filing'
 import LoadError from '@/components/LoadError'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -32,6 +34,8 @@ import {
 
 export default function Entities() {
   const { entities, loading, error, reload, create } = useEntities()
+  const { entities: filing } = useFiling()
+  const filingOf = (id: string) => filingCounts(filing.filter(f => f.entity_id === id))
   const nav = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const showNew = searchParams.get('new') === '1'
@@ -135,8 +139,12 @@ export default function Entities() {
                   </Badge>
                 </div>
                 <div className="flex gap-4 text-xs text-muted-foreground">
-                  {entity.return_count !== undefined && (
-                    <span>{entity.return_count} return{entity.return_count !== 1 ? 's' : ''}</span>
+                  {/* Filed and accepted entity-years, not a count of stored rows
+                      (drafts, extensions and duplicate imports read as "10 returns"). */}
+                  {filingOf(entity.id).filed > 0 ? (
+                    <span>{filingOf(entity.id).filed} filed · {filingOf(entity.id).accepted} accepted</span>
+                  ) : entity.return_count !== undefined && (
+                    <span>{entity.return_count} draft{entity.return_count !== 1 ? 's' : ''}</span>
                   )}
                   {entity.scenario_count !== undefined && (
                     <span>{entity.scenario_count} scenario{entity.scenario_count !== 1 ? 's' : ''}</span>

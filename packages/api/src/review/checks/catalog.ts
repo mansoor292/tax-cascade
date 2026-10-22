@@ -6,13 +6,14 @@
 import { checkTies } from '../../catalog/ties.js'
 import type { Check, CheckResult } from '../types.js'
 import { filed, transcript, money } from '../lookup.js'
+import { filedReturnExpected } from './irs.js'
 
 const ALL = ['1040', '1120', '1120S', '1065'] as const
 
 export const catalogChecks: Check[] = [
   {
     id: 'catalog.return_present',
-    version: 1,
+    version: 2,
     area: 'catalog',
     title: 'The filed return is catalogued, completely',
     applies: [...ALL],
@@ -20,6 +21,10 @@ export const catalogChecks: Check[] = [
     description: 'Every question about a return is answered from its catalog, so a year whose filed return is missing from the catalog, or catalogued with blocking problems, cannot be reviewed — and nothing said about it is grounded.',
     run(ctx) {
       const cat = filed(ctx.catalogs, ctx.year)
+      const expected = filedReturnExpected(ctx)
+      if (!cat && !expected.expected) {
+        return [{ check: this.id, status: 'n/a', severity: 'info', title: `No filed ${ctx.year} return expected — ${expected.why}`, detail: '', evidence: [] }]
+      }
       if (!cat) {
         return [{
           check: this.id, status: 'gap', severity: 'high',

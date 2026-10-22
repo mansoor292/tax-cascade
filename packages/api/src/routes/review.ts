@@ -17,6 +17,7 @@ import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 import { runReview, latestRuns, resolveFinding, loadBundles, loadMapInputs, setBreaksReport } from '../review/store.js'
 import { listSets } from '../services/versions.js'
+import { yearFilings } from '../review/filing.js'
 import { listNotes } from '../services/notes.js'
 
 const supabase = lazyServiceClient()
@@ -111,6 +112,32 @@ router.get('/summary', async (req, res) => {
     res.json({
       count: items.length, items, facts_to_ask: asks, open_notes_count: openNotes.length, open_notes: openNotes,
       breaks: { filed: filedBreaks, sets: setReports },
+    })
+  } catch (e: any) {
+    sendError(res, e)
+  }
+})
+
+// Filed and accepted, per entity and year (review/filing.ts): filed = a
+// filed return on file here (catalogued PDF or imported row); accepted = the
+// IRS's transcript confirms it. Read-only, computed from the catalog.
+router.get('/filing', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+  try {
+    const wanted = req.query.entity_id ? [String(req.query.entity_id)] : undefined
+    const bundles = await loadBundles(supabase, userId, wanted)
+    if (wanted && !bundles.length) return res.status(404).json({ error: 'Entity not found' })
+    const { data: rows, error } = await supabase.from('tax_return')
+      .select('id, entity_id, tax_year, source, form_type, computed_at')
+      .in('entity_id', bundles.map(b => b.entity.id))
+    if (error) throw new Error(error.message)
+    const today = new Date()
+    res.json({
+      entities: bundles.map(b => ({
+        entity_id: b.entity.id, name: b.entity.name, form_type: b.entity.form_type,
+        years: yearFilings(b.entity, b.catalogs, (rows ?? []).filter(r => r.entity_id === b.entity.id), today),
+      })),
     })
   } catch (e: any) {
     sendError(res, e)

@@ -3,7 +3,7 @@
  * metricsForForm ordering keeps Filed / Amendment / Proforma scannable.
  */
 import { useState } from 'react'
-import { Download, ListOrdered, Loader2, Sparkles, Trash2, RefreshCw, Scale } from 'lucide-react'
+import { Download, ListOrdered, Loader2, Sparkles, Trash2, RefreshCw, Scale, Pencil } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { fmtMoney } from '@/lib/format'
@@ -12,26 +12,33 @@ import { metricsForForm } from '@taxengine/shared'
 import type { TaxReturn } from '@taxengine/shared'
 import type { GroupedYear } from './helpers'
 import LineDetail from './LineDetail'
+import AcceptedBadge from './AcceptedBadge'
+import BooksAgreement from './BooksAgreement'
+import { Link } from 'react-router-dom'
 
 const fmt = (n: unknown) => fmtMoney(n, '—')
 
 export default function YearDetail({
+  entityId,
   group,
   onPdf,
   onDelete,
   onFillGaps,
   onRecompute,
   onCompareAmendment,
+  onEditLines,
   downloading,
   gapFilling,
   recomputing,
 }: {
+  entityId: string
   group: GroupedYear
   onPdf: (id: string) => void
   onDelete: (r: TaxReturn) => void
   onFillGaps: (id: string) => void
   onRecompute: (r: TaxReturn) => void
   onCompareAmendment: (r: TaxReturn) => void
+  onEditLines: (r: TaxReturn) => void
   downloading: string | null
   gapFilling: string | null
   recomputing: string | null
@@ -64,8 +71,22 @@ export default function YearDetail({
   }
   const methodStr = readMethod(group.filed) || readMethod(group.amendments[0])
 
+  const f = group.filing
   return (
     <div className="space-y-3">
+      {f?.filed && (
+        <div className="bg-background rounded-lg border px-3 py-2 text-xs space-y-1" data-testid="filing-status">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.filed_import}`}>Filed</Badge>
+            <AcceptedBadge filing={f} />
+            {f.filed.filename && <span className="text-muted-foreground">{f.filed.filename}</span>}
+          </div>
+          <p className="text-muted-foreground">IRS: {f.accepted_why}.</p>
+          <Link className="text-primary hover:underline" to={`/app/compare/${entityId}?view=sources&year=${group.year}`}>
+            Open {group.year}, every source side by side
+          </Link>
+        </div>
+      )}
       {(methodStr || group.amendments.length > 1) && (
         <div className="flex items-center gap-2 flex-wrap">
           {methodStr && (
@@ -142,13 +163,25 @@ export default function YearDetail({
                     Fill gaps
                   </Button>
                 )}
-                {r.source === 'amendment' && group.filed && (
+                {r.source === 'amendment' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onEditLines(r)}
+                    className="gap-1 text-xs h-7"
+                    title="Change the lines this amendment corrects"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit lines
+                  </Button>
+                )}
+                {r.source === 'amendment' && (group.filed || group.filing?.filed) && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => onCompareAmendment(r)}
                     className="gap-1 text-xs h-7"
-                    title={`Line-by-line compare of this amendment (${r.id.slice(0, 8)}) against filed ${group.filed.id.slice(0, 8)}`}
+                    title="This amendment beside the filed return and the books, line by line"
                   >
                     <Scale className="h-3 w-3" />
                     Compare vs filed
@@ -234,6 +267,17 @@ export default function YearDetail({
                   ? ` · ${gap.gaps_rejected} rejected (not present in document)` : ''}
                 {gap.model ? ` · ${gap.model}` : ''}
                 {gap.error ? ` · error: ${gap.error}` : ''}
+              </div>
+            )}
+            {r.source === 'amendment' && (
+              <div className="mt-2 space-y-1 border-t pt-2">
+                {(() => {
+                  const base = (r.computed_data as { amendment_base?: { label?: string } } | undefined)?.amendment_base
+                  return base?.label
+                    ? <p className="text-xs text-muted-foreground">Started from {base.label}.</p>
+                    : null
+                })()}
+                <BooksAgreement entityId={entityId} year={r.tax_year} returnId={r.id} />
               </div>
             )}
             {openLines.has(r.id) && <LineDetail ret={r} />}

@@ -710,6 +710,42 @@ router.post('/compute', async (req, res) => {
   res.status(out.status).json(out.body)
 })
 
+// ─── Start an amendment from the best base (services/amendment_base.ts) ───
+// The filed return — imported here, or held only in the catalog — mapped
+// back to engine inputs and recomputed, books and documents left out. The
+// response says which lines the engine computes differently from how they
+// were filed, before anything has been changed.
+router.post('/amendments', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+  const { entity_id, tax_year } = req.body ?? {}
+  if (!entity_id || !Number.isInteger(tax_year)) return res.status(400).json({ error: 'entity_id and tax_year are required', field: !entity_id ? 'entity_id' : 'tax_year' })
+  try {
+    const { data: ent } = await supabase.from('tax_entity').select('user_id, form_type').eq('id', entity_id).single()
+    if (!ent || ent.user_id !== userId) return res.status(404).json({ error: 'Entity not found' })
+    const { amendmentBase, differsFromBase } = await import('../services/amendment_base.js')
+    const base = await amendmentBase(supabase, userId, entity_id, tax_year, ent.form_type)
+    if (!base) return res.status(404).json({ error: `No filed ${tax_year} return to amend — upload the filed return first` })
+    const meta = { source: base.source, label: base.label, return_id: base.return_id ?? null, catalog_id: base.catalog_id ?? null }
+    const out = await computeReturn(userId, {
+      entity_id, tax_year, form_type: ent.form_type, inputs: base.inputs, merge_sources: false,
+      ...(base.return_id ? { amend_of: base.return_id } : {}),
+      amend_base: { values: base.values, meta },
+    })
+    if (out.status >= 300) return res.status(out.status).json(out.body)
+    const id = (out.body as any).return_id as string | null
+    let differs: string[] = []
+    if (id) {
+      const { data: row } = await supabase.from('tax_return').select(`id, field_values, ${RETURN_ENC_COLS}`).eq('id', id).single()
+      await hydrateReturn(row, userId)
+      differs = differsFromBase(base.values, (row?.field_values ?? {}) as Record<string, unknown>)
+    }
+    res.json({ return_id: id, base: meta, inputs_from_base: Object.keys(base.inputs).length, differs_from_base: differs })
+  } catch (e: any) {
+    sendError(res, e)
+  }
+})
+
 // ─── One-shot: pull QBO → map → apply overrides → compute ───
 // Collapses the two-step pattern (GET /api/qbo/:entity_id/qbo-to-tax-inputs
 // → edit → POST /api/returns/compute) into a single call. Use when the

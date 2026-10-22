@@ -4,6 +4,7 @@
 import type { Check, CheckResult } from '../types.js'
 import { filed, find, amount, ev, evs, money, formEntries, transcript, transcriptValue } from '../lookup.js'
 import { issuedK1s } from '../k1.js'
+import { beforeRecords } from './irs.js'
 
 const electionDate: Check = {
   id: 'corporate.s_election_date',
@@ -130,7 +131,7 @@ const lossYearSuspended: Check = {
 
 const factGaps: Check = {
   id: 'facts.required_answered',
-  version: 1,
+  version: 2,
   area: 'facts',
   title: 'Every fact this return type requires is answered',
   applies: ['1040', '1120', '1120S', '1065'],
@@ -139,6 +140,10 @@ const factGaps: Check = {
   run(ctx) {
     const gaps = ctx.factGaps ?? []
     if (!gaps.length) return [{ check: this.id, status: 'n/a', severity: 'info', title: 'Fact registry not evaluated', detail: '', evidence: [] }]
+    // A year before anything on file asks 47 questions nobody needs answered
+    // (the same reasoning as catalog.return_present; UI audit 2026-10-22).
+    const first = beforeRecords(ctx)
+    if (first !== undefined) return [{ check: this.id, status: 'n/a', severity: 'info', title: `${ctx.year} is before the first year on file here (${first})`, detail: '', evidence: [] }]
     const missing = gaps.filter(g => g.status === 'missing' || g.status === 'unknown')
     const contradicted = gaps.filter(g => g.status === 'contradicted')
     const out: CheckResult[] = contradicted.map(g => ({ check: this.id, status: 'finding' as const, severity: 'high' as const, key: g.key, title: `Recorded answer to "${g.question}" contradicts the return`, detail: 'Either the recorded fact or the return is wrong.', evidence: [{ where: `fact ${g.key}`, fact: g.key }] }))

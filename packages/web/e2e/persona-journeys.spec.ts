@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { testEmail, deleteUserByEmail, signUpViaApi, signInThroughUi } from './helpers'
+import { testEmail, deleteUserByEmail, signUpViaApi, signInThroughUi, signInViaApi, authed } from './helpers'
 
 /**
  * The UI audit of 2026-10-22: each persona's journeys from docs/USER_PERSONAS.md
@@ -9,8 +9,9 @@ import { testEmail, deleteUserByEmail, signUpViaApi, signInThroughUi } from './h
  * Most run on the demo account — the Talbrook group, a fictional copy of the
  * owner's four entities with the same shape (filed years, an S-corp, the
  * misposted IRS transcripts), built for exactly this (login in SSM
- * /tax-api/DEMO_ACCOUNT_*; `npm run test:e2e:clean` loads it). They read and
- * never write. The day-one journeys need an empty account and make their own.
+ * /tax-api/DEMO_ACCOUNT_*; `npm run test:e2e:clean` loads it). They read,
+ * except the amendment journey, which creates its own amendment and deletes
+ * it. The day-one journeys need an empty account and make their own.
  *
  * Each test starts where its persona starts and reaches the fix by clicking.
  * Only the deep-link test opens a page by address, because the link is its
@@ -92,6 +93,98 @@ test.describe('P1 business owner — demo account', () => {
     await page.getByRole('link', { name: 'Open 2023, every source side by side' }).click()
     await expect(page).toHaveURL(/\/app\/compare\/[0-9a-f-]+\?view=sources&year=2023/)
     await expect(page.getByText('Sources for 2023')).toBeVisible({ timeout: 30_000 })
+  })
+})
+
+test.describe('P1 business owner — filed, accepted, amended (2026-10-22 decisions)', () => {
+  test.describe.configure({ timeout: 120_000 })
+
+  test('P1-J1 a filed PDF is filed; accepted only once the IRS transcript shows it', async ({ page }) => {
+    await signInDemo(page)
+    // "Filed returns" counts filed entity-years and says how many the IRS accepted.
+    await expect(page.getByText(/\d+ accepted by the IRS/).first()).toBeVisible()
+    await sidebar(page).getByRole('link', { name: /Talbrook Investments Inc/ }).click()
+    // 2025 is filed only as a catalogued PDF: it read Filed "—".
+    const row2025 = page.getByRole('row').filter({ has: page.getByRole('cell', { name: '2025', exact: true }) })
+    await expect(row2025).toContainText('Filed')
+    // The IRS posted the 2024 return in the 2025 period: not accepted.
+    await expect(row2025).toContainText('Misposted')
+    const row2023 = page.getByRole('row').filter({ has: page.getByRole('cell', { name: '2023', exact: true }) })
+    await expect(row2023).toContainText('Accepted')
+    await page.getByRole('cell', { name: '2024', exact: true }).click()
+    await expect(page.getByTestId('filing-status')).toContainText('The IRS processed the 2023 return in the 2024 period')
+  })
+
+  test('P1-J3 open items do not ask for returns not yet due or before the records', async ({ page }) => {
+    await signInDemo(page)
+    await sidebar(page).getByRole('link', { name: 'Group' }).click()
+    await page.getByRole('tab', { name: 'Open items' }).click()
+    await expect(page.getByText(/\d+ open items?/)).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText('No filed 2026 return is catalogued')).toHaveCount(0)
+    await expect(page.getByText(/No filed 201[6-8] return is catalogued/)).toHaveCount(0)
+    // A return past due with nothing on file is still asked for.
+    await expect(page.getByText('No filed 2025 return is catalogued').first()).toBeVisible()
+  })
+
+  test('P1-J5 an amendment starts from the filed return; its lines can be changed; books shown beside it', async ({ page, baseURL }) => {
+    await signInDemo(page)
+    await sidebar(page).getByRole('link', { name: /Talbrook Investments Inc/ }).click()
+    const entityId = page.url().match(/entities\/([0-9a-f-]{36})/)![1]
+    try {
+      await amendmentJourney(page)
+    } finally {
+      // A failed run must not leave an amendment on the demo account.
+      const token = await signInViaApi(DEMO_EMAIL, DEMO_PASSWORD)
+      type Row = { id: string; entity_id: string; source: string; tax_year: number }
+      const list = await (await fetch(`${baseURL}/api/returns`, { headers: authed(token) })).json() as { returns?: Row[] }
+      for (const r of (list.returns ?? []).filter(x => x.entity_id === entityId && x.source === 'amendment' && x.tax_year === 2024)) {
+        await fetch(`${baseURL}/api/returns/${r.id}`, { method: 'DELETE', headers: authed(token) })
+      }
+    }
+  })
+
+  async function amendmentJourney(page: Page) {
+    const row2024 = page.getByRole('row').filter({ has: page.getByRole('cell', { name: '2024', exact: true }) })
+    page.once('dialog', d => d.accept())
+    await row2024.getByRole('button', { name: 'Create' }).click()
+    // It started blank: every computed line $0 against the filed return.
+    await expect(page.getByText(/2024 amendment started from the filed 2024 return/)).toBeVisible({ timeout: 60_000 })
+    await expect(page.getByText('Started from the filed 2024 return.', { exact: true })).toBeVisible()
+    await expect(page.getByTestId('books-agreement')).toBeVisible({ timeout: 30_000 })
+
+    await page.getByRole('button', { name: 'Edit lines' }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('heading', { name: "Edit the 2024 amendment's lines" })).toBeVisible()
+    const receipts = dialog.getByTestId('field-gross_receipts').getByRole('spinbutton')
+    await expect(receipts).not.toHaveValue('')
+    await expect(receipts).not.toHaveValue('0')
+    await dialog.getByTestId('field-officer_compensation').getByRole('spinbutton').fill('61000')
+    await dialog.getByRole('button', { name: 'Save and recompute' }).click()
+    await expect(page.getByText('Amendment recomputed with your changes')).toBeVisible({ timeout: 60_000 })
+
+    // Compare vs filed: the readable side-by-side view, filed as base, books beside it.
+    await page.getByRole('button', { name: 'Compare vs filed' }).click()
+    await expect(page).toHaveURL(/view=sources&year=2024&base=filed&with=ret%3A[0-9a-f]{8}%2Cbooks/)
+    await expect(page.getByText('Sources for 2024')).toBeVisible({ timeout: 30_000 })
+
+    // Delete it by clicking, as a person would; the finally above is the net.
+    await page.goBack()
+    await page.getByRole('cell', { name: '2024', exact: true }).click()
+    page.once('dialog', d => d.accept())
+    await page.getByTitle('Delete').first().click()
+    await expect(row2024.getByRole('button', { name: 'Create' })).toBeVisible({ timeout: 30_000 })
+  }
+
+  test('P1-J5 a scenario defaults to the best base: the filed return', async ({ page }) => {
+    await signInDemo(page)
+    await sidebar(page).getByRole('link', { name: /Talbrook Investments Inc/ }).click()
+    await page.getByRole('tab', { name: /Scenarios/ }).click()
+    await page.getByRole('button', { name: 'New Scenario' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('combobox').first().click()
+    await page.getByRole('option', { name: '2024', exact: true }).click()
+    // It defaulted to no base at all.
+    await expect(dialog.getByRole('combobox').nth(1)).toContainText('2024 · Filed')
   })
 })
 

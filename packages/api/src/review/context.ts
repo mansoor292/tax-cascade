@@ -115,6 +115,7 @@ export function buildContext(args: {
   factsByEntity?: Map<string, FactLike[]>
   documents?: DocumentFact[]
   factGaps?: ReviewContext['factGaps']
+  filing?: ReviewContext['filing']
   today?: Date
 }): ReviewContext {
   return {
@@ -134,5 +135,6 @@ export function buildContext(args: {
       },
     } : {}),
     today: args.today ?? new Date(),
+    ...(args.filing ? { filing: args.filing } : {}),
   }
 }

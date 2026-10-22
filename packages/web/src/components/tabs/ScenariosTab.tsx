@@ -40,6 +40,8 @@ import { toast } from '@/lib/toast'
 import { fmtMoney as fmt } from '@/lib/format'
 import LoadError from '@/components/LoadError'
 import { filingYear, TAX_YEARS } from '@/lib/years'
+import { SOURCE_LABEL } from '@/lib/labels'
+import { bestBase } from './returns/helpers'
 const SCENARIO_YEARS = TAX_YEARS.slice(0, 4)
 
 interface Props {
@@ -56,6 +58,8 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
   const [description, setDescription] = useState('')
   const [taxYear, setTaxYear] = useState(() => filingYear(SCENARIO_YEARS))
   const [baseReturnId, setBaseReturnId] = useState('')
+  // Until one is picked, the base is the best one for the year: the filed return.
+  const effectiveBase = baseReturnId || bestBase(returns, taxYear, entity?.form_type ?? '')?.id || 'none'
   // Adjustments are built one field at a time from the form schema. `adjRows`
   // is the editable list; it's collapsed to the {key: number} shape the API
   // wants on submit. Advanced mode keeps the old raw-JSON escape hatch for
@@ -92,7 +96,8 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
         description: description || undefined,
         tax_year: taxYear,
         adjustments: adj,
-        base_return_id: baseReturnId || undefined,
+        // "none" is the explicit no-base choice; it used to be sent as the id.
+        base_return_id: effectiveBase !== 'none' ? effectiveBase : undefined,
       })
       if (scenario?.id) {
         await compute(scenario.id)
@@ -325,13 +330,13 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
               </div>
               <div className="space-y-2">
                 <Label>Base Return</Label>
-                <Select value={baseReturnId} items={[{ value: 'none', label: 'None' }, ...returns.map(r => ({ value: r.id, label: `${r.form_type} — ${r.tax_year}` }))]} onValueChange={(v) => v && setBaseReturnId(v)}>
+                <Select value={effectiveBase} items={[{ value: 'none', label: 'None' }, ...returns.map(r => ({ value: r.id, label: `${r.form_type} — ${r.tax_year} · ${SOURCE_LABEL[r.source as keyof typeof SOURCE_LABEL] ?? r.source}` }))]} onValueChange={(v) => v && setBaseReturnId(v)}>
                   <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     {returns.map((r: any) => (
                       <SelectItem key={r.id} value={r.id}>
-                        {r.form_type} — {r.tax_year}
+                        {r.form_type} — {r.tax_year} · {SOURCE_LABEL[r.source as keyof typeof SOURCE_LABEL] ?? r.source}
                       </SelectItem>
                     ))}
                   </SelectContent>

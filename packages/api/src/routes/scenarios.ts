@@ -81,9 +81,16 @@ router.post('/:id/compute', async (req, res) => {
     let baseInputs: Record<string, any> = {}
     if (scenario.base_return_id) {
       const { data: br } = await supabase.from('tax_return')
-        .select('input_data, input_data_enc').eq('id', scenario.base_return_id).single()
+        .select('source, input_data, input_data_enc, field_values, field_values_enc').eq('id', scenario.base_return_id).single()
       await hydrate(supabase, br, { ...ENCRYPTED_RETURN_FIELDS, userId })
-      if (br?.input_data) baseInputs = br.input_data
+      if (br?.source === 'filed_import') {
+        // A filed import carries archival metadata in input_data, not engine
+        // inputs: a scenario on the filed return started from nothing. Its
+        // figures are mapped back to inputs, as an amendment's base is
+        // (services/amendment_base.ts).
+        const { baseInputs: toInputs, goldenValues } = await import('../services/amendment_base.js')
+        baseInputs = toInputs(formType, goldenValues(formType, (br.field_values ?? {}) as Record<string, unknown>))
+      } else if (br?.input_data) baseInputs = br.input_data
     }
     const mergedInputs: Record<string, any> = { ...baseInputs, ...adj }
 

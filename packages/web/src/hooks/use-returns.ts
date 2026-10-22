@@ -46,6 +46,8 @@ export function useReturns(entityId?: string) {
     amend_of?: string
     return_id?: string
     new_row?: boolean
+    /** false: compute from these inputs only — no books, no documents */
+    merge_sources?: boolean
   }) => {
     const data = await api<any>('/api/returns/compute', {
       method: 'POST',
@@ -74,18 +76,22 @@ export function useReturns(entityId?: string) {
     return data
   }
 
-  /** Create an amendment that supersedes a filed_import (or another amendment). */
-  const createAmendment = async (
-    filedReturn: TaxReturn,
-    inputOverrides: Record<string, unknown> = {},
-  ) => {
-    return compute({
-      entity_id: filedReturn.entity_id,
-      tax_year: filedReturn.tax_year,
-      form_type: filedReturn.form_type,
-      amend_of: filedReturn.id,
-      inputs: inputOverrides,
+  /**
+   * Start an amendment from the best base — the filed return, imported or
+   * held only as a catalogued PDF (api services/amendment_base.ts). It used to
+   * start blank: every computed line $0 against the filed return.
+   */
+  const createAmendment = async (entityId: string, taxYear: number) => {
+    const data = await api<{
+      return_id: string | null
+      base: { source: string; label: string }
+      differs_from_base: string[]
+    }>('/api/returns/amendments', {
+      method: 'POST',
+      body: JSON.stringify({ entity_id: entityId, tax_year: taxYear }),
     })
+    await load()
+    return data
   }
 
   const validate = async (body: {
@@ -93,7 +99,7 @@ export function useReturns(entityId?: string) {
     tax_year: number
     inputs: Record<string, unknown>
   }) => {
-    return api<{ valid: boolean; errors?: string[]; warnings?: string[] }>('/api/returns/validate', {
+    return api<{ valid: boolean; errors?: Array<string | { field?: string; message?: string }>; warnings?: Array<string | { field?: string; message?: string }> }>('/api/returns/validate', {
       method: 'POST',
       body: JSON.stringify(body),
     })

@@ -172,6 +172,11 @@ export const INPUT_SCHEMAS: Record<string, FormSchema> = {
       { name: 'schedule_k_lt_cap_gain', type: 'number', required: false, description: 'Net long-term capital gain/(loss) (Schedule K line 8a)', category: 'schedule_k', irs_line: 'K-8a' },
       { name: 'schedule_k_other_portfolio_income', type: 'number', required: false, description: 'Other income/(loss) (Schedule K line 10)', category: 'schedule_k', irs_line: 'K-10' },
       { name: 'schedule_k_tax_exempt_interest', type: 'number', required: false, description: 'Tax-exempt interest income (Schedule K line 16a)', category: 'schedule_k', irs_line: 'K-16a' },
+      // The engine has always read these two (calc1120S → K-1 boxes 16C/16D
+      // and the shareholder's basis); the schema did not list them, so
+      // validation called them unknown and the forms could not show them.
+      { name: 'schedule_k_nondeductible_expenses', type: 'number', required: false, description: 'Nondeductible expenses (Schedule K line 16c)', category: 'schedule_k', irs_line: 'K-16c' },
+      { name: 'schedule_k_distributions', type: 'number', required: false, description: 'Distributions to shareholders (Schedule K line 16d)', category: 'schedule_k', irs_line: 'K-16d' },
       { name: 'is_sstb', type: 'boolean', required: false, description: 'Specified Service Trade or Business — flows to shareholders K-1 for QBI deduction limitation', category: 'schedule_k' },
       { name: 'schedule_k_ubia', type: 'number', required: false, description: 'UBIA of qualified property (corporation total; allocated pro-rata onto each K-1 Statement A for the shareholder QBI limit)', category: 'schedule_k' },
       { name: 'shareholders', type: 'array', required: true, description: 'Array of shareholders: [{name: string, pct: number}]. Percentages must sum to 100.', category: 'shareholders' },

@@ -30,6 +30,11 @@ import { coerceNumericInputs } from '@/lib/format'
 import { COMPUTABLE_FORM_OPTIONS } from '@/lib/labels'
 import { filingYear, TAX_YEARS } from '@/lib/years'
 
+/** The validate route answers {field, message}; older callers sent strings.
+ *  Printed raw, an object read "[object Object]" in the toast. */
+type Problem = string | { field?: string; message?: string }
+const say = (p: Problem) => typeof p === 'string' ? p : p.message ?? JSON.stringify(p)
+
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -38,17 +43,26 @@ interface Props {
   compute: (body: {
     entity_id: string; tax_year: number; form_type: string
     inputs: Record<string, unknown>
+    return_id?: string; merge_sources?: boolean
   }) => Promise<unknown>
   validate: (body: {
     form_type: string; tax_year: number; inputs: Record<string, unknown>
-  }) => Promise<{ valid?: boolean; errors?: string[]; warnings?: string[] }>
+  }) => Promise<{ valid?: boolean; errors?: Problem[]; warnings?: Problem[] }>
   onComputed: () => void
+  /** Edit an existing amendment's lines: its inputs prefilled, the form and
+   *  year fixed, saved onto that return with nothing merged in from the books
+   *  or documents (an amendment's base is the filed return, not the books). */
+  edit?: { returnId: string; taxYear: number; inputs: Record<string, unknown> }
 }
 
-export default function ComputeDialog({ open, onOpenChange, entityId, defaultFormType, compute, validate, onComputed }: Props) {
+export default function ComputeDialog({ open, onOpenChange, entityId, defaultFormType, compute, validate, onComputed, edit }: Props) {
   const [formType, setFormType] = useState(defaultFormType || '1040')
-  const [taxYear, setTaxYear] = useState(() => filingYear())
-  const [inputs, setInputs] = useState<Record<string, string>>({})
+  const [taxYear, setTaxYear] = useState(() => edit?.taxYear ?? filingYear())
+  const [inputs, setInputs] = useState<Record<string, string>>(() => Object.fromEntries(
+    Object.entries(edit?.inputs ?? {})
+      .filter(([k, v]) => k !== 'tax_year' && (typeof v === 'number' || typeof v === 'string'))
+      .map(([k, v]) => [k, String(v)]),
+  ))
   const [computing, setComputing] = useState(false)
   const { schema, loading: schemaLoading } = useSchema(open ? formType : undefined, open ? taxYear : undefined)
 
@@ -70,18 +84,26 @@ export default function ComputeDialog({ open, onOpenChange, entityId, defaultFor
   const handleCompute = async () => {
     setComputing(true)
     try {
-      const numericInputs = { tax_year: taxYear, ...coerceNumericInputs(inputs) }
+      // An amendment's inputs that are not form fields (its shareholders)
+      // ride along unchanged; the form edits the figures.
+      const carried = edit
+        ? Object.fromEntries(Object.entries(edit.inputs).filter(([k, v]) => k !== 'tax_year' && v !== null && typeof v === 'object'))
+        : {}
+      const numericInputs = { tax_year: taxYear, ...carried, ...coerceNumericInputs(inputs) }
 
       const valResult = await validate({ form_type: formType, tax_year: taxYear, inputs: numericInputs })
       if (valResult.errors && valResult.errors.length > 0) {
-        toast.error(valResult.errors.join(', '))
+        toast.error(valResult.errors.map(say).join(', '))
         setComputing(false)
         return
       }
-      valResult.warnings?.forEach(w => toast.warning(w))
+      valResult.warnings?.filter(w => typeof w === 'string' || w.field !== 'tax_year').forEach(w => toast.warning(say(w)))
 
-      await compute({ entity_id: entityId, tax_year: taxYear, form_type: formType, inputs: numericInputs })
-      toast.success('Return computed successfully')
+      await compute({
+        entity_id: entityId, tax_year: taxYear, form_type: formType, inputs: numericInputs,
+        ...(edit ? { return_id: edit.returnId, merge_sources: false } : {}),
+      })
+      toast.success(edit ? 'Amendment recomputed with your changes' : 'Return computed successfully')
       onOpenChange(false)
       setInputs({})
       onComputed()
@@ -95,13 +117,13 @@ export default function ComputeDialog({ open, onOpenChange, entityId, defaultFor
 <Dialog open={open} onOpenChange={onOpenChange}>
   <DialogContent className="w-[95vw] max-w-2xl max-h-[80vh] overflow-y-auto">
     <DialogHeader>
-      <DialogTitle>Compute Tax Return</DialogTitle>
+      <DialogTitle>{edit ? `Edit the ${edit.taxYear} amendment's lines` : 'Compute Tax Return'}</DialogTitle>
     </DialogHeader>
     <div className="space-y-4 py-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Form Type</Label>
-          <Select value={formType} items={COMPUTABLE_FORM_OPTIONS} onValueChange={(v) => v && setFormType(v)}>
+          <Select value={formType} items={COMPUTABLE_FORM_OPTIONS} disabled={!!edit} onValueChange={(v) => v && setFormType(v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {COMPUTABLE_FORM_OPTIONS.map(f => (
@@ -112,7 +134,7 @@ export default function ComputeDialog({ open, onOpenChange, entityId, defaultFor
         </div>
         <div className="space-y-2">
           <Label>Tax Year</Label>
-          <Select value={String(taxYear)} onValueChange={v => setTaxYear(Number(v))}>
+          <Select value={String(taxYear)} disabled={!!edit} onValueChange={v => setTaxYear(Number(v))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {TAX_YEARS.map(y => (
@@ -152,7 +174,7 @@ export default function ComputeDialog({ open, onOpenChange, entityId, defaultFor
     <DialogFooter>
       <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
       <Button onClick={handleCompute} disabled={computing}>
-        {computing ? 'Computing...' : 'Compute'}
+        {computing ? 'Computing...' : edit ? 'Save and recompute' : 'Compute'}
       </Button>
     </DialogFooter>
   </DialogContent>

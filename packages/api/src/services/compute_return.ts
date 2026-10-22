@@ -72,6 +72,14 @@ export function overlayUncomputedLines(
 
 export async function computeReturn(userId: string, body: any): Promise<HttpOutcome> {
   const { entity_id, tax_year, form_type, inputs, save, return_id, amend_of, new_row } = body || {}
+  // merge_sources:false — compute from the inputs given and nothing else: no
+  // books (QBO), no documents, no NOL carry-in. An amendment built from its
+  // base (services/amendment_base.ts) uses it: the books may agree with the
+  // filed return or not, and that is shown beside it, never mixed into it.
+  const mergeSources = body?.merge_sources !== false
+  // amend_base: start an amendment from these figures when there is no
+  // filed_import row to amend (a filed return held only in the catalog).
+  const amendBase: { values: Record<string, number>; meta: Record<string, unknown> } | undefined = body?.amend_base
   if (!form_type || !tax_year || !inputs) {
     return { status: 400, body: { error: 'form_type, tax_year, and inputs are required' } }
   }
@@ -120,6 +128,9 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     await hydrateReturn(data, userId)
     amendOfRow = data
   }
+  if (!amendOfRow && !targetRow && amendBase) {
+    amendOfRow = { id: null as unknown as string, entity_id, tax_year, form_type, field_values: amendBase.values }
+  }
 
   try {
     // Pull supporting documents for this entity+year and merge into inputs.
@@ -137,7 +148,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     if (!new_row && entity_id) {
       let seedId: string | null = null
       if (targetRow) seedId = targetRow.id
-      else if (amendOfRow) seedId = amendOfRow.id
+      else if (amendOfRow) seedId = amendBase ? null : amendOfRow.id || null
       else {
         const isExtensionForm = ['4868', '7004', '8868'].includes(form_type)
         const { data: latest } = await supabase.from('tax_return')
@@ -207,7 +218,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     //   - Balance Sheet → Schedule L canonical keys (schedL.L1_cash_eoy_d, ...)
     //   - Emits warnings (SSTB_SUSPECTED, OFFICER_COMP_UNSPLIT, ...)
     // setIfUnset semantics: caller-provided inputs always win.
-    if (entity_id && (form_type === '1120S' || form_type === '1120')) {
+    if (mergeSources && entity_id && (form_type === '1120S' || form_type === '1120')) {
       try {
         const { data: conn } = await supabase.from('qbo_connection')
           .select('realm_id').eq('entity_id', entity_id).single()
@@ -255,7 +266,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       } catch (_) { /* QBO not connected or fetch failed — caller still gets explicit inputs */ }
     }
 
-    if (entity_id) {
+    if (mergeSources && entity_id) {
       const supportedTypes = SUPPORTED_DOC_TYPES
       // The _enc twins + hydrate are LOAD-BEARING: post-cutover the
       // plaintext meta/textract_data columns are null, and this query read
@@ -283,7 +294,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     // year's nol_generated via setIfUnset. Caller can override by
     // passing nol_deduction explicitly. The engine still caps at 80% of
     // TI per §172(a)(2), so even a too-high auto-pull can't under-tax.
-    if (entity_id && form_type === '1120') {
+    if (mergeSources && entity_id && form_type === '1120') {
       try {
         const { data: priorRet } = await supabase.from('tax_return')
           .select(`id, field_values, ${RETURN_ENC_COLS}`)
@@ -359,7 +370,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       engineResult = calc1120({ ...mergedInputs, tax_year })
 
       // Auto-pull Schedule L from QBO if entity has a connection and inputs don't already have it
-      if (entity_id && !mergedInputs['schedL.L15_total_eoy_d']) {
+      if (mergeSources && entity_id && !mergedInputs['schedL.L15_total_eoy_d']) {
         try {
           const { data: conn } = await supabase.from('qbo_connection')
             .select('realm_id').eq('entity_id', entity_id).single()
@@ -468,7 +479,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       engineResult = calc1120S(mergedInputs)
 
       // Auto-pull Schedule L from QBO (same logic as 1120)
-      if (entity_id && !mergedInputs['schedL.L15_total_eoy_d']) {
+      if (mergeSources && entity_id && !mergedInputs['schedL.L15_total_eoy_d']) {
         try {
           const { data: conn } = await supabase.from('qbo_connection')
             .select('realm_id').eq('entity_id', entity_id).single()
@@ -706,7 +717,8 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       // debug + scenario structural data.
       const { computed: _computed, ...engineData } = (engineResult ?? {}) as any
       void _computed
-      const computedDataPayload = Object.keys(schemaRejected).length ? { ...engineData, schema_rejected: schemaRejected } : engineData
+      const withBase = amendBase?.meta ? { ...engineData, amendment_base: amendBase.meta } : engineData
+      const computedDataPayload = Object.keys(schemaRejected).length ? { ...withBase, schema_rejected: schemaRejected } : withBase
       const rawPayload = {
         entity_id,
         tax_year,

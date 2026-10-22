@@ -158,6 +158,11 @@ export interface ReviewContext {
     facts: Map<string, import('./map.js').FactLike[]>
   }
   today: Date
+  /** What is on file for the entity beyond the catalogs: years with an
+   *  extension stored, and the first year with any record here (a filed
+   *  return, a stored return or a source document). A transcript alone is
+   *  not a record — the IRS sends one for every year asked for. */
+  filing?: { extended_years: number[]; first_record_year?: number }
 }
 
 export interface Check {

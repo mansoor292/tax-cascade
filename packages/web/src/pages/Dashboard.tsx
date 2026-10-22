@@ -4,6 +4,8 @@ import { Building2, FileText, FlaskConical, Link2, Clock, ArrowRight, GitBranch,
 import { api } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCalendar, nextDeadline } from '@/hooks/use-calendar'
+import { useFiling } from '@/hooks/use-filing'
+import { filingCounts } from '@/lib/filing'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -69,8 +71,13 @@ export default function Dashboard() {
     })
   }, [entities])
 
-  const filed       = returns.filter(r => r.source === 'filed_import')
-  const proforma    = returns.filter(r => r.source === 'proforma')
+  // Filed = a filed return on file (catalogued PDF or imported row), per
+  // entity-year; accepted = the IRS's transcript confirms it. Counting
+  // filed_import rows read "16 filed" for 12 filed returns (duplicate
+  // imports) and missed the ones catalogued through MCP (UI audit 2026-10-22).
+  const { entities: filing } = useFiling()
+  const filedCount = filingCounts(filing)
+  const filingOf = (id: string) => filingCounts(filing.filter(f => f.entity_id === id))
   const amendments  = returns.filter(r => r.source === 'amendment')
   const extensions  = returns.filter(r => r.source === 'extension')
   const recent = [...returns].sort((a, b) => new Date(b.computed_at || 0).getTime() - new Date(a.computed_at || 0).getTime()).slice(0, 5)
@@ -120,7 +127,7 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {entities.length} {entities.length === 1 ? 'entity' : 'entities'}
-            {filed.length > 0 ? ` · ${filed.length} filed` : ''}
+            {filedCount.filed > 0 ? ` · ${filedCount.filed} filed, ${filedCount.accepted} accepted by the IRS` : ''}
             {amendments.length > 0 ? ` · ${amendments.length} ${amendments.length === 1 ? 'amendment' : 'amendments'}` : ''}
           </p>
         </div>
@@ -178,8 +185,8 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Filed Returns</p>
-                <p className="text-2xl font-bold">{filed.length}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{proforma.length} proforma · {extensions.length} ext</p>
+                <p className="text-2xl font-bold">{filedCount.filed}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{filedCount.accepted} accepted by the IRS</p>
               </div>
               <FileText className="w-8 h-8 text-emerald-500/30" />
             </div>
@@ -262,7 +269,9 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">{entityReturns.length} returns</Badge>
+                    {(() => { const c = filingOf(e.id); return c.filed
+                      ? <Badge variant="secondary" className="text-xs">{c.filed} filed · {c.accepted} accepted</Badge>
+                      : <Badge variant="secondary" className="text-xs">{entityReturns.length} drafts</Badge> })()}
                     {hasAmendments && (
                       <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.amendment}`}>amended</Badge>
                     )}

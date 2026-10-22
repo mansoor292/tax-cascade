@@ -55,6 +55,29 @@ export function dueDates(formType: string, year: number): { due: Date; extended:
   return { due: day(4), extended: day(10) }
 }
 
+/**
+ * Is a filed return for ctx.year something to ask for? Not before it is due
+ * (the extended date when an extension is on file), and not for a year
+ * before the first record here: the open items opened with "High · No filed
+ * 2026 return is catalogued" and the same for 2016–2018, years with nothing
+ * on file but a transcript (UI audit, 2026-10-22; Mansoor agreed).
+ */
+export function filedReturnExpected(ctx: ReviewContext): { expected: true } | { expected: false; why: string } {
+  const { due, extended } = dueDates(ctx.entity.form_type, ctx.year)
+  const ext = (ctx.filing?.extended_years ?? []).includes(ctx.year) || transactions(transcript(ctx.catalogs, ctx.year)).some(x => x.code === '460')
+  const dueOn = ext ? extended : due
+  if (dueOn.getTime() > ctx.today.getTime()) return { expected: false, why: `not due until ${iso(dueOn)}` }
+  const first = beforeRecords(ctx)
+  if (first !== undefined) return { expected: false, why: `before the first year on file here (${first})` }
+  return { expected: true }
+}
+
+/** The first year on file when ctx.year comes before it. */
+export function beforeRecords(ctx: ReviewContext): number | undefined {
+  const first = ctx.filing?.first_record_year
+  return first !== undefined && ctx.year < first ? first : undefined
+}
+
 /** Taxable income as the catalogued return for `year` prints it. */
 function returnTaxable(ctx: ReviewContext, year: number): number | undefined {
   const cat = filed(ctx.catalogs, year)
@@ -288,7 +311,7 @@ const transcriptAccount: Check = {
 
 const returnTranscriptCheck: Check = {
   id: 'irs.return_transcript',
-  version: 2,
+  version: 3,
   area: 'irs_account',
   title: 'The return the IRS processed, line by line, against the filed return',
   applies: ['1040', '1120', '1120S'],
@@ -312,6 +335,9 @@ const returnTranscriptCheck: Check = {
     const held = heldYear(ctx.entity.form_type, ctx.year, rt.entries, byYear)
     const rows = goldenRows({ formType: ctx.entity.form_type, year: ctx.year, filed: own ? { id: own.id, entries: own.entries } : undefined, transcript: { id: rt.id, entries: rt.entries, as_of: rt.as_of, ...(held !== undefined ? { holdsYear: held } : {}) } })
     const compared = rows.filter(r => r.filed && r.irs)
+    if (!own && beforeRecords(ctx) !== undefined) {
+      return [{ check: this.id, status: 'n/a', severity: 'info', key: 'no_filed', title: `${ctx.year}: before the first year on file here (${beforeRecords(ctx)}) — no filed return asked for`, detail: '', evidence: [] }]
+    }
     if (!own || !compared.length) {
       return [{ check: this.id, status: 'gap', severity: 'medium', key: 'no_filed', title: `${ctx.year}: the IRS processed a return${about ? ` (${about})` : ''}, but no filed ${ctx.year} return is catalogued to compare it with`, detail: 'Upload the filed return so the IRS\'s figures can be checked against it.', evidence: [{ where: `${ctx.year} IRS return transcript${asOf}`, catalog_id: rt.id }] }]
     }
