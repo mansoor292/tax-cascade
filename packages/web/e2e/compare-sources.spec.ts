@@ -9,7 +9,8 @@ import { testEmail, deleteUserByEmail, signUpViaApi, signInThroughUi, createEnti
  *  1. Live API: a fresh account's year with nothing on file says so — the
  *     tab must never paint a blank table.
  *  2. A full year, served from a fixture shaped like EZA 2024 (the IRS holds
- *     the 2023 return in the 2024 period): the banner, the books' summed
+ *     the 2023 return in the 2024 period; the figures are the Talbrook demo's,
+ *     never the owner's): the banner, the books' summed
  *     totals and accounts, the year switch — and the EIN a QuickBooks account
  *     name can carry never reaches the screen.
  *  3. (2026-10-21) The owner asked for the filed · IRS · books layout and a
@@ -29,11 +30,11 @@ function watch(page: Page) {
 }
 
 const FAKE_EIN = '98-7654321'
-const PROFORMA_ID = '815a9144-aaaa-bbbb-cccc-000000000000'
+const PROFORMA_ID = 'e2e0fa11-aaaa-bbbb-cccc-000000000000'
 
 function fixture(entityId: string, year: number) {
   const where = (s: string) => `${year} ${s}`
-  const proforma = 'proforma 2026-10-15 (815a9144)'
+  const proforma = 'proforma 2026-10-15 (e2e0fa11)'
   return {
     entity: { id: entityId, name: 'E2E Sources Inc', form_type: '1120S' },
     year,
@@ -50,17 +51,17 @@ function fixture(entityId: string, year: number) {
     rows: [
       {
         form: 'f1120s', key: 'tax.L22_ordinary_income', label: 'Ordinary business income (loss). Subtract line 21 from line 6', section: '', line: '22', headline: true, key_line: true,
-        filed: { value: 162007, where: where('filed return, Form 1120-S line 22, page 1') },
-        irs: { value: 3044422, where: where('IRS return transcript dated 2026-10-20: Deductions — Ordinary Income/Loss') },
-        books: { value: 150000, where: '2024 books (sum of the lines mapped from the books)', summed: true },
-        returns: { [proforma]: { value: 162007, where: 'proforma, tax.L22_ordinary_income' } },
-        scenarios: { 'Pay officer more': { value: 102007, where: 'scenario' } },
-        golden: 162007, golden_from: 'filed', status: 'differs', books_differs: true,
+        filed: { value: 128143, where: where('filed return, Form 1120-S line 22, page 1') },
+        irs: { value: 3239353, where: where('IRS return transcript dated 2026-10-20: Deductions — Ordinary Income/Loss') },
+        books: { value: 120000, where: '2024 books (sum of the lines mapped from the books)', summed: true },
+        returns: { [proforma]: { value: 128143, where: 'proforma, tax.L22_ordinary_income' } },
+        scenarios: { 'Pay officer more': { value: 68143, where: 'scenario' } },
+        golden: 128143, golden_from: 'filed', status: 'differs', books_differs: true,
       },
       {
         form: 'f1120s', key: 'income.L1a_gross_receipts', label: 'Gross receipts or sales', section: '', line: '1a', headline: true, key_line: true,
-        filed: { value: 2100000, where: where('filed return, line 1a') }, irs: { value: 2100000, where: where('IRS: Gross Receipts') },
-        books: { value: 2100000, where: '2024 books' }, golden: 2100000, golden_from: 'filed', status: 'agrees',
+        filed: { value: 1929750, where: where('filed return, line 1a') }, irs: { value: 1929750, where: where('IRS: Gross Receipts') },
+        books: { value: 1929750, where: '2024 books' }, golden: 1929750, golden_from: 'filed', status: 'agrees',
       },
       {
         form: 'f1125a', key: 'cogs.L1_inventory', label: 'Inventory at beginning of year', section: '', line: '1',
@@ -69,34 +70,34 @@ function fixture(entityId: string, year: number) {
       },
       {
         form: 'f1120s', key: 'schedL.L7_loans_eoy_d', label: 'Loans to shareholders — End of tax year. (d)', section: 'Schedule L', line: '7', col: 'd', key_line: true,
-        irs: { value: 3070386, where: where('IRS: Loans to Shareholders End of Year') }, status: 'irs_only',
+        irs: { value: 608000, where: where('IRS: Loans to Shareholders End of Year') }, status: 'irs_only',
       },
       {
         form: 'f1120s', key: 'deductions.L8_salaries', label: 'Salaries and wages (less employment credits)', section: '', line: '8', key_line: true,
-        filed: { value: 177802, where: where('filed return, Form 1120-S line 8, page 1') },
-        documents: { value: 177802, where: '2024 documents on file: 1 × W-2', sources: ['1 × W-2'] },
-        books: { value: 150987, where: '2024 books', accounts: [{ account: `Payroll > Wages (EIN ${FAKE_EIN})`, amount: 150987, rule: 'rule:salaries' }] },
-        golden: 177802, golden_from: 'filed', status: 'filed_only', books_differs: true,
+        filed: { value: 137794, where: where('filed return, Form 1120-S line 8, page 1') },
+        documents: { value: 137794, where: '2024 documents on file: 1 × W-2', sources: ['1 × W-2'] },
+        books: { value: 111569, where: '2024 books', accounts: [{ account: `Payroll > Wages (EIN ${FAKE_EIN})`, amount: 111569, rule: 'rule:salaries' }] },
+        golden: 137794, golden_from: 'filed', status: 'filed_only', books_differs: true,
       },
       {
         form: 'f1120s', key: 'income.L3_gross_profit', label: 'Gross profit. Subtract line 2 from line 1c', section: '', line: '3', key_line: true,
-        filed: { value: 1516138, where: where('filed return, line 3') },
-        irs_computed: { value: 5171913, where: where('IRS return transcript: Income — Gross Profit Per Computer') },
-        golden: 1516138, golden_from: 'filed', status: 'irs_recomputed',
+        filed: { value: 1336046, where: where('filed return, line 3') },
+        irs_computed: { value: 5123790, where: where('IRS return transcript: Income — Gross Profit Per Computer') },
+        golden: 1336046, golden_from: 'filed', status: 'irs_recomputed',
       },
       {
         form: 'f1120s', key: 'schedK.L5a_dividends', label: 'Dividends: a. Ordinary dividends', section: 'Schedule K', line: '5a', key_line: true,
-        filed: { value: 516, where: where('filed return, Schedule K line 5a') }, books: { value: 516, where: '2024 books' }, golden: 516, golden_from: 'filed', status: 'filed_only',
+        filed: { value: 1381, where: where('filed return, Schedule K line 5a') }, books: { value: 1381, where: '2024 books' }, golden: 1381, golden_from: 'filed', status: 'filed_only',
       },
       // a zero no other source speaks to: never shown
       { form: 'f1120s', key: 'schedM2.L8_end_balance', label: 'Balance at end of tax year', section: 'Schedule M-2', line: '8', col: 'a', key_line: true, filed: { value: 0, where: where('filed return, M-2 line 8') }, golden: 0, golden_from: 'filed', status: 'filed_only' },
       // the same page printed twice in the PDF: the second copy is not a key line
-      { form: 'f1120s', key: 'tax.L22_ordinary_income', instance: '#2', label: 'Ordinary business income (loss). Subtract line 21 from line 6', section: '', line: '22', filed: { value: 162007, where: where('filed return, line 22, page 40') }, golden: 162007, golden_from: 'filed', status: 'filed_only' },
+      { form: 'f1120s', key: 'tax.L22_ordinary_income', instance: '#2', label: 'Ordinary business income (loss). Subtract line 21 from line 6', section: '', line: '22', filed: { value: 128143, where: where('filed return, line 22, page 40') }, golden: 128143, golden_from: 'filed', status: 'filed_only' },
       {
         form: 'f1120s', key: 'deductions.L16_advertising', label: 'Advertising', section: '', line: '16', key_line: true,
-        filed: { value: 600000, where: where('filed return, line 16') },
-        returns: { [proforma]: { value: 600000, where: 'proforma' } },
-        golden: 600000, golden_from: 'filed', status: 'filed_only',
+        filed: { value: 598000, where: where('filed return, line 16') },
+        returns: { [proforma]: { value: 598000, where: 'proforma' } },
+        golden: 598000, golden_from: 'filed', status: 'filed_only',
       },
     ],
   }
@@ -173,11 +174,11 @@ test.describe('Compare — all sources, one year', () => {
     await expect(page.locator('[data-key="schedK.L5a_dividends"]')).toContainText('Dividends: a. Ordinary dividends')
 
     const obi = page.locator('[data-key="tax.L22_ordinary_income"]')
-    await expect(obi).toContainText('$3,044,422')
-    await expect(obi).toContainText('$150,000 Σ')
-    await expect(obi.getByTestId('delta')).toHaveText(['+$2,882,415', '-$12,007'])
+    await expect(obi).toContainText('$3,239,353')
+    await expect(obi).toContainText('$120,000 Σ')
+    await expect(obi.getByTestId('delta')).toHaveText(['+$3,111,210', '-$8,143'])
     await expect(obi).toContainText('Differs: IRS, Books')
-    await expect(page.locator('[data-key="income.L3_gross_profit"]')).toContainText('$5,171,913 ¹')
+    await expect(page.locator('[data-key="income.L3_gross_profit"]')).toContainText('$5,123,790 ¹')
     await expect(page.locator('[data-key="income.L1a_gross_receipts"]')).toContainText('Matches')
     await expect(page.locator('[data-key="schedL.L7_loans_eoy_d"]')).toContainText('Not in base')
     await expect(page.locator('[data-key="deductions.L16_advertising"]')).toContainText('Only in base')
@@ -212,7 +213,7 @@ test.describe('Compare — all sources, one year', () => {
     await pressed(page, 'Compare with', 'Documents').click()
     await pressed(page, 'Compare with', 'Proforma 10/15/2026').click()
     await pressed(page, 'Compare with', 'Books').click() // off
-    await expect(page).toHaveURL(/base=filed&with=irs%2Cdocuments%2Cret%3A815a9144/)
+    await expect(page).toHaveURL(/base=filed&with=irs%2Cdocuments%2Cret%3Ae2e0fa11/)
     await expect(table.locator('thead th')).toHaveText(['Line', 'Filed return (base)', 'IRS', 'Documents', 'Proforma 10/15/2026', 'Against base'])
     await expect(page.locator('[data-key="deductions.L8_salaries"]')).toContainText('Matches')
 
@@ -233,7 +234,7 @@ test.describe('Compare — all sources, one year', () => {
 
     await page.getByTestId('sources-year').filter({ hasText: '2023' }).click()
     await expect(page).toHaveURL(/year=2023/)
-    await expect(page).toHaveURL(/base=ret%3A815a9144/)
+    await expect(page).toHaveURL(/base=ret%3Ae2e0fa11/)
     await expect.poll(() => asked).toContain('2023')
     await expect(page.getByTestId('base-column')).toContainText('Proforma 10/15/2026')
     expect(problems).toEqual([])

@@ -8,7 +8,7 @@ const sources = (over: Partial<GoldenView['sources']> = {}): Pick<GoldenView, 's
   sources: {
     filed_return: { catalog_id: 'c1', filename: 'f.pdf' },
     irs_return_transcript: { catalog_id: 'c2', type: 'return', as_of: '2026-10-20' },
-    returns: [{ id: '8b813d2d-0000', label: 'filed_import 2026-04-26 (8b813d2d)' }, { id: '815a9144-0000', label: 'proforma 2026-10-15 (815a9144)' }],
+    returns: [{ id: 'e2e0f11e-0000', label: 'filed_import 2026-04-26 (e2e0f11e)' }, { id: 'e2e0fa11-0000', label: 'proforma 2026-10-15 (e2e0fa11)' }],
     books: { lines: 33, pnl_as_of: '2026-10-20' },
     scenarios: [{ id: 'aaaa1111-0000', label: 'Pay officer more' }],
     documents: { count: 3, types: ['1099_int'], lines: 3, k1s_from_group_returns: [], unplaced: [], notes: [] },
@@ -32,22 +32,22 @@ describe('all-sources view helpers', () => {
     expect(shortLabel('Ordinary business income (loss). Subtract line 21 from line 6')).toBe('Ordinary business income (loss)')
     expect(shortLabel('Dividends: a. Ordinary dividends')).toBe('Dividends: a. Ordinary dividends')
     expect(shortLabel('Taxable interest. Attach Sch. B if required')).toBe('Taxable interest')
-    expect(sourceLabel('proforma 2026-10-15 (815a9144)')).toBe('Proforma 10/15/2026')
+    expect(sourceLabel('proforma 2026-10-15 (e2e0fa11)')).toBe('Proforma 10/15/2026')
     expect(sourceLabel('filed_import 2026-10-14 (0a1b2c3d)')).toBe('Filed import 10/14/2026')
   })
 
   it('lists only the sources the year has, in a fixed order', () => {
-    expect(availableSources(sources()).map(s => s.id)).toEqual(['filed', 'irs', 'books', 'documents', 'ret:8b813d2d', 'ret:815a9144', 'sc:aaaa1111'])
+    expect(availableSources(sources()).map(s => s.id)).toEqual(['filed', 'irs', 'books', 'documents', 'ret:e2e0f11e', 'ret:e2e0fa11', 'sc:aaaa1111'])
     expect(availableSources(sources({ books: { available: false, why: 'not connected' }, documents: { count: 0, types: [], lines: 0, k1s_from_group_returns: [], unplaced: [], notes: [] }, irs_return_transcript: null })).map(s => s.id))
-      .toEqual(['filed', 'ret:8b813d2d', 'ret:815a9144', 'sc:aaaa1111'])
-    expect(S('ret:815a9144').name).toBe('Proforma 10/15/2026')
+      .toEqual(['filed', 'ret:e2e0f11e', 'ret:e2e0fa11', 'sc:aaaa1111'])
+    expect(S('ret:e2e0fa11').name).toBe('Proforma 10/15/2026')
   })
 
   it('the IRS column falls back to the IRS calculation, marked, and books totals carry Σ', () => {
-    expect(cellOf(row({ irs_computed: { value: 5171913, where: '' } }), S('irs'))).toMatchObject({ value: 5171913, mark: '¹' })
+    expect(cellOf(row({ irs_computed: { value: 5123790, where: '' } }), S('irs'))).toMatchObject({ value: 5123790, mark: '¹' })
     expect(cellOf(row({ irs: { value: 10, where: '' }, irs_computed: { value: 12, where: '' } }), S('irs'))).toMatchObject({ value: 10, note: 'IRS calc $12' })
     expect(cellOf(row({ books: { value: 922200, where: '', summed: true } }), S('books'))).toMatchObject({ value: 922200, mark: 'Σ' })
-    expect(cellOf(row({ returns: { 'proforma 2026-10-15 (815a9144)': { value: 7, where: '' } } }), S('ret:815a9144')).value).toBe(7)
+    expect(cellOf(row({ returns: { 'proforma 2026-10-15 (e2e0fa11)': { value: 7, where: '' } } }), S('ret:e2e0fa11')).value).toBe(7)
   })
 
   it('measures a row against the base; a blank is not a difference', () => {
@@ -56,9 +56,9 @@ describe('all-sources view helpers', () => {
     const d = versusBase(row({ filed: { value: 100, where: '' }, irs: { value: 100, where: '' }, books: { value: 150, where: '' } }), base, others)
     expect(d.state).toBe('differs')
     expect(d.differ.map(s => s.id)).toEqual(['books'])
-    expect(versusBase(row({ filed: { value: 600000, where: '' } }), base, others).state).toBe('only_base')
+    expect(versusBase(row({ filed: { value: 598000, where: '' } }), base, others).state).toBe('only_base')
     expect(versusBase(row({ filed: { value: 0, where: '' } }), base, others).state).toBe('none')
-    expect(versusBase(row({ irs: { value: 3070386, where: '' } }), base, others).state).toBe('not_in_base')
+    expect(versusBase(row({ irs: { value: 608000, where: '' } }), base, others).state).toBe('not_in_base')
     expect(versusBase(row({ irs: { value: 0, where: '' } }), base, others).state).toBe('none')
     // a source not chosen says nothing
     expect(versusBase(row({ scenarios: { 'Pay officer more': { value: 5, where: '' } } }), base, others).state).toBe('none')
@@ -70,8 +70,8 @@ describe('all-sources view helpers', () => {
     const noBooks = availableSources(sources({ books: null }))
     expect(chooseSources(noBooks, {}).others.map(s => s.id)).toEqual(['irs', 'documents'])
     // the URL wins when it names sources this year has; the base is never also compared
-    const picked = chooseSources(all, { base: 'ret:815a9144', with: 'filed,sc:aaaa1111,ret:815a9144,nope' })
-    expect(picked.base?.id).toBe('ret:815a9144')
+    const picked = chooseSources(all, { base: 'ret:e2e0fa11', with: 'filed,sc:aaaa1111,ret:e2e0fa11,nope' })
+    expect(picked.base?.id).toBe('ret:e2e0fa11')
     expect(picked.others.map(s => s.id)).toEqual(['filed', 'sc:aaaa1111'])
     expect(chooseSources(all, { base: 'gone', with: '' })).toMatchObject({ base: { id: 'filed' }, others: [] })
     expect(chooseSources([], {}).base).toBeUndefined()
