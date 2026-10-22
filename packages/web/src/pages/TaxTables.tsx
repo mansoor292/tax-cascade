@@ -20,9 +20,10 @@ import {
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fmtMoney as fmt } from '@/lib/format'
+import { filingYear, TAX_YEARS } from '@/lib/years'
 
 export default function TaxTables() {
-  const [year, setYear] = useState(2024)
+  const [year, setYear] = useState(() => filingYear())
   const { tables, loading } = useTaxTables(year)
 
   const brackets = (tables?.brackets || tables?.tax_brackets) as Record<string, unknown> | unknown[] | undefined
@@ -45,7 +46,7 @@ export default function TaxTables() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018].map(y => (
+              {TAX_YEARS.map(y => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
             </SelectContent>

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Building2, FileText, FlaskConical, Link2, Clock, ArrowRight, GitBranch, Bot, CalendarClock } from 'lucide-react'
+import { Building2, FileText, FlaskConical, Link2, Clock, ArrowRight, GitBranch, Bot, CalendarClock, Plus } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useCalendar } from '@/hooks/use-calendar'
+import { useCalendar, nextDeadline } from '@/hooks/use-calendar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -33,7 +33,8 @@ function fmtSigned(n: number): string {
 export default function Dashboard() {
   const nav = useNavigate()
   const { data: calendar } = useCalendar()
-  const nextDue = calendar?.obligations?.find(o => o.status === 'pending')
+  const nextDue = nextDeadline(calendar?.obligations)
+  const toConfirm = calendar?.obligations?.filter(o => o.status === 'pending' && o.urgency === 'unverified').length ?? 0
   const [entities, setEntities] = useState<Entity[]>([])
   const [returns, setReturns] = useState<Return[]>([])
   const [scenarios, setScenarios] = useState<Scenario[]>([])
@@ -151,6 +152,9 @@ export default function Dashboard() {
                 ) : (
                   <p className="text-2xl font-bold">—</p>
                 )}
+                {toConfirm > 0 && (
+                  <p className="text-xs text-sky-400 truncate">{toConfirm} past {toConfirm === 1 ? 'date' : 'dates'} to confirm</p>
+                )}
               </div>
               <CalendarClock className="w-8 h-8 text-muted-foreground/30 shrink-0" />
             </div>
@@ -224,6 +228,19 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            {/* A new account's Dashboard was blank cards; the only pointer was a
+                small sidebar link (UI audit, 2026-10-22). */}
+            {!loading && entities.length === 0 && (
+              <div className="py-6 text-center">
+                <p className="text-sm font-medium mb-1">Start with who you file for.</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Add a company or a person, then upload the last return they filed.
+                </p>
+                <Button size="sm" onClick={() => nav('/app/entities?new=1')} className="gap-2">
+                  <Plus className="w-4 h-4" /> Add your first entity
+                </Button>
+              </div>
+            )}
             {entities.map(e => {
               const entityReturns = returns.filter(r => r.tax_entity?.name === e.name)
               const cd = compareData[e.id]

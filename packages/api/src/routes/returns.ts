@@ -1222,7 +1222,9 @@ router.get('/:id/pdf', async (req, res) => {
     // Body upload — no more /tmp PDF that was never unlinked.
     const { s3PutObject, s3PresignGet } = await import('../lib/s3.js')
     await s3PutObject(s3Key, Buffer.from(pdfBytes), 'application/pdf')
-    const url = await s3PresignGet(s3Key, 3600)
+    const kind = ({ filed_import: 'filed', proforma: 'draft', amendment: 'amended' } as Record<string, string>)[taxReturn.source] ?? ''
+    const url = await s3PresignGet(s3Key, 3600,
+      [entityData.name, taxReturn.tax_year, taxReturn.form_type, kind].filter(Boolean).join('_') + '.pdf')
 
     // Cache the S3 path on the return
     await supabase.from('tax_return').update({ pdf_s3_path: s3Key }).eq('id', req.params.id)

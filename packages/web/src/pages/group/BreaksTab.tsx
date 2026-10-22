@@ -85,7 +85,7 @@ export default function BreaksTab({ sets }: { sets: VersionSet[] }) {
       ) : view === 'filed' ? (
         <Section
           title={data.ties ? 'Every filed return ties' : `${data.breaks_count} ${data.breaks_count === 1 ? 'break' : 'breaks'} in the returns as filed`}
-          hint={`From the last review of ${data.reviewed_returns} filed ${data.reviewed_returns === 1 ? 'return' : 'returns'}: figures that must agree within a return, year to year, or between the returns of related entities.`}
+          hint={`From the last review of ${data.reviewed_returns} entity-${data.reviewed_returns === 1 ? 'year' : 'years'} (each entity's years, filed or not): figures that must agree within a return, year to year, or between the returns of related entities.`}
           tone={data.ties ? 'border-emerald-500/30' : 'border-fuchsia-500/30'}>
           {data.ties
             ? <p className="text-sm flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Nothing to fix.</p>

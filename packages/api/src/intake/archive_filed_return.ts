@@ -57,7 +57,7 @@ export function archiveFiledReturn(
     totals.total_payments        = num(field_values, 'payments.L33_total')
     totals.overpayment           = num(field_values, 'result.L34_overpayment')
     totals.refund                = num(field_values, 'refund.L35a_refunded')
-    totals.balance_due           = num(field_values, 'result.L37_balance_due')
+    totals.balance_due           = num(field_values, 'result.L37_balance_due', 'owed.L37_amount_owed')
     totals.wages                 = num(field_values, 'income.L1z_total_wages', 'income.L1a_w2_wages')
     totals.taxable_interest      = num(field_values, 'income.L2b_taxable_int')
     totals.ordinary_dividends    = num(field_values, 'income.L3b_ord_dividends')
@@ -102,10 +102,10 @@ export function archiveFiledReturn(
     totals.total_income          = num(field_values, 'income.L6_total_income', 'income.L11_total_income')
     totals.total_deductions      = num(field_values, 'deductions.L20_total_deductions', 'deductions.L21_total', 'deductions.L27_total_deductions')
     totals.ordinary_income_loss  = num(field_values, 'tax.L21_ordinary_income', 'tax.L22_ordinary_income', 'tax.L30_taxable_income')
-    totals.total_tax             = num(field_values, 'tax.L22_total_tax', 'tax.L31_total_tax')
-    totals.total_payments        = num(field_values, 'payments.L33_total_payments')
-    totals.balance_due           = num(field_values, 'payments.L35_amount_owed')
-    totals.overpayment           = num(field_values, 'payments.L36_overpayment')
+    totals.total_tax             = num(field_values, 'tax.L23c_total', 'tax.L22_total_tax', 'tax.L31_total_tax')
+    totals.total_payments        = num(field_values, 'payments.L24z_total', 'payments.L33_total_payments')
+    totals.balance_due           = num(field_values, 'owed.L26', 'payments.L35_amount_owed')
+    totals.overpayment           = num(field_values, 'overpayment.L27', 'payments.L36_overpayment')
   }
 
   return { field_values, totals }

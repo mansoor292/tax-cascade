@@ -41,6 +41,8 @@ import {
 import { toast } from '@/lib/toast'
 import { fmtMoney as fmt } from '@/lib/format'
 import LoadError from '@/components/LoadError'
+import { filingYear, TAX_YEARS } from '@/lib/years'
+const QBO_YEARS = TAX_YEARS.slice(0, 5)
 
 interface Props {
   entityId: string
@@ -56,7 +58,7 @@ export default function QuickBooksTab({ entityId, entity }: Props) {
   const { status: statusRaw, loading, error, reloadStatus, connect, getFinancials, getReport, getTransactions, getAccounts, getMapping } = useQbo(entityId)
   // Load failure keeps status null; the LoadError branch below handles it.
   const status = statusRaw ?? { connected: false }
-  const [year, setYear] = useState(2024)
+  const [year, setYear] = useState(() => filingYear(QBO_YEARS))
   const [financials, setFinancials] = useState<Record<string, unknown> | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -187,7 +189,7 @@ export default function QuickBooksTab({ entityId, entity }: Props) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[2025, 2024, 2023, 2022, 2021].map(y => (
+              {QBO_YEARS.map(y => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
             </SelectContent>

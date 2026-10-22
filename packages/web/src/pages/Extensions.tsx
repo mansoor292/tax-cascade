@@ -15,6 +15,8 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from '@/lib/toast'
 import { fmtMoney as fmt, coerceNumericInputs } from '@/lib/format'
+import { filingYear, TAX_YEARS } from '@/lib/years'
+const EXTENSION_YEARS = TAX_YEARS.slice(0, 4)
 
 const EXTENSION_TYPES = [
   { value: '4868', label: 'Form 4868 — Individual Extension', desc: 'Automatic 6-month extension for individuals' },
@@ -63,7 +65,7 @@ const FIELD_MAP: Record<string, { key: string; label: string }[]> = {
 
 export default function Extensions() {
   const [extType, setExtType] = useState('4868')
-  const [taxYear, setTaxYear] = useState(2024)
+  const [taxYear, setTaxYear] = useState(() => filingYear(EXTENSION_YEARS))
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [result, setResult] = useState<Record<string, unknown> | null>(null)
   const [filing, setFiling] = useState(false)
@@ -129,7 +131,7 @@ export default function Extensions() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Extension Type</Label>
-              <Select value={extType} onValueChange={v => { if (v) { setExtType(v); setInputs({}); setResult(null); setErrors([]) } }}>
+              <Select value={extType} items={EXTENSION_TYPES} onValueChange={v => { if (v) { setExtType(v); setInputs({}); setResult(null); setErrors([]) } }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {EXTENSION_TYPES.map(et => (
@@ -143,7 +145,7 @@ export default function Extensions() {
               <Select value={String(taxYear)} onValueChange={v => setTaxYear(Number(v))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[2025, 2024, 2023, 2022].map(y => (
+                  {EXTENSION_YEARS.map(y => (
                     <SelectItem key={y} value={String(y)}>{y}</SelectItem>
                   ))}
                 </SelectContent>

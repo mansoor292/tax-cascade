@@ -78,6 +78,21 @@ async function refreshForUser(userId: string, entityId?: string) {
     }
   }
 
+  // A filed return held in the catalog closes its year too. Returns
+  // catalogued through /api/catalog or MCP (rather than uploaded on the
+  // Documents tab) have no filed_import row, so the group's three 2025
+  // returns, filed 10/14, stayed "7 days overdue" here (UI audit, 2026-10-22).
+  const { data: filedCatalog } = await supabase.from('return_catalog')
+    .select('entity_id, tax_year')
+    .eq('kind', 'filed_return')
+    .in('entity_id', ids)
+  for (const c of filedCatalog || []) {
+    if (!c.tax_year) continue
+    const set = closedYears.get(c.entity_id) || new Set<number>()
+    set.add(c.tax_year)
+    closedYears.set(c.entity_id, set)
+  }
+
   const today = todayIso()
   const generated: GeneratedObligation[] = []
   for (const e of entities as any[]) {
@@ -111,9 +126,23 @@ async function refreshForUser(userId: string, entityId?: string) {
       : 'pending'
 
   const { data: existing } = await supabase.from('obligation')
-    .select('id, entity_id, obligation_key')
+    .select('id, entity_id, obligation_key, kind, tax_year, status, source')
     .eq('user_id', userId)
     .in('entity_id', ids)
+
+  // initialStatus only applies on insert, so an obligation generated before
+  // its return was on file stayed pending after the return was filed. A
+  // filed year closes its federal return, extension and estimated payments
+  // (as on insert); state returns and annual reports are separate filings.
+  const CLOSES = new Set(['return', 'extension', 'estimated_payment'])
+  const nowClosed = (existing || []).filter((o: any) =>
+    o.source === 'generated' && o.status === 'pending' && CLOSES.has(o.kind) &&
+    o.tax_year != null && (closedYears.get(o.entity_id)?.has(o.tax_year) ?? false))
+  if (nowClosed.length) {
+    await supabase.from('obligation')
+      .update({ status: 'done', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .in('id', nowClosed.map((o: any) => o.id))
+  }
 
   const existingByKey = new Map<string, string>()
   for (const row of existing || []) {

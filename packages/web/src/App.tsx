@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import Landing from '@/pages/Landing'
 import Security from '@/pages/Security'
@@ -20,10 +20,17 @@ import TaxTables from '@/pages/TaxTables'
 import Settings from '@/pages/Settings'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 
+/**
+ * Signed out, a link into the app goes to sign-in and comes back to itself.
+ * It used to go to the landing page and, after sign-in, to the Dashboard — a
+ * link Claude gave, or one a reviewer was sent, was lost (UI audit,
+ * 2026-10-22).
+ */
 function Guard({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth()
+  const loc = useLocation()
   if (loading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading...</div>
-  if (!session) return <Navigate to="/" />
+  if (!session) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />
   return <>{children}</>
 }
 

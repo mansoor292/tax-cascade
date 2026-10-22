@@ -19,6 +19,7 @@ import SchemaFieldInput from '@/components/SchemaFieldInput'
 import { toast } from '@/lib/toast'
 import { fmtMoney as fmt, coerceNumericInputs } from '@/lib/format'
 import { COMPUTABLE_FORM_OPTIONS } from '@/lib/labels'
+import { filingYear, TAX_YEARS } from '@/lib/years'
 
 interface ComputeResult {
   computed?: Record<string, number>
@@ -40,7 +41,7 @@ interface ComputeResult {
 
 export default function Compute() {
   const [formType, setFormType] = useState('1120')
-  const [taxYear, setTaxYear] = useState(2024)
+  const [taxYear, setTaxYear] = useState(() => filingYear())
   const [entityId, setEntityId] = useState<string>('')
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [result, setResult] = useState<ComputeResult | null>(null)
@@ -144,7 +145,7 @@ export default function Compute() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Form Type</Label>
-              <Select value={formType} onValueChange={v => { if (v) { setFormType(v); setInputs({}); setResult(null) } }}>
+              <Select value={formType} items={COMPUTABLE_FORM_OPTIONS} onValueChange={v => { if (v) { setFormType(v); setInputs({}); setResult(null) } }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {COMPUTABLE_FORM_OPTIONS.map(f => (
@@ -158,7 +159,7 @@ export default function Compute() {
               <Select value={String(taxYear)} onValueChange={v => { setTaxYear(Number(v)); setResult(null) }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018].map(y => (
+                  {TAX_YEARS.map(y => (
                     <SelectItem key={y} value={String(y)}>{y}</SelectItem>
                   ))}
                 </SelectContent>
@@ -168,7 +169,7 @@ export default function Compute() {
 
           <div className="space-y-2">
             <Label>Entity (optional — enables save + QBO)</Label>
-            <Select value={entityId || '__none__'} onValueChange={v => setEntityId(!v || v === '__none__' ? '' : v)}>
+            <Select value={entityId || '__none__'} items={[{ value: '__none__', label: 'No entity (standalone)' }, ...compatibleEntities.map(e => ({ value: e.id, label: `${e.name} — ${e.form_type}` }))]} onValueChange={v => setEntityId(!v || v === '__none__' ? '' : v)}>
               <SelectTrigger><SelectValue placeholder="No entity (standalone compute)" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">No entity (standalone)</SelectItem>

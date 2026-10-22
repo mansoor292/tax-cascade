@@ -202,7 +202,14 @@ export default function YearDetail({
                 if (allBlank) {
                   return (
                     <div className="col-span-full text-center text-muted-foreground py-1 italic">
-                      Stale shape — click Recompute (or Re-archive on the source PDF) to regenerate.
+                      {/* Said "Stale shape — click Recompute (or Re-archive…)" on every
+                          extension, which has no Recompute button and usually no
+                          amounts at all (UI audit, 2026-10-22). */}
+                      {r.source === 'extension'
+                        ? 'No tax or payment amounts on this extension.'
+                        : r.source === 'filed_import'
+                          ? 'No line figures read from this filed return yet — Fill gaps reads them from the PDF.'
+                          : 'No line figures on this return yet — Recompute fills them.'}
                     </div>
                   )
                 }

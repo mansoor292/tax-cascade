@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle, CalendarClock, Check, CircleSlash, Loader2, RotateCcw } from 'lucide-react'
-import { useCalendar, type Obligation, type Urgency } from '@/hooks/use-calendar'
+import { useCalendar, nextDeadline, type Obligation, type Urgency } from '@/hooks/use-calendar'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -134,6 +134,7 @@ export default function Calendar() {
   const unverified = pending.filter(o => o.urgency === 'unverified')
   const dueSoon = pending.filter(o => o.urgency === 'due_soon')
   const upcoming = pending.filter(o => o.urgency === 'upcoming')
+  const next = nextDeadline(all)
 
   return (
     <div className="space-y-4">
@@ -167,8 +168,9 @@ export default function Calendar() {
         <Card><CardContent className="p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Next up</div>
           <div className="text-2xl font-semibold">
-            {pending.length ? whenText(pending[0]) : '—'}
+            {next ? whenText(next) : '—'}
           </div>
+          {next && <div className="text-xs text-muted-foreground truncate">{next.title}</div>}
         </CardContent></Card>
       </div>
 

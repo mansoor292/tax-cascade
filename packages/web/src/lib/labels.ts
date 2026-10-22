@@ -60,6 +60,14 @@ export const LEGAL_FORMS = [
   { value: 'individual',       label: 'Individual' },
 ]
 
+/**
+ * LEGAL_FORMS as Select items. Base UI's <SelectValue> renders the raw value
+ * unless the Select is given its items, so the empty "Not specified" option
+ * showed its sentinel, "__none__", on the Create Entity dialog (UI audit,
+ * 2026-10-22). Every Select whose values are not their labels passes items.
+ */
+export const LEGAL_FORM_ITEMS = LEGAL_FORMS.map(lf => ({ value: lf.value || '__none__', label: lf.label }))
+
 export const LEGAL_FORM_LABEL: Record<string, string> = {
   llc: 'LLC', corporation: 'Corporation', partnership: 'Partnership',
   sole_proprietor: 'Sole proprietor', trust: 'Trust', estate: 'Estate',

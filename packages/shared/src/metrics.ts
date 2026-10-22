@@ -43,25 +43,32 @@ const METRIC_TO_FIELD_1120: Record<string, string> = {
   refund:                    'payments.L37_refunded',
 }
 
+// The golden schema's 1120-S keys (data/schema/f1120s): line 21 total
+// deductions, 22 ordinary income, 23c total tax, 24z payments, 26 owed, 27
+// overpayment. This map once carried the 1120's line numbers shifted by one
+// (L20_total_deductions, L21_ordinary_income, L33/L35/L36) — keys no return
+// ever holds, so every S-corp's summary card showed "—" for ordinary income,
+// deductions and tax, and its amendment column never moved (UI audit,
+// 2026-10-22). shared_metrics.test.ts now checks every key against the schema.
 const METRIC_TO_FIELD_1120S: Record<string, string> = {
   gross_receipts:            'income.L1a_gross_receipts',
   balance_1c:                'income.L1c_balance',
   cost_of_goods_sold:        'income.L2_cogs',
   gross_profit:              'income.L3_gross_profit',
   total_income:              'income.L6_total_income',
-  total_deductions:          'deductions.L20_total_deductions',
-  ordinary_income_loss:      'tax.L21_ordinary_income',
-  total_tax:                 'tax.L22_total_tax',
-  total_payments:            'payments.L33_total_payments',
-  amount_owed:               'payments.L35_amount_owed',
-  balance_due:               'payments.L35_amount_owed',
-  overpayment:               'payments.L36_overpayment',
+  total_deductions:          'deductions.L21_total',
+  ordinary_income_loss:      'tax.L22_ordinary_income',
+  total_tax:                 'tax.L23c_total',
+  total_payments:            'payments.L24z_total',
+  amount_owed:               'owed.L26',
+  balance_due:               'owed.L26',
+  overpayment:               'overpayment.L27',
 }
 
 const METRIC_TO_FIELD_1040: Record<string, string> = {
   total_income:              'income.L9_total_income',
   agi:                       'income.L11b_agi',
-  standard_deduction:        'deductions.L12_standard',
+  standard_deduction:        'deductions.L12e_standard',
   qbi_deduction:             'deductions.L13a_qbi',
   taxable_income:            'tax.L15_taxable_income',
   income_tax:                'tax.L16_income_tax',
@@ -69,8 +76,8 @@ const METRIC_TO_FIELD_1040: Record<string, string> = {
   total_payments:            'payments.L33_total',
   refund:                    'refund.L35a_refunded',
   overpayment:               'result.L34_overpayment',
-  balance_due:               'result.L37_balance_due',
-  amount_owed:               'result.L37_balance_due',
+  balance_due:               'owed.L37_amount_owed',
+  amount_owed:               'owed.L37_amount_owed',
 }
 
 export const METRIC_TO_FIELD_BY_FORM: Record<string, Record<string, string>> = {
@@ -174,11 +181,11 @@ export const METRICS_BY_FORM: Record<string, Array<{ fv_key: string; label: stri
     { fv_key: 'income.L1a_gross_receipts',         label: 'Gross receipts' },
     { fv_key: 'income.L3_gross_profit',            label: 'Gross profit' },
     { fv_key: 'income.L6_total_income',            label: 'Total income' },
-    { fv_key: 'deductions.L20_total_deductions',   label: 'Total deductions' },
-    { fv_key: 'tax.L21_ordinary_income',           label: 'Ordinary income/loss' },
-    { fv_key: 'tax.L22_total_tax',                 label: 'Total tax' },
-    { fv_key: 'payments.L33_total_payments',       label: 'Total payments' },
-    { fv_key: 'payments.L36_overpayment',          label: 'Overpayment' },
+    { fv_key: 'deductions.L21_total',              label: 'Total deductions' },
+    { fv_key: 'tax.L22_ordinary_income',           label: 'Ordinary income/loss' },
+    { fv_key: 'tax.L23c_total',                    label: 'Total tax' },
+    { fv_key: 'payments.L24z_total',               label: 'Total payments' },
+    { fv_key: 'overpayment.L27',                   label: 'Overpayment' },
   ],
   '1040': [
     { fv_key: 'income.L9_total_income',            label: 'Total income' },
@@ -188,7 +195,7 @@ export const METRICS_BY_FORM: Record<string, Array<{ fv_key: string; label: stri
     { fv_key: 'tax.L24_total_tax',                 label: 'Total tax' },
     { fv_key: 'payments.L33_total',                label: 'Total payments' },
     { fv_key: 'refund.L35a_refunded',              label: 'Refund' },
-    { fv_key: 'result.L37_balance_due',            label: 'Balance due' },
+    { fv_key: 'owed.L37_amount_owed',              label: 'Balance due' },
   ],
   '7004': [
     { fv_key: 'tentative_tax',                     label: 'Tentative tax' },
@@ -212,7 +219,7 @@ export function metricsForForm(form_type: string): Array<{ fv_key: string; label
  * The headline "what moved" metric for a return of this form — what an
  * amendment column shows.
  *   1120  → total_tax            (tax.L31_total_tax)
- *   1120S → ordinary income/loss (tax.L21_ordinary_income)
+ *   1120S → ordinary income/loss (tax.L22_ordinary_income)
  *   1040  → total_tax            (tax.L24_total_tax)
  */
 export function keyMetric(
@@ -224,7 +231,7 @@ export function keyMetric(
     const v = fv[k]
     return typeof v === 'number' && !isNaN(v) ? v : undefined
   }
-  if (form_type === '1120S') return { value: num('tax.L21_ordinary_income'), label: 'Δ Ord. income' }
+  if (form_type === '1120S') return { value: num('tax.L22_ordinary_income'), label: 'Δ Ord. income' }
   if (form_type === '1040')  return { value: num('tax.L24_total_tax'),       label: 'Δ Tax' }
   return                            { value: num('tax.L31_total_tax'),       label: 'Δ Tax' }
 }

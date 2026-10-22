@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Building2, Pencil, ArrowLeft } from 'lucide-react'
-import { useEntity } from '@/hooks/use-entities'
+import { useEntity, entitiesChanged } from '@/hooks/use-entities'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -30,7 +30,7 @@ import ScenariosTab from '@/components/tabs/ScenariosTab'
 import DocumentsTab from '@/components/tabs/DocumentsTab'
 import QuickBooksTab from '@/components/tabs/QuickBooksTab'
 import { maskTaxId } from '@/lib/mask'
-import { FORM_TYPE_OPTIONS, LEGAL_FORMS } from '@/lib/labels'
+import { FORM_TYPE_OPTIONS, LEGAL_FORMS, LEGAL_FORM_ITEMS } from '@/lib/labels'
 
 // This page's badge shows the label with the form number attached.
 const FORM_TYPE_LABEL: Record<string, string> = Object.fromEntries(
@@ -39,6 +39,11 @@ const FORM_TYPE_LABEL: Record<string, string> = Object.fromEntries(
 FORM_TYPE_LABEL['1120-S'] = FORM_TYPE_LABEL['1120S']
 
 type Basis = 'accrual' | 'cash' | ''
+const BASIS_ITEMS = [
+  { value: '__qbo__', label: 'Follow QBO company preference' },
+  { value: 'accrual', label: 'Accrual' },
+  { value: 'cash', label: 'Cash' },
+]
 
 function readBasis(entity: { meta?: Record<string, unknown> } | null | undefined): Basis {
   const m = entity?.meta?.accounting_method
@@ -53,6 +58,12 @@ function readBasis(entity: { meta?: Record<string, unknown> } | null | undefined
 export default function EntityDetail() {
   const { id } = useParams<{ id: string }>()
   const nav = useNavigate()
+  // The open tab lives in the URL (?tab=documents) so a link — or the empty
+  // Returns tab's "Upload documents" — can open the right one.
+  const [params, setParams] = useSearchParams()
+  const TABS = ['returns', 'scenarios', 'documents', 'quickbooks']
+  const tab = TABS.includes(params.get('tab') || '') ? params.get('tab')! : 'returns'
+  const openTab = (t: string) => setParams(p => { const n = new URLSearchParams(p); if (t === 'returns') n.delete('tab'); else n.set('tab', t); return n }, { replace: true })
   const { entity, returns, scenarios, loading, reload } = useEntity(id)
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState('')
@@ -92,6 +103,7 @@ export default function EntityDetail() {
       toast.success('Entity updated')
       setEditing(false)
       reload()
+      entitiesChanged()   // the sidebar shows the name and form too
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to update')
     }
@@ -163,7 +175,7 @@ export default function EntityDetail() {
         </Button>
       </div>
 
-      <Tabs defaultValue="returns" className="space-y-4">
+      <Tabs value={tab} onValueChange={v => openTab(String(v))} className="space-y-4">
         <TabsList>
           <TabsTrigger value="returns">
             Returns {returns.length > 0 && <Badge variant="secondary" className="ml-1.5 text-xs px-1.5">{returns.length}</Badge>}
@@ -176,7 +188,7 @@ export default function EntityDetail() {
         </TabsList>
 
         <TabsContent value="returns">
-          <ReturnsTab entityId={id!} entity={entity} onUpdate={reload} />
+          <ReturnsTab entityId={id!} entity={entity} onUpdate={reload} onOpenTab={openTab} />
         </TabsContent>
 
         <TabsContent value="scenarios">
@@ -204,7 +216,7 @@ export default function EntityDetail() {
             </div>
             <div className="space-y-2">
               <Label>Entity Type</Label>
-              <Select value={editFormType} onValueChange={(v) => v && setEditFormType(v)}>
+              <Select value={editFormType} items={FORM_TYPE_OPTIONS} onValueChange={(v) => v && setEditFormType(v)}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {FORM_TYPE_OPTIONS.map(ft => (
@@ -215,7 +227,7 @@ export default function EntityDetail() {
             </div>
             <div className="space-y-2">
               <Label>Legal form</Label>
-              <Select value={editLegalForm || '__none__'} onValueChange={v => setEditLegalForm(v && v !== '__none__' ? v : '')}>
+              <Select value={editLegalForm || '__none__'} items={LEGAL_FORM_ITEMS} onValueChange={v => setEditLegalForm(v && v !== '__none__' ? v : '')}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {LEGAL_FORMS.map(lf => (
@@ -245,7 +257,7 @@ export default function EntityDetail() {
             </div>
             <div className="space-y-2">
               <Label>Accounting basis</Label>
-              <Select value={editBasis || '__qbo__'} onValueChange={v => setEditBasis(v === '__qbo__' ? '' : v as Basis)}>
+              <Select value={editBasis || '__qbo__'} items={BASIS_ITEMS} onValueChange={v => setEditBasis(v === '__qbo__' ? '' : v as Basis)}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__qbo__">Follow QBO company preference</SelectItem>

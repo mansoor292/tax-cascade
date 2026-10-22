@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+export { nextDeadline } from '@/lib/deadlines'
 
 export type Urgency = 'overdue' | 'unverified' | 'due_soon' | 'upcoming' | 'done' | 'dismissed'
 

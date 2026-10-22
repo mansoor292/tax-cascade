@@ -4,6 +4,18 @@ import type { Entity } from '@taxengine/shared'
 
 export type { Entity }
 
+/**
+ * Every useEntities() is its own fetch, so creating an entity on the Entities
+ * page left the sidebar's copy stale: a new account still read "Create your
+ * first entity" beside the entity it had just made (UI audit, 2026-10-22).
+ * Anything that adds, edits or deletes an entity calls entitiesChanged(), and
+ * every mounted list reloads.
+ */
+const CHANGED = 'catipult:entities-changed'
+export function entitiesChanged() {
+  window.dispatchEvent(new Event(CHANGED))
+}
+
 export function useEntities() {
   const [entities, setEntities] = useState<Entity[]>([])
   const [loading, setLoading] = useState(true)
@@ -22,13 +34,18 @@ export function useEntities() {
   }, [])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const onChange = () => { load() }
+    window.addEventListener(CHANGED, onChange)
+    return () => window.removeEventListener(CHANGED, onChange)
+  }, [load])
 
   const create = async (body: { name: string; form_type: string; ein?: string; legal_form?: string }) => {
     const data = await api<{ entity: Entity }>('/api/entities', {
       method: 'POST',
       body: JSON.stringify(body),
     })
-    await load()
+    entitiesChanged()
     return data.entity
   }
 
@@ -37,7 +54,7 @@ export function useEntities() {
       method: 'PUT',
       body: JSON.stringify(body),
     })
-    await load()
+    entitiesChanged()
   }
 
   return { entities, loading, error, reload: load, create, update }

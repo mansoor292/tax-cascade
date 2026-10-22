@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Loader2, GitBranch, BarChart3, ChevronRight } from 'lucide-react'
+import { Plus, FileText, Loader2, GitBranch, BarChart3, ChevronRight, Upload } from 'lucide-react'
 import { type Entity } from '@/hooks/use-entities'
 import { useReturns, type TaxReturn } from '@/hooks/use-returns'
 import { Button } from '@/components/ui/button'
@@ -32,13 +32,15 @@ interface Props {
   entityId: string
   entity: Entity
   onUpdate: () => void
+  /** Switch the entity page to another tab (the empty state's "Upload documents"). */
+  onOpenTab?: (tab: string) => void
 }
 
 
 // Metric ordering/labels and the keyMetric headline live in @taxengine/shared —
 // the sectioned canonical keys are the API's contract, not this component's.
 
-export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
+export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Props) {
   const nav = useNavigate()
   const { returns, loading, error, reload, compute, computeFromQbo, createAmendment, validate, getPdf, remove, fillGaps } = useReturns(entityId)
   const [showCompute, setShowCompute] = useState(false)
@@ -180,11 +182,27 @@ export default function ReturnsTab({ entityId, entity, onUpdate }: Props) {
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <FileText className="h-10 w-10 text-muted-foreground/50 mb-3" />
-            <p className="text-sm text-muted-foreground mb-3">No returns computed yet for this entity.</p>
-            <Button onClick={() => setShowCompute(true)} size="sm" variant="outline" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Compute First Return
-            </Button>
+            {/* A day-one owner holds papers, not line figures: the first step
+                is the last return they filed and this year's W-2s and 1099s.
+                This used to offer only "Compute First Return" — a form of 40
+                blank inputs (UI audit, 2026-10-22). */}
+            <p className="text-sm font-medium mb-1">No returns here yet.</p>
+            <p className="text-sm text-muted-foreground mb-4 max-w-md">
+              Start with the last return you filed and this year's W-2s, 1099s and K-1s. Each filed
+              return you upload becomes that year's filed return here.
+            </p>
+            <div className="flex gap-2">
+              {onOpenTab && (
+                <Button onClick={() => onOpenTab('documents')} size="sm" className="gap-2">
+                  <Upload className="h-4 w-4" />
+                  Upload documents
+                </Button>
+              )}
+              <Button onClick={() => setShowCompute(true)} size="sm" variant="outline" className="gap-2">
+                <Plus className="h-4 w-4" />
+                Enter figures instead
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (

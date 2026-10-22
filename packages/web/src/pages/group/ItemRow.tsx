@@ -4,6 +4,7 @@
  * evidence quotes return headers, EINs included (lib/mask.ts).
  */
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { fmtDate, fmtMoney } from '@/lib/format'
@@ -29,6 +30,7 @@ export interface RowItem {
   status?: string
   tie?: boolean
   version_set?: string
+  entity_id?: string
   tax_year?: number | null
   dollar_effect?: number | null
   deadline?: string | null
@@ -75,6 +77,19 @@ export function ItemRow({ item, showYear = false, badge }: { item: RowItem; show
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Evidence</div>
               <ul className="space-y-0.5 text-xs text-muted-foreground">{evidence.map((e, i) => <li key={i}>{maskTaxIdsInText(e.where)}</li>)}</ul>
+            </div>
+          )}
+          {/* A break or open item was a dead end: it explained itself but
+              led nowhere (UI audit, 2026-10-22). It now opens the year it is
+              about, every source side by side, and the entity's returns. */}
+          {item.entity_id && (
+            <div className="flex gap-3 text-xs pt-1">
+              {item.tax_year ? (
+                <Link className="text-primary hover:underline" to={`/app/compare/${item.entity_id}?view=sources&year=${item.tax_year}`}>
+                  Open {item.tax_year}, every source side by side
+                </Link>
+              ) : null}
+              <Link className="text-primary hover:underline" to={`/app/entities/${item.entity_id}`}>Open the entity's returns</Link>
             </div>
           )}
         </div>

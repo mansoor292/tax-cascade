@@ -29,7 +29,7 @@ export default function SchemaFieldInput({ field, value, onChange }: Props) {
     <div className="space-y-1" data-testid={`field-${field.key}`}>
       <Label className="text-xs">{field.label || field.key.replace(/_/g, ' ')}</Label>
       {field.options?.length ? (
-        <Select value={value || ''} onValueChange={v => v && onChange(v)}>
+        <Select value={value || ''} items={field.options} onValueChange={v => v && onChange(v)}>
           <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select…" /></SelectTrigger>
           <SelectContent>
             {field.options.map(o => (

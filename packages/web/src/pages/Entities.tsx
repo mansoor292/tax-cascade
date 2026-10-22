@@ -27,7 +27,7 @@ import { toast } from '@/lib/toast'
 import { maskTaxId } from '@/lib/mask'
 import {
   FORM_TYPE_OPTIONS, FORM_TYPE_LABEL, FORM_TYPE_COLOR,
-  LEGAL_FORMS, LEGAL_FORM_LABEL,
+  LEGAL_FORMS, LEGAL_FORM_LABEL, LEGAL_FORM_ITEMS,
 } from '@/lib/labels'
 
 export default function Entities() {
@@ -166,7 +166,7 @@ export default function Entities() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="form_type">Tax treatment</Label>
-              <Select value={formType} onValueChange={(v) => v && setFormType(v)}>
+              <Select value={formType} items={FORM_TYPE_OPTIONS} onValueChange={(v) => v && setFormType(v)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -182,7 +182,7 @@ export default function Entities() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="legal_form">Legal form (optional)</Label>
-              <Select value={legalForm || '__none__'} onValueChange={(v) => setLegalForm(v && v !== '__none__' ? v : '')}>
+              <Select value={legalForm || '__none__'} items={LEGAL_FORM_ITEMS} onValueChange={(v) => setLegalForm(v && v !== '__none__' ? v : '')}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>

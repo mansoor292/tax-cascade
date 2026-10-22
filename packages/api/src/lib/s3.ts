@@ -41,8 +41,17 @@ export async function s3PresignPut(key: string, contentType: string, expiresIn =
   }), { expiresIn })
 }
 
-export async function s3PresignGet(key: string, expiresIn = 3600): Promise<string> {
-  return getSignedUrl(s3(), new GetObjectCommand({ Bucket: s3Bucket(), Key: key }), { expiresIn })
+/**
+ * `filename` names the file the browser saves (Content-Disposition), so a
+ * return downloads as "Talbrook_Investments_Inc_2025_1120S_draft.pdf", not
+ * as its S3 key's uuid (UI audit, 2026-10-22). Shown inline either way.
+ */
+export async function s3PresignGet(key: string, expiresIn = 3600, filename?: string): Promise<string> {
+  const safe = filename?.replace(/[^\w.-]+/g, '_').replace(/_+/g, '_').slice(0, 120)
+  return getSignedUrl(s3(), new GetObjectCommand({
+    Bucket: s3Bucket(), Key: key,
+    ...(safe ? { ResponseContentDisposition: `inline; filename="${safe}"` } : {}),
+  }), { expiresIn })
 }
 
 export async function s3PresignGetMany(keys: string[], expiresIn = 3600): Promise<Record<string, string>> {

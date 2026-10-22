@@ -130,6 +130,8 @@ web audit checks only that; Claude's own behaviour is the MCP harness's job.
 
 ## Journeys
 
+The first walk, its findings and what was fixed: `docs/UI_AUDIT_2026-10-22.md`.
+
 Each is walked by clicking only, from the persona's starting page. A step
 that cannot be done because the capability does not exist is logged as
 **missing**. A step that exists but is hard to find or misleads is logged as a

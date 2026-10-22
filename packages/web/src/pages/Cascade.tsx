@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 
 import { toast } from '@/lib/toast'
 import { fmtMoney as fmt, coerceNumericInputs } from '@/lib/format'
+import { filingYear } from '@/lib/years'
 
 const S_CORP_FIELDS = [
   { key: 'gross_receipts', label: 'Gross Receipts' },
@@ -30,13 +31,13 @@ const INDIVIDUAL_FIELDS = [
 
 export default function Cascade() {
   const [sCorpInputs, setSCorpInputs] = useState<Record<string, string>>({
-    tax_year: '2024',
+    tax_year: String(filingYear()),
     gross_receipts: '500000',
     officer_compensation: '100000',
     salaries_wages: '50000',
   })
   const [individualInputs, setIndividualInputs] = useState<Record<string, string>>({
-    tax_year: '2024',
+    tax_year: String(filingYear()),
     filing_status: 'mfj',
     wages: '100000',
   })

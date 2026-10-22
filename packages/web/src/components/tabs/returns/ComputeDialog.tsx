@@ -28,6 +28,7 @@ import { useSchema } from '@/hooks/use-schema'
 import { toast } from '@/lib/toast'
 import { coerceNumericInputs } from '@/lib/format'
 import { COMPUTABLE_FORM_OPTIONS } from '@/lib/labels'
+import { filingYear, TAX_YEARS } from '@/lib/years'
 
 interface Props {
   open: boolean
@@ -46,7 +47,7 @@ interface Props {
 
 export default function ComputeDialog({ open, onOpenChange, entityId, defaultFormType, compute, validate, onComputed }: Props) {
   const [formType, setFormType] = useState(defaultFormType || '1040')
-  const [taxYear, setTaxYear] = useState(2024)
+  const [taxYear, setTaxYear] = useState(() => filingYear())
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [computing, setComputing] = useState(false)
   const { schema, loading: schemaLoading } = useSchema(open ? formType : undefined, open ? taxYear : undefined)
@@ -100,7 +101,7 @@ export default function ComputeDialog({ open, onOpenChange, entityId, defaultFor
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Form Type</Label>
-          <Select value={formType} onValueChange={(v) => v && setFormType(v)}>
+          <Select value={formType} items={COMPUTABLE_FORM_OPTIONS} onValueChange={(v) => v && setFormType(v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {COMPUTABLE_FORM_OPTIONS.map(f => (
@@ -114,7 +115,7 @@ export default function ComputeDialog({ open, onOpenChange, entityId, defaultFor
           <Select value={String(taxYear)} onValueChange={v => setTaxYear(Number(v))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              {[2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018].map(y => (
+              {TAX_YEARS.map(y => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
             </SelectContent>
