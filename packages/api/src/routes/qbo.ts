@@ -615,6 +615,7 @@ export async function getFinancials(
   let pnlData: { summary: Record<string, number>; raw: any; fetched_at: string } | null = null
   let bsData: { summary: Record<string, number>; raw: any; fetched_at: string } | null = null
   let source: 'cache' | 'qbo' = 'cache'
+  let pnlStale: any = null, bsStale: any = null
 
   if (!opts.refresh) {
     const [{ data: pnlCached }, { data: bsCached }] = await Promise.all([
@@ -639,6 +640,21 @@ export async function getFinancials(
     const fresh = (row: any) => row && (Date.now() - new Date(row.fetched_at).getTime()) < CACHE_TTL_MS
     if (fresh(pnlCached)) pnlData = { summary: pnlCached.summary, raw: pnlCached.raw_data, fetched_at: pnlCached.fetched_at }
     if (fresh(bsCached))  bsData  = { summary: bsCached.summary,  raw: bsCached.raw_data,  fetched_at: bsCached.fetched_at }
+    pnlStale = pnlCached; bsStale = bsCached
+  }
+
+  // No live QuickBooks connection (disconnected, or an account set up from
+  // stored reports, like the demo group): the last stored reports ARE the
+  // books, however old — fetched_at says as of when. Before 2026-10-22 a
+  // stale cache with no connection threw on the refetch, and the books
+  // vanished from every view a day after they were last pulled.
+  if ((!pnlData && pnlStale) || (!bsData && bsStale)) {
+    const { data: conn } = await supabase.from('qbo_connection')
+      .select('id').eq('entity_id', entityId).eq('is_active', true).maybeSingle()
+    if (!conn) {
+      if (!pnlData && pnlStale) pnlData = { summary: pnlStale.summary, raw: pnlStale.raw_data, fetched_at: pnlStale.fetched_at }
+      if (!bsData && bsStale) bsData = { summary: bsStale.summary, raw: bsStale.raw_data, fetched_at: bsStale.fetched_at }
+    }
   }
 
   // Use entity's preferred accounting method
