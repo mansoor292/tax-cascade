@@ -5,7 +5,7 @@
  * and the same for 2016–2018.
  */
 import { describe, it, expect } from 'vitest'
-import type { EntityInfo } from './types.js'
+import type { CatalogView, EntityInfo } from './types.js'
 import { buildContext } from './context.js'
 import { catalogChecks } from './checks/catalog.js'
 import { entityChecks } from './checks/entity.js'
@@ -40,6 +40,18 @@ describe('a missing filed return is asked for only when one is expected', () => 
     const inRange = ctx(indiv, 2023, '2026-10-22', { extended_years: [], first_record_year: 2022 })
     expect((present.run(inRange) as any[])[0]).toMatchObject({ status: 'gap' })
     expect((facts.run(inRange) as any[])[0]).toMatchObject({ status: 'gap' })
+  })
+
+  it('before the records, a return the IRS shows processed is a low item: upload the copy', () => {
+    const tc150: CatalogView = { id: 't2019', kind: 'irs_transcript', tax_year: 2019, status: 'complete', transcript_type: 'account', entries: [
+      { id: 'x1', form: 'irs_transcript', title: '', rev: '2019', instance: '', page: 1, section: 'Transactions', line: '150', label: 'Tax return filed', desc: '', kind: 'amount', value: 0, raw: '', method: 'geometry', date: '04-15-2020' },
+    ] }
+    const c = buildContext({ self: { entity: indiv, catalogs: [tc150] }, others: [], year: 2019, facts: [], today: new Date('2026-10-23T00:00:00Z'),
+      filing: { extended_years: [], first_record_year: 2022 }, factGaps: [{ key: 'owners.list', question: 'Who owns it?', status: 'missing' }] })
+    const r = (present.run(c) as any[])[0]
+    expect(r).toMatchObject({ status: 'gap', severity: 'low', title: 'The IRS has a 2019 return; no copy is on file here' })
+    expect(r.detail).toMatch(/TC150 on 04-15-2020/)
+    expect((facts.run(c) as any[])[0]).toMatchObject({ status: 'n/a' })
   })
 
   it('with nothing on file at all, only the due date decides', () => {

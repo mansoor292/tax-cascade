@@ -34,6 +34,7 @@ export function useScenarios(entityId?: string) {
     tax_year: number
     adjustments: Record<string, unknown>
     base_return_id?: string
+    base_catalog_id?: string
   }) => {
     const data = await api<{ scenario: Scenario }>('/api/scenarios', {
       method: 'POST',

@@ -124,6 +124,8 @@ test.describe('P1 business owner — filed, accepted, amended (2026-10-22 decisi
     await expect(page.getByText(/No filed 201[6-8] return is catalogued/)).toHaveCount(0)
     // A return past due with nothing on file is still asked for.
     await expect(page.getByText('No filed 2025 return is catalogued').first()).toBeVisible()
+    // Before the records, a return the IRS shows processed asks only for its copy, at low priority.
+    await expect(page.getByText(/The IRS has a 201[6-8] return; no copy is on file here/).first()).toBeVisible()
   })
 
   test('P1-J5 an amendment starts from the filed return; its lines can be changed; books shown beside it', async ({ page, baseURL }) => {
@@ -185,6 +187,10 @@ test.describe('P1 business owner — filed, accepted, amended (2026-10-22 decisi
     await page.getByRole('option', { name: '2024', exact: true }).click()
     // It defaulted to no base at all.
     await expect(dialog.getByRole('combobox').nth(1)).toContainText('2024 · Filed')
+    // 2025 is filed only as a catalogued PDF: it fell back to the draft.
+    await dialog.getByRole('combobox').first().click()
+    await page.getByRole('option', { name: '2025', exact: true }).click()
+    await expect(dialog.getByRole('combobox').nth(1)).toContainText('2025 · Filed (PDF)')
   })
 })
 

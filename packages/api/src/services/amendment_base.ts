@@ -117,6 +117,26 @@ async function shareholdersOf(supabase: SupabaseClient, userId: string, entityId
   return pick ? (pick as any).input_data.shareholders : undefined
 }
 
+/** One catalogued filed return of the caller's, by id: its label and golden
+ *  values. A scenario names its base this way when the filed return is held
+ *  only in the catalog (no imported row to point base_return_id at). */
+export async function filedCatalogBase(
+  supabase: SupabaseClient, userId: string, catalogId: string, entityId?: string,
+): Promise<{ catalog_id: string; tax_year: number | null; label: string; values: Record<string, number> } | null> {
+  let q = supabase.from('return_catalog')
+    .select('id, user_id, entity_id, tax_year, source_filename, entries, entries_enc')
+    .eq('id', catalogId).eq('user_id', userId).eq('kind', 'filed_return')
+  if (entityId) q = q.eq('entity_id', entityId)
+  const { data } = await q.maybeSingle()
+  if (!data) return null
+  const [cat] = await hydrateAll(supabase, [data], { json: ['entries'] })
+  return {
+    catalog_id: cat.id, tax_year: cat.tax_year ?? null,
+    label: `the filed${cat.tax_year ? ` ${cat.tax_year}` : ''} return (${cat.source_filename ?? 'catalogued PDF'})`,
+    values: catalogValues((cat.entries as CatalogEntry[] | null) ?? []),
+  }
+}
+
 export async function amendmentBase(
   supabase: SupabaseClient, userId: string, entityId: string, taxYear: number, formType: string,
 ): Promise<AmendmentBase | null> {

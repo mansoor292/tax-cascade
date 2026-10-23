@@ -42,6 +42,7 @@ import LoadError from '@/components/LoadError'
 import { filingYear, TAX_YEARS } from '@/lib/years'
 import { SOURCE_LABEL } from '@/lib/labels'
 import { bestBase } from './returns/helpers'
+import { useFiling } from '@/hooks/use-filing'
 const SCENARIO_YEARS = TAX_YEARS.slice(0, 4)
 
 interface Props {
@@ -57,9 +58,23 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [taxYear, setTaxYear] = useState(() => filingYear(SCENARIO_YEARS))
+  const { entities: filing } = useFiling(entityId)
   const [baseReturnId, setBaseReturnId] = useState('')
+  // A filed return held only in the catalog (filed from its PDF, never
+  // imported) has no return row; it is offered by its catalog id (2026-10-23).
+  const filedPdfs = (filing[0]?.years ?? [])
+    .filter(y => y.filed?.via === 'catalog' && !y.filed.return_id && y.filed.catalog_id)
+    .map(y => ({ value: `cat:${y.filed!.catalog_id}`, label: `${entity?.form_type ?? ''} — ${y.tax_year} · Filed (PDF)`, year: y.tax_year }))
   // Until one is picked, the base is the best one for the year: the filed return.
-  const effectiveBase = baseReturnId || bestBase(returns, taxYear, entity?.form_type ?? '')?.id || 'none'
+  const best = bestBase(returns, taxYear, entity?.form_type ?? '')
+  const effectiveBase = baseReturnId
+    || (best?.source === 'filed_import' ? best.id : filedPdfs.find(p => p.year === taxYear)?.value ?? best?.id)
+    || 'none'
+  const baseItems = [
+    { value: 'none', label: 'None' },
+    ...filedPdfs.map(({ value, label }) => ({ value, label })),
+    ...returns.map(r => ({ value: r.id, label: `${r.form_type} — ${r.tax_year} · ${SOURCE_LABEL[r.source as keyof typeof SOURCE_LABEL] ?? r.source}` })),
+  ]
   // Adjustments are built one field at a time from the form schema. `adjRows`
   // is the editable list; it's collapsed to the {key: number} shape the API
   // wants on submit. Advanced mode keeps the old raw-JSON escape hatch for
@@ -97,7 +112,8 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
         tax_year: taxYear,
         adjustments: adj,
         // "none" is the explicit no-base choice; it used to be sent as the id.
-        base_return_id: effectiveBase !== 'none' ? effectiveBase : undefined,
+        base_return_id: effectiveBase !== 'none' && !effectiveBase.startsWith('cat:') ? effectiveBase : undefined,
+        base_catalog_id: effectiveBase.startsWith('cat:') ? effectiveBase.slice(4) : undefined,
       })
       if (scenario?.id) {
         await compute(scenario.id)
@@ -330,14 +346,11 @@ export default function ScenariosTab({ entityId, entity, onUpdate }: Props) {
               </div>
               <div className="space-y-2">
                 <Label>Base Return</Label>
-                <Select value={effectiveBase} items={[{ value: 'none', label: 'None' }, ...returns.map(r => ({ value: r.id, label: `${r.form_type} — ${r.tax_year} · ${SOURCE_LABEL[r.source as keyof typeof SOURCE_LABEL] ?? r.source}` }))]} onValueChange={(v) => v && setBaseReturnId(v)}>
+                <Select value={effectiveBase} items={baseItems} onValueChange={(v) => v && setBaseReturnId(v)}>
                   <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {returns.map((r: any) => (
-                      <SelectItem key={r.id} value={r.id}>
-                        {r.form_type} — {r.tax_year} · {SOURCE_LABEL[r.source as keyof typeof SOURCE_LABEL] ?? r.source}
-                      </SelectItem>
+                    {baseItems.map(i => (
+                      <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

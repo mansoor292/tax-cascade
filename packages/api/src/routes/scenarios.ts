@@ -17,6 +17,19 @@ async function hydrateNestedEntity(row: any, userId: string): Promise<void> {
 
 const supabase = lazyServiceClient()
 
+/** The base's figure for every line the scenario is compared on: the compare
+ *  metrics and every output the engine computed. Reading the compare metrics
+ *  alone listed each other output (line 1c) as a change from a base of 0. */
+async function baseMetrics(fv: Record<string, unknown>, formType: string, computed?: Record<string, unknown>): Promise<Record<string, number>> {
+  const { COMPARE_METRICS, readMetric } = await import('@taxengine/shared')
+  const metrics: Record<string, number> = {}
+  for (const m of new Set([...COMPARE_METRICS, ...Object.keys(computed ?? {})])) {
+    const v = readMetric(fv as any, formType, m)
+    if (v !== null) metrics[m] = v
+  }
+  return metrics
+}
+
 const router = Router()
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
 
@@ -33,7 +46,7 @@ router.get('/', async (req, res) => {
 // Create scenario
 router.post('/', async (req, res) => {
   const userId = (req as any).userId
-  const { name, description, entity_id, tax_year, base_return_id, adjustments } = req.body
+  const { name, description, entity_id, tax_year, base_return_id, base_catalog_id, adjustments } = req.body
 
   // A scenario with no entity has no form type, so computing it used to crash
   // on `formType.toLowerCase()` and answer 500. It could never do anything
@@ -46,10 +59,17 @@ router.post('/', async (req, res) => {
   const { data: ownEntity } = await supabase.from('tax_entity')
     .select('id, form_type').eq('id', entity_id).eq('user_id', userId).maybeSingle()
   if (!ownEntity) return res.status(404).json({ error: 'Entity not found' })
+  // A filed return held only in the catalog can be the base (2026-10-23).
+  if (base_catalog_id) {
+    const { data: cat } = await supabase.from('return_catalog').select('id')
+      .eq('id', base_catalog_id).eq('user_id', userId).eq('entity_id', entity_id).eq('kind', 'filed_return').maybeSingle()
+    if (!cat) return res.status(400).json({ error: "base_catalog_id is not one of this entity's catalogued filed returns.", field: 'base_catalog_id' })
+  }
 
   const { data, error } = await supabase.from('scenario').insert({
     user_id: userId, name, description, entity_id, tax_year,
     base_return_id, adjustments: adjustments || {},
+    ...(base_catalog_id && !base_return_id ? { base_catalog_id } : {}),
   }).select().single()
 
   if (error) return sendDbError(res, error)
@@ -92,6 +112,13 @@ router.post('/:id/compute', async (req, res) => {
         baseInputs = toInputs(formType, goldenValues(formType, (br.field_values ?? {}) as Record<string, unknown>))
       } else if (br?.input_data) baseInputs = br.input_data
     }
+    // The filed return held only in the catalog: its golden values.
+    let catalogBase: Record<string, number> | null = null
+    if (!scenario.base_return_id && scenario.base_catalog_id) {
+      const { filedCatalogBase, baseInputs: toInputs } = await import('../services/amendment_base.js')
+      catalogBase = (await filedCatalogBase(supabase, userId, scenario.base_catalog_id))?.values ?? null
+      if (catalogBase) baseInputs = toInputs(formType, catalogBase)
+    }
     const mergedInputs: Record<string, any> = { ...baseInputs, ...adj }
 
     let result: any
@@ -113,23 +140,16 @@ router.post('/:id/compute', async (req, res) => {
       const { data: baseReturn } = await supabase.from('tax_return')
         .select('field_values, form_type, field_values_enc').eq('id', scenario.base_return_id).single()
       await hydrate(supabase, baseReturn, { ...ENCRYPTED_RETURN_FIELDS, userId })
-      if (baseReturn?.field_values && baseReturn.form_type) {
-        const { COMPARE_METRICS, readMetric } = await import('@taxengine/shared')
-        const metrics: Record<string, number> = {}
-        for (const m of COMPARE_METRICS) {
-          const v = readMetric(baseReturn.field_values as any, baseReturn.form_type, m)
-          if (v !== null) metrics[m] = v
-        }
-        baseComputed = metrics
-      }
-    }
+      if (baseReturn?.field_values && baseReturn.form_type) baseComputed = await baseMetrics(baseReturn.field_values, baseReturn.form_type, result?.computed)
+    } else if (catalogBase) baseComputed = await baseMetrics(catalogBase, formType, result?.computed)
 
     // Build field-by-field diff vs base
     const diff: Array<{ field: string; base: number; scenario: number; delta: number; pct_change: number }> = []
     if (baseComputed && result?.computed) {
-      const allKeys = new Set([...Object.keys(baseComputed), ...Object.keys(result.computed)])
+      // A line the base does not carry is not a change from 0 (a blank is not a difference).
+      const allKeys = new Set(Object.keys(baseComputed))
       for (const key of allKeys) {
-        const b = typeof baseComputed[key] === 'number' ? baseComputed[key] : 0
+        const b = baseComputed[key]
         const s = typeof result.computed[key] === 'number' ? result.computed[key] : 0
         if (b !== s) {
           diff.push({

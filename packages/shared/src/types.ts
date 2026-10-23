@@ -68,6 +68,8 @@ export interface Scenario {
   id: string
   entity_id?: string
   base_return_id?: string
+  /** A filed return held only in the catalog, when there is no row to name */
+  base_catalog_id?: string | null
   name: string
   description?: string
   tax_year: number

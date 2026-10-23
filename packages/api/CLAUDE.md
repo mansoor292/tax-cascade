@@ -94,7 +94,8 @@ scripts/               deploy-reload.sh + load-ssm-env.sh are LOAD-BEARING
 ## Route surface
 
 Mounted in `server.ts` (~line 217): `/auth` (signup/signin/me/API keys),
-`/api/scenarios`, `/api/documents`, `/api/returns` (the big one — compute,
+`/api/scenarios` (base: `base_return_id`, or `base_catalog_id` for a filed
+return held only in the catalog), `/api/documents`, `/api/returns` (the big one — compute,
 compute_from_qbo, amend, validate, PDF, extensions; `POST /amendments` starts
 one from the filed return, services/amendment_base.ts), `/api/entities`,
 `/api/schema` (self-describing form specs — clients should read this instead

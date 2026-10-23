@@ -5,7 +5,7 @@
  */
 import { checkTies } from '../../catalog/ties.js'
 import type { Check, CheckResult } from '../types.js'
-import { filed, transcript, money } from '../lookup.js'
+import { filed, transcript, transactions, money } from '../lookup.js'
 import { filedReturnExpected } from './irs.js'
 
 const ALL = ['1040', '1120', '1120S', '1065'] as const
@@ -13,7 +13,7 @@ const ALL = ['1040', '1120', '1120S', '1065'] as const
 export const catalogChecks: Check[] = [
   {
     id: 'catalog.return_present',
-    version: 2,
+    version: 3,
     area: 'catalog',
     title: 'The filed return is catalogued, completely',
     applies: [...ALL],
@@ -23,6 +23,20 @@ export const catalogChecks: Check[] = [
       const cat = filed(ctx.catalogs, ctx.year)
       const expected = filedReturnExpected(ctx)
       if (!cat && !expected.expected) {
+        // Not asked for — but when the IRS shows the return processed (TC150),
+        // the copy is worth having, at low priority: the owner's 2016–2021
+        // returns were filed, the transcripts say so, and no copy is here
+        // (Mansoor, 2026-10-23: "yea").
+        const t = transcript(ctx.catalogs, ctx.year)
+        const tc150 = transactions(t).find(x => x.code === '150')
+        if (tc150) {
+          return [{
+            check: this.id, status: 'gap', severity: 'low',
+            title: `The IRS has a ${ctx.year} return; no copy is on file here`,
+            detail: `The ${ctx.year} account transcript shows the return processed (TC150${tc150.date ? ` on ${tc150.date}` : ''}). Upload the filed PDF if you have it; otherwise a copy can be requested from the IRS on Form 4506. Not asked for as a filing: ${expected.why}.`,
+            evidence: [{ where: `${ctx.year} IRS account transcript${t?.source_filename ? ` (${t.source_filename})` : ''}`, catalog_id: t!.id }],
+          }]
+        }
         return [{ check: this.id, status: 'n/a', severity: 'info', title: `No filed ${ctx.year} return expected — ${expected.why}`, detail: '', evidence: [] }]
       }
       if (!cat) {
