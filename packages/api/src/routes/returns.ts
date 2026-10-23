@@ -746,6 +746,25 @@ router.post('/amendments', async (req, res) => {
   }
 })
 
+// ─── Record an amendment as filed (services/amendment_filed.ts) ───
+// Body: { filename, s3_key } (a presigned upload) or { filename,
+// content_base64 }. The signed amended return is stored and catalogued as the
+// amendment's copy; the amendment becomes 'filed' and its lines lock. Accepted
+// comes from the transcripts (a TC977), in GET /api/review/filing.
+router.post('/:id/filed', async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+  const { filename, s3_key, content_base64 } = req.body ?? {}
+  try {
+    const { recordAmendmentFiled } = await import('../services/amendment_filed.js')
+    const out = await recordAmendmentFiled(supabase, userId, req.params.id, { filename, s3_key, content_base64 })
+    if (!out.ok) return res.status(out.status).json({ error: out.error })
+    res.json({ return_id: out.return_id, tax_year: out.tax_year, filed_at: out.filed_at, document_id: out.document_id, catalog_id: out.catalog_id, catalog_status: out.catalog_status })
+  } catch (e: any) {
+    sendError(res, e)
+  }
+})
+
 // ─── One-shot: pull QBO → map → apply overrides → compute ───
 // Collapses the two-step pattern (GET /api/qbo/:entity_id/qbo-to-tax-inputs
 // → edit → POST /api/returns/compute) into a single call. Use when the
@@ -808,11 +827,16 @@ router.post('/compute_from_qbo', async (req, res) => {
     // Shallow-merge caller overrides onto mapper inputs.
     const mergedInputs = { ...packet.inputs, ...(overrides || {}) }
 
-    const computeResp = (await computeReturn(userId, {
+    const computeOut = await computeReturn(userId, {
       entity_id, tax_year, form_type,
       inputs: mergedInputs,
       return_id, amend_of, new_row, save,
-    })).body
+    })
+    // A refusal is the answer (a filed return, a filed amendment, a missing
+    // row). Only .body was kept here, so a refusal came back as a 200 with a
+    // reconciliation built on nothing (found 2026-10-23).
+    if (computeOut.status >= 300) return res.status(computeOut.status).json(computeOut.body)
+    const computeResp = computeOut.body as any
 
     // Reconciliation: the dollar-level "did the QBO P&L make it onto the
     // tax form?" check. Without this, a missing $200K of operating expenses
@@ -1460,6 +1484,11 @@ router.delete('/:id', async (req, res) => {
 
   // Cascade: delete scenarios that reference this return as their base
   await supabase.from('scenario').delete().eq('base_return_id', req.params.id)
+  // and a filed amendment's copy: the record of its filing goes with it
+  if (ret.source === 'amendment') {
+    const { deleteAmendmentCopies } = await import('../services/amendment_filed.js')
+    await deleteAmendmentCopies(supabase, userId, req.params.id)
+  }
 
   // Delete the return itself
   const { error } = await supabase.from('tax_return').delete().eq('id', req.params.id)

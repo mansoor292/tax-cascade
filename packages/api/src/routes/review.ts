@@ -129,7 +129,7 @@ router.get('/filing', async (req, res) => {
     const bundles = await loadBundles(supabase, userId, wanted)
     if (wanted && !bundles.length) return res.status(404).json({ error: 'Entity not found' })
     const { data: rows, error } = await supabase.from('tax_return')
-      .select('id, entity_id, tax_year, source, form_type, computed_at')
+      .select('id, entity_id, tax_year, source, form_type, computed_at, status, filed_at')
       .in('entity_id', bundles.map(b => b.entity.id))
     if (error) throw new Error(error.message)
     const today = new Date()

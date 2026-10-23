@@ -67,4 +67,47 @@ describe('filed and accepted', () => {
     const y = by(yearFilings(scorp, [tr(2020, { ti: 5, txs: [tx('150', 'Tax return filed', '06-15-2021')] })], [], today)).get(2020)!
     expect(y).toMatchObject({ filed: null, accepted: false })
   })
+
+  describe('amendments (2026-10-23): filed once the signed copy is on file, accepted by a TC977', () => {
+    const amended = (id: string, year: number, returnId: string) =>
+      cat(id, year, [], 'amended_return', { return_id: returnId, document_id: `doc-${id}`, source_filename: `S_${year}_1120S_amended.pdf` })
+    const rows = [
+      { id: 'a1', tax_year: 2023, source: 'amendment', form_type: '1120S', status: 'filed', filed_at: '2026-03-02T00:00:00Z' },
+      { id: 'a2', tax_year: 2023, source: 'amendment', form_type: '1120S', status: 'filed', filed_at: '2026-08-10T00:00:00Z' },
+      { id: 'draft', tax_year: 2023, source: 'amendment', form_type: '1120S', status: 'computed' },
+    ]
+    const base = [ret(2023, 3000), amended('c1', 2023, 'a1'), amended('c2', 2023, 'a2')]
+
+    it('only an amendment recorded as filed is listed, with its copy', () => {
+      const y = by(yearFilings(scorp, base, rows, today)).get(2023)!
+      expect(y.amendments!.map(a => a.return_id)).toEqual(['a1', 'a2'])
+      expect(y.amendments![0].copy).toEqual({ catalog_id: 'c1', document_id: 'doc-c1', filename: 'S_2023_1120S_amended.pdf' })
+      expect(y.amendments!.every(a => !a.accepted)).toBe(true)
+      expect(y.amendments![0].accepted_why).toMatch(/No 2023 IRS account transcript/)
+    })
+
+    it('the amended copy never stands in for the return as filed', () => {
+      const y = by(yearFilings(scorp, [amended('c1', 2023, 'a1')], rows, today)).get(2023)!
+      expect(y.filed).toBeNull()
+    })
+
+    it('a transcript without a TC977 keeps it unaccepted; each TC977 accepts the next amendment filed', () => {
+      const original = tx('150', 'Tax return filed', '09-20-2024')
+      const none = by(yearFilings(scorp, [...base, tr(2023, { ti: 3000, txs: [original] })], rows, today)).get(2023)!
+      expect(none.accepted).toBe(true)
+      expect(none.amendments!.map(a => a.accepted)).toEqual([false, false])
+      expect(none.amendments![0].accepted_why).toMatch(/shows no amended return processed yet \(no TC977\)/)
+
+      const one = by(yearFilings(scorp, [...base, tr(2023, { ti: 3000, txs: [original, tx('977', 'Amended tax return or claim forwarded for processing', '05-11-2026')] })], rows, today)).get(2023)!
+      expect(one.amendments!.map(a => a.accepted)).toEqual([true, false])
+      expect(one.amendments![0].accepted_why).toMatch(/TC977 .* \(05-11-2026\)/)
+      expect(one.amendments![1].accepted_why).toMatch(/shows 1 amended return processed \(TC977\); this is amendment 2 filed here/)
+    })
+
+    it('a 1040-X imported as filed counts, without an uploaded copy', () => {
+      const p: EntityInfo = { id: 'p', name: 'Example Person', form_type: '1040', entity_type: 'individual' }
+      const y = by(yearFilings(p, [], [{ id: 'x', tax_year: 2022, source: 'amendment', form_type: '1040', status: 'filed' }], today)).get(2022)!
+      expect(y.amendments).toEqual([expect.objectContaining({ return_id: 'x', copy: null, accepted: false })])
+    })
+  })
 })

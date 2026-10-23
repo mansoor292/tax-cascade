@@ -110,12 +110,20 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
   let targetRow: { id: string; source: string; entity_id: string; tax_year: number; form_type: string; supersedes_id?: string | null } | null = null
   if (return_id) {
     const { data } = await supabase.from('tax_return')
-      .select('id, source, entity_id, tax_year, form_type, supersedes_id').eq('id', return_id).single()
+      .select('id, source, status, entity_id, tax_year, form_type, supersedes_id').eq('id', return_id).single()
     if (!data) return { status: 404, body: { error: `return_id ${return_id} not found` } }
     if (data.source === 'filed_import') {
       return { status: 409, body: {
         error: 'Cannot compute onto a filed_import row — filed returns are immutable archives.',
         hint: 'Pass amend_of=<return_id> to start a new amendment, or omit return_id to write a fresh proforma.',
+      } }
+    }
+    // A filed amendment is a record of what was sent, like a filed return
+    // (services/amendment_filed.ts, 2026-10-23).
+    if (data.source === 'amendment' && data.status === 'filed') {
+      return { status: 409, body: {
+        error: `This ${data.tax_year} amendment is recorded as filed — its lines are locked.`,
+        hint: 'Start a new amendment to change the return again.',
       } }
     }
     targetRow = data

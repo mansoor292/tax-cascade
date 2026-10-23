@@ -3,7 +3,7 @@
  * metricsForForm ordering keeps Filed / Amendment / Proforma scannable.
  */
 import { useState } from 'react'
-import { Download, ListOrdered, Loader2, Sparkles, Trash2, RefreshCw, Scale, Pencil } from 'lucide-react'
+import { Download, ListOrdered, Loader2, Sparkles, Trash2, RefreshCw, Scale, Pencil, FileCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { fmtMoney } from '@/lib/format'
@@ -27,9 +27,11 @@ export default function YearDetail({
   onRecompute,
   onCompareAmendment,
   onEditLines,
+  onRecordFiled,
   downloading,
   gapFilling,
   recomputing,
+  recordingFiled,
 }: {
   entityId: string
   group: GroupedYear
@@ -39,9 +41,12 @@ export default function YearDetail({
   onRecompute: (r: TaxReturn) => void
   onCompareAmendment: (r: TaxReturn) => void
   onEditLines: (r: TaxReturn) => void
+  /** Upload the signed amended return: the amendment is then filed */
+  onRecordFiled: (r: TaxReturn) => void
   downloading: string | null
   gapFilling: string | null
   recomputing: string | null
+  recordingFiled: string | null
 }) {
   const rows = [
     group.filed,
@@ -108,7 +113,10 @@ export default function YearDetail({
       )}
       {rows.map(r => {
         const gap = r.verification?.gemini_gap_fill
-        const canRecompute = r.source === 'amendment' || r.source === 'proforma'
+        // A filed amendment is a record of what was sent: its lines are locked.
+        const amendFiled = r.source === 'amendment' && r.status === 'filed'
+        const amendFiling = amendFiled ? group.filing?.amendments?.find(a => a.return_id === r.id) : undefined
+        const canRecompute = (r.source === 'amendment' && !amendFiled) || r.source === 'proforma'
         const isCorp = r.form_type === '1120' || r.form_type === '1120S'
         const isStale = r.status === 'invalidated'
         return (
@@ -129,6 +137,10 @@ export default function YearDetail({
                     Stale — regenerate
                   </Badge>
                 )}
+                {amendFiled && (
+                  <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.filed_import}`}>Filed</Badge>
+                )}
+                {amendFiling && <AcceptedBadge filing={{ ...amendFiling, filed: true }} />}
                 <Badge variant="outline" className="text-xs">{r.form_type}</Badge>
                 <span className="text-xs text-muted-foreground font-mono">
                   {r.id.slice(0, 8)}
@@ -163,7 +175,20 @@ export default function YearDetail({
                     Fill gaps
                   </Button>
                 )}
-                {r.source === 'amendment' && (
+                {r.source === 'amendment' && !amendFiled && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRecordFiled(r)}
+                    disabled={recordingFiled === r.id}
+                    className="gap-1 text-xs h-7"
+                    title="Upload the signed amended return you filed — the amendment is then recorded as filed and its lines lock"
+                  >
+                    {recordingFiled === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileCheck className="h-3 w-3" />}
+                    Record as filed
+                  </Button>
+                )}
+                {r.source === 'amendment' && !amendFiled && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -277,6 +302,14 @@ export default function YearDetail({
                     ? <p className="text-xs text-muted-foreground">Started from {base.label}.</p>
                     : null
                 })()}
+                {amendFiled && (
+                  <p className="text-xs text-muted-foreground" data-testid="amendment-filing">
+                    Filed{amendFiling?.filed_at ? ` ${new Date(amendFiling.filed_at).toLocaleDateString()}` : ''}
+                    {amendFiling?.copy?.filename ? ` — the copy on file is ${amendFiling.copy.filename} (Documents)` : ''}.
+                    {amendFiling ? ` ${amendFiling.accepted ? 'Accepted' : 'Not accepted yet'}: ${amendFiling.accepted_why}.` : ''}
+                    {' '}Its lines are locked; start a new amendment to change the return again.
+                  </p>
+                )}
                 <BooksAgreement entityId={entityId} year={r.tax_year} returnId={r.id} />
               </div>
             )}

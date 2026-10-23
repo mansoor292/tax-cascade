@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, FileText, Loader2, GitBranch, BarChart3, ChevronRight, Upload } from 'lucide-react'
 import { type Entity } from '@/hooks/use-entities'
@@ -44,7 +44,7 @@ interface Props {
 
 export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Props) {
   const nav = useNavigate()
-  const { returns, loading, error, reload, compute, computeFromQbo, createAmendment, validate, getPdf, remove, fillGaps } = useReturns(entityId)
+  const { returns, loading, error, reload, compute, computeFromQbo, createAmendment, recordFiled, validate, getPdf, remove, fillGaps } = useReturns(entityId)
   const [showCompute, setShowCompute] = useState(false)
   const [expandedYear, setExpandedYear] = useState<number | null>(null)
   const [downloading, setDownloading] = useState<string | null>(null)
@@ -52,7 +52,11 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
   const [creatingAmendment, setCreatingAmendment] = useState<string | null>(null)
   const [recomputing, setRecomputing] = useState<string | null>(null)
   const [editing, setEditing] = useState<TaxReturn | null>(null)
-  const { entities: filingEntities } = useFiling(entityId)
+  // Record as filed: the amendment waiting for its signed copy, and the picker
+  const [amendingCopyFor, setFilingFor] = useState<TaxReturn | null>(null)
+  const [recordingFiled, setRecordingFiled] = useState<string | null>(null)
+  const copyInput = useRef<HTMLInputElement>(null)
+  const { entities: filingEntities, reload: reloadFiling } = useFiling(entityId)
   const filing = filingEntities[0]?.years
   const grouped = useMemo(() => groupByYear(returns, filing), [returns, filing])
 
@@ -136,6 +140,31 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
     setRecomputing(null)
   }
 
+  const handleRecordFiled = (r: TaxReturn) => {
+    setFilingFor(r)
+    copyInput.current?.click()
+  }
+
+  // Nothing recorded an amendment as filed (UI audit #26). The signed copy is
+  // the record, as a filed PDF is for the original (Mansoor, 2026-10-23).
+  const handleCopyChosen = async (file: File | undefined) => {
+    const r = amendingCopyFor
+    if (copyInput.current) copyInput.current.value = ''
+    setFilingFor(null)
+    if (!file || !r) return
+    if (!confirm(`Record the ${r.tax_year} amendment as filed, with ${file.name} as the copy you sent? Its lines are then locked, like a filed return's.`)) return
+    setRecordingFiled(r.id)
+    try {
+      await recordFiled(r.id, file)
+      reloadFiling()
+      toast.success(`${r.tax_year} amendment recorded as filed. It shows accepted once an IRS transcript shows the amendment processed (TC977).`)
+      onUpdate()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Recording the amendment as filed failed')
+    }
+    setRecordingFiled(null)
+  }
+
   // The amendment beside the filed return and the books, every line labelled
   // by the IRS (the Sources view). The old amendment-vs-filed page printed
   // internal keys and each line twice (UI audit #24).
@@ -145,9 +174,13 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
   }
 
   const handleDelete = async (r: TaxReturn) => {
-    if (!confirm(`Delete ${SOURCE_LABEL[r.source!] || r.source} ${r.tax_year} ${r.form_type}? This is permanent.`)) return
+    const what = r.source === 'amendment' && r.status === 'filed'
+      ? `the filed ${r.tax_year} amendment and the copy it was filed with`
+      : `${SOURCE_LABEL[r.source!] || r.source} ${r.tax_year} ${r.form_type}`
+    if (!confirm(`Delete ${what}? This is permanent.`)) return
     try {
       await remove(r.id)
+      reloadFiling()
       toast.success('Return deleted')
       onUpdate()
     } catch (e) {
@@ -284,6 +317,13 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
                         {latestAmendment ? (
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.amendment}`}>Amended</Badge>
+                            {latestAmendment.status === 'filed' && (
+                              <Badge variant="outline" className={`text-xs ${SOURCE_VARIANT.filed_import}`}>Filed</Badge>
+                            )}
+                            {(() => {
+                              const af = g.filing?.amendments?.find(a => a.return_id === latestAmendment.id)
+                              return af ? <AcceptedBadge filing={{ ...af, filed: true }} /> : null
+                            })()}
                             {amendIsBlank ? (
                               <span className="text-xs text-muted-foreground italic" title="This amendment has no values yet — expand the year to compute or delete it.">
                                 blank — not yet computed
@@ -351,9 +391,11 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
                             onRecompute={handleRecompute}
                             onCompareAmendment={handleCompareAmendment}
                             onEditLines={setEditing}
+                            onRecordFiled={handleRecordFiled}
                             downloading={downloading}
                             gapFilling={gapFilling}
                             recomputing={recomputing}
+                            recordingFiled={recordingFiled}
                           />
                         </TableCell>
                       </TableRow>
@@ -365,6 +407,16 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
           </Table>
         </Card>
       )}
+
+      {/* The signed copy of an amendment, for Record as filed */}
+      <input
+        ref={copyInput}
+        type="file"
+        accept="application/pdf,.pdf"
+        className="hidden"
+        data-testid="amendment-copy-input"
+        onChange={e => handleCopyChosen(e.target.files?.[0])}
+      />
 
       {/* Edit an amendment's lines: its inputs, prefilled, recomputed in place */}
       {editing && (

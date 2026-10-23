@@ -18,6 +18,13 @@
  *
  * Computed on read from the catalogued transcripts, never stored: a stored
  * flag would go stale the day a new transcript is uploaded.
+ *
+ * AMENDMENTS (Mansoor, 2026-10-23): an amendment is filed once the signed
+ * amended return is uploaded to it (POST /api/returns/:id/filed, which sets
+ * the row's status to 'filed' and catalogues the copy as 'amended_return'),
+ * or when it came in as a filed 1040-X. It is accepted once the year's account
+ * transcript shows the IRS processed an amended return (TC977): the first
+ * TC977 accepts the first amendment filed, the second the second.
  */
 import type { CatalogView, EntityInfo } from './types.js'
 import { buildContext } from './context.js'
@@ -25,7 +32,16 @@ import { filed, transcript, returnTranscript, transactions, transcriptValue, noR
 import { postedFrom, dueDates } from './checks/irs.js'
 import { heldYear } from '../schema/golden.js'
 
-export interface StoredReturnRow { id: string; tax_year: number; source: string; form_type: string; computed_at?: string | null }
+export interface StoredReturnRow { id: string; tax_year: number; source: string; form_type: string; computed_at?: string | null; status?: string | null; filed_at?: string | null }
+
+/** One filed amendment of the year: when it was recorded as filed, its copy, and the IRS's word on it */
+export interface AmendmentFiling {
+  return_id: string
+  filed_at: string | null
+  copy: null | { catalog_id: string; document_id?: string | null; filename?: string | null }
+  accepted: boolean
+  accepted_why: string
+}
 
 export interface YearFiling {
   tax_year: number
@@ -42,6 +58,29 @@ export interface YearFiling {
   extended: boolean
   due: string
   extended_due: string
+  /** The year's filed amendments, the first filed first */
+  amendments?: AmendmentFiling[]
+}
+
+/** Filed amendments of one year, each accepted by a TC977 in filing order. */
+function amendmentFilings(catalogs: CatalogView[], rows: StoredReturnRow[], year: number, t: CatalogView | undefined, asOf: string | null): AmendmentFiling[] {
+  const filedRows = rows.filter(r => r.tax_year === year && r.source === 'amendment' && r.status === 'filed')
+    .sort((a, b) => String(a.filed_at ?? a.computed_at ?? '').localeCompare(String(b.filed_at ?? b.computed_at ?? '')))
+  const tc977 = transactions(t).filter(x => x.code === '977')
+  const dated = asOf ? `, transcript dated ${asOf}` : ''
+  return filedRows.map((r, i) => {
+    const cat = catalogs.find(c => c.kind === 'amended_return' && c.return_id === r.id)
+    const hit = tc977[i]
+    const why = !t ? `No ${year} IRS account transcript on file yet — upload one to confirm`
+      : hit ? `TC977 (amended return processed) on the ${year} account transcript${hit.date ? ` (${hit.date})` : ''}${dated}`
+      : tc977.length ? `The ${year} transcript${asOf ? ` dated ${asOf}` : ''} shows ${tc977.length} amended return${tc977.length === 1 ? '' : 's'} processed (TC977); this is amendment ${i + 1} filed here`
+      : `The ${year} transcript${asOf ? ` dated ${asOf}` : ''} shows no amended return processed yet (no TC977)`
+    return {
+      return_id: r.id, filed_at: r.filed_at ?? null,
+      copy: cat ? { catalog_id: cat.id, document_id: cat.document_id ?? null, filename: cat.source_filename ?? null } : null,
+      accepted: !!hit, accepted_why: why,
+    }
+  })
 }
 
 function asOfOf(t: CatalogView | undefined): string | null {
@@ -103,11 +142,13 @@ export function yearFilings(entity: EntityInfo, catalogs: CatalogView[], stored:
 
     const extended = transactions(t).some(x => x.code === '460') || own.some(r => r.tax_year === year && r.source === 'extension')
     const { due, extended: extDue } = dueDates(entity.form_type, year)
+    const amendments = amendmentFilings(catalogs, own, year, t, asOf)
     out.push({
       tax_year: year, filed: filedOn, accepted, accepted_why: why, transcript_as_of: asOf,
       ...(postedIn !== undefined ? { posted_in: postedIn } : {}),
       ...(holds !== undefined ? { holds_return_of: holds } : {}),
       extended, due: iso(due), extended_due: iso(extDue),
+      ...(amendments.length ? { amendments } : {}),
     })
   }
   return out

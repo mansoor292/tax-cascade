@@ -26,7 +26,7 @@ export async function loadBundles(supabase: SupabaseClient, userId: string, enti
   const { data: ents, error } = await eq
   if (error) throw new Error(error.message)
   let cq = supabase.from('return_catalog')
-    .select('id, user_id, entity_id, tax_year, kind, transcript_type, as_of, source_filename, status, coverage, entries, entries_enc')
+    .select('id, user_id, entity_id, tax_year, kind, transcript_type, as_of, source_filename, status, coverage, entries, entries_enc, return_id, document_id')
     .eq('user_id', userId).is('superseded_by', null)
   if (entityIds) cq = cq.in('entity_id', entityIds)
   const { data: cats, error: e2 } = await cq
@@ -37,6 +37,7 @@ export async function loadBundles(supabase: SupabaseClient, userId: string, enti
     const v: CatalogView = {
       id: r.id, kind: r.kind, tax_year: r.tax_year, source_filename: r.source_filename, status: r.status,
       transcript_type: r.transcript_type ?? null, as_of: r.as_of ?? null,
+      return_id: r.return_id ?? null, document_id: r.document_id ?? null,
       coverage: r.coverage as CatalogCoverage, entries: keyEntries((r.entries as CatalogEntry[] | null) ?? []),
     }
     byEntity.set(r.entity_id, [...(byEntity.get(r.entity_id) ?? []), v])

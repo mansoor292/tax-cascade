@@ -59,8 +59,11 @@ export interface CheckResult {
 
 export interface CatalogView {
   id: string
-  kind: 'filed_return' | 'computed_return' | 'irs_transcript' | 'irs_notice' | 'other'
+  kind: 'filed_return' | 'amended_return' | 'computed_return' | 'irs_transcript' | 'irs_notice' | 'other'
   tax_year: number | null
+  /** An amended return's copy: the amendment row it was filed for, and the uploaded PDF */
+  return_id?: string | null
+  document_id?: string | null
   source_filename?: string | null
   status: string
   coverage?: CatalogCoverage

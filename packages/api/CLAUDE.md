@@ -97,7 +97,8 @@ Mounted in `server.ts` (~line 217): `/auth` (signup/signin/me/API keys),
 `/api/scenarios` (base: `base_return_id`, or `base_catalog_id` for a filed
 return held only in the catalog), `/api/documents`, `/api/returns` (the big one — compute,
 compute_from_qbo, amend, validate, PDF, extensions; `POST /amendments` starts
-one from the filed return, services/amendment_base.ts), `/api/entities`,
+one from the filed return, services/amendment_base.ts; `POST /:id/filed`
+records an amendment as filed with its signed copy, services/amendment_filed.ts), `/api/entities`,
 `/api/schema` (self-describing form specs — clients should read this instead
 of hardcoding), `/api/qbo` (OAuth, reports, transactions, AI
 recategorization, bank reconciliation), `/api/stripe`, `/api/scratch` (KV

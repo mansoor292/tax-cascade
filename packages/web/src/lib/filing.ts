@@ -5,7 +5,18 @@
  * Filed: a filed return is on file — a catalogued filed PDF or an imported
  * row. Accepted: the IRS's transcript confirms it; false until a transcript
  * does (Mansoor, 2026-10-22).
+ *
+ * Amendments: filed once the signed amended return is uploaded to it; accepted
+ * once the year's transcript shows a TC977 (Mansoor, 2026-10-23).
  */
+export interface AmendmentFiling {
+  return_id: string
+  filed_at: string | null
+  copy: null | { catalog_id: string; document_id?: string | null; filename?: string | null }
+  accepted: boolean
+  accepted_why: string
+}
+
 export interface YearFiling {
   tax_year: number
   filed: null | { via: 'catalog' | 'import'; catalog_id?: string; filename?: string | null; return_id?: string }
@@ -17,6 +28,8 @@ export interface YearFiling {
   extended: boolean
   due: string
   extended_due: string
+  /** The year's filed amendments, the first filed first */
+  amendments?: AmendmentFiling[]
 }
 
 export interface EntityFiling {

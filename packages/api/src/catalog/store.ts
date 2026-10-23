@@ -10,7 +10,7 @@ import type { CatalogSource } from './query.js'
 import { transcriptParts } from './transcript.js'
 import { keyEntries } from '../schema/index.js'
 
-export type CatalogKind = 'filed_return' | 'computed_return' | 'irs_transcript' | 'irs_notice' | 'other'
+export type CatalogKind = 'filed_return' | 'amended_return' | 'computed_return' | 'irs_transcript' | 'irs_notice' | 'other'
 
 export interface PageIndexRow {
   page: number
@@ -39,6 +39,9 @@ export function pageIndex(cat: Catalog): PageIndexRow[] {
 
 export function kindForDocType(docType: string | null | undefined): CatalogKind {
   if (!docType) return 'other'
+  // An amended return is never the year's filed return: Compare, the checks
+  // and the amendment base all read that catalog as the return as filed.
+  if (docType === 'prior_return_1040x' || docType.startsWith('amended_return')) return 'amended_return'
   if (docType.startsWith('prior_return_')) return 'filed_return'
   if (/transcript/.test(docType)) return 'irs_transcript'
   if (/notice|irs_letter/.test(docType)) return 'irs_notice'

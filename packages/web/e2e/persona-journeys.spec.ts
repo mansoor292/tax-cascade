@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { testEmail, deleteUserByEmail, signUpViaApi, signInThroughUi, signInViaApi, authed } from './helpers'
 
 /**
@@ -10,8 +11,8 @@ import { testEmail, deleteUserByEmail, signUpViaApi, signInThroughUi, signInViaA
  * owner's four entities with the same shape (filed years, an S-corp, the
  * misposted IRS transcripts), built for exactly this (login in SSM
  * /tax-api/DEMO_ACCOUNT_*; `npm run test:e2e:clean` loads it). They read,
- * except the amendment journey, which creates its own amendment and deletes
- * it. The day-one journeys need an empty account and make their own.
+ * except the amendment journeys, which create their own amendment (and its
+ * filed copy) and delete it. The day-one journeys need an empty account and make their own.
  *
  * Each test starts where its persona starts and reaches the fix by clicking.
  * Only the deep-link test opens a page by address, because the link is its
@@ -175,6 +176,68 @@ test.describe('P1 business owner — filed, accepted, amended (2026-10-22 decisi
     page.once('dialog', d => d.accept())
     await page.getByTitle('Delete').first().click()
     await expect(row2024.getByRole('button', { name: 'Create' })).toBeVisible({ timeout: 30_000 })
+  }
+
+  test('P1-J5 an amendment is recorded as filed by uploading the signed copy; accepted only once a transcript shows a TC977', async ({ page, baseURL }) => {
+    await signInDemo(page)
+    await sidebar(page).getByRole('link', { name: /Talbrook Investments Inc/ }).click()
+    const entityId = page.url().match(/entities\/([0-9a-f-]{36})/)![1]
+    try {
+      await recordFiledJourney(page)
+    } finally {
+      // Deleting the amendment deletes its filed copy too; a failed run must not leave either.
+      const token = await signInViaApi(DEMO_EMAIL, DEMO_PASSWORD)
+      type Row = { id: string; entity_id: string; source: string; tax_year: number }
+      const list = await (await fetch(`${baseURL}/api/returns`, { headers: authed(token) })).json() as { returns?: Row[] }
+      for (const r of (list.returns ?? []).filter(x => x.entity_id === entityId && x.source === 'amendment' && x.tax_year === 2023)) {
+        await fetch(`${baseURL}/api/returns/${r.id}`, { method: 'DELETE', headers: authed(token) })
+      }
+    }
+  })
+
+  async function signedCopy(): Promise<Buffer> {
+    const doc = await PDFDocument.create()
+    const page = doc.addPage([612, 792])
+    page.drawText('Form 1120-S 2023 - Amended return (test copy)', { x: 72, y: 720, size: 12, font: await doc.embedFont(StandardFonts.Helvetica) })
+    return Buffer.from(await doc.save())
+  }
+
+  async function recordFiledJourney(page: Page) {
+    const row2023 = page.getByRole('row').filter({ has: page.getByRole('cell', { name: '2023', exact: true }) })
+    page.once('dialog', d => d.accept())
+    await row2023.getByRole('button', { name: 'Create' }).click()
+    await expect(page.getByText(/2023 amendment started from the filed 2023 return/)).toBeVisible({ timeout: 60_000 })
+
+    // Nothing recorded an amendment as filed (UI audit #26).
+    const chooser = page.waitForEvent('filechooser')
+    await page.getByRole('button', { name: 'Record as filed' }).click()
+    page.once('dialog', d => d.accept())
+    await (await chooser).setFiles({ name: 'Talbrook_2023_1120S_amended_signed.pdf', mimeType: 'application/pdf', buffer: await signedCopy() })
+    await expect(page.getByText('2023 amendment recorded as filed.', { exact: false })).toBeVisible({ timeout: 60_000 })
+
+    // Filed, with its copy; the demo's 2023 transcript has no TC977, so not accepted.
+    await expect(row2023).toContainText('Filed')
+    await expect(row2023).toContainText('Not accepted yet')
+    const filing = page.getByTestId('amendment-filing')
+    await expect(filing).toContainText('Talbrook_2023_1120S_amended_signed.pdf')
+    await expect(filing).toContainText('shows no amended return processed yet (no TC977)')
+    // Its lines are locked, like a filed return's.
+    await expect(page.getByRole('button', { name: 'Edit lines' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Record as filed' })).toHaveCount(0)
+
+    // The copy is in Documents, as the filed amended return.
+    await page.getByRole('tab', { name: /Documents/ }).click()
+    await expect(page.getByText('Talbrook_2023_1120S_amended_signed.pdf')).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText('Amended return (filed)').first()).toBeVisible()
+
+    // Deleting the amendment takes its copy with it.
+    await page.getByRole('tab', { name: /Returns/ }).click()
+    await page.getByRole('cell', { name: '2023', exact: true }).click()
+    page.once('dialog', d => { expect(d.message()).toContain('the filed 2023 amendment and the copy it was filed with'); d.accept() })
+    await page.getByTitle('Delete').first().click()
+    await expect(row2023.getByRole('button', { name: 'Create' })).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('tab', { name: /Documents/ }).click()
+    await expect(page.getByText('Talbrook_2023_1120S_amended_signed.pdf')).toHaveCount(0)
   }
 
   test('P1-J5 a scenario defaults to the best base: the filed return', async ({ page }) => {

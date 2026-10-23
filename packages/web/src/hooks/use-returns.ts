@@ -94,6 +94,26 @@ export function useReturns(entityId?: string) {
     return data
   }
 
+  /**
+   * Record an amendment as filed: the signed amended return, uploaded to it
+   * (api services/amendment_filed.ts). Its lines lock; it reads accepted once
+   * a transcript shows the IRS processed it (TC977). Nothing recorded an
+   * amendment as filed before 2026-10-23 (UI audit #26).
+   */
+  const recordFiled = async (returnId: string, file: File) => {
+    const presign = await api<{ upload_url: string; s3_key: string; content_type: string }>(
+      `/api/documents/presign?filename=${encodeURIComponent(file.name)}`
+    )
+    const put = await fetch(presign.upload_url, { method: 'PUT', headers: { 'Content-Type': presign.content_type }, body: file })
+    if (!put.ok) throw new Error(`Upload failed (${put.status})`)
+    const data = await api<{ return_id: string; tax_year: number; filed_at: string }>(`/api/returns/${returnId}/filed`, {
+      method: 'POST',
+      body: JSON.stringify({ s3_key: presign.s3_key, filename: file.name }),
+    })
+    await load()
+    return data
+  }
+
   const validate = async (body: {
     form_type: string
     tax_year: number
@@ -131,7 +151,7 @@ export function useReturns(entityId?: string) {
     })
   }
 
-  return { returns, loading, error, reload: load, compute, computeFromQbo, createAmendment, validate, getPdf, compare, remove, fillGaps }
+  return { returns, loading, error, reload: load, compute, computeFromQbo, createAmendment, recordFiled, validate, getPdf, compare, remove, fillGaps }
 }
 
 /** Dedicated hook for the compare_returns endpoint — used by the Compare page. */
