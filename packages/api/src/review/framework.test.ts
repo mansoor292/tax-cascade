@@ -1,5 +1,6 @@
 /**
- * The review framework on synthetic catalogs shaped like the Edgewater facts:
+ * The review framework on synthetic catalogs shaped like the Edgewater facts
+ * (figures are the Talbrook demo group's, standing in for the owner's):
  * an S corporation whose 1040 reported its income as passive, whose
  * distributions exceeded basis, and a loss year funded by a related company.
  */
@@ -30,7 +31,7 @@ const indiv: EntityInfo = { id: 'i', name: 'Example Taxpayer', form_type: '1040'
 function k1(year: number, box1: number, dist: number, extra: CatalogEntry[] = []): CatalogEntry[] {
   return [
     e('f1120s', { line: 'D', kind: 'text', value: EIN, raw: '00-0000001' }),
-    e('f1120s', { line: 'B', kind: 'text', value: '541213', raw: '541213' }),
+    e('f1120s', { line: 'B', kind: 'text', value: '541810', raw: '541810' }),
     e('f1120ssk', { section: 'Part III', line: '1', value: box1, raw: String(box1) }),
     e('f1120ssk', { section: 'Part III', line: '16', kind: 'text', value: 'D', raw: 'D', label: 'Line 1 of 5. Code' }),
     e('f1120ssk', { section: 'Part III', line: '16', value: dist, raw: String(dist), label: 'Line 1 of 5. Amount' }),
@@ -39,9 +40,9 @@ function k1(year: number, box1: number, dist: number, extra: CatalogEntry[] = []
 }
 
 const SCORP_CATS = [
-  cat('t2021', 2021, [e('irs_transcript', { section: 'Return information', line: 'Taxable Income', value: -41424, raw: 'Taxable Income -$41,424.00' })], 'irs_transcript'),
-  cat('s2022', 2022, k1(2022, 1_061_424, 1_048_000)),
-  cat('s2023', 2023, k1(2023, 3_044_422, 3_108_149, [amt('f1120ssk', '4', 26_008, { section: 'Part III' }), amt('f1120ssk', '5a', 516, { section: 'Part III' })])),
+  cat('t2021', 2021, [e('irs_transcript', { section: 'Return information', line: 'Taxable Income', value: -35615, raw: 'Taxable Income -$35,615.00' })], 'irs_transcript'),
+  cat('s2022', 2022, k1(2022, 1_063_210, 1_048_000)),
+  cat('s2023', 2023, k1(2023, 3_239_353, 3_297_973, [amt('f1120ssk', '4', 24_623, { section: 'Part III' }), amt('f1120ssk', '5a', 516, { section: 'Part III' })])),
 ]
 
 const INDIV_CATS = [
@@ -49,9 +50,9 @@ const INDIV_CATS = [
     e('f1040se', { section: 'Part II', line: '28', row: 'A', col: 'a', kind: 'text', value: 'EXAMPLE S CORP', raw: 'EXAMPLE S CORP' }),
     e('f1040se', { section: 'Part II', line: '28', row: 'A', col: 'b', kind: 'text', value: 'S', raw: 'S' }),
     e('f1040se', { section: 'Part II', line: '28', row: 'A', col: 'd', kind: 'text', value: EIN, raw: '00-0000001' }),
-    e('f1040se', { section: 'Part II', line: '28', row: 'A', col: 'h', value: 3_044_422, raw: '3,044,422' }),
-    amt('f8960', '4a', 3_044_422),
-    amt('f7203', '6', 3_108_149, { section: 'Part I' }),
+    e('f1040se', { section: 'Part II', line: '28', row: 'A', col: 'h', value: 3_239_353, raw: '3,239,353' }),
+    amt('f8960', '4a', 3_239_353),
+    amt('f7203', '6', 3_297_973, { section: 'Part I' }),
   ]),
 ]
 
@@ -59,11 +60,11 @@ describe('review framework', () => {
   it('rolls basis forward in the §1367 order, using the transcript for a year with no return', () => {
     const roll = basisRollforward(SCORP_CATS, 2023, 0, 2021, () => 0)
     expect(roll.map(r => r.year)).toEqual([2021, 2022, 2023])
-    expect(roll[0]).toMatchObject({ allowedLoss: 0, suspendedOut: 41424, eoy: 0 })
-    // 2022: 1,061,424 − 1,048,000 = 13,424 of room → 13,424 of the 41,424 allowed.
-    expect(roll[1]).toMatchObject({ excess: 0, allowedLoss: 13424, suspendedOut: 28000, eoy: 0 })
-    // 2023: income 3,070,946 against 3,108,149 of distributions → 37,203 over basis.
-    expect(roll[2].excess).toBe(37203)
+    expect(roll[0]).toMatchObject({ allowedLoss: 0, suspendedOut: 35615, eoy: 0 })
+    // 2022: 1,063,210 − 1,048,000 = 15,210 of room → 15,210 of the 35,615 allowed, 20,405 still suspended.
+    expect(roll[1]).toMatchObject({ excess: 0, allowedLoss: 15210, suspendedOut: 20405, eoy: 0 })
+    // 2023: income 3,239,353 + 24,623 + 516 = 3,264,492 against 3,297,973 of distributions → 33,481 over basis.
+    expect(roll[2].excess).toBe(33481)
   })
 
   it('links the 1040 to the S corporation only through the EIN both returns print', () => {
@@ -80,13 +81,14 @@ describe('review framework', () => {
     expect(before.findings[0].asks).toContain('k1.material_participation')
     const facts = [{ fact_key: 'k1.material_participation', tax_year: 2023, subject: 'Example S Corp', value: 'more_than_500_hours', status: 'answered' as const }]
     const after = await runFramework(buildContext({ self: { entity: indiv, catalogs: INDIV_CATS }, others, year: 2023, facts }), { ai: false, only: ['niit.nonpassive_income_taxed'] })
-    expect(after.findings[0]).toMatchObject({ status: 'finding', dollar_effect: -115688 })
+    // 3.8% of the 3,239,353 in Form 8960 line 4a
+    expect(after.findings[0]).toMatchObject({ status: 'finding', dollar_effect: -123095 })
   })
 
   it('flags distributions above basis and a Form 7203 missing the ordinary income', async () => {
     const ctx = buildContext({ self: { entity: indiv, catalogs: INDIV_CATS }, others: [{ entity: scorp, catalogs: SCORP_CATS }], year: 2023, facts: [] })
     const { findings } = await runFramework(ctx, { ai: false, only: ['basis.distributions_within_basis', 'basis.form7203_matches_k1', 'qbi.sstb_position_consistent'] })
-    expect(findings.find(f => f.key?.endsWith(':excess'))?.title).toMatch(/37,203/)
+    expect(findings.find(f => f.key?.endsWith(':excess'))?.title).toMatch(/33,481/)
     expect(findings.find(f => f.key?.endsWith(':3a'))?.title).toMatch(/line 3a shows 0/)
   })
 
@@ -133,7 +135,7 @@ describe('review framework', () => {
       const ids = [...prompt.matchAll(/"id":"(e\d+)"/g)].map(m => m[1])
       return { issues: [
         { title: 'Real problem', detail: 'd', area: 'x', severity: 'high', amount_involved: 1800000, tax_effect: 600000, cited: [ids[0]] },
-        { title: 'Misread credit', detail: 'd', area: 'x', severity: 'high', amount_involved: 147713, tax_effect: -147713, cited: [ids[1]] },
+        { title: 'Misread credit', detail: 'd', area: 'x', severity: 'high', amount_involved: 107876, tax_effect: -107876, cited: [ids[1]] },
         { title: 'Cites nothing real', detail: 'd', area: 'x', severity: 'high', cited: ['nope'] },
       ] }
     }).find(c => c.id === 'ai.framework_scan')!

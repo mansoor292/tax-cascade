@@ -376,10 +376,10 @@ import { calc2220, type Form2220Inputs } from './form2220.js'
  *
  * Catipult stored an amendment as a corrected Form 1120 and nothing else,
  * so the refund it showed was the corrected return's whole overpayment.
- * Edgewater Ventures' 2023 amendment read 435,059 when the claim was
- * 192,234 — the original return had already credited 242,825 forward —
- * and its 2024 amendment read 168,170 against a 22,332 claim, because the
- * IRS had already refunded 145,838. A preparer pulling those rows had to
+ * Edgewater Ventures' 2023 amendment read 334,709 when the claim was
+ * 141,601 — the original return had already credited 176,667 forward —
+ * and its 2024 amendment read 122,707 against a 22,186 claim, because the
+ * IRS had already refunded 106,450. A preparer pulling those rows had to
  * redo the netting by hand. This computes Part I the way the form does:
  * column A as originally reported (or as the IRS later adjusted it),
  * column C as corrected, B the difference, then lines 5–13 netting the

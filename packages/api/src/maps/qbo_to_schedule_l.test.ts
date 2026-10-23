@@ -3,49 +3,49 @@
  *
  * This mapper used to read equity by account name: "Partner's Equity",
  * "Retained Earnings", "Shareholder Distributions". A real company's
- * distributions account is called "Partner distributions", so $5.25M of
+ * distributions account is called "Partner distributions", so $6.20M of
  * cumulative distributions matched nothing, the current year's "Net Income"
  * was never added either, and retained earnings went onto Schedule L
- * overstated by $3.96M. Lines 15 and 28 still agreed, because both come
+ * overstated by $4.97M. Lines 15 and 28 still agreed, because both come
  * straight from QuickBooks' own totals — so the balance sheet balanced in the
  * two boxes a reviewer checks and failed to foot everywhere else.
  *
- * The figures below are a real 2025 file, with the balance sheet QuickBooks
- * itself reports.
+ * The figures below are the Talbrook demo group's, standing in for a real 2025
+ * file, with the balance sheet QuickBooks itself reports.
  */
 import { describe, it, expect } from 'vitest'
 import { buildScheduleL, fieldValuesForPdf } from './qbo_to_schedule_l.js'
 
 const EOY_2025 = {
-  'BankAccounts (Total)': 520_571.20,
-  'OtherCurrentAssets (Total)': 1_577_531.57,
-  'FixedAssets (Total)': 131_745.45,
-  'TotalAssets (Total)': 2_229_848.22,
-  'CreditCards (Total)': -4_006.33,        // overpaid card: a DEBIT balance
-  'OtherCurrentLiabilities (Total)': 1_809_277.84,
-  'Liabilities (Total)': 1_805_271.51,
+  'BankAccounts (Total)': 416_851.05,
+  'OtherCurrentAssets (Total)': 1_505_342.84,
+  'FixedAssets (Total)': 97_240.46,
+  'TotalAssets (Total)': 2_019_434.35,
+  'CreditCards (Total)': -3_993.34,        // overpaid card: a DEBIT balance
+  'OtherCurrentLiabilities (Total)': 1_869_068.95,
+  'Liabilities (Total)': 1_865_075.61,
   'Opening balance equity': 858.61,
-  'Partner distributions': -5_250_580.43,  // named nothing this mapper knew
-  'Retained Earnings': 4_376_223.28,       // prior years only
-  'Net Income': 1_298_075.25,              // current year, a separate row
-  'Equity (Total)': 424_576.71,
-  'TotalLiabilitiesAndEquity (Total)': 2_229_848.22,
+  'Partner distributions': -6_200_133.57,  // named nothing this mapper knew
+  'Retained Earnings': 5_122_431.88,       // prior years only
+  'Net Income': 1_231_201.82,              // current year, a separate row
+  'Equity (Total)': 154_358.74,
+  'TotalLiabilitiesAndEquity (Total)': 2_019_434.35,
 }
 
 const EOY_2024 = {
-  'BankAccounts (Total)': 292_999.32,
-  'OtherCurrentAssets (Total)': 1_439_575.06,
-  'FixedAssets (Total)': 130_933.72,
-  'TotalAssets (Total)': 1_863_508.10,
+  'BankAccounts (Total)': 214_965.72,
+  'OtherCurrentAssets (Total)': 1_409_183.07,
+  'FixedAssets (Total)': 96_302.78,
+  'TotalAssets (Total)': 1_720_451.57,
   'CreditCards (Total)': -572.60,
-  'OtherCurrentLiabilities (Total)': 1_780_569.84,
-  'Liabilities (Total)': 1_779_997.24,
+  'OtherCurrentLiabilities (Total)': 1_672_786.55,
+  'Liabilities (Total)': 1_672_213.95,
   'Opening balance equity': 858.61,
-  'Partner distributions': -4_293_571.03,
-  'Retained Earnings': 4_130_989.78,
-  'Net Income': 245_233.50,
-  'Equity (Total)': 83_510.86,
-  'TotalLiabilitiesAndEquity (Total)': 1_863_508.10,
+  'Partner distributions': -5_075_052.87,
+  'Retained Earnings': 4_941_528.50,
+  'Net Income': 180_903.38,
+  'Equity (Total)': 48_237.62,
+  'TotalLiabilitiesAndEquity (Total)': 1_720_451.57,
 }
 
 /** Sum the liabilities-and-equity lines the way the form does. */
@@ -69,16 +69,17 @@ describe('buildScheduleL — equity', () => {
   })
 
   it('carries retained earnings net of distributions, not the gross account balance', () => {
-    // 4,376,223.28 + 1,298,075.25 - 5,250,580.43 = 423,718.10, within the
+    // 5,122,431.88 + 1,231,201.82 - 6,200,133.57 = 153,500.13, within the
     // dollar of rounding that the residual deliberately absorbs.
-    expect(m['schedL.L25_retained_eoy_d']).toBeCloseTo(423_718, -0.5)
-    expect(m['schedL.L25_retained_boy_b']).toBe(82_652)
+    expect(m['schedL.L25_retained_eoy_d']).toBeCloseTo(153_500, -0.5)
+    // 4,941,528.50 + 180,903.38 - 5,075,052.87 = 47,379.01
+    expect(m['schedL.L25_retained_boy_b']).toBe(47_379)
     // The unadjusted account balance is what used to land here.
-    expect(m['schedL.L25_retained_eoy_d']).not.toBe(4_376_223)
+    expect(m['schedL.L25_retained_eoy_d']).not.toBe(5_122_431)
   })
 
   it('keeps an overpaid credit card as a debit rather than flipping its sign', () => {
-    expect(m['schedL.L17_mortshort_eoy_d']).toBe(-4_006)
+    expect(m['schedL.L17_mortshort_eoy_d']).toBe(-3_993)
     expect(m['schedL.L17_mortshort_boy_b']).toBe(-573)
   })
 
@@ -89,22 +90,22 @@ describe('buildScheduleL — equity', () => {
   it('still foots when the distributions account is named something else entirely', () => {
     const renamed = { ...EOY_2025 }
     delete (renamed as any)['Partner distributions']
-    ;(renamed as any)['Owner draws — Mansoor'] = -5_250_580.43
+    ;(renamed as any)['Owner draws — Adrian'] = -6_200_133.57
     const n = buildScheduleL(renamed, EOY_2024)
     expect(liabilitiesAndEquity(n, 'eoy_d')).toBe(n['schedL.L28_total_eoy_d'])
   })
 })
 
 describe('fieldValuesForPdf', () => {
-  const qbo = { 'schedL.L7_loans_eoy_d': 500_000, 'schedL.L14_other_eoy_d': 1_446_749, 'schedL.L15_total_eoy_d': 1_654_986 }
+  const qbo = { 'schedL.L7_loans_eoy_d': 500_000, 'schedL.L14_other_eoy_d': 1_395_967, 'schedL.L15_total_eoy_d': 1_667_557 }
 
   it('prints the saved Schedule L, not a fresh QBO mapping', () => {
-    // A reviewed 2025 return printed L7 500,000 and L14 1,446,749 (the loan
+    // A reviewed 2025 return printed L7 500,000 and L14 1,395,967 (the loan
     // counted twice) because the route spread QBO over the saved values.
-    const saved = { 'tax.L31_total_tax': 30_514, 'schedL.L7_loans_eoy_d': 571_514, 'schedL.L14_other_eoy_d': 608_564 }
+    const saved = { 'tax.L31_total_tax': 28_663, 'schedL.L7_loans_eoy_d': 490_797, 'schedL.L14_other_eoy_d': 494_175 }
     const fv = fieldValuesForPdf(saved, qbo)
-    expect(fv['schedL.L7_loans_eoy_d']).toBe(571_514)
-    expect(fv['schedL.L14_other_eoy_d']).toBe(608_564)
+    expect(fv['schedL.L7_loans_eoy_d']).toBe(490_797)
+    expect(fv['schedL.L14_other_eoy_d']).toBe(494_175)
     expect(fv['schedL.L15_total_eoy_d'], 'no QBO line mixed into a saved Schedule L').toBeUndefined()
   })
 

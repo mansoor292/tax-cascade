@@ -29,7 +29,7 @@ describe('maskTaxIdsInText', () => {
     expect(maskTaxIdsInText('TIN 123456789.')).toBe('TIN •••••6789.')
   })
   it('leaves amounts, dates, phone numbers and IRS document locators alone', () => {
-    const prose = 'Due 2026-12-11; 1,175,000 vs 1,245,000; call 866-860-4259; DLN 29316-326-29100-5; 2382710; 123456789.50'
+    const prose = 'Due 2026-12-11; 1,175,000 vs 1,245,000; call 866-860-4259; DLN 99999-123-45678-9; 2097888; 123456789.50'
     expect(maskTaxIdsInText(prose)).toBe(prose)
   })
   it('handles empty and nullish input', () => {

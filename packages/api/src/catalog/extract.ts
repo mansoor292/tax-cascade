@@ -225,7 +225,7 @@ function alignToBlank(p: LayoutPage, cand: IndexedPage): LayoutPage {
 const LINE_LABEL = /^\d{1,2}[a-z]?$/
 
 /** On a substitute form, the line number printed just left of a value's box
- *  ("27  1,240,884") says which line the value is — more reliably than its
+ *  ("27  1,103,306") says which line the value is — more reliably than its
  *  aligned position, because facsimiles change the row spacing. Returns the
  *  line id, e.g. "27" or "29a". */
 function lineLabelLeftOf(o: BBox, words: TextRun[]): { line: string; column: number } | null {
@@ -417,7 +417,7 @@ function formPage(p: LayoutPage, cand: IndexedPage, instance: string, aligned = 
     // year. $").
     const moneyBox = /\$\s*$|\bAmount\b/.test(w.label)
     if (moneyBox || !NOT_AMOUNT_LABEL.test(w.label)) {
-      // Money boxes may carry a software note ("SEE STATEMENT 1 385,560");
+      // Money boxes may carry a software note ("SEE STATEMENT 1 291,770");
       // the amount is the right-most amount-shaped token.
       const toks = readingOrder(words).map(x => x.text)
       const amts = toks.filter(t => isAmount(t) && (/[,.]/.test(t) || toks.length === 1))

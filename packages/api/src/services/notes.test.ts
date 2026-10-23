@@ -41,7 +41,7 @@ function fakeSupabase(rows: any[]) {
 
 const open = {
   id: 'v1', note_key: 'k1', user_id: 'u1', entity_id: 'e1', tax_year: null, status: 'open', waiting_on: 'owner',
-  title: 'ERC refund 19,919.70 reissued — confirm deposited', body: 'Reissued 5/4/2026; not in the books.',
+  title: 'Refund 2,450.00 reissued — confirm deposited', body: 'Reissued 3/2/2026; not in the books.',
   fact_key: null, finding_fingerprint: null, due_date: null, recorded_by: 'u1', recorded_at: '2026-10-18T10:00:00Z', superseded_by: null,
 }
 

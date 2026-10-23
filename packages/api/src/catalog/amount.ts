@@ -18,7 +18,7 @@ export function isAmount(raw: string): boolean {
   return AMOUNT_RE.test(s)
 }
 
-/** Parse a printed amount: "1,061,424." → 1061424, "(3,000)" → -3000,
+/** Parse a printed amount: "1,010,210." → 1010210, "(3,000)" → -3000,
  *  "-560." → -560, "8,825.44" → 8825.44, "1,234-" (trailing minus) → -1234. */
 export function parseAmount(raw: string): number | null {
   const s = raw.trim()

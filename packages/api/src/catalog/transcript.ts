@@ -188,7 +188,7 @@ export function transcriptEntries(lines: TranscriptLine[], page: number, ctx: Tr
       }
     }
     if (ctx.section === 'Return information' || ctx.section === 'Account') {
-      // "Taxable Income -$41,424.00" | "Processed date: 04-01-2024" | "Principal Business Activity Code 551112"
+      // "Taxable Income -$35,615.00" | "Processed date: 04-01-2024" | "Principal Business Activity Code 445452"
       const kv = /^(.+?)\s*:?\s+(-?\$[\d,]+\.\d{2}|\d{2}-\d{2}-\d{4}|\d{3,6})$/.exec(t)
       if (kv) {
         const v = kv[2]
@@ -231,9 +231,9 @@ export function transcriptEntries(lines: TranscriptLine[], page: number, ctx: Tr
       ctx.pendingRow = undefined
       return
     }
-    // "Gross Receipts: $2,169,999.00" | "Received Date: 01-20-2026" |
+    // "Gross Receipts: $1,929,750.00" | "Received Date: 01-20-2026" |
     // "F8586: Low Income Housing Credit: $0.00" (label up to the LAST colon) |
-    // "Ordinary Income/Loss $162,007.00" (no colon) | "Designee Check Box:" (blank = no data on file)
+    // "Ordinary Income/Loss $128,143.00" (no colon) | "Designee Check Box:" (blank = no data on file)
     const kv = /^(.+):\s*(.*)$/.exec(t) ?? /^(.+?)\s+(-?\$[\d,]+\.\d{2})$/.exec(t)
     if (!kv || ctx.section === 'Header') {
       const row = push({ section: ctx.section, line: '', label: t, raw: t, kind: 'row', value: t, bbox })

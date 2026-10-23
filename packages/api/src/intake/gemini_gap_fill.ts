@@ -42,7 +42,7 @@ const EXPECTED_KEY_CACHE: Record<string, string[]> = {}
  * Grounding check — the hard rule Gemini's prompt only asks for.
  *
  * Postmortem (2026-09-02, SOP-03): asked to fill 1040 line 16, Gemini
- * "derived" $53,908 by subtracting Schedule 2's OTHER-taxes total from
+ * "derived" $45,584 by subtracting Schedule 2's OTHER-taxes total from
  * line 18 — a number that appears nowhere on the filed PDF, persisted
  * into the filed-return archive looking exactly like a parsed value.
  * Filed imports are archives of what the document says; a gap-filled
@@ -204,7 +204,7 @@ Rules:
   in columns (b) and (d). Most other lines have values only in columns (b) and (d).
 
 Output format:
-{"deductions.L22_advertising": 1226, "schedL.L1_cash_boy_b": 847391}`
+{"deductions.L22_advertising": 1366.52, "schedL.L1_cash_boy_b": 781041}`
 
   const genAI = new GoogleGenerativeAI(GEMINI_KEY)
   const modelName = 'gemini-3.1-flash-lite-preview'

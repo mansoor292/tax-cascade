@@ -53,8 +53,8 @@ export function isPassthroughScheduleKey(k: string): boolean {
  *
  * A return computed onto an existing row keeps every line the engine does
  * not recompute. Edgewater Ventures' 2024 amendment was seeded from the
- * filed return and kept its Schedule J line 13 (242,825 prior-year credit)
- * and line 37 (147,713 refunded) after the corrected payments were put on
+ * filed return and kept its Schedule J line 13 (176,667 prior-year credit)
+ * and line 37 (107,876 refunded) after the corrected payments were put on
  * line 14, so the row counted the credit twice, and no input could clear
  * it. Lines the engine computes (J14, L33, L36…) stay the engine's; the
  * caller can only fill or zero the ones it never touches.
@@ -176,7 +176,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     // in their payload to check — and then the stored detail is merged back in
     // underneath. The return is saved with an itemisation that contradicts the
     // line it supports, and nothing ever looked. That is exactly how line 20
-    // came to read 285,741 over a breakdown totalling 283,661.
+    // came to read 212,475 over a breakdown totalling 208,550.
     //
     // The same applies to a Schedule L where only some lines are restated.
     // Validate what will actually be persisted.
@@ -311,7 +311,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         // A prior year can hand forward an NOL WITHOUT having made a loss: the
         // 80% cap leaves part of an existing carryforward unused. Only the
         // loss case was carried, so a chain of profitable years slowly dropped
-        // the balance — Edgewater Ventures lost $83,423 of carryforward into
+        // the balance — Edgewater Ventures lost $63,642 of carryforward into
         // 2024 that way. Both sources add: a loss generates new NOL, and the
         // unused balance survives alongside it.
         const priorRemaining = Number((priorRet?.field_values as any)?.['nol.carryover_next_year'])
@@ -440,9 +440,9 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       // year with a carryforward uses part of it and leaves the rest. The
       // engine computes that remainder as nol_carryforward_remaining and it was
       // discarded: computed_data is not persisted, so nothing in the vault ever
-      // said how much was left. Edgewater Ventures carried $710,075 into 2022,
-      // used $367,413, carried $342,662 into 2023, used $259,239 — and the
-      // $83,423 still outstanding simply vanished, so 2024 computed with no NOL
+      // said how much was left. Edgewater Ventures carried $587,582 into 2022,
+      // used $279,413, carried $258,381 into 2023, used $191,261 — and the
+      // $63,642 still outstanding simply vanished, so 2024 computed with no NOL
       // at all and overstated tax by ~$17,500.
       //
       // It goes in field_values because that is what survives, what the export
@@ -508,7 +508,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
               // ("OtherIncome > Dividend Income") — plus "(Total)" roll-ups
               // that contain their own children. Summing across all of them
               // double counts: a single $511.16 dividend account came out as
-              // $1,022 on Schedule K line 5a, while the engine's own line 18
+              // $1,164 on Schedule K line 5a, while the engine's own line 18
               // reconciliation used the correct figure. Count the bare leaf
               // keys only.
               const findByPattern = (patterns: RegExp[]): number => {
@@ -555,7 +555,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       // Schedules M-1 and M-2 follow the income statement. They were pure
       // pass-through, so when the figures above them changed the caller's
       // earlier values stayed put — a recompute moved ordinary income by
-      // $37,483 and left M-1 line 8 and M-2 line 2 on the old number, with the
+      // $33,450 and left M-1 line 8 and M-2 line 2 on the old number, with the
       // ending AAA (and the shareholder's basis) built on income the return no
       // longer reported. The lines the form computes are derived here; the
       // facts only the caller knows are left alone.
@@ -628,7 +628,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
             suspected_sstb_entity: sstbSuspect,
             hint: sstbSuspect
               ? `The S-Corp "${sstbSuspect.entity_name}" has business_code ${sstbSuspect.business_code} which matches "${sstbSuspect.category}" — likely SSTB. Confirm with is_sstb:true to zero out QBI, or is_sstb:false if you disagree.`
-              : 'Check the business code of the source S-Corp. §199A(d)(2) categories: health, law, accounting/tax prep (541213), consulting, investment mgmt, performing arts, athletics, brokerage, and "reputation or skill"-based trades.',
+              : 'Check the business code of the source S-Corp. §199A(d)(2) categories: health, law, accounting/tax prep (NAICS 5412), consulting, investment mgmt, performing arts, athletics, brokerage, and "reputation or skill"-based trades.',
           } }
         }
       }

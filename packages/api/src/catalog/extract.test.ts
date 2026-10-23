@@ -27,15 +27,15 @@ function widget(sel: { section?: string; line: string; col?: string; kind?: stri
 describe('catalogue a flattened official Form 1120-S', () => {
   let cat: Catalog
   const VALUES: Array<[{ section?: string; line: string; col?: string }, string, number]> = [
-    [{ line: '1a' }, '8,641,913', 8641913],
+    [{ line: '1a' }, '8,895,990', 8895990],
     [{ line: '1b' }, '1,800,000', 1800000],
-    [{ line: '1c' }, '6,841,913', 6841913],
+    [{ line: '1c' }, '7,095,990', 7095990],
     [{ line: '2' }, '1,670,000', 1670000],
-    [{ line: '3' }, '5,171,913', 5171913],
-    [{ line: '6' }, '5,171,913', 5171913],
+    [{ line: '3' }, '5,425,990', 5425990],
+    [{ line: '6' }, '5,425,990', 5425990],
     [{ line: '7' }, '60,000', 60000],
     [{ line: '21' }, '60,000', 60000],
-    [{ line: '22' }, '5,111,913', 5111913],
+    [{ line: '22' }, '5,365,990', 5365990],
     [{ section: 'Schedule L', line: '19', col: 'd' }, '1,040,000', 1040000],
     [{ section: 'Schedule L', line: '19', col: 'b' }, '3,000', 3000],
   ]

@@ -6,7 +6,7 @@
  * Schedule D (Form 1120-S)", and the two disagreed by a dollar. The engine
  * took the short-term gain from the 1099-B import as one number — $147.65,
  * rounded to 148 — while the Schedule D printed beside it carried proceeds
- * 1,146,458 and cost 1,146,311 in whole dollars, whose difference is 147.
+ * 1,049,201 and cost 1,049,061.22 in whole dollars, whose difference is 147.
  * The filed return said 147 on both, because a form's columns are entered
  * in whole dollars and column (h) is (d) − (e) + (g) of what is printed:
  * a Schedule D whose gain column is not the difference of its own columns

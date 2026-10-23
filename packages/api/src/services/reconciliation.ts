@@ -5,7 +5,7 @@
  * Both schedules were pure pass-through: whatever the caller sent was stored,
  * and nothing re-derived them when the numbers above changed. A return was
  * recomputed with a different taxes-and-licenses figure and a new other-income
- * line, which moved ordinary business income by $37,483 — and M-1 line 8 and
+ * line, which moved ordinary business income by $33,450 — and M-1 line 8 and
  * M-2 line 2 both kept the previous figure, because the caller had supplied
  * them explicitly on an earlier pass and nothing invalidated that. The ending
  * AAA, and therefore the number a shareholder's basis is computed from, was
@@ -91,8 +91,8 @@ export function deriveReconciliation1120S(
     // the AAA goes up by the separately stated income items, down by the
     // separately stated deductions and losses and the nondeductible
     // expenses, and out by the distributions. They were left to the caller,
-    // and a return that gave none printed an ending AAA of $1,306,476 where
-    // the filed return said $369,802 — every dollar distributed still
+    // and a return that gave none printed an ending AAA of $1,163,353 where
+    // the filed return said $283,179 — every dollar distributed still
     // counted as available to distribute tax-free. A stated line is kept and
     // checked against Schedule K; an absent one is derived from it.
     const aaa = aaaFromScheduleK(fv)

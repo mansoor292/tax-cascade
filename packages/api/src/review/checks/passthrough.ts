@@ -5,7 +5,7 @@
  *
  * Each of these was a real miss on the Edgewater returns, found months apart:
  * 2023–2024 1040s reported EZA income as PASSIVE and paid 3.8% NIIT on it
- * (≈115,688 and 6,156); 2023 and 2024 distributions exceeded stock basis and no
+ * (≈84,652 and 6,738); 2023 and 2024 distributions exceeded stock basis and no
  * gain was reported; the 2023 Form 7203 left line 3a blank; the K-1s marked the
  * business SSTB while the 1040s took the QBI deduction as non-SSTB; K-1 item I
  * reported a related company's loan as a shareholder loan.
@@ -253,7 +253,7 @@ const form7203: Check = {
   title: 'Form 7203 carries the K-1 figures',
   applies: ['1040'],
   kind: 'rule',
-  description: 'Form 7203 must start from last year\'s ending basis and include every K-1 income item (the 2023 Form 7203 left the 3,044,422 of ordinary income off line 3a, then reported distributions far above the basis it showed). A 7203 is required whenever an S corporation made distributions.',
+  description: 'Form 7203 must start from last year\'s ending basis and include every K-1 income item (the 2023 Form 7203 left the 3,239,353 of ordinary income off line 3a, then reported distributions far above the basis it showed). A 7203 is required whenever an S corporation made distributions.',
   run(ctx) {
     const cat = filed(ctx.catalogs, ctx.year)
     const out: CheckResult[] = []
@@ -328,7 +328,7 @@ const sstbConsistency: Check = {
   title: 'The SSTB position agrees on the K-1, the 1040 and the business code',
   applies: ['1040', '1120S'],
   kind: 'rule',
-  description: 'A QBI deduction taken as non-SSTB needs a business that is not in a §199A(d)(2) field. If the K-1 marks the business SSTB, or its activity code is accounting, law, consulting or another listed field, the 1040\'s non-SSTB deduction is exposed (EZA 2023: 501,393 deduction on an "accounting / tax preparation" code).',
+  description: 'A QBI deduction taken as non-SSTB needs a business that is not in a §199A(d)(2) field. If the K-1 marks the business SSTB, or its activity code is accounting, law, consulting or another listed field, the 1040\'s non-SSTB deduction is exposed (EZA 2023: 398,058 deduction on an "accounting / tax preparation" code).',
   run(ctx) {
     const out: CheckResult[] = []
     const check1040 = (issuerName: string, issuerCats: CatalogView[]) => {

@@ -608,7 +608,7 @@ Caller-provided overrides always win, INCLUDING explicit 0 or null (that's how y
     entity_id: z.string().describe('Entity UUID'),
     tax_year: z.number().describe('Tax year'),
     form_type: z.string().describe('1120 or 1120S'),
-    overrides: z.record(z.any()).optional().describe('Field-level overrides applied AFTER the mapper runs. E.g. {officer_compensation: 60000, salaries_wages: 177802, is_sstb: true}. Use this to correct any audit entry you disagree with.'),
+    overrides: z.record(z.any()).optional().describe('Field-level overrides applied AFTER the mapper runs. E.g. {officer_compensation: 60000, salaries_wages: 137794, is_sstb: true}. Use this to correct any audit entry you disagree with.'),
     return_id: z.string().optional().describe('Update this specific row. Rejected if filed_import.'),
     amend_of: z.string().optional().describe('Start an amendment off this return_id.'),
     new_row: z.boolean().optional().describe('Force INSERT a fresh proforma row.'),
@@ -1314,7 +1314,7 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
   const NOTE_RULES = 'Where things go: a question every return of this type should answer is a FACT (record_fact; if the registry has no key for it, say so — it needs adding); a decision about a review finding is resolve_finding; everything else still open about the return, or that a new session must know, is a NOTE. Never leave an open item only in the conversation.'
   const noteFields = {
     tax_year: z.number().nullable().optional().describe('The return year; null for the whole entity (a thread spanning years, e.g. a payroll refund)'),
-    title: z.string().optional().describe('One line saying what is open, with the amount if there is one, e.g. "ERC refund 19,919.70 reissued 5/4/2026 — not in the books; confirm deposited"'),
+    title: z.string().optional().describe('One line saying what is open, with the amount if there is one, e.g. "Refund 2,450.00 reissued 3/2/2026 — not in the books; confirm deposited"'),
     body: z.string().nullable().optional().describe('Everything a new session needs: what is known, from which document or person and when, what was tried, what settles it. Replaces the previous body (the old version is kept), so carry forward what still matters.'),
     status: z.enum(['open', 'closed', 'info']).optional().describe('open = needs something (default); closed = settled — say in body what settled it; info = standing context a new session must know, nothing to do'),
     waiting_on: z.enum(['owner', 'irs', 'preparer', 'agent', 'third_party']).nullable().optional().describe('Who must act next. Required while open. owner = the taxpayer or their representative; agent = this assistant/system'),
@@ -1364,7 +1364,7 @@ Auto-created entities land with meta.form_type_inferred:true and meta.qbo_compan
     from_year: z.number().nullable().optional().describe('First tax year the link holds; null = from the start'),
     to_year: z.number().nullable().optional().describe('Last tax year the link holds; null = still holds'),
     source: z.enum(['owner', 'filed_return', 'fact', 'entity_record']).optional().describe('Where the link comes from (default owner = the owner said so)'),
-    evidence: z.string().nullable().optional().describe('Citation, e.g. "2025 Form 1120-S Schedule K-1 items F/G: Mansoor Razzaq, 100%". Required unless the source is the owner'),
+    evidence: z.string().nullable().optional().describe('Citation, e.g. "2025 Form 1120-S Schedule K-1 items F/G: Jane Doe, 100%". Required unless the source is the owner'),
     detail: z.string().nullable().optional().describe('Anything a new session needs about the link: what the fee is for, who decided, open questions'),
     removed: z.boolean().optional().describe('true retires a link recorded in error (kept, so its evidence is not suggested again)'),
   }

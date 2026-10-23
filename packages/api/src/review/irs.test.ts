@@ -1,6 +1,7 @@
 /**
  * The IRS-record checks on synthetic transcripts shaped like what the
- * Edgewater transcripts showed on 2026-10-17: returns posted to the wrong
+ * Edgewater transcripts showed on 2026-10-17 (figures are the Talbrook demo
+ * group's, standing in for the owner's): returns posted to the wrong
  * year, a duplicate received AFTER the counted return, a return due on a
  * Sunday, and a transcript pulled the day the return was filed.
  */
@@ -55,7 +56,7 @@ describe('IRS account checks', () => {
   })
 
   it('names the year whose return the IRS posted to this period', async () => {
-    const cats = [ret(2023, 3044422), ret(2024, 162007), tr(2024, { ti: 3044422, txs: [tx('150', 'Tax return filed', '12-29-2025')] })]
+    const cats = [ret(2023, 3239353), ret(2024, 128143), tr(2024, { ti: 3239353, txs: [tx('150', 'Tax return filed', '12-29-2025')] })]
     const out = await run(2024, cats)
     const m = out.find(f => f.key === 'mismatch')!
     expect(m.title).toMatch(/posted the 2023 return to 2024/)
@@ -64,7 +65,7 @@ describe('IRS account checks', () => {
 
   it('a duplicate received after the counted return does not support penalty relief, and an estimated-tax penalty never does', async () => {
     const cats = [ret(2023, 100), tr(2023, { ti: 100, received: '10-17-2025', txs: [
-      tx('150', 'Tax return filed', '12-29-2025'), tx('976', 'Duplicate return filed', '01-20-2026'), tx('176', 'Penalty for not pre-paying tax', '03-16-2026', 1875),
+      tx('150', 'Tax return filed', '12-29-2025'), tx('976', 'Duplicate return filed', '01-20-2026'), tx('176', 'Penalty for not pre-paying tax', '03-16-2026', 1945),
     ] })]
     const out = await run(2023, cats)
     expect(out.find(f => f.key === '976')!.detail).not.toMatch(/before the receipt/)
@@ -91,7 +92,7 @@ describe('IRS account checks', () => {
   })
 
   it('a misposted return\'s receipt date never becomes this year\'s filing date', () => {
-    const cats = [ret(2024, 162007), ret(2025, 1306476), tr(2025, { ti: 162007, received: '03-15-2026', txs: [tx('150', 'Tax return filed', '03-30-2026')] })]
+    const cats = [ret(2024, 128143), ret(2025, 1163353), tr(2025, { ti: 128143, received: '03-15-2026', txs: [tx('150', 'Tax return filed', '03-30-2026')] })]
     const facts = [{ fact_key: 'irs.filing_date', tax_year: 2025, subject: null, value: '2026-10-14', status: 'answered' as const, source: 'owner', recorded_at: '2026-10-17', superseded_by: null }]
     const ctx = buildContext({ self: { entity: scorp, catalogs: cats }, others: [], year: 2025, facts, today: new Date('2026-10-17T00:00:00Z') })
     const fd = filingDate(ctx, 2025)
@@ -101,15 +102,15 @@ describe('IRS account checks', () => {
 
   it('reads the extension off the transcript and prices relief from an earlier receipt (EZA 2021)', async () => {
     // No TC460: due 15 Mar 2022. Counted receipt 12 Feb 2024 (12 months, capped);
-    // a copy arrived 15 Sep 2022 (6 months) — half the 2,520 is abatable.
+    // a copy arrived 15 Sep 2022 (6 months) — half the 2,464 is abatable.
     const cats = [ret(2021, 100), tr(2021, { ti: 100, received: '02-12-2024', txs: [
-      tx('150', 'Tax return filed', '04-01-2024'), tx('976', 'Duplicate return filed', '09-15-2022'), tx('246', 'Failure to provide information penalty', '04-01-2024', 2520),
+      tx('150', 'Tax return filed', '04-01-2024'), tx('976', 'Duplicate return filed', '09-15-2022'), tx('246', 'Failure to provide information penalty', '04-01-2024', 2464),
     ] })]
     const out = await run(2021, cats)
     expect(out.find(f => f.key === 'late')!.title).toMatch(/after the due date 2022-03-15 \(no extension on file\)/)
     const pen = out.find(f => f.key === 'penalties')! as { title: string; dollar_effect?: number }
-    expect(pen.dollar_effect).toBe(-1260)
-    expect(pen.title).toMatch(/1,260 of it is abatable/)
+    expect(pen.dollar_effect).toBe(-1232)
+    expect(pen.title).toMatch(/1,232 of it is abatable/)
   })
 
   it('with a TC460 the extended date counts (EZA 2024: 2 months, 490)', async () => {
@@ -121,8 +122,8 @@ describe('IRS account checks', () => {
   it('a penalty the IRS reversed is not owed (EV 2024: TC176/276 removed by TC177/277)', async () => {
     const cats = [ret(2024, 100), tr(2024, { ti: 100, txs: [
       tx('150', 'Tax return filed', '12-22-2025'), tx('460', 'Extension', '04-15-2025'),
-      tx('176', 'Penalty for not pre-paying tax', '12-22-2025', 2418.54), tx('276', 'Penalty for late payment of tax', '12-22-2025', 3804.48),
-      tx('277', 'Reduced or removed penalty for late payment of tax', '03-16-2026', -3804.48), tx('177', 'Reduced or removed penalty for not pre-paying tax', '03-16-2026', -2418.54),
+      tx('176', 'Penalty for not pre-paying tax', '12-22-2025', 2392.88), tx('276', 'Penalty for late payment of tax', '12-22-2025', 3743.07),
+      tx('277', 'Reduced or removed penalty for late payment of tax', '03-16-2026', -3743.07), tx('177', 'Reduced or removed penalty for not pre-paying tax', '03-16-2026', -2392.88),
     ] })]
     const out = await run(2024, cats, [], { ...scorp, form_type: '1120', entity_type: 'c_corp' })
     const pen = out.find(f => f.key === 'penalties')!
@@ -144,15 +145,15 @@ describe('IRS account checks', () => {
   it('a credit balance is money the IRS holds, and a returned refund is called out', async () => {
     const cats = [cat('t2023', 2023, [
       e('irs_transcript', { section: 'Header', line: 'Response Date', kind: 'text', value: '04-11-2026', raw: '' }),
-      e('irs_transcript', { section: 'Account', line: 'Account balance', value: -179816.02, raw: 'Account balance: -$179,816.02' }),
-      tx('150', 'Tax return filed', '01-05-2026'), tx('846', 'Refund issued', '01-19-2026', 181409.21), tx('841', 'Refund cancelled', '01-19-2026', -181409.21),
-      tx('846', 'Refund issued', '03-30-2026', 181409.21), tx('740', 'Undelivered refund returned to IRS', '03-30-2026', -181409.21),
+      e('irs_transcript', { section: 'Account', line: 'Account balance', value: -134964.56, raw: 'Account balance: -$134,964.56' }),
+      tx('150', 'Tax return filed', '01-05-2026'), tx('846', 'Refund issued', '01-19-2026', 132059.17), tx('841', 'Refund cancelled', '01-19-2026', -132059.17),
+      tx('846', 'Refund issued', '03-30-2026', 132059.17), tx('740', 'Undelivered refund returned to IRS', '03-30-2026', -132059.17),
     ], 'irs_transcript')]
     const out = await run(2023, cats, [], indiv)
     const c = out.find(f => f.key === 'credit')! as { title: string; detail: string; severity: string; dollar_effect?: number }
     expect(c.severity).toBe('high')
-    expect(c.dollar_effect).toBeCloseTo(-179816.02)
-    expect(c.title).toMatch(/holding 179,816.*the refund came back/)
+    expect(c.dollar_effect).toBeCloseTo(-134964.56)
+    expect(c.title).toMatch(/holding 134,965.*the refund came back/)
     expect(c.detail).toMatch(/undelivered refund returned to the IRS 03-30-2026/)
   })
 

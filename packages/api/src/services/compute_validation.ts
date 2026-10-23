@@ -5,8 +5,8 @@
  * scalar `<bucket>` (e.g. other_deductions_detail + other_deductions),
  * reject with a loud diagnostic if the sum of detail items doesn't match
  * the scalar. Prevents the class of silent failures where the LLM manually
- * totaled a line-item list and got it wrong (e.g. $38,994 claimed vs
- * $69,008 actual, producing phantom profit).
+ * totaled a line-item list and got it wrong (e.g. $34,092 claimed vs
+ * $50,743 actual, producing phantom profit).
  *
  * Also validates Schedule L two ways: assets_total vs liabilities_equity_total
  * (the two boxes agreeing with each other), and each side's component lines

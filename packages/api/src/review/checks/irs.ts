@@ -26,7 +26,7 @@ const PENALTY_CODES: Record<string, string> = {
 /** Each penalty is reduced or removed by the next transaction code (TC177
  *  removes a TC176, TC277 a TC276, TC247 a TC246…). Without netting them,
  *  EV's 2024 transcript — every penalty reversed the day it was assessed —
- *  read as 6,223 of penalties owed (2026-10-18). */
+ *  read as 6,826 of penalties owed (2026-10-18). */
 const REVERSES: Record<string, string> = Object.fromEntries(Object.keys(PENALTY_CODES).map(c => [String(Number(c) + 1), c]))
 
 type Tx = ReturnType<typeof transactions>[number]
@@ -265,10 +265,10 @@ const transcriptAccount: Check = {
       out.push({ check: this.id, status: 'finding', severity: 'medium', key: 'balance', title: `${ctx.year}: ${money(bal.value)} owed to the IRS per the transcript`, detail: 'Pay it or request abatement; interest accrues daily.', evidence: [{ where: `${ctx.year} IRS transcript: ${bal.entry.raw}`, catalog_id: t.id, value: bal.value }], dollar_effect: bal.value })
     }
     // A credit balance is the IRS holding the taxpayer's money — the 2023
-    // 1040 refund (181,409) was issued twice and came back both times
+    // 1040 refund (132,059) was issued twice and came back both times
     // (TC841 cancelled, TC740 undelivered), and nothing flagged it.
     // Before the return posts, a credit is the year's payments waiting for
-    // it (the 2025 1040: 493,626 paid, return filed 10/14/2026, not posted
+    // it (the 2025 1040: 392,984 paid, return filed 10/14/2026, not posted
     // by 10/20) — not money the IRS is holding back.
     if (bal && typeof bal.value === 'number' && bal.value < -1 && !tc150) {
       out.push({ check: this.id, status: 'pass', severity: 'info', key: 'credit', title: `${ctx.year}: ${money(-bal.value)} paid, waiting for the return to post${asOf ? ` (as of ${asOf})` : ''}`, detail: 'Payments and credits for the year sit as a credit until the return is processed; the return then applies them.', evidence: [{ where: `${ctx.year} IRS transcript: ${bal.entry.raw}`, catalog_id: t.id, value: bal.value }] })

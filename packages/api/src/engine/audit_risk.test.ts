@@ -1,7 +1,8 @@
 /**
- * Audit-risk rater. The cases are shaped on returns prepared this week: an
+ * Audit-risk rater. The cases are shaped on returns prepared this week (figures
+ * are the Talbrook demo group's, standing in for the owner's): an
  * 1120 whose Schedule L counted a shareholder loan twice, an 1120-S paying its
- * owner 120,000 beside 965,784 of distributions, and a joint 1040 over $1M.
+ * owner 120,000 beside 905,103 of distributions, and a joint 1040 over $1M.
  */
 import { describe, it, expect } from 'vitest'
 import { rateReturn } from './audit_risk.js'
@@ -9,14 +10,14 @@ import { rateReturn } from './audit_risk.js'
 const codes = (r: ReturnType<typeof rateReturn>) => r.flags.map(f => f.code)
 
 const ev1120 = {
-  'income.L1c_balance': 1_279_110, 'income.L2_cogs': 8_474,
-  'deductions.L27_total_deductions': 1_157_554, 'deductions.L26_other_deductions': 208_305,
-  'deductions.L22_advertising': 6_892, 'deductions.L12_officer_comp': 0, 'deductions.L13_salaries': 825_742,
-  'tax.L28_ti_before_nol': 113_083,
-  'schedM1.L10_income_line28': 113_083,
-  'schedL.L1_cash_eoy_d': 124_636, 'schedL.L2a_trade_eoy_d': 1_312, 'schedL.L6_othercurr_eoy_d': 33_806,
-  'schedL.L7_loans_eoy_d': 500_000, 'schedL.L10b_dep_eoy_d': 484, 'schedL.L13b_amort_eoy_d': 314_669,
-  'schedL.L14_other_eoy_d': 608_564, 'schedL.L15_total_eoy_d': 1_583_471, 'schedL.L28_total_eoy_d': 1_583_471,
+  'income.L1c_balance': 1_093_086, 'income.L2_cogs': 10_093,
+  'deductions.L27_total_deductions': 1_059_759, 'deductions.L26_other_deductions': 153_330,
+  'deductions.L22_advertising': 7_801, 'deductions.L12_officer_comp': 0, 'deductions.L13_salaries': 716_405,
+  'tax.L28_ti_before_nol': 82_677,
+  'schedM1.L10_income_line28': 82_677,
+  'schedL.L1_cash_eoy_d': 91_078, 'schedL.L2a_trade_eoy_d': 1_434, 'schedL.L6_othercurr_eoy_d': 30_986,
+  'schedL.L7_loans_eoy_d': 500_000, 'schedL.L10b_dep_eoy_d': 484, 'schedL.L13b_amort_eoy_d': 240_038,
+  'schedL.L14_other_eoy_d': 494_175, 'schedL.L15_total_eoy_d': 1_358_195, 'schedL.L28_total_eoy_d': 1_358_195,
 }
 
 describe('audit risk — 1120', () => {
@@ -28,15 +29,15 @@ describe('audit risk — 1120', () => {
   })
 
   it('catches a shareholder loan counted twice in Schedule L', () => {
-    // The QBO mapper put the 500,000 loan on line 7 AND inside line 14.
-    const r = rateReturn('1120', { ...ev1120, 'schedL.L14_other_eoy_d': 1_108_564 })
+    // The QBO mapper put the 500,000 loan on line 7 AND inside line 14 (494,175 + 500,000).
+    const r = rateReturn('1120', { ...ev1120, 'schedL.L14_other_eoy_d': 994_175 })
     const f = r.flags.find(x => x.code === 'SCHED_L_LINES_VS_TOTAL')
     expect(f?.severity).toBe('high')
     expect(f?.value).toBe(500_000)
   })
 
   it('catches M-1 that does not reach line 28', () => {
-    const r = rateReturn('1120', { ...ev1120, 'schedM1.L10_income_line28': 136_932 })
+    const r = rateReturn('1120', { ...ev1120, 'schedM1.L10_income_line28': 99_628 })
     expect(codes(r)).toContain('M1_NOT_TIED')
   })
 
@@ -78,11 +79,11 @@ describe('audit risk — 1120', () => {
 
 describe('audit risk — 1120-S', () => {
   const eza = {
-    'income.L1c_balance': 2_922_791, 'income.L2_cogs': 1_206_636, 'deductions.L21_total': 420_179,
-    'deductions.L20_other': 285_741, 'deductions.L7_officer_comp': 120_000,
-    'tax.L22_ordinary_income': 1_306_476, 'schedK.L16d_distributions': 965_784,
-    'schedM2.L1_beg_balance': 82_652, 'schedM2.L2_ordinary_income': 1_306_476, 'schedM2.L3_other_additions': 33_602,
-    'schedM2.L5_other_reductions': 4_491, 'schedM2.L7_distributions': 965_784, 'schedM2.L8_end_balance': 452_455,
+    'income.L1c_balance': 2_555_456, 'income.L2_cogs': 1_065_137, 'deductions.L21_total': 338_866,
+    'deductions.L20_other': 212_475, 'deductions.L7_officer_comp': 120_000,
+    'tax.L22_ordinary_income': 1_163_353, 'schedK.L16d_distributions': 905_103,
+    'schedM2.L1_beg_balance': 63_276, 'schedM2.L2_ordinary_income': 1_163_353, 'schedM2.L3_other_additions': 30_826,
+    'schedM2.L5_other_reductions': 4_616, 'schedM2.L7_distributions': 905_103, 'schedM2.L8_end_balance': 347_736,  // 63,276 + 1,163,353 + 30,826 − 4,616 − 905,103
   }
   it('flags low officer pay beside large distributions (reasonable compensation)', () => {
     const f = rateReturn('1120S', eza).flags.find(x => x.code === 'REASONABLE_COMP')
@@ -91,26 +92,26 @@ describe('audit risk — 1120-S', () => {
   })
   it('accepts an M-2 that rolls forward and catches one that does not', () => {
     expect(codes(rateReturn('1120S', eza))).not.toContain('M2_NOT_TIED')
-    expect(codes(rateReturn('1120S', { ...eza, 'schedM2.L8_end_balance': 423_747 }))).toContain('M2_NOT_TIED')
+    expect(codes(rateReturn('1120S', { ...eza, 'schedM2.L8_end_balance': 323_905 }))).toContain('M2_NOT_TIED')
   })
 })
 
 describe('audit risk — 1040', () => {
   it('notes the high income class and a K-1-heavy mix, not the standard deduction', () => {
     const r = rateReturn('1040', {
-      'income.L11b_agi': 1_807_775, 'income.L1z_total_wages': 120_000, 'sched1.L5_rental_partnership_scorp': 1_306_476,
-      'deductions.L12e_standard': 31_500, 'income.L2b_taxable_int': 33_349,
-    }, { inputs: { taxable_interest_detail: [{ label: 'Broker', amount: 406 }], k1_portfolio: { interest: 32_943 } } })
+      'income.L11b_agi': 1_867_153, 'income.L1z_total_wages': 120_000, 'sched1.L5_rental_partnership_scorp': 1_163_353,
+      'deductions.L12e_standard': 31_500, 'income.L2b_taxable_int': 29_243,   // 406 + 28,837
+    }, { inputs: { taxable_interest_detail: [{ label: 'Broker', amount: 406 }], k1_portfolio: { interest: 28_837 } } })
     expect(codes(r)).toEqual(expect.arrayContaining(['HIGH_INCOME', 'PASSTHROUGH_VS_WAGES']))
     expect(codes(r)).not.toContain('DEDUCTIONS_VS_AGI')
     expect(codes(r)).not.toContain('SCHED_B_NOT_TIED')
   })
   it('catches Schedule B payers that do not add to line 2b', () => {
-    const r = rateReturn('1040', { 'income.L2b_taxable_int': 33_349 }, { inputs: { taxable_interest_detail: [{ label: 'Broker', amount: 406 }] } })
+    const r = rateReturn('1040', { 'income.L2b_taxable_int': 29_243 }, { inputs: { taxable_interest_detail: [{ label: 'Broker', amount: 406 }] } })
     expect(codes(r)).toContain('SCHED_B_NOT_TIED')
   })
   it('scores and bands', () => {
-    const r = rateReturn('1120', { ...ev1120, 'schedL.L14_other_eoy_d': 1_108_564, 'schedM1.L10_income_line28': 1 })
+    const r = rateReturn('1120', { ...ev1120, 'schedL.L14_other_eoy_d': 994_175, 'schedM1.L10_income_line28': 1 })
     expect(r.score).toBeGreaterThanOrEqual(50)
     expect(r.band).toBe('high')
     expect(r.disclaimer).toMatch(/not IRS norms/)

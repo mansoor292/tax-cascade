@@ -19,7 +19,7 @@ import type { AttachmentContext } from './types.js'
 
 const entity = {
   name: 'Parity Test Inc', ein: '00-0000000',
-  address: '1 Test Way', city: 'Testville', state: 'FL', zip: '33301',
+  address: '1 Test Way', city: 'Testville', state: 'FL', zip: '30589',
 }
 
 /** Every widget on every page: short field name → text value or checkbox state. Works on merged packages. */
@@ -247,33 +247,35 @@ describe('1120-S statements', () => {
  * 2026-10-16 blind test: with nothing typed in, the 1120-S package left out
  * K-1 codes 16C/16D/17A/17V, Schedule K line 17a and the M-2 line 3
  * statement, and its short-term gain was a dollar off its own Schedule D.
+ * The figures are the Talbrook demo group's, standing in for the filed ones.
  */
 describe('1120-S lines the engine now derives', () => {
   const base = {
-    gross_receipts: 2_922_791, cost_of_goods_sold: 1_206_636, other_income: 10_500,
-    officer_compensation: 120_000, taxes_licenses: 8_825, rents: 5_453, employee_benefits: 160, other_deductions: 285_741,
-    schedule_k_interest: 32_943, schedule_k_dividends_ordinary: 511,
+    gross_receipts: 2_555_456, cost_of_goods_sold: 1_065_137, other_income: 10_500,
+    officer_compensation: 120_000, taxes_licenses: 10_542, rents: 5_689, employee_benefits: 160, other_deductions: 202_475,
+    schedule_k_interest: 28_837, schedule_k_dividends_ordinary: 511,
     schedule_k_st_cap_gain: 148,   // the 1099-B import: 147.65 rounded
-    'schedK.L16c_nondeductible': 4_491, 'schedK.L16d_distributions': 965_784,
-    schedule_d_1120s: { rows: { L1a: { proceeds: 1_146_458, cost: 1_146_311 }, L8a: { proceeds: 15_000, cost: 15_000 } } },
+    'schedK.L16c_nondeductible': 4_616, 'schedK.L16d_distributions': 905_103,
+    schedule_d_1120s: { rows: { L1a: { proceeds: 1_049_201, cost: 1_049_054.22 }, L8a: { proceeds: 15_000, cost: 15_000 } } },
     shareholders: [{ name: 'Sam Shareholder', pct: 100 }],
   }
 
   it('takes Schedule K line 7 from the attached Schedule D, which foots in whole dollars', () => {
     const r = calc1120S(base as any)
-    expect(r.computed.ordinary_income_loss).toBe(1_306_476)
+    // 2,555,456 − 1,065,137 + 10,500 − (120,000 + 10,542 + 5,689 + 160 + 202,475)
+    expect(r.computed.ordinary_income_loss).toBe(1_161_953)
     expect(r.field_values!['schedK.L7_st_capital_gain']).toBe(147)
-    expect(r.field_values!['schedK.L18_income_loss']).toBe(1_340_077)
+    expect(r.field_values!['schedK.L18_income_loss']).toBe(1_191_448)   // 1,161,953 + 28,837 + 511 + 147
     expect(r.computed.k1s[0].st_cap_gain).toBe(147)
   })
 
   it('states 16c, 16d and 17a on Schedule K and on the K-1 allocation', () => {
     const r = calc1120S(base as any)
-    expect(r.field_values!['schedK.L16c_nondeductible']).toBe(4_491)
-    expect(r.field_values!['schedK.L16d_distributions']).toBe(965_784)
-    expect(r.field_values!['schedK.L17a_invest_income']).toBe(33_454)   // lines 4 + 5a only
+    expect(r.field_values!['schedK.L16c_nondeductible']).toBe(4_616)
+    expect(r.field_values!['schedK.L16d_distributions']).toBe(905_103)
+    expect(r.field_values!['schedK.L17a_invest_income']).toBe(29_348)   // lines 4 + 5a only
     const k1 = r.computed.k1s[0]
-    expect([k1.nondeductible_expenses, k1.distributions, k1.investment_income]).toEqual([4_491, 965_784, 33_454])
+    expect([k1.nondeductible_expenses, k1.distributions, k1.investment_income]).toEqual([4_616, 905_103, 29_348])
   })
 
   it('prints 16C, 16D, 17V and 17A on the K-1 with no supplemental rows', async () => {
@@ -281,17 +283,17 @@ describe('1120-S lines the engine now derives', () => {
     const { pdf } = await build1120SK1(2025, { ...entity }, { name: 'Sam Shareholder' }, k1 as any)
     const r16 = K1_1120S_CODE_ROWS_2025['16']
     const r17 = K1_1120S_CODE_ROWS_2025['17']
-    expect([textValue(pdf, r16[0][0]), textValue(pdf, r16[0][1])]).toEqual(['C', '4,491'])
-    expect([textValue(pdf, r16[1][0]), textValue(pdf, r16[1][1])]).toEqual(['D', '965,784'])
+    expect([textValue(pdf, r16[0][0]), textValue(pdf, r16[0][1])]).toEqual(['C', '4,616'])
+    expect([textValue(pdf, r16[1][0]), textValue(pdf, r16[1][1])]).toEqual(['D', '905,103'])
     expect(textValue(pdf, r17[1][0])).toBe('V')
-    expect([textValue(pdf, r17[2][0]), textValue(pdf, r17[2][1])]).toEqual(['A', '33,454'])
+    expect([textValue(pdf, r17[2][0]), textValue(pdf, r17[2][1])]).toEqual(['A', '29,348'])
   })
 
   it('lets a stated code replace the implied one, never print twice', async () => {
     const alloc = calc1120S(base as any).computed.k1s[0]
     const k1 = applySupplemental(alloc as any, [
-      { label: 'Box 16C Nondeductible expenses', amount: 4_491 },
-      { label: 'Box 16D Distributions', amount: 965_784 },
+      { label: 'Box 16C Nondeductible expenses', amount: 4_616 },
+      { label: 'Box 16D Distributions', amount: 905_103 },
     ])
     const { pdf } = await build1120SK1(2025, { ...entity }, { name: 'Sam Shareholder' }, k1)
     const codes16 = K1_1120S_CODE_ROWS_2025['16'].map(([c]) => textValue(pdf, c) || '')
@@ -299,22 +301,22 @@ describe('1120-S lines the engine now derives', () => {
   })
 
   it('prints the rounded-column gain on Schedule D itself', async () => {
-    // 147.60 unrounded, which rounds to 148; the columns print as 1,146,457 and 1,146,310.
-    const att = await buildScheduleD1120S(ctx({ schedule_d_1120s: { rows: { L1a: { proceeds: 1_146_457.4, cost: 1_146_309.8 } } } }))
-    expect(textValue(att!.pdf, 'f1_3')).toBe('1,146,457')
-    expect(textValue(att!.pdf, 'f1_4')).toBe('1,146,310')
+    // 147.60 unrounded, which rounds to 148; the columns print as 1,049,200 and 1,049,053.
+    const att = await buildScheduleD1120S(ctx({ schedule_d_1120s: { rows: { L1a: { proceeds: 1_049_200.40, cost: 1_049_052.80 } } } }))
+    expect(textValue(att!.pdf, 'f1_3')).toBe('1,049,200')
+    expect(textValue(att!.pdf, 'f1_4')).toBe('1,049,053')
     expect(textValue(att!.pdf, 'f1_6')).toBe('147')    // (d) - (e) as printed
     expect(textValue(att!.pdf, 'f1_22')).toBe('147')   // line 7
   })
 
   it('itemizes a derived M-2 line 3 by its Schedule K items', () => {
     const blocks = statementBlocks1120S({}, {
-      'schedK.L4_interest': 32_943, 'schedK.L5a_dividends': 511, 'schedK.L7_st_gain': 147,
-      'schedM2.L3_other_additions': 33_601,
+      'schedK.L4_interest': 28_837, 'schedK.L5a_dividends': 511, 'schedK.L7_st_gain': 147,
+      'schedM2.L3_other_additions': 29_495,
     })
     const m2 = blocks.find(b => b.title.includes('M2'))!
-    expect(m2.rows.map(r => r[1])).toEqual(['32,943', '511', '147'])
-    expect(m2.total).toEqual(['Total:', '33,601', ''])
+    expect(m2.rows.map(r => r[1])).toEqual(['28,837', '511', '147'])
+    expect(m2.total).toEqual(['Total:', '29,495', ''])
     // A stated line 3 the Schedule K items do not explain gets no invented breakdown.
     expect(statementBlocks1120S({}, { 'schedK.L4_interest': 10, 'schedM2.L3_other_additions': 99 })).toEqual([])
   })

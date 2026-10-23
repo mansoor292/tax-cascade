@@ -12,22 +12,22 @@ function e(p: Partial<CatalogEntry>): CatalogEntry {
 const SOURCES: CatalogSource[] = [
   {
     catalog_id: 'c2023', tax_year: 2023, entries: [
-      e({ line: '22', label: 'Ordinary business income (loss)', value: 3044422, raw: '3,044,422.', canonical: 'tax.L22_ordinary_income' }),
+      e({ line: '22', label: 'Ordinary business income (loss)', value: 3239353, raw: '3,239,353.', canonical: 'tax.L22_ordinary_income' }),
       e({ page: 4, section: 'Schedule L', line: '19', col: 'd', label: 'Loans from shareholders — End of tax year. (d)', value: 1040000, raw: '1,040,000.' }),
       e({ page: 4, section: 'Schedule L', line: '19', col: 'b', label: 'Loans from shareholders — Beginning of tax year. (b)', value: 3000, raw: '3,000.' }),
-      e({ form: 'f1120ssk', title: 'Form 1120-S Schedule K-1', page: 9, section: 'Part III', line: '1', label: 'Ordinary business income (loss)', value: 3044422, raw: '3,044,422.' }),
+      e({ form: 'f1120ssk', title: 'Form 1120-S Schedule K-1', page: 9, section: 'Part III', line: '1', label: 'Ordinary business income (loss)', value: 3239353, raw: '3,239,353.' }),
       e({ page: 2, section: 'Schedule B', line: '1', kind: 'check', value: true, raw: 'X', label: 'Check accounting method: a. Cash' }),
-      e({ page: 30, instance: 'copy2', line: '22', value: 3044422, raw: '3,044,422.' }),
+      e({ page: 30, instance: 'copy2', line: '22', value: 3239353, raw: '3,239,353.' }),
       e({ form: 'statement', title: 'Statement or worksheet', page: 12, section: 'Form 1120S Other Deductions', line: '4', kind: 'row', label: 'Professional fees', value: 12000, raw: 'Professional fees 12,000.' }),
     ],
   },
-  { catalog_id: 'c2024', tax_year: 2024, entries: [e({ rev: '2024', line: '22', label: 'Ordinary business income (loss)', value: 162007, raw: '162,007.' })] },
+  { catalog_id: 'c2024', tax_year: 2024, entries: [e({ rev: '2024', line: '22', label: 'Ordinary business income (loss)', value: 128143, raw: '128,143.' })] },
 ]
 
 describe('catalog query', () => {
   it('finds a line across years, skipping printed copies', () => {
     const hits = filterEntries(SOURCES, { forms: ['1120-S'], line: '22' })
-    expect(hits.map(h => [h.tax_year, h.value])).toEqual([[2023, 3044422], [2024, 162007]])
+    expect(hits.map(h => [h.tax_year, h.value])).toEqual([[2023, 3239353], [2024, 128143]])
   })
 
   it('section + line + column pins one Schedule L box', () => {
@@ -39,7 +39,7 @@ describe('catalog query', () => {
 
   it('"1120-S" does not drag in the K-1; "K-1" finds it', () => {
     expect(filterEntries(SOURCES, { forms: ['1120-S'], line: '1', kinds: ['amount'] })).toHaveLength(0)
-    expect(filterEntries(SOURCES, { forms: ['K-1'], line: '1' })[0].value).toBe(3044422)
+    expect(filterEntries(SOURCES, { forms: ['K-1'], line: '1' })[0].value).toBe(3239353)
   })
 
   it('text search spans label, description and printed text', () => {
@@ -53,7 +53,7 @@ describe('catalog query', () => {
   })
 
   it('form matching', () => {
-    expect(formMatches({ form: 'f8960', title: 'Form 8960' }, '8960')).toBe(true)
+    expect(formMatches({ form: 'f8960', title: 'Form 10700' }, '10700')).toBe(true)
     expect(formMatches({ form: 'f1040se', title: 'Form 1040 Schedule E' }, 'Schedule E')).toBe(true)
   })
 })

@@ -140,6 +140,13 @@ Since 2026-10-17 (docs/RETURN_CATALOG_AND_REVIEW.md — read it):
   handles exactly that data and has a masking/encryption layer for it
   (`web/src/lib/mask.ts`, `api/src/lib/crypto.ts`). The README once carried
   a real SSN; don't repeat that.
+- **Never** put the owner's real figures (amounts from the owner's returns,
+  transcripts or books, IRS document numbers, the owner's name) in a
+  committed file — tests, fixtures, comments, MCP tool text, prompts. Use the
+  Talbrook demo group's figures (the demo account mirrors the owner's
+  entities through a secret value map) or plainly fictional ones. 2026-10-23:
+  about 490 such amounts were swapped out of 28 files, and an MCP tool
+  description had been showing every user the owner's name.
 - Comment style: file-header comments explain *why* (often a postmortem).
   Preserve them through refactors; they are this repo's institutional
   memory. Follow the same style for new modules.

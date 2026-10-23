@@ -108,7 +108,7 @@ const lossYearSuspended: Check = {
   title: 'A loss year is tracked against the owner\'s basis',
   applies: ['1120S'],
   kind: 'rule',
-  description: 'An S-corporation loss passes through only to the extent of the shareholder\'s stock and debt basis; the rest is suspended and deductible later. EZA\'s 2021 loss (−41,424 as processed) was funded by a related company\'s loan — no debt basis — and never deducted; it carries forward.',
+  description: 'An S-corporation loss passes through only to the extent of the shareholder\'s stock and debt basis; the rest is suspended and deductible later. EZA\'s 2021 loss (−35,615 as processed) was funded by a related company\'s loan — no debt basis — and never deducted; it carries forward.',
   run(ctx) {
     const cat = filed(ctx.catalogs, ctx.year)
     const line = ctx.year >= 2023 ? '22' : '21'

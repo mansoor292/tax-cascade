@@ -22,21 +22,21 @@ import { buildReturnPdf } from './build_return_pdf.js'
 
 const entity = {
   name: 'Year Pairing Inc', ein: '00-0000000',
-  address: '1 Test Way', city: 'Testville', state: 'FL', zip: '33301',
+  address: '1 Test Way', city: 'Testville', state: 'FL', zip: '30589',
 }
 
 /** Distinct sentinels so a value on the wrong line is unmistakable. */
 const INCOME_1120S: Record<string, number> = {
-  'income.L1a_gross_receipts': 7_010_001,
-  'income.L1c_balance': 7_010_001,
-  'income.L2_cogs': 2_020_002,
-  'income.L3_gross_profit': 4_989_999,
-  'income.L5_other_income': 5_050_005,
-  'income.L6_total_income': 10_040_004,
-  'deductions.L8_salaries': 8_080_008,
-  'deductions.L12_taxes': 1_212_012,
-  'deductions.L20_other': 2_020_020,
-  'deductions.L21_total': 11_312_040,
+  'income.L1a_gross_receipts': 8_415_974,
+  'income.L1c_balance': 8_415_974,
+  'income.L2_cogs': 2_138_410,
+  'income.L3_gross_profit': 6_060_111,
+  'income.L5_other_income': 6_143_075,
+  'income.L6_total_income': 12_357_228,
+  'deductions.L8_salaries': 9_922_394,
+  'deductions.L12_taxes': 1_115_032,
+  'deductions.L20_other': 2_138_432,
+  'deductions.L21_total': 13_744_295,
 }
 
 async function render(formType: string, taxYear: number, fieldValues: Record<string, number>) {
@@ -88,12 +88,12 @@ describe('form year pairing', () => {
     // map and the blank disagree, the value lands on a neighbouring row and
     // these fail.
     for (const [label, value] of [
-      [/Cost of goods sold/, 2_020_002],
-      [/Gross profit\./, 4_989_999],
-      [/Salaries and wages/, 8_080_008],
-      [/Taxes and licenses/, 1_212_012],
-      [/Other deductions \(attach statement\)/, 2_020_020],
-      [/Total deductions\./, 11_312_040],
+      [/Cost of goods sold/, 2_138_410],
+      [/Gross profit\./, 6_060_111],
+      [/Salaries and wages/, 9_922_394],
+      [/Taxes and licenses/, 1_115_032],
+      [/Other deductions \(attach statement\)/, 2_138_432],
+      [/Total deductions\./, 13_744_295],
     ] as Array<[RegExp, number]>) {
       const row = lineRow(text, label)
       expect(row, `no row matched ${label}`).not.toBe('')
@@ -108,23 +108,23 @@ describe('form year pairing', () => {
     // interest box and total income printed on line 10 "Adjustments to income".
     // Distinct sentinels per line; each must land on its own.
     const INCOME_1040: Record<string, number> = {
-      'income.L1a_w2_wages': 1_010_101,
-      'income.L2b_taxable_int': 2_020_202,
-      'income.L3b_ord_dividends': 3_030_303,
-      'income.L9_total_income': 9_090_909,
-      'income.L11_agi': 1_111_111,
-      'tax.L15_taxable_income': 1_515_151,
+      'income.L1a_w2_wages': 900_601,
+      'income.L2b_taxable_int': 2_138_659,
+      'income.L3b_ord_dividends': 3_595_157,
+      'income.L9_total_income': 11_049_497,
+      'income.L11_agi': 1_015_497,
+      'tax.L15_taxable_income': 1_480_464,
     }
     for (const year of [2023, 2024]) {
       const { text, formYear } = await render('1040', year, INCOME_1040)
       expect(formYear, `${year} should render on its own form`).toBe(year)
       for (const [label, value] of [
-        [/Total amount from Form\(s\) W-2/, 1_010_101],
-        [/b Taxable interest/, 2_020_202],
-        [/b Ordinary dividends/, 3_030_303],
-        [/This is your total income/, 9_090_909],
-        [/This is your adjusted gross income/, 1_111_111],
-        [/This is your taxable income/, 1_515_151],
+        [/Total amount from Form\(s\) W-2/, 900_601],
+        [/b Taxable interest/, 2_138_659],
+        [/b Ordinary dividends/, 3_595_157],
+        [/This is your total income/, 11_049_497],
+        [/This is your adjusted gross income/, 1_015_497],
+        [/This is your taxable income/, 1_480_464],
       ] as Array<[RegExp, number]>) {
         const row = lineRow(text, label)
         expect(row, `${year}: no row matched ${label}`).not.toBe('')
@@ -139,13 +139,13 @@ describe('form year pairing', () => {
     // spelling was filled, and it held zero — AGI, the standard deduction and
     // the QBI deduction all printed 0 beneath a line 14 showing their sum.
     const { text } = await render('1040', 2023, {
-      'income.L11_agi': 0, 'income.L11b_agi': 4_444_444,
+      'income.L11_agi': 0, 'income.L11b_agi': 5_361_430,
       'deductions.L12_standard': 0, 'deductions.L12e_standard': 27_700,
-      'deductions.L13_qbi': 0, 'deductions.L13a_qbi': 501_393,
+      'deductions.L13_qbi': 0, 'deductions.L13a_qbi': 398_058,
     })
-    expect(lineRow(text, /This is your adjusted gross income/)).toContain('4,444,444')
+    expect(lineRow(text, /This is your adjusted gross income/)).toContain('5,361,430')
     expect(lineRow(text, /Standard deduction or itemized/)).toContain('27,700')
-    expect(lineRow(text, /Qualified business income deduction/)).toContain('501,393')
+    expect(lineRow(text, /Qualified business income deduction/)).toContain('398,058')
   })
 
   it('puts every 1040 money line on its own line, 2022 through 2025', async () => {
@@ -196,17 +196,17 @@ describe('form year pairing', () => {
 
   it('prints whole dollars, never cents or float residue', async () => {
     // QuickBooks carries cents and the 80%-of-taxable-income NOL limit leaves
-    // binary-float residue, so the 1120 printed taxable income as "91,853.2"
-    // and an NOL deduction as "367,412.80000000005".
+    // binary-float residue, so the 1120 printed taxable income with cents
+    // ("67,901.2") and an NOL deduction as "279,412.80000000005".
     const { text } = await render('1120', 2024, {
-      'tax.L30_taxable_income': 91_853.19999999995,
-      'tax.L29a_nol': 367_412.80000000005,
-      'income.L11_total_income': 1_685_718.74,
+      'tax.L30_taxable_income': 67_901.19999999995,
+      'tax.L29a_nol': 279_412.80000000005,
+      'income.L11_total_income': 1_707_510.47,
     })
     expect(text).not.toMatch(/\d,\d{3}\.\d/)
-    expect(lineRow(text, /This is your taxable income|Taxable income\. Subtract/)).toContain('91,853')
-    expect(text).toContain('367,413')
-    expect(text).toContain('1,685,719')
+    expect(lineRow(text, /This is your taxable income|Taxable income\. Subtract/)).toContain('67,901')
+    expect(text).toContain('279,413')
+    expect(text).toContain('1,707,510')
   })
 
   it('puts the 2025 1120-S header, line 1c and title where they belong', async () => {
@@ -217,8 +217,8 @@ describe('form year pairing', () => {
       formType: '1120S', taxYear: 2025,
       entity: { ...entity, meta: { title: 'PRESIDENT' } },
       fieldValues: {
-        'income.L1a_gross_receipts': 2_922_791, 'income.L1c_balance': 2_922_791,
-        'meta.total_assets': 2_229_848,
+        'income.L1a_gross_receipts': 2_555_456, 'income.L1c_balance': 2_555_456,
+        'meta.total_assets': 2_415_445,
       },
     })
     const dir = mkdtempSync(path.join(tmpdir(), 'yearpair-'))
@@ -226,8 +226,8 @@ describe('form year pairing', () => {
       const file = path.join(dir, 'r.pdf')
       writeFileSync(file, await res.pdf.save())
       const text = execFileSync('pdftotext', ['-layout', '-f', '1', '-l', '1', file, '-'], { encoding: 'utf8' })
-      expect(text).toMatch(/c Balance\s+1c\s+2,922,791/)
-      expect(lineRow(text, /Total assets/)).toContain('2,229,848')
+      expect(text).toMatch(/c Balance\s+1c\s+2,555,456/)
+      expect(lineRow(text, /Total assets/)).toContain('2,415,445')
       // Single physical lines: lineRow would run on from 28c into the signature
       // block, which has no line number to stop it.
       const line = (re: RegExp) => text.split('\n').find(l => re.test(l)) ?? ''
@@ -245,7 +245,7 @@ describe('form year pairing', () => {
       const { text, formYear } = await render('1120S', year, INCOME_1120S)
       const row = lineRow(text, /Taxes and licenses/)
       expect(row, `${year}: taxes landed off its line (rendered on ${formYear})`)
-        .toContain((1_212_012).toLocaleString())
+        .toContain((1_115_032).toLocaleString())
     }
   })
 })
