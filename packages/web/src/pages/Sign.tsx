@@ -42,6 +42,7 @@ export default function Sign() {
               <div><div className="text-xs text-muted-foreground">Designee</div><div className="font-medium">{req.designee.name || '—'}</div><div className="text-sm text-muted-foreground">{req.designee.caf ? `CAF ${req.designee.caf}` : ''}{req.designee.city ? ` · ${req.designee.city}, ${req.designee.state ?? ''}` : ''}</div></div>
               <div className="sm:col-span-2"><div className="text-xs text-muted-foreground">Information covered</div><div className="text-sm">Income tax ({(req.scope.income ?? []).join(', ') || '—'}) and employment tax ({(req.scope.payroll ?? []).join(', ') || '—'}), tax years {req.scope.from_year}–{req.scope.to_year}.</div></div>
             </div>
+            <a className="ds-rowlink text-sm" href={`${BASE}/api/sign/${token}/8821.pdf`} target="_blank" rel="noreferrer">View the form you are signing (PDF)</a>
             <SignHere onSign={async body => {
               const r = await fetch(`${BASE}/api/sign/${token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
               const j = await r.json().catch(() => ({}))

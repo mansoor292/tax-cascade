@@ -21,6 +21,7 @@ import {
 } from '../lib/row_crypto.js'
 import { accountForTin, taxnowFor } from '../taxnow/client.js'
 import type { ClientSummary } from './practice_read.js'
+import { fill8821 } from './f8821.js'
 
 export type Provider = 'taxnow' | 'fixture'
 export interface Practice {
@@ -458,4 +459,32 @@ export async function claimAccounts(sb: SupabaseClient, p: Practice, accountIds:
 /** The entity's form as TaxNow reads it: an S-corp's transcripts are in the 1120 module. */
 export function irsFormFor(formType: string): string {
   return formType === '1120S' ? '1120' : formType
+}
+
+/**
+ * The client's Form 8821 as a PDF. `fullTin` prints the full TIN while it is
+ * still held (onboarding pending, preparer only); the public signature page
+ * gets the last four only.
+ */
+export async function form8821(sb: SupabaseClient, p: Practice, clientId: string, opts: { fullTin: boolean }): Promise<{ pdf: Uint8Array; filename: string }> {
+  const { data: c } = await sb.from('practice_client').select(`${CLIENT_COLS}, tin`).eq('practice_id', p.id).eq('id', clientId).maybeSingle() as { data: any }
+  if (!c) throw new PracticeError(404, 'No such client in this practice.')
+  await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
+  const { data: ent } = await sb.from('tax_entity').select('name, address, city, state, zip').eq('id', c.entity_id).single()
+  const tin = opts.fullTin && c.tin ? c.tin : c.tin_last4 ? `XX-XXX${c.tin_last4}` : ''
+  const { source: _s, ...designee } = designeeOf(p)
+  const pdf = await fill8821({
+    taxpayer: { name: ent?.name ?? '', address: [ent?.address, [ent?.city, ent?.state, ent?.zip].filter(Boolean).join(' ')].filter(Boolean).join('\n') || undefined },
+    tin, designee, scope: c.authorization_scope ?? {},
+    signer: c.signature ? { name: c.signature.signer_name, title: c.signature.signer_title, signedAt: c.signature.signed_at, electronic: true } : null,
+  })
+  return { pdf, filename: `${(ent?.name ?? 'client').replace(/[^A-Za-z0-9]+/g, '_')}_8821.pdf` }
+}
+
+/** The 8821 behind a signature link (last four only). */
+export async function form8821ForToken(sb: SupabaseClient, token: string) {
+  const { data: c } = await sb.from('practice_client').select('id, practice_id, sign_token_expires').eq('sign_token_hash', hashToken(token)).maybeSingle()
+  if (!c || !c.sign_token_expires || new Date(c.sign_token_expires) < new Date()) throw new PracticeError(404, 'This signature link has expired or was replaced.')
+  const { data: p } = await sb.from('practice').select('id, user_id, name, designee_mode, designee, provider').eq('id', c.practice_id).single()
+  return form8821(sb, p as Practice, c.id, { fullTin: false })
 }

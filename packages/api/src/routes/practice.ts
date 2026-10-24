@@ -8,6 +8,7 @@
  *   GET   /api/practice/clients             every client with its roll-up
  *   POST  /api/practice/clients             new client {name, form_type, tin?, year_end_month?, scope?}
  *   GET   /api/practice/clients/:id         one client: transcripts, findings
+ *   GET   /api/practice/clients/:id/8821.pdf      the client's Form 8821, filled (full TIN while pending)
  *   POST  /api/practice/clients/:id/sign-link     a fresh signature link (token shown once)
  *   POST  /api/practice/clients/:id/sign          sign in the app {signer_name, signer_title, typed_signature, agree}
  *   POST  /api/practice/clients/:id/id-verified   the signer's identity was checked {method}
@@ -30,7 +31,7 @@ import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 import {
   PracticeError, claimAccounts, clientDetail, coverage, createClient, createPractice, designeeOf, getPractice, isPlatformAdmin,
-  issueSignLink, listClients, markIdVerified, markSubmitted, onboardingCheck, opportunities, requirePractice, signInApp, updatePractice,
+  form8821, issueSignLink, listClients, markIdVerified, markSubmitted, onboardingCheck, opportunities, requirePractice, signInApp, updatePractice,
 } from '../services/practice.js'
 import { enqueue, type TranscriptKey } from '../services/practice_jobs.js'
 
@@ -76,6 +77,14 @@ router.post('/clients', handle(async (req, res, userId) => {
 
 router.get('/clients/:id', handle(async (req, res, userId) => {
   res.json(await clientDetail(supabase, await requirePractice(supabase, userId), req.params.id))
+}))
+
+router.get('/clients/:id/8821.pdf', handle(async (req, res, userId) => {
+  const r = await form8821(supabase, await requirePractice(supabase, userId), req.params.id, { fullTin: true })
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="${r.filename}"`)
+  res.setHeader('Cache-Control', 'no-store')
+  res.send(Buffer.from(r.pdf))
 }))
 
 router.post('/clients/:id/sign-link', handle(async (req, res, userId) => {

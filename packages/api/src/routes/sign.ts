@@ -6,6 +6,7 @@
  * days, a new link replaces the old one, and signing consumes it.
  *
  *   GET  /api/sign/:token    what will be signed (taxpayer, last four, designee, scope)
+ *   GET  /api/sign/:token/8821.pdf   the form itself, TIN shown as its last four
  *   POST /api/sign/:token    {signer_name, signer_title, typed_signature, agree}
  *
  * The /api gate lets /sign/* through without a key (server.ts); nothing else
@@ -14,7 +15,7 @@
 import { Router } from 'express'
 import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient } from '../lib/supabase.js'
-import { PracticeError, signRequest, submitSignature } from '../services/practice.js'
+import { PracticeError, form8821ForToken, signRequest, submitSignature } from '../services/practice.js'
 
 const supabase = lazyServiceClient()
 const router = Router()
@@ -24,6 +25,20 @@ router.get('/:token', async (req, res) => {
   if (!TOKEN.test(req.params.token)) return res.status(404).json({ error: 'This signature link is not valid.' })
   try {
     res.json(await signRequest(supabase, req.params.token))
+  } catch (e: any) {
+    if (e instanceof PracticeError) return res.status(e.status).json({ error: e.message })
+    sendError(res, e)
+  }
+})
+
+router.get('/:token/8821.pdf', async (req, res) => {
+  if (!TOKEN.test(req.params.token)) return res.status(404).json({ error: 'This signature link is not valid.' })
+  try {
+    const r = await form8821ForToken(supabase, req.params.token)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="${r.filename}"`)
+    res.setHeader('Cache-Control', 'no-store')
+    res.send(Buffer.from(r.pdf))
   } catch (e: any) {
     if (e instanceof PracticeError) return res.status(e.status).json({ error: e.message })
     sendError(res, e)

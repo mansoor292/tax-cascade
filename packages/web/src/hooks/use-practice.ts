@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 
 export type PeriodStatus = 'filed' | 'no_return_filed' | 'activity_no_return' | 'no_irs_account' | 'not_authorized' | 'never_synced'
 export type Stage = 'draft' | 'awaiting_signature' | 'signed' | 'submitted' | 'readable' | 'claimed'
@@ -99,6 +100,19 @@ export const useOpportunities = () => {
 }
 export const usePracticeClient = (id: string | undefined) => useResource<ClientDetail>(id ? `/api/practice/clients/${id}` : null)
 export const useCoverage = () => useResource<Coverage>('/api/practice/coverage')
+
+/** Fetch the client's filled Form 8821 (authenticated) and save it. */
+export async function download8821(clientId: string, name: string) {
+  const { data } = await supabase.auth.getSession()
+  const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/practice/clients/${clientId}/8821.pdf`, { headers: data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {} })
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not make the 8821')
+  const url = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${name.replace(/[^A-Za-z0-9]+/g, '_')}_8821.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 export const practiceApi = {
   create: (name: string) => api('/api/practice', { method: 'POST', body: JSON.stringify({ name }) }),

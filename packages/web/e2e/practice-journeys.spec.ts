@@ -99,6 +99,10 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await expect(page.getByRole('heading', { name })).toBeVisible()
     const entityId = await clientEntityId(page)
     try {
+      // Catipult fills the 8821: it downloads as a PDF.
+      const dl = page.waitForEvent('download')
+      await page.getByRole('button', { name: 'Download 8821' }).click()
+      expect((await dl).suggestedFilename()).toMatch(/_8821\.pdf$/)
       await page.getByRole('button', { name: 'Copy signature link' }).click()
       const link = await page.getByLabel('Signature link').inputValue()
       expect(link).toMatch(/\/sign\/[A-Za-z0-9_-]{20,}$/)
@@ -184,6 +188,9 @@ async function signAsClient(browser: Browser, link: string, taxpayer: string) {
   await expect(p.getByRole('heading', { name: /Form 8821/ })).toBeVisible()
   await expect(p.getByText(taxpayer)).toBeVisible()
   await expect(p.getByText(/EIN ending 0006/)).toBeVisible()
+  // The form itself, behind the same link, with the TIN as its last four.
+  const pdf = await p.request.get(await p.getByRole('link', { name: /View the form/ }).getAttribute('href') ?? '')
+  expect(pdf.headers()['content-type']).toContain('application/pdf')
   await p.getByLabel("Signer's name").fill('Pat Example')
   await p.getByLabel('Title').fill('President')
   await p.getByLabel('Signature (type your name)').fill('Pat Example')

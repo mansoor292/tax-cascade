@@ -8,7 +8,7 @@
  */
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { practiceApi, type ClientDetail } from '@/hooks/use-practice'
+import { practiceApi, download8821, type ClientDetail } from '@/hooks/use-practice'
 import { Button } from '@/components/ui/button'
 import { Pill } from '@/components/ds'
 import { FORM_NAME, ago } from '@/lib/practice-labels'
@@ -37,10 +37,13 @@ export default function Onboarding({ detail, onChange }: { detail: ClientDetail;
   return (
     <ol className="flex flex-col gap-3 list-none p-0 m-0">
       {step(1, 'Form 8821 prepared', true, (
+        <div className="flex flex-col gap-2">
         <p className="text-muted-foreground">
           Taxpayer {c.name}{c.tin_last4 ? ` (EIN ending ${c.tin_last4})` : ''}. Designee: {designee?.name || 'the platform designee'}{designee?.caf ? `, CAF ${designee.caf}` : ''}.
           Covers income {(a.income ?? []).map(f => FORM_NAME[f] ?? f).join(', ') || '—'} and employment {(a.payroll ?? []).join(', ') || '—'}, {a.from_year}–{a.to_year}{a.year_end_month && a.year_end_month !== 12 ? `, year ending month ${a.year_end_month}` : ''}.
         </p>
+        <div><Button variant="outline" size="sm" onClick={() => download8821(c.id, c.name).catch(e => toast.error(e.message))}>Download 8821</Button></div>
+        </div>
       ), false)}
       {step(2, 'Signed by the taxpayer', signed, signed ? (
         <p className="text-muted-foreground">Signed by {c.signer?.name}{c.signer?.title ? `, ${c.signer.title}` : ''} {c.signed_at ? ago(c.signed_at) : ''} ({c.signer?.method === 'link' ? 'signature link' : 'in the app'}).</p>

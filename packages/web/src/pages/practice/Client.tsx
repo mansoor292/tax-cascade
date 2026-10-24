@@ -7,7 +7,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { usePracticeClient, practiceApi, type Transcript, type ClientDetail } from '@/hooks/use-practice'
+import { usePracticeClient, practiceApi, download8821, type Transcript, type ClientDetail } from '@/hooks/use-practice'
 import LoadError from '@/components/LoadError'
 import { Button } from '@/components/ui/button'
 import { IrsRequestDialog, PageHeader, Pill, Tabs } from '@/components/ds'
@@ -235,6 +235,7 @@ function Authorization({ data }: { data: ClientDetail }) {
         {a.imported && <span className="text-xs text-muted-foreground">Signed outside Catipult and brought in from TaxNow.</span>}
         {data.client.signer && <span className="text-xs text-muted-foreground">Signed by {data.client.signer.name}{data.client.signer.title ? `, ${data.client.signer.title}` : ''} · ID {data.client.signer.id_verified_at ? 'verified' : 'not yet verified'}</span>}
         <span className="text-xs text-muted-foreground">What the IRS actually honours shows in the period grid: a 451 refusal means the 8821 on file does not cover that form or period.</span>
+        {!a.imported && <div><Button variant="outline" size="sm" onClick={() => download8821(data.client.id, data.client.name).catch(e => toast.error(e.message))}>Download 8821</Button></div>}
       </div>
       <div className="ds-card p-4 flex-[1_1_360px] flex flex-col gap-2">
         <h2>Gaps</h2>
