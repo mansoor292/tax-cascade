@@ -176,4 +176,18 @@ describe('IRS account checks', () => {
     t.entries.push(tx('150', 'Tax return filed', '11-30-2026', 400000))
     expect((await run(2025, [t], [], indiv)).find(f => f.key === 'credit')).toMatchObject({ status: 'finding', severity: 'high' })
   })
+
+  it('a TC977 is the amendment filed here, not a duplicate set aside (2026-10-24)', async () => {
+    const cats = [ret(2023, 1000), tr(2023, { asOf: '10-19-2026', txs: [tx('150', 'Tax return filed', '04-01-2024', 1000), tx('977', 'Amended return filed', '07-27-2026')] })]
+    const runWith = (amended_years: number[]) => account.run(buildContext({ self: { entity: scorp, catalogs: cats }, others: [], year: 2023, facts: [], filing: { extended_years: [], amended_years }, today: new Date('2026-10-24T00:00:00Z') })) as Array<{ key?: string; title: string; status: string; severity: string }>
+    const filedHere = await runWith([2023])
+    expect(filedHere.some(f => f.key === '976')).toBe(false)
+    expect(filedHere.find(f => f.key === '977')).toMatchObject({ status: 'pass', severity: 'info' })
+    expect(filedHere.find(f => f.key === '977')!.title).toBe('2023: 1 amended return(s) posted by the IRS (TC977 07-27-2026), as recorded filed here')
+    // Not recorded here: ask for the copy, still not a duplicate.
+    const notHere = await runWith([2024])
+    expect(notHere.some(f => f.key === '976')).toBe(false)
+    expect(notHere.find(f => f.key === '977')).toMatchObject({ status: 'gap', severity: 'low' })
+    expect(notHere.find(f => f.key === '977')!.title).toContain('none recorded here as filed')
+  })
 })

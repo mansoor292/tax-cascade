@@ -748,18 +748,18 @@ router.post('/amendments', async (req, res) => {
 
 // ─── Record an amendment as filed (services/amendment_filed.ts) ───
 // Body: { filename, s3_key } (a presigned upload) or { filename,
-// content_base64 }. The signed amended return is stored and catalogued as the
+// content_base64 }, and filed_on (YYYY-MM-DD, default today). The signed amended return is stored and catalogued as the
 // amendment's copy; the amendment becomes 'filed' and its lines lock. Accepted
 // comes from the transcripts (a TC977), in GET /api/review/filing.
 router.post('/:id/filed', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
-  const { filename, s3_key, content_base64 } = req.body ?? {}
+  const { filename, s3_key, content_base64, filed_on } = req.body ?? {}
   try {
     const { recordAmendmentFiled } = await import('../services/amendment_filed.js')
-    const out = await recordAmendmentFiled(supabase, userId, req.params.id, { filename, s3_key, content_base64 })
+    const out = await recordAmendmentFiled(supabase, userId, req.params.id, { filename, s3_key, content_base64, filed_on: filed_on == null ? undefined : String(filed_on) })
     if (!out.ok) return res.status(out.status).json({ error: out.error })
-    res.json({ return_id: out.return_id, tax_year: out.tax_year, filed_at: out.filed_at, document_id: out.document_id, catalog_id: out.catalog_id, catalog_status: out.catalog_status })
+    res.json({ return_id: out.return_id, entity_id: out.entity_id, tax_year: out.tax_year, filed_at: out.filed_at, document_id: out.document_id, catalog_id: out.catalog_id, catalog_status: out.catalog_status })
   } catch (e: any) {
     sendError(res, e)
   }

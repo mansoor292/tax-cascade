@@ -74,10 +74,11 @@ async function loadDocuments(supabase: SupabaseClient, userId: string, entityId:
     .map(r => ({ id: r.id, doc_type: r.doc_type, tax_year: r.tax_year, key_values: ((r.meta as any)?.key_values ?? {}) as Record<string, unknown>, summary: (r.meta as any)?.summary }))
 }
 
-/** Extensions stored here, and the first year with any record: a filed
- *  return, a stored return or a source document (not a transcript alone). */
+/** Extensions stored here, amendments recorded as filed, and the first year
+ *  with any record: a filed return, a stored return or a source document
+ *  (not a transcript alone). */
 async function loadFiling(supabase: SupabaseClient, entityId: string, catalogs: CatalogView[], documents: DocumentFact[]): Promise<NonNullable<ReviewContext['filing']>> {
-  const { data, error } = await supabase.from('tax_return').select('tax_year, source').eq('entity_id', entityId)
+  const { data, error } = await supabase.from('tax_return').select('tax_year, source, status').eq('entity_id', entityId)
   if (error) throw new Error(error.message)
   const rows = data ?? []
   const years = [
@@ -87,6 +88,7 @@ async function loadFiling(supabase: SupabaseClient, entityId: string, catalogs: 
   ].filter(y => Number.isFinite(y))
   return {
     extended_years: rows.filter(r => r.source === 'extension').map(r => r.tax_year as number),
+    amended_years: rows.filter(r => r.source === 'amendment' && r.status === 'filed').map(r => r.tax_year as number),
     ...(years.length ? { first_record_year: Math.min(...years) } : {}),
   }
 }

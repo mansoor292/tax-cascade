@@ -230,7 +230,7 @@ Returns live in two worlds. Don't cross them.
 **Working world — MUTABLE.**
 - \`proforma\` — current-year work. compute_return writes here by default (updates latest, or inserts new if none).
 - \`extension\` — 4868/7004/8868.
-- \`amendment\` — first-class peer of filed returns (not a flag on them). Create with compute_return(amend_of:<filed_return_id>).
+- \`amendment\` — first-class peer of filed returns (not a flag on them). Create with compute_return(amend_of:<filed_return_id>). Once it has been sent, record_amendment_filed with the signed copy (ask when it was sent); its lines then lock, and it reads accepted only when the year's account transcript shows a TC977.
 
 compute_return's routing params:
 - \`return_id\`  → UPDATE that specific row (rejected if filed_import)
@@ -313,6 +313,7 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   audit_risk:                 { title: 'Audit-risk screen (DIF-style)', ...RO },
   mark_reviewed:              { title: 'Mark return reviewed', ...WRITE },
   delete_return:              { title: 'Delete return', ...DESTRUCTIVE },
+  record_amendment_filed:     { title: 'Record an amendment as filed (signed copy)', ...WRITE },
   review_return:              { title: 'Review return (QC)', ...WRITE },
   use_prior_year:             { title: 'Pull prior-year values', ...RO },
   compare_returns:            { title: 'Compare returns across years', ...RO },
@@ -775,6 +776,29 @@ Present it as a heuristic screen, never as the IRS's score. A flag means "keep d
     return_id: z.string().describe('Tax return UUID'),
   }, async ({ return_id }) => {
     return text(await call('DELETE', `/api/returns/${return_id}`))
+  })
+
+  // ─── Tool: record_amendment_filed ───
+  // 2026-10-24: the web app could record an amendment as filed (UI audit
+  // #26) but Claude could not, so an amendment filed in a conversation stayed
+  // a draft. Same route as the Record as filed button; the response carries
+  // the year's filing status so "is it accepted?" is answered in the turn.
+  server.tool('record_amendment_filed', `Record an amendment as filed, with the signed amended return that was sent (Form 1120-X, 1040-X or the amended 1120-S) as a PDF. The copy is stored in Documents as "Amended return (filed)" and catalogued; the amendment's status becomes filed and its lines lock — compute_return and compute_return_from_qbo refuse it from then on (start a new amendment to change the return again). The web app's Returns → amendment → "Record as filed" does the same.
+
+Accepted is never set here. The amendment reads accepted once the year's IRS account transcript shows a TC977 (amended return posted), the first TC977 accepting the first amendment filed, the second the second; upload a newer transcript with catalog_upload. The response carries that year's filing status (filed, accepted, accepted_why, and each filed amendment).
+
+Only an amendment (source amendment) can be recorded this way, and only once; an original filed return goes in with catalog_upload. delete_return on the amendment deletes its filed copy too.`, {
+    return_id: z.string().describe('The amendment\'s tax_return UUID (source amendment, from list_entities)'),
+    filename: z.string().describe('File name of the signed copy, ending .pdf'),
+    content_base64: z.string().optional().describe('The signed PDF, base64-encoded (no data: prefix). Mutually exclusive with s3_key.'),
+    s3_key: z.string().optional().describe('S3 key of a PDF already uploaded via /api/documents/presign. Mutually exclusive with content_base64.'),
+    filed_on: z.string().optional().describe('YYYY-MM-DD the amended return was mailed or e-filed. Default today; never in the future. Ask the user when it was sent rather than assuming today.'),
+  }, async ({ return_id, ...body }) => {
+    const out = await call('POST', `/api/returns/${encodeURIComponent(return_id)}/filed`, body)
+    if (!out || out.error || !out.entity_id) return text(out)
+    const filing = await call('GET', `/api/review/filing?entity_id=${encodeURIComponent(out.entity_id)}`)
+    const year = filing?.entities?.[0]?.years?.find((y: any) => y.tax_year === out.tax_year)
+    return text({ recorded: out, filing: year ? { tax_year: year.tax_year, filed: year.filed, accepted: year.accepted, accepted_why: year.accepted_why, amendments: year.amendments ?? [] } : filing })
   })
 
   // ─── Tool: review_return ───

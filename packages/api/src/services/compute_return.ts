@@ -22,6 +22,8 @@ import { lazyServiceClient } from '../lib/supabase.js'
 import { getFinancials } from '../routes/qbo.js'
 import { validateInputArithmetic } from './compute_validation.js'
 import { deriveSupportingSchedules, type ReconciliationIssue } from './reconciliation.js'
+import { carryFiledLines } from './amendment_base.js'
+import { resolveKey } from '../schema/validate.js'
 import { entityIdentityFields } from '../builders/entity_identity.js'
 import { extractAggregates as extractAggregatesFromFv } from '@taxengine/shared'
 import { INPUT_SCHEMAS } from '../routes/schema.js'
@@ -434,6 +436,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         }
       }
       if (engineResult.field_values) overlayUncomputedLines(engineResult.field_values, mergedInputs)
+      if (engineResult.field_values) carryFiledLines(engineResult.field_values, mergedInputs.amend_carry, form_type)
 
       // The supporting schedules' arithmetic — M-1/M-2 totals, Form 1125-A
       // lines 6 and 8, Form 4562's limits and totals (services/reconciliation.ts).
@@ -469,7 +472,9 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         const xIn = (mergedInputs.amended_x || {}) as Record<string, any>
         let original = xIn.original
         if (!original) {
-          let origFv = amendOfRow?.field_values
+          // The figures as filed: the base the amendment started from (the
+          // catalogued filed return) before the older imported row.
+          let origFv = amendBase?.values ?? amendOfRow?.field_values
           if (!origFv && targetRow?.supersedes_id) {
             const { data: orig } = await supabase.from('tax_return')
               .select(`field_values, ${RETURN_ENC_COLS}`).eq('id', targetRow.supersedes_id).single()
@@ -559,6 +564,9 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         if (!engineResult.field_values) engineResult.field_values = {}
         for (const [k, v] of scheduleKeys1120S) engineResult.field_values[k] = v
       }
+      // An amendment carries the filed lines the engine does not compute
+      // (services/amendment_base.ts).
+      if (engineResult.field_values) carryFiledLines(engineResult.field_values, mergedInputs.amend_carry, form_type)
 
       // Schedules M-1 and M-2 follow the income statement. They were pure
       // pass-through, so when the figures above them changed the caller's
@@ -667,7 +675,11 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         await hydrateReturn(data, userId)
         seededFieldValues = data?.field_values || {}
       } else if (amendOfRow) {
-        seededFieldValues = amendOfRow.field_values || {}
+        // An amendment built from its base (services/amendment_base.ts) starts
+        // from the base's figures — the catalogued filed return — not the
+        // imported row it supersedes: that row's Schedule L sat one line off
+        // and leaked into the demo's 2022 amendment (2026-10-24).
+        seededFieldValues = amendBase?.values ?? amendOfRow.field_values ?? {}
       } else {
         const { data } = await supabase.from('tax_return')
           .select(`field_values, ${RETURN_ENC_COLS}`)
@@ -706,6 +718,14 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       // computed_data.schema_rejected, kept and reported, never blocking a
       // compute. A parent return seeded from an old import is the usual source.
       const { splitBySchema } = await import('../schema/validate.js')
+      // A box the engine wrote replaces the seeded box under any name: the
+      // seed holds golden keys, the engine some aliases (schedK.L5a_dividends
+      // vs schedK.L5a_ordinary_dividends), and both kept meant a changed line
+      // could print its old figure (2026-10-24).
+      const engineBoxes = new Set(Object.keys(scheduleFieldValues).map(k => resolveKey(form_type, k)?.key ?? k))
+      for (const k of Object.keys(existingFieldValues)) {
+        if (!(k in scheduleFieldValues) && engineBoxes.has(resolveKey(form_type, k)?.key ?? k)) delete existingFieldValues[k]
+      }
       const { kept: mergedFieldValues, rejected: schemaRejected } = splitBySchema({ ...existingFieldValues, ...scheduleFieldValues }, form_type)
       schemaRejectedKeys = Object.keys(schemaRejected)
       if (Object.keys(schemaRejected).length) {

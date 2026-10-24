@@ -584,7 +584,10 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
     'schedK.L16c_nondeductible':        nondeductible,
     'schedK.L16d_distributions':        distributions,
     'schedK.L17a_invest_income':        investment_income,
-    // L18: Income/loss reconciliation = ordinary + separately stated portfolio items - separately stated expenses
+    // L18: Income/loss reconciliation — lines 1 through 10, less lines 11
+    // through 12d. The charitable contribution was ADDED here, so a return
+    // with a 5,200 contribution (the demo's 2022 1120-S) reconciled 10,400
+    // high, and section 179 was left out (2026-10-24).
     'schedK.L18_income_loss':
       ordinary_income_loss
       + (inp.schedule_k_interest || 0)
@@ -593,10 +596,14 @@ export function calc1120S(raw: Form1120S_Inputs): Form1120S_Result {
       + (inp.schedule_k_st_cap_gain || 0)
       + (inp.schedule_k_lt_cap_gain || 0)
       + (inp.schedule_k_other_portfolio_income || 0)
-      + inp.charitable_contrib,
+      - (inp.section_179 || 0)
+      - (inp.charitable_contrib || 0),
     // Schedule M-1 — reconciliation of income (loss) per books with return
-    // Line 1 = net income per books, often close to ordinary_income_loss after book-tax adjustments
-    'schedM1.L1_net_income':            ordinary_income_loss,
+    // Line 1 = net income per books, often close to ordinary_income_loss after book-tax adjustments.
+    // Under the name the M-1 arithmetic reads (services/reconciliation.ts):
+    // as 'schedM1.L1_net_income' it was invisible there, and every return
+    // computed without books printed line 1 with lines 4 and 8 at 0 (2026-10-24).
+    'schedM1.L1_net_income_books':      ordinary_income_loss,
     'schedM1.L3_expenses_not_K':        0,  // book-only expenses not on K (e.g. 50% meals difference)
     'schedM1.L4_add':                   ordinary_income_loss,
     'schedM1.L6_ded_on_K':              0,  // K deductions not charged against book income

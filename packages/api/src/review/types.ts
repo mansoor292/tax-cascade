@@ -164,8 +164,9 @@ export interface ReviewContext {
   /** What is on file for the entity beyond the catalogs: years with an
    *  extension stored, and the first year with any record here (a filed
    *  return, a stored return or a source document). A transcript alone is
-   *  not a record — the IRS sends one for every year asked for. */
-  filing?: { extended_years: number[]; first_record_year?: number }
+   *  not a record — the IRS sends one for every year asked for. Amended
+   *  years: one entry per amendment recorded here as filed. */
+  filing?: { extended_years: number[]; first_record_year?: number; amended_years?: number[] }
 }
 
 export interface Check {

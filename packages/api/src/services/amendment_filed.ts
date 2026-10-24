@@ -20,11 +20,30 @@ import { encryptedFields, ENCRYPTED_DOC_FIELDS } from '../lib/row_crypto.js'
 import { catalogPdf } from '../catalog/extract.js'
 import { saveCatalog } from '../catalog/store.js'
 
-export interface FiledCopy { s3_key?: string; content_base64?: string; filename: string }
+export interface FiledCopy {
+  s3_key?: string; content_base64?: string; filename: string
+  /** YYYY-MM-DD the amended return was sent; today when absent. An amendment
+   *  is often recorded weeks after it went in, and the TC977s are matched to
+   *  the amendments in the order they were filed. */
+  filed_on?: string
+}
 
 export type RecordFiledResult =
-  | { ok: true; return_id: string; tax_year: number; filed_at: string; document_id: string; catalog_id: string; catalog_status: string }
+  | { ok: true; return_id: string; entity_id: string; tax_year: number; filed_at: string; document_id: string; catalog_id: string; catalog_status: string }
   | { ok: false; status: number; error: string }
+
+/** When the amendment was filed: a real date, not in the future, and not
+ *  before its tax year ended (the original return comes first). Noon UTC, so
+ *  the date reads the same in every US time zone. */
+export function filedAtFor(filedOn: string | undefined, taxYear: number, now = new Date()): { ok: true; filed_at: string } | { ok: false; error: string } {
+  if (filedOn === undefined || filedOn === '') return { ok: true, filed_at: now.toISOString() }
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(filedOn)
+  const d = m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)) : undefined
+  if (!m || !d || d.getUTCMonth() !== Number(m[2]) - 1 || d.getUTCDate() !== Number(m[3])) return { ok: false, error: 'filed_on must be a date, YYYY-MM-DD' }
+  if (filedOn > now.toISOString().slice(0, 10)) return { ok: false, error: `filed_on ${filedOn} is in the future` }
+  if (Number(m[1]) <= taxYear) return { ok: false, error: `filed_on ${filedOn} is before the ${taxYear} tax year ended` }
+  return { ok: true, filed_at: d.toISOString() }
+}
 
 export async function recordAmendmentFiled(
   supabase: SupabaseClient, userId: string, returnId: string, copy: FiledCopy,
@@ -37,6 +56,8 @@ export async function recordAmendmentFiled(
   if (ret.source !== 'amendment') return { ok: false, status: 400, error: 'Only an amendment is recorded as filed this way — upload a filed original return in Documents' }
   if (ret.status === 'filed') return { ok: false, status: 409, error: `This ${ret.tax_year} amendment is already recorded as filed` }
   if (!copy.filename || !/\.pdf$/i.test(copy.filename)) return { ok: false, status: 400, error: 'The filed copy must be a PDF' }
+  const when = filedAtFor(copy.filed_on, ret.tax_year)
+  if (!when.ok) return { ok: false, status: 400, error: when.error }
 
   let buf: Buffer
   let s3Key: string
@@ -71,10 +92,10 @@ export async function recordAmendmentFiled(
     entityId: ret.entity_id, taxYear: ret.tax_year, documentId: doc.id, returnId: ret.id, kind: 'amended_return', catalog: cat,
   })
 
-  const filedAt = new Date().toISOString()
+  const filedAt = when.filed_at
   const { error: upErr } = await supabase.from('tax_return').update({ status: 'filed', filed_at: filedAt }).eq('id', ret.id)
   if (upErr) throw new Error(`recording the amendment as filed failed: ${upErr.message}`)
-  return { ok: true, return_id: ret.id, tax_year: ret.tax_year, filed_at: filedAt, document_id: doc.id, catalog_id: saved.id, catalog_status: saved.status }
+  return { ok: true, return_id: ret.id, entity_id: ret.entity_id, tax_year: ret.tax_year, filed_at: filedAt, document_id: doc.id, catalog_id: saved.id, catalog_status: saved.status }
 }
 
 /** Deleting an amendment deletes the record of its filing too: the

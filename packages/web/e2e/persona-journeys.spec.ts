@@ -12,7 +12,9 @@ import { testEmail, deleteUserByEmail, signUpViaApi, signInThroughUi, signInViaA
  * misposted IRS transcripts), built for exactly this (login in SSM
  * /tax-api/DEMO_ACCOUNT_*; `npm run test:e2e:clean` loads it). They read,
  * except the amendment journeys, which create their own amendment (and its
- * filed copy) and delete it. The day-one journeys need an empty account and make their own.
+ * filed copy) and delete it. The one amendment the demo keeps is its 2022
+ * amended 1120-S, recorded filed and posted by the IRS (TC977) — the
+ * accepted path (s9_amended_filed.py in the demo pipeline). The day-one journeys need an empty account and make their own.
  *
  * Each test starts where its persona starts and reaches the fix by clicking.
  * Only the deep-link test opens a page by address, because the link is its
@@ -152,7 +154,8 @@ test.describe('P1 business owner — filed, accepted, amended (2026-10-22 decisi
     await row2024.getByRole('button', { name: 'Create' }).click()
     // It started blank: every computed line $0 against the filed return.
     await expect(page.getByText(/2024 amendment started from the filed 2024 return/)).toBeVisible({ timeout: 60_000 })
-    await expect(page.getByText('Started from the filed 2024 return.', { exact: true })).toBeVisible()
+    // The base is the catalogued filed return, named by its PDF (2026-10-24).
+    await expect(page.getByText(/^Started from the filed 2024 return \(.+\.pdf\)\.$/)).toBeVisible()
     await expect(page.getByTestId('books-agreement')).toBeVisible({ timeout: 30_000 })
 
     await page.getByRole('button', { name: 'Edit lines' }).click()
@@ -240,6 +243,24 @@ test.describe('P1 business owner — filed, accepted, amended (2026-10-22 decisi
     await expect(page.getByText('Talbrook_2023_1120S_amended_signed.pdf')).toHaveCount(0)
   }
 
+  test('P1-J5 an amendment the IRS has posted (TC977) reads accepted', async ({ page }) => {
+    // The demo's 2022 amended 1120-S (the omitted 1099 interest and dividends)
+    // was recorded filed on 3 Aug 2026 with its copy, and the 2022 account
+    // transcript of 10-23-2026 shows the TC977. Before, no demo transcript had
+    // one, so prod had only ever shown "Not accepted yet".
+    await signInDemo(page)
+    await sidebar(page).getByRole('link', { name: /Talbrook Investments Inc/ }).click()
+    const row2022 = page.getByRole('row').filter({ has: page.getByRole('cell', { name: '2022', exact: true }) })
+    await expect(row2022).toContainText('Filed', { timeout: 30_000 })
+    await expect(row2022).not.toContainText('Not accepted yet')
+    await page.getByRole('cell', { name: '2022', exact: true }).click()
+    const filing = page.getByTestId('amendment-filing')
+    await expect(filing).toContainText('Filed 8/3/2026 — the copy on file is Talbrook_Investments_2022_1120S_amended.pdf (Documents).')
+    await expect(filing).toContainText('Accepted: TC977 (amended return processed) on the 2022 account transcript (08-10-2026), transcript dated 10-23-2026.')
+    // A filed amendment's lines are locked.
+    await expect(page.getByRole('button', { name: 'Edit lines' })).toHaveCount(0)
+  })
+
   test('P1-J5 a scenario defaults to the best base: the filed return', async ({ page }) => {
     await signInDemo(page)
     await sidebar(page).getByRole('link', { name: /Talbrook Investments Inc/ }).click()
@@ -254,6 +275,55 @@ test.describe('P1 business owner — filed, accepted, amended (2026-10-22 decisi
     await dialog.getByRole('combobox').first().click()
     await page.getByRole('option', { name: '2025', exact: true }).click()
     await expect(dialog.getByRole('combobox').nth(1)).toContainText('2025 · Filed (PDF)')
+  })
+})
+
+test.describe('P5 Claude, through the connector — demo account', () => {
+  test.describe.configure({ timeout: 120_000 })
+  const DEMO_KEY = process.env.DEMO_ACCOUNT_API_KEY || ''
+
+  /** Streamable HTTP may answer as SSE or plain JSON. */
+  const parseMcp = (body: string): any => body.startsWith('event:')
+    ? JSON.parse((body.split('\n').find(l => l.startsWith('data: ')) || '').slice(6))
+    : JSON.parse(body)
+
+  test('P5 an amendment filed in a conversation is recorded as filed with its copy (record_amendment_filed)', async ({ request, baseURL }) => {
+    test.skip(!DEMO_KEY, 'DEMO_ACCOUNT_API_KEY not set')
+    // 2026-10-24: only the web app's Record as filed button could do this.
+    const auth = { 'x-api-key': DEMO_KEY, 'Content-Type': 'application/json' }
+    const mcp = async (name: string, args: Record<string, unknown>) => {
+      const res = await request.post(`${baseURL}/mcp`, {
+        headers: { Authorization: `Bearer ${DEMO_KEY}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+        data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+      })
+      expect(res.status()).toBe(200)
+      return JSON.parse(parseMcp(await res.text()).result?.content?.[0]?.text || 'null')
+    }
+    const entities = await (await request.get(`${baseURL}/api/entities`, { headers: auth })).json() as { entities: Array<{ id: string; name: string }> }
+    const entityId = entities.entities.find(e => /^Talbrook Investments/.test(e.name))!.id
+    const started = await request.post(`${baseURL}/api/returns/amendments`, { headers: auth, data: { entity_id: entityId, tax_year: 2024 } })
+    expect(started.status(), await started.text()).toBe(200)
+    const amendmentId = (await started.json()).return_id as string
+    try {
+      const doc = await PDFDocument.create()
+      doc.addPage([612, 792]).drawText('Form 1120-S 2024 - Amended return (test copy)', { x: 72, y: 720, size: 12, font: await doc.embedFont(StandardFonts.Helvetica) })
+      const content_base64 = Buffer.from(await doc.save()).toString('base64')
+
+      const out = await mcp('record_amendment_filed', { return_id: amendmentId, filename: 'Talbrook_2024_1120S_amended_mcp.pdf', content_base64, filed_on: '2026-09-14' })
+      expect(out.recorded).toMatchObject({ return_id: amendmentId, tax_year: 2024, filed_at: '2026-09-14T12:00:00.000Z' })
+      const mine = out.filing.amendments.find((a: { return_id: string }) => a.return_id === amendmentId)
+      expect(mine).toMatchObject({ accepted: false, copy: { filename: 'Talbrook_2024_1120S_amended_mcp.pdf' } })
+      expect(mine.accepted_why).toContain('shows no amended return processed yet (no TC977)')
+
+      // Recorded once; its lines are locked against Claude too.
+      expect((await mcp('record_amendment_filed', { return_id: amendmentId, filename: 'again.pdf', content_base64 })).error).toContain('already recorded as filed')
+      const recompute = await mcp('compute_return', { entity_id: entityId, tax_year: 2024, form_type: '1120S', return_id: amendmentId, inputs: {} })
+      expect(JSON.stringify(recompute)).toContain('its lines are locked')
+    } finally {
+      await request.delete(`${baseURL}/api/returns/${amendmentId}`, { headers: auth })
+    }
+    const after = await (await request.get(`${baseURL}/api/documents`, { headers: auth })).text()
+    expect(after).not.toContain('Talbrook_2024_1120S_amended_mcp.pdf')
   })
 })
 

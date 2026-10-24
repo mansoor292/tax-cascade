@@ -190,12 +190,12 @@ const statute: Check = {
 
 const transcriptAccount: Check = {
   id: 'irs.account_status',
-  version: 6,
+  version: 7,
   area: 'irs_account',
   title: 'What the IRS processed, duplicates, penalties and balance due',
   applies: ['1040', '1120', '1120S', '1065'],
   kind: 'rule',
-  description: 'Reads the account transcript: the processed return (TC150) and whether its figures match the catalogued return, duplicates set aside (TC976/977), penalties assessed and whether they qualify for abatement, the balance due, and lateness against the due date.',
+  description: 'Reads the account transcript: the processed return (TC150) and whether its figures match the catalogued return, duplicates set aside (TC976), amended returns posted (TC977) against the amendments recorded here as filed, penalties assessed and whether they qualify for abatement, the balance due, and lateness against the due date.',
   run(ctx) {
     const t = transcript(ctx.catalogs, ctx.year)
     if (!t) return [{ check: this.id, status: 'n/a', severity: 'info', title: 'No transcript (see catalog.transcript_present)', detail: '', evidence: [] }]
@@ -227,7 +227,19 @@ const transcriptAccount: Check = {
         out.push({ check: this.id, status: 'finding', severity: 'high', key: '150', title: `${ctx.year}: no TC150 — the IRS shows no processed return`, detail: 'Without a TC150 the IRS treats the year as unfiled. Confirm whether a return was sent and where it posted (returns have posted to the wrong period before).', evidence: [{ where: `${ctx.year} IRS transcript${asOf ? ` dated ${asOf}` : ''}`, catalog_id: t.id }] })
       }
     }
-    const dups = txs.filter(x => x.code === '976' || x.code === '977')
+    // TC976 is a return the IRS set aside as a duplicate. TC977 is an amended
+    // return it posted — the amendment filed here, not a duplicate: counted
+    // with the 976s, the demo's accepted 2023 amendment read as "received and
+    // set aside" (2026-10-24).
+    const dups = txs.filter(x => x.code === '976')
+    const amendedTx = txs.filter(x => x.code === '977')
+    if (amendedTx.length) {
+      const here = (ctx.filing?.amended_years ?? []).filter(y => y === ctx.year).length
+      const posted = amendedTx.map(d => `TC977 ${d.date ?? ''}`.trim()).join(', ')
+      out.push(here >= amendedTx.length
+        ? { check: this.id, status: 'pass', severity: 'info', key: '977', title: `${ctx.year}: ${amendedTx.length} amended return(s) posted by the IRS (${posted}), as recorded filed here`, detail: '', evidence: amendedTx.map(cite) }
+        : { check: this.id, status: 'gap', severity: 'low', key: '977', title: `${ctx.year}: the IRS posted ${amendedTx.length} amended return(s) (${posted}); ${here ? `only ${here}` : 'none'} recorded here as filed`, detail: 'Record the amendment as filed with the signed copy that was sent (Returns → the amendment → Record as filed). If nobody here filed it, find out who did.', evidence: amendedTx.map(cite) })
+    }
     // An earlier receipt only helps a failure-to-file penalty, and only if it
     // really is earlier than the receipt the IRS counted.
     const counted = parseDate(transcriptValue(t, 'Return information', /return received date/i)?.date) ?? parseDate(tc150?.date)
