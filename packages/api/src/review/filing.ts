@@ -31,6 +31,7 @@ import { buildContext } from './context.js'
 import { filed, transcript, returnTranscript, transactions, transcriptValue, noRecord, iso } from './lookup.js'
 import { postedFrom, dueDates } from './checks/irs.js'
 import { heldYear } from '../schema/golden.js'
+import { actionOf } from '../taxnow/codes.js'
 
 export interface StoredReturnRow { id: string; tax_year: number; source: string; form_type: string; computed_at?: string | null; status?: string | null; filed_at?: string | null }
 
@@ -66,13 +67,15 @@ export interface YearFiling {
 function amendmentFilings(catalogs: CatalogView[], rows: StoredReturnRow[], year: number, t: CatalogView | undefined, asOf: string | null): AmendmentFiling[] {
   const filedRows = rows.filter(r => r.tax_year === year && r.source === 'amendment' && r.status === 'filed')
     .sort((a, b) => String(a.filed_at ?? a.computed_at ?? '').localeCompare(String(b.filed_at ?? b.computed_at ?? '')))
-  const tc977 = transactions(t).filter(x => x.code === '977')
+  // An amended return posts as TC977, or as TC976 worded "Amended return
+  // filed" (beside TC976 "Duplicate return filed"; taxnow/codes.ts actionOf).
+  const tc977 = transactions(t).filter(x => x.code === '977' || (x.code === '976' && actionOf('976', x.label) === 'amended_return'))
   const dated = asOf ? `, transcript dated ${asOf}` : ''
   return filedRows.map((r, i) => {
     const cat = catalogs.find(c => c.kind === 'amended_return' && c.return_id === r.id)
     const hit = tc977[i]
     const why = !t ? `No ${year} IRS account transcript on file yet — upload one to confirm`
-      : hit ? `TC977 (amended return processed) on the ${year} account transcript${hit.date ? ` (${hit.date})` : ''}${dated}`
+      : hit ? `TC${hit.code} (amended return processed) on the ${year} account transcript${hit.date ? ` (${hit.date})` : ''}${dated}`
       : tc977.length ? `The ${year} transcript${asOf ? ` dated ${asOf}` : ''} shows ${tc977.length} amended return${tc977.length === 1 ? '' : 's'} processed (TC977); this is amendment ${i + 1} filed here`
       : `The ${year} transcript${asOf ? ` dated ${asOf}` : ''} shows no amended return processed yet (no TC977)`
     return {

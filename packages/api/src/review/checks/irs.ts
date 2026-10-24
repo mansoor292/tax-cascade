@@ -12,6 +12,7 @@ import type { Check, CheckResult, ReviewContext, CatalogView } from '../types.js
 import { transcript, returnTranscript, returnLine, noRecord, transactions, transcriptValue, parseDate, iso, money, filed, amount } from '../lookup.js'
 import { goldenRows, heldYear, type GoldenRow } from '../../schema/golden.js'
 import { nextBusinessDay } from '../../engine/tax_calendar.js'
+import { actionOf } from '../../taxnow/codes.js'
 
 const PENALTY_CODES: Record<string, string> = {
   '166': 'failure-to-file / late-filing penalty',
@@ -230,12 +231,16 @@ const transcriptAccount: Check = {
     // TC976 is a return the IRS set aside as a duplicate. TC977 is an amended
     // return it posted — the amendment filed here, not a duplicate: counted
     // with the 976s, the demo's accepted 2023 amendment read as "received and
-    // set aside" (2026-10-24).
-    const dups = txs.filter(x => x.code === '976')
-    const amendedTx = txs.filter(x => x.code === '977')
+    // set aside" (2026-10-24). The IRS also posts amended returns as TC976
+    // with the wording "Amended return filed", right beside TC976 "Duplicate
+    // return filed" (seen 39 times across 45 business accounts read through
+    // TaxNow, 2026-10-24): the wording decides, as in taxnow/codes.ts.
+    const isAmended = (x: { code: string; label: string }) => x.code === '977' || (x.code === '976' && actionOf('976', x.label) === 'amended_return')
+    const dups = txs.filter(x => x.code === '976' && !isAmended(x))
+    const amendedTx = txs.filter(isAmended)
     if (amendedTx.length) {
       const here = (ctx.filing?.amended_years ?? []).filter(y => y === ctx.year).length
-      const posted = amendedTx.map(d => `TC977 ${d.date ?? ''}`.trim()).join(', ')
+      const posted = amendedTx.map(d => `TC${d.code} ${d.date ?? ''}`.trim()).join(', ')
       out.push(here >= amendedTx.length
         ? { check: this.id, status: 'pass', severity: 'info', key: '977', title: `${ctx.year}: ${amendedTx.length} amended return(s) posted by the IRS (${posted}), as recorded filed here`, detail: '', evidence: amendedTx.map(cite) }
         : { check: this.id, status: 'gap', severity: 'low', key: '977', title: `${ctx.year}: the IRS posted ${amendedTx.length} amended return(s) (${posted}); ${here ? `only ${here}` : 'none'} recorded here as filed`, detail: 'Record the amendment as filed with the signed copy that was sent (Returns → the amendment → Record as filed). If nobody here filed it, find out who did.', evidence: amendedTx.map(cite) })

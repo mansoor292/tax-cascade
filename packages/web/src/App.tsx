@@ -19,6 +19,14 @@ import Extensions from '@/pages/Extensions'
 import TaxTables from '@/pages/TaxTables'
 import Settings from '@/pages/Settings'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import PracticeLayout from '@/pages/practice/PracticeLayout'
+import PracticeClients from '@/pages/practice/Clients'
+import PracticeClient from '@/pages/practice/Client'
+import PracticeOpportunities from '@/pages/practice/Opportunities'
+import PracticeDeadlines from '@/pages/practice/Deadlines'
+import PracticeTaxNow from '@/pages/practice/TaxNow'
+import PracticeSettings from '@/pages/practice/PracticeSettings'
+import Sign from '@/pages/Sign'
 
 /**
  * Signed out, a link into the app goes to sign-in and comes back to itself.
@@ -51,6 +59,8 @@ export default function App() {
           <Route path="/security" element={<Security />} />
           <Route path="/oauth/authorize" element={<OAuthAuthorize />} />
           <Route path="/login" element={<Login />} />
+          {/* The 8821 signature link a preparer sends a client: no login. */}
+          <Route path="/sign/:token" element={<Sign />} />
           <Route path="/app" element={<Guard><Layout /></Guard>}>
             <Route index element={<Dashboard />} />
             <Route path="calendar" element={<Calendar />} />
@@ -65,6 +75,15 @@ export default function App() {
             <Route path="extensions" element={<Extensions />} />
             <Route path="tax-tables" element={<TaxTables />} />
             <Route path="settings" element={<Settings />} />
+            {/* The practice workspace (2026-10-24): one preparer, many clients. */}
+            <Route path="practice" element={<PracticeLayout />}>
+              <Route index element={<PracticeClients />} />
+              <Route path="clients/:id" element={<PracticeClient />} />
+              <Route path="opportunities" element={<PracticeOpportunities />} />
+              <Route path="deadlines" element={<PracticeDeadlines />} />
+              <Route path="taxnow" element={<PracticeTaxNow />} />
+              <Route path="settings" element={<PracticeSettings />} />
+            </Route>
           </Route>
           {/* Legacy route redirects */}
           <Route path="/compute" element={<Navigate to="/app/compute" />} />

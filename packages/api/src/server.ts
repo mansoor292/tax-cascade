@@ -54,6 +54,9 @@ import versionRoutes from './routes/versions.js'
 import discoveryRoutes from './discovery/discovery_routes.js'
 import oauthRoutes from './routes/oauth.js'
 import wellknownRoutes from './routes/wellknown.js'
+import practiceRoutes from './routes/practice.js'
+import signRoutes from './routes/sign.js'
+import { startPracticeWorker } from './services/practice_jobs.js'
 import { mountMCP } from './mcp/tax-mcp.js'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -255,6 +258,8 @@ app.use('/api', async (req, res, next) => {
   // Public routes — no API key needed
   if (req.path === '/health') return next()
   if (req.path === '/qbo/callback') return next()
+  // The 8821 signature link: its token is the credential (routes/sign.ts).
+  if (req.path.startsWith('/sign/')) return next()
   // Auth routes are separate
   // Extract key from x-api-key header, query param, or Bearer token
   const key = req.headers['x-api-key'] as string
@@ -330,6 +335,8 @@ app.use('/api/notes', noteRoutes)
 app.use('/api/entity-map', entityMapRoutes)
 app.use('/api/version-sets', versionRoutes)
 app.use('/api/discover', discoveryRoutes)
+app.use('/api/practice', practiceRoutes)
+app.use('/api/sign', signRoutes)
 
 // ─── Health ───
 // Resolved once at boot, so it reports the commit THIS worker actually loaded
@@ -630,6 +637,8 @@ app.get('*', (req, res, next) => {
 const PORT = parseInt(process.env.PORT || '3737')
 const httpServer = app.listen(PORT, async () => {
   console.log(`Tax API running on http://localhost:${PORT}`)
+  // The practice job queue (DB-backed; every worker polls, each job runs once).
+  startPracticeWorker()
   // Seed field maps from Supabase for forms discovered at runtime (not in git)
   await seedCacheFromSupabase()
   console.log(`  POST /api/compute/1120    — C-Corp return`)

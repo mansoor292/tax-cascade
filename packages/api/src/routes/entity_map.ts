@@ -23,7 +23,8 @@ const supabase = lazyServiceClient()
 const router = Router()
 
 async function accountEntities(userId: string) {
-  const { data, error } = await supabase.from('tax_entity').select('id, form_type, name').eq('user_id', userId)
+  // The owner's group only: a practice's clients are not part of it.
+  const { data, error } = await supabase.from('tax_entity').select('id, form_type, name').eq('user_id', userId).is('practice_id', null)
   if (error) throw new Error(error.message)
   return data ?? []
 }

@@ -205,10 +205,13 @@ router.get('/', async (req, res) => {
       await refreshForUser(userId, req.query.entity_id as string | undefined)
     }
 
+    // Practice clients' deadlines are listed in the practice workspace
+    // (?workspace=practice), the owner's everywhere else.
     let q = supabase.from('obligation')
-      .select('*, tax_entity(name, form_type)')
+      .select('*, tax_entity!inner(name, form_type, practice_id)')
       .eq('user_id', userId)
       .order('due_date', { ascending: true })
+    q = req.query.workspace === 'practice' ? q.not('tax_entity.practice_id', 'is', null) : q.is('tax_entity.practice_id', null)
 
     if (req.query.entity_id) q = q.eq('entity_id', req.query.entity_id as string)
     if (req.query.status) q = q.eq('status', req.query.status as string)

@@ -25,6 +25,12 @@ import {
   SET_ENC_COLS,
   ENCRYPTED_VERSION_FIELDS,
   VERSION_ENC_COLS,
+  ENCRYPTED_PRACTICE_CLIENT_FIELDS,
+  PRACTICE_CLIENT_ENC_COLS,
+  ENCRYPTED_TRANSCRIPT_FIELDS,
+  TRANSCRIPT_ENC_COLS,
+  ENCRYPTED_FINDING_FIELDS,
+  FINDING_ENC_COLS,
   encCols,
 } from './row_crypto.js'
 
@@ -42,6 +48,9 @@ describe('encrypted field specs', () => {
     expect(LINK_ENC_COLS).toBe(encCols(ENCRYPTED_LINK_FIELDS))
     expect(SET_ENC_COLS).toBe(encCols(ENCRYPTED_SET_FIELDS))
     expect(VERSION_ENC_COLS).toBe(encCols(ENCRYPTED_VERSION_FIELDS))
+    expect(PRACTICE_CLIENT_ENC_COLS).toBe(encCols(ENCRYPTED_PRACTICE_CLIENT_FIELDS))
+    expect(TRANSCRIPT_ENC_COLS).toBe(encCols(ENCRYPTED_TRANSCRIPT_FIELDS))
+    expect(FINDING_ENC_COLS).toBe(encCols(ENCRYPTED_FINDING_FIELDS))
   })
 
   it('covers the known encrypted columns', () => {

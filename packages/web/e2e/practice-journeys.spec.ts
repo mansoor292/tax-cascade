@@ -1,0 +1,176 @@
+import { test, expect, type Page, type Browser } from '@playwright/test'
+import { signInThroughUi, signInViaApi, authed } from './helpers'
+
+/**
+ * The practice workspace (2026-10-24): persona P2, the tax preparer, walked
+ * by clicking from where a preparer starts — the client list or the deadline
+ * list — one test per journey (docs/USER_PERSONAS.md discipline).
+ *
+ * Runs on the fictional demo practice (login in SSM /tax-api/PRACTICE_DEMO_*;
+ * `npm run test:e2e:clean` loads it; rebuilt by
+ * packages/api/scripts/practice/seed_demo.ts). Its TaxNow is the in-process
+ * fixture: no real taxpayer, and an "IRS request" here never leaves the
+ * server. The onboarding journey makes its own client and deletes it.
+ */
+
+const EMAIL = process.env.PRACTICE_DEMO_EMAIL || ''
+const PASSWORD = process.env.PRACTICE_DEMO_PASSWORD || ''
+
+async function signIn(page: Page) {
+  test.skip(!EMAIL || !PASSWORD, 'PRACTICE_DEMO_EMAIL / PRACTICE_DEMO_PASSWORD not set')
+  await signInThroughUi(page, EMAIL, PASSWORD)
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 20_000 })
+}
+
+/** From the owner Dashboard to the practice, by the workspace switch. */
+async function toPractice(page: Page) {
+  await page.getByRole('group', { name: 'Workspace' }).getByRole('link', { name: 'Practice' }).click()
+  await expect(page.getByRole('heading', { name: 'Clients' })).toBeVisible({ timeout: 20_000 })
+}
+
+const nav = (page: Page) => page.locator('[data-sidebar="sidebar"]')
+
+test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
+  test.describe.configure({ timeout: 120_000 })
+
+  test('PJ1 Clients: every client at a glance; the owner pages do not list them', async ({ page }) => {
+    await signIn(page)
+    // The owner workspace's entity list holds none of the practice's clients.
+    await expect(nav(page).getByText('Harbor Point Dental PC')).toHaveCount(0)
+    await toPractice(page)
+    const row = page.getByRole('row', { name: /Juniper Freight LLC/ })
+    await expect(row).toContainText('Readable')
+    await expect(row).toContainText('2024')     // filed through: 2025 shows no return yet
+    await expect(row).toContainText('$8,140')   // the credit the IRS holds on 2023
+    await expect(page.getByRole('row', { name: /Tallow & Pine Interiors/ })).toContainText('Waiting on signature')
+    await expect(page.getByRole('row', { name: /Bluegill Landscaping LLC/ })).toContainText('Submitted')
+  })
+
+  test('PJ2 Money the IRS holds: tile → Opportunities → the client’s period and its transactions', async ({ page }) => {
+    await signIn(page)
+    await toPractice(page)
+    await page.getByRole('link', { name: /IRS holds/ }).click()
+    await expect(page.getByRole('heading', { name: 'Opportunities' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: /Income tax/ })).toHaveAttribute('aria-selected', 'true')
+    const held = page.getByRole('region', { name: 'Credit held' })
+    await held.getByRole('link', { name: 'Juniper Freight LLC' }).click()
+    await expect(page.getByRole('heading', { name: 'Juniper Freight LLC' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'IRS account' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('cell', { name: 'Penalty for late payment of tax' })).toBeVisible()
+    await expect(page.getByText('Account balance').locator('..')).toContainText('−$8,140')
+  })
+
+  test('PJ3 Penalties: first-time abatement fits, payroll kept in its own section', async ({ page }) => {
+    await signIn(page)
+    await toPractice(page)
+    await nav(page).getByRole('link', { name: 'Opportunities' }).click()
+    const fta = page.getByRole('region', { name: 'Penalty, first-time abatement' })
+    await expect(fta.getByRole('row', { name: /Ostrander Millwork Inc/ })).toContainText(/refundable until 2027-08-19/)
+    // Income first; the 941 deposit penalty is not in the income section.
+    await expect(fta.getByRole('row', { name: /Redwick Staffing Group/ })).toHaveCount(0)
+    await page.getByRole('tab', { name: /Payroll/ }).click()
+    await expect(page.getByRole('region', { name: 'Penalty, first-time abatement' }).getByRole('row', { name: /Redwick Staffing Group/ })).toContainText('$1,840')
+    await page.getByRole('tab', { name: /Risks from the returns/ }).click()
+    await expect(page.getByRole('region', { name: 'Low officer pay' })).toContainText('Ostrander Millwork Inc')
+  })
+
+  test('PJ4 TaxNow: a refused period (451) leads to the client’s authorization', async ({ page }) => {
+    await signIn(page)
+    await toPractice(page)
+    await nav(page).getByRole('link', { name: 'TaxNow' }).click()
+    await expect(page.getByRole('heading', { name: 'TaxNow' })).toBeVisible()
+    const gaps = page.getByRole('region', { name: 'Authorization gaps' })
+    await expect(gaps).toContainText('2024-03, 2024-06, 2024-09')
+    await gaps.getByRole('link', { name: 'Calloway Imaging Partners' }).click()
+    await expect(page.getByRole('tab', { name: 'Authorization' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByText(/refused \(451\)/)).toBeVisible()
+  })
+
+  test('PJ5 Onboarding: add a client, the client signs by link, verify, submit, check → readable', async ({ page, browser }) => {
+    await signIn(page)
+    await toPractice(page)
+    await nav(page).getByRole('link', { name: 'TaxNow' }).click()
+    await page.getByRole('button', { name: 'Add client' }).click()
+    const name = `E2E Onboarding ${Date.now()}`
+    await page.getByLabel('Legal name').fill(name)
+    await page.getByLabel(/EIN/).fill('000000006') // even last digit: the fixture TaxNow finds it
+    await page.getByRole('button', { name: 'Create client and 8821' }).click()
+    await expect(page.getByRole('heading', { name })).toBeVisible()
+    const entityId = await clientEntityId(page)
+    try {
+      await page.getByRole('button', { name: 'Copy signature link' }).click()
+      const link = await page.getByLabel('Signature link').inputValue()
+      expect(link).toMatch(/\/sign\/[A-Za-z0-9_-]{20,}$/)
+      await signAsClient(browser, link, name)
+
+      await page.reload()
+      await expect(page.getByText(/Signed by Pat Example/)).toBeVisible()
+      await page.getByRole('button', { name: 'Mark identity verified' }).click()
+      await page.getByRole('button', { name: 'Mark submitted' }).click()
+      await expect(page.getByText(/Checked 0 times/)).toBeVisible()
+      await page.getByRole('button', { name: 'Check now' }).click()
+      await expect(page.getByRole('tab', { name: 'IRS account' })).toBeVisible({ timeout: 20_000 })
+      // Its first read runs in the background; the client then lists as readable.
+      await nav(page).getByRole('link', { name: 'Clients' }).click()
+      await expect(page.getByRole('row', { name: new RegExp(name) })).toContainText('Readable')
+    } finally {
+      const token = await signInViaApi(EMAIL, PASSWORD)
+      await page.request.delete(`/api/entities/${entityId}`, { headers: authed(token) })
+    }
+  })
+
+  test('PJ6 IRS requests always pass through the confirmation', async ({ page }) => {
+    await signIn(page)
+    await toPractice(page)
+    await page.getByRole('link', { name: 'Harbor Point Dental PC' }).click()
+    await page.getByRole('tab', { name: 'IRS account' }).click()
+    await page.getByRole('button', { name: /Request \d+ from IRS/ }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toContainText('real IRS request')
+    const send = dialog.getByRole('button', { name: 'Send requests' })
+    await expect(send).toBeDisabled()
+    await dialog.getByLabel('I understand these are real IRS requests').check()
+    await expect(send).toBeEnabled()
+    await send.click()
+    await expect(page.getByText(/queued/)).toBeVisible()
+  })
+
+  test('PJ7 Deadlines: what is due across clients, each opening its client', async ({ page }) => {
+    await signIn(page)
+    await toPractice(page)
+    await nav(page).getByRole('link', { name: 'Deadlines' }).click()
+    await expect(page.getByRole('heading', { name: 'Deadlines' })).toBeVisible()
+    const first = page.locator('table.ds-table tbody tr').first()
+    await expect(first).not.toContainText('Loading')
+    const link = first.getByRole('link')
+    const client = (await link.textContent())?.trim() ?? ''
+    expect(client).not.toBe('')
+    await link.click()
+    await expect(page.getByRole('heading', { name: client })).toBeVisible()
+  })
+})
+
+async function clientEntityId(page: Page): Promise<string> {
+  const href = await page.getByRole('heading').first().evaluate(() => location.pathname)
+  const clientId = href.split('/').pop()!
+  const token = await signInViaApi(EMAIL, PASSWORD)
+  const r = await page.request.get(`/api/practice/clients/${clientId}`, { headers: authed(token) })
+  return (await r.json()).client.entity_id
+}
+
+/** The taxpayer opens the link with no login and signs. */
+async function signAsClient(browser: Browser, link: string, taxpayer: string) {
+  const ctx = await browser.newContext()
+  const p = await ctx.newPage()
+  await p.goto(link)
+  await expect(p.getByRole('heading', { name: /Form 8821/ })).toBeVisible()
+  await expect(p.getByText(taxpayer)).toBeVisible()
+  await expect(p.getByText(/EIN ending 0006/)).toBeVisible()
+  await p.getByLabel("Signer's name").fill('Pat Example')
+  await p.getByLabel('Title').fill('President')
+  await p.getByLabel('Signature (type your name)').fill('Pat Example')
+  await p.getByLabel(/I am authorized/).check()
+  await p.getByRole('button', { name: 'Sign' }).click()
+  await expect(p.getByRole('heading', { name: 'Signed. Thank you.' })).toBeVisible()
+  await ctx.close()
+}

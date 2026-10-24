@@ -21,10 +21,14 @@ router.get('/', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
-  const { data, error } = await supabase.from('tax_entity')
+  // A practice's clients are entities too (services/practice.ts), kept out of
+  // the owner's own pages: the list is the owner's entities unless the
+  // practice workspace asks for its clients (?practice=1).
+  let listQ = supabase.from('tax_entity')
     .select('*, tax_return(id, tax_year, form_type, status, source)')
     .eq('user_id', userId)
-    .order('name')
+  listQ = req.query.practice === '1' ? listQ.not('practice_id', 'is', null) : listQ.is('practice_id', null)
+  const { data, error } = await listQ.order('name')
 
   if (error) return sendDbError(res, error)
 

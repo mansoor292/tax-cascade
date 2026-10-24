@@ -104,6 +104,15 @@ describe('filed and accepted', () => {
       expect(one.amendments![1].accepted_why).toMatch(/shows 1 amended return processed \(TC977\); this is amendment 2 filed here/)
     })
 
+    it('a TC976 worded "Amended return filed" accepts an amendment; "Duplicate return filed" does not (2026-10-24)', () => {
+      const original = tx('150', 'Tax return filed', '09-20-2024')
+      const dup = by(yearFilings(scorp, [...base, tr(2023, { ti: 3000, txs: [original, tx('976', 'Duplicate return filed', '05-11-2026')] })], rows, today)).get(2023)!
+      expect(dup.amendments!.map(a => a.accepted)).toEqual([false, false])
+      const amendedTx = by(yearFilings(scorp, [...base, tr(2023, { ti: 3000, txs: [original, tx('976', 'Amended return filed', '05-11-2026')] })], rows, today)).get(2023)!
+      expect(amendedTx.amendments!.map(a => a.accepted)).toEqual([true, false])
+      expect(amendedTx.amendments![0].accepted_why).toMatch(/TC976 \(amended return processed\)/)
+    })
+
     it('a 1040-X imported as filed counts, without an uploaded copy', () => {
       const p: EntityInfo = { id: 'p', name: 'Example Person', form_type: '1040', entity_type: 'individual' }
       const y = by(yearFilings(p, [], [{ id: 'x', tax_year: 2022, source: 'amendment', form_type: '1040', status: 'filed' }], today)).get(2022)!

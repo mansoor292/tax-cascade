@@ -78,7 +78,11 @@ router.get('/summary', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
   try {
-    const { data: ents } = await supabase.from('tax_entity').select('id, name, form_type').eq('user_id', userId)
+    // The owner's entities unless asked for specific ones (a practice client's by id).
+    const wanted0 = req.query.entity_ids ? String(req.query.entity_ids).split(',') : undefined
+    let entQ = supabase.from('tax_entity').select('id, name, form_type').eq('user_id', userId)
+    if (!wanted0) entQ = entQ.is('practice_id', null)
+    const { data: ents } = await entQ
     const wanted = req.query.entity_ids ? String(req.query.entity_ids).split(',') : undefined
     const items: any[] = []
     for (const e of (ents ?? []).filter(x => !wanted || wanted.includes(x.id))) {

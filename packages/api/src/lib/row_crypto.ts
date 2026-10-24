@@ -138,6 +138,15 @@ export const ENCRYPTED_LINK_FIELDS: FieldSpec = { text: ['evidence', 'detail'] }
  *  quote amounts and the reasons for an amendment. */
 export const ENCRYPTED_SET_FIELDS: FieldSpec = { text: ['title', 'description'] }
 export const ENCRYPTED_VERSION_FIELDS: FieldSpec = { json: ['changes'], text: ['note'] }
+/** practice_client: the full TIN while onboarding is pending, the 8821
+ *  signer (name, title, ID verification, the signed copy), and the roll-up of
+ *  the client's IRS account (balances, credits, penalties). */
+export const ENCRYPTED_PRACTICE_CLIENT_FIELDS: FieldSpec = { json: ['signature', 'summary'], text: ['tin'] }
+/** taxnow_transcript: a client's IRS transcript as parsed (balances,
+ *  transactions, return lines) — third parties' IRS data. */
+export const ENCRYPTED_TRANSCRIPT_FIELDS: FieldSpec = { json: ['parsed'] }
+/** practice_finding: the amount and the sentence that explains it. */
+export const ENCRYPTED_FINDING_FIELDS: FieldSpec = { json: ['detail'] }
 
 /**
  * Ciphertext sibling columns for selects that name columns explicitly.
@@ -161,6 +170,9 @@ export const NOTE_ENC_COLS = 'title_enc, body_enc'
 export const LINK_ENC_COLS = 'evidence_enc, detail_enc'
 export const SET_ENC_COLS = 'title_enc, description_enc'
 export const VERSION_ENC_COLS = 'changes_enc, note_enc'
+export const PRACTICE_CLIENT_ENC_COLS = 'signature_enc, summary_enc, tin_enc'
+export const TRANSCRIPT_ENC_COLS = 'parsed_enc'
+export const FINDING_ENC_COLS = 'detail_enc'
 
 /**
  * Produce `*_enc` columns for any fields in `payload` that are set. Caller

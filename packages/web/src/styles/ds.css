@@ -1,0 +1,113 @@
+/*
+ * Catipult design system — one set of tokens and a few classes for every page.
+ *
+ * Why (2026-10-24): the practice workspace is for preparers (docs/USER_PERSONAS.md
+ * P2) who want density and speed and know the line numbers. Mansoor asked for
+ * a unified new design system for the whole app; it lands with the practice
+ * pages first and the owner pages move onto it one by one. It is tokens and
+ * classes on the stack the app already runs (Tailwind v4 + shadcn/Base UI),
+ * not a new component library. The approved sheet is the "Design system"
+ * artboard of the Catipult Practice mock.
+ *
+ * Rules it encodes:
+ *  - Figures in a monospace with tabular digits, right-aligned, so columns line up.
+ *  - 13px body, 32px table rows and controls, one hairline border, no shadows
+ *    except dialogs.
+ *  - Meaning colours (good / warn / bad / info) always come with words.
+ *  - The six IRS period answers are never merged and differ in lightness as
+ *    well as hue: filed, no return filed, activity, no IRS account, refused
+ *    (451), never synced.
+ * Light values sit on :root and dark on .dark; the app ships dark today
+ * (index.html), so a theme switch is a class away.
+ */
+
+:root {
+  --ds-good: #166534;      --ds-good-weak: #e3f3e8;
+  --ds-warn: #9a4a00;      --ds-warn-weak: #fdf0dc;
+  --ds-bad: #a1281b;       --ds-bad-weak: #fbe6e3;
+  --ds-info: #1d4ed8;      --ds-info-weak: #e6edfc;
+  --st-filed: #1f3a5f;     --st-filed-fg: #ffffff;
+  --st-nrf: #e8892b;       --st-nrf-fg: #1f1300;
+  --st-act: #fbe2b6;       --st-act-fg: #5a3800;
+  --st-none: #eceef1;      --st-none-fg: #4f5862;
+  --st-451: #7a2e0e;       --st-451-fg: #ffffff;
+  --st-never-line: #8d96a0; --st-never-fg: #4f5862;
+}
+
+.dark {
+  --ds-good: #6fcf8f;      --ds-good-weak: rgba(111, 207, 143, 0.14);
+  --ds-warn: #f0a65a;      --ds-warn-weak: rgba(240, 166, 90, 0.14);
+  --ds-bad: #ff8a7a;       --ds-bad-weak: rgba(255, 138, 122, 0.14);
+  --ds-info: #8fb0ff;      --ds-info-weak: rgba(107, 155, 255, 0.16);
+  --st-filed: #8fb3e8;     --st-filed-fg: #0b1526;
+  --st-nrf: #e8892b;       --st-nrf-fg: #1f1300;
+  --st-act: #5a4220;       --st-act-fg: #fbe2b6;
+  --st-none: #252a31;      --st-none-fg: #a9b0b9;
+  --st-451: #c2552a;       --st-451-fg: #160700;
+  --st-never-line: #6b737d; --st-never-fg: #a9b0b9;
+}
+
+.ds {
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.ds .num, .ds-num {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ds h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+.ds h2 { font-size: 14px; font-weight: 600; margin: 0; }
+
+/* Cards and tiles */
+.ds-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
+.ds-tile { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; text-align: left; color: inherit; }
+a.ds-tile:hover, button.ds-tile:hover { background: var(--muted); }
+.ds-tile .label { font-size: 12px; color: var(--muted-foreground); }
+.ds-tile .value { font-size: 20px; font-weight: 500; }
+.ds-tile .sub { font-size: 11.5px; color: var(--muted-foreground); }
+.ds-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+
+/* Data tables */
+.ds-table-wrap { overflow-x: auto; }
+.ds-table { width: 100%; border-collapse: collapse; }
+.ds-table th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-foreground); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--card); position: sticky; top: 0; white-space: nowrap; }
+.ds-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.ds-table tr:last-child td { border-bottom: 0; }
+.ds-table .r { text-align: right; }
+.ds-table tr.clickable { cursor: pointer; }
+.ds-table tr.clickable:hover td { background: var(--muted); }
+.ds-table tr.selected td { background: var(--ds-info-weak); }
+.ds-rowlink { font-weight: 600; color: var(--foreground); }
+.ds-rowlink:hover { color: var(--primary); text-decoration: underline; }
+
+/* Pills */
+.ds-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 500; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.ds-pill.good { background: var(--ds-good-weak); color: var(--ds-good); }
+.ds-pill.warn { background: var(--ds-warn-weak); color: var(--ds-warn); }
+.ds-pill.bad { background: var(--ds-bad-weak); color: var(--ds-bad); }
+.ds-pill.info { background: var(--ds-info-weak); color: var(--ds-info); }
+.ds-pill.mute { background: var(--muted); color: var(--muted-foreground); }
+
+/* Tabs */
+.ds-tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.ds-tab { border: 0; background: transparent; font: inherit; color: var(--muted-foreground); padding: 10px 2px; margin-right: 20px; border-bottom: 2px solid transparent; cursor: pointer; }
+.ds-tab[aria-selected="true"] { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 600; }
+
+/* IRS period cells */
+.ds-cell { width: 100%; height: 28px; border-radius: 4px; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid transparent; }
+.ds-cell[aria-pressed="true"] { outline: 2px solid var(--primary); outline-offset: 1px; }
+.ds-cell.st-filed, .ds-swatch.st-filed { background: var(--st-filed); color: var(--st-filed-fg); }
+.ds-cell.st-no_return_filed, .ds-swatch.st-no_return_filed { background: var(--st-nrf); color: var(--st-nrf-fg); }
+.ds-cell.st-activity_no_return, .ds-swatch.st-activity_no_return { background: var(--st-act); color: var(--st-act-fg); }
+.ds-cell.st-no_irs_account, .ds-swatch.st-no_irs_account { background: var(--st-none); color: var(--st-none-fg); }
+.ds-cell.st-not_authorized, .ds-swatch.st-not_authorized { background: var(--st-451); color: var(--st-451-fg); }
+.ds-cell.st-never_synced, .ds-swatch.st-never_synced { background: transparent; color: var(--st-never-fg); border: 1px dashed var(--st-never-line); }
+.ds-cell.st-empty { background: transparent; border: 1px dotted var(--border); cursor: default; }
+.ds-swatch { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 18px; border-radius: 3px; font-family: "IBM Plex Mono", monospace; font-size: 10px; }
+
+/* Forms */
+.ds-field { display: flex; flex-direction: column; gap: 4px; }
+.ds-field label { font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+.ds-field input, .ds-field select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--input); border-radius: 6px; background: transparent; color: var(--foreground); min-height: 32px; }

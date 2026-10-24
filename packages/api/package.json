@@ -30,6 +30,7 @@
     "dotenv": "^17.4.2",
     "express": "^4.21.0",
     "jose": "^6.2.10",
+    "node-html-parser": "6.1.13",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "5.7.284",
     "uuid": "^13.0.0",

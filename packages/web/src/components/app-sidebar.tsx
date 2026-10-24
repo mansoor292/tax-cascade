@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, useParams } from 'react-router-dom'
+import { NavLink, useLocation, useParams } from 'react-router-dom'
 import {
   Building2,
   Calculator,
@@ -15,6 +15,10 @@ import {
   Bot,
   CalendarClock,
   Network,
+  Users,
+  BadgeDollarSign,
+  ShieldCheck,
+  Settings2,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -62,7 +66,70 @@ function EntityItem({ entity }: { entity: Entity }) {
   )
 }
 
+const practiceNav = [
+  { to: '/app/practice', label: 'Clients', icon: Users, end: true },
+  { to: '/app/practice/opportunities', label: 'Opportunities', icon: BadgeDollarSign },
+  { to: '/app/practice/deadlines', label: 'Deadlines', icon: CalendarClock },
+  { to: '/app/practice/taxnow', label: 'TaxNow', icon: ShieldCheck },
+  { to: '/app/practice/settings', label: 'Practice settings', icon: Settings2 },
+]
+
+/**
+ * Two workspaces under one login (2026-10-24): "My returns" (the owner's own
+ * entities: Dashboard, Group, Entities) and "Practice" (a preparer's clients).
+ * The switch keeps them apart; practice clients never appear in the owner's
+ * entity list.
+ */
+function WorkspaceSwitch({ practice }: { practice: boolean }) {
+  const base = 'flex-1 rounded-md px-2 py-1 text-xs font-medium text-center transition-colors'
+  return (
+    <div className="mx-3 mb-1 flex gap-0.5 rounded-lg bg-muted p-0.5" role="group" aria-label="Workspace">
+      <NavLink to="/app" className={`${base} ${!practice ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`} aria-current={!practice ? 'page' : undefined}>My returns</NavLink>
+      <NavLink to="/app/practice" className={`${base} ${practice ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`} aria-current={practice ? 'page' : undefined}>Practice</NavLink>
+    </div>
+  )
+}
+
 export function AppSidebar() {
+  const { pathname } = useLocation()
+  const inPractice = pathname.startsWith('/app/practice')
+  if (inPractice) return <PracticeSidebar />
+  return <OwnerSidebar />
+}
+
+function PracticeSidebar() {
+  return (
+    <Sidebar>
+      <SidebarHeader className="px-4 py-3">
+        <NavLink to="/app/practice" className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center">
+            <Calculator className="w-3.5 h-3.5 text-primary-foreground" />
+          </div>
+          <span className="font-semibold text-lg">Catipult</span>
+        </NavLink>
+      </SidebarHeader>
+      <WorkspaceSwitch practice />
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {practiceNav.map(l => (
+                <SidebarMenuItem key={l.to}>
+                  <SidebarMenuButton render={<NavLink to={l.to} end={l.end} />}>
+                    <l.icon className="shrink-0" />
+                    <span>{l.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </Sidebar>
+  )
+}
+
+function OwnerSidebar() {
   const { entities, loading } = useEntities()
   const [toolsOpen, setToolsOpen] = useState(false)
 
@@ -76,6 +143,7 @@ export function AppSidebar() {
           <span className="font-semibold text-lg">Catipult</span>
         </NavLink>
       </SidebarHeader>
+      <WorkspaceSwitch practice={false} />
 
       <SidebarContent>
         {/* Main nav */}
