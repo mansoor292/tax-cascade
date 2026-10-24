@@ -122,7 +122,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
       await expect(page.getByText(/Identity check in progress/)).toBeVisible()
       await signer.finishCheck()
       await page.reload()
-      await expect(page.getByText(/Verified: .*SSN ending 6789 confirmed \(test check\)/)).toBeVisible({ timeout: 20_000 })
+      await expect(page.getByText(/Verified: .*SSN ending 6789 confirmed; schedule k-1 names them \(shareholder\) for EIN ending 0006 \(test check\)/)).toBeVisible({ timeout: 20_000 })
       await page.getByRole('button', { name: 'Mark submitted' }).click()
       await expect(page.getByText(/Checked 0 times/)).toBeVisible()
       await page.getByRole('button', { name: 'Check now' }).click()
@@ -228,7 +228,11 @@ async function signAsClient(browser: Browser, link: string, taxpayer: string) {
     expect(sim.ok()).toBe(true)
     // Didit returns the signer to the link, which pulls the result.
     await p.goto(link)
-    await expect(p.getByRole('heading', { name: 'Signed and verified. Thank you.' })).toBeVisible({ timeout: 20_000 })
+    // A business: the signer then shows they belong to it (a fictional K-1).
+    await expect(p.getByText('Your ID and SSN are confirmed.')).toBeVisible({ timeout: 20_000 })
+    await p.getByLabel('Document (PDF or photo)').setInputFiles('e2e/fixtures/sample-k1-proof.pdf')
+    await p.getByRole('button', { name: 'Upload proof' }).click()
+    await expect(p.getByRole('heading', { name: 'Signed and verified. Thank you.' })).toBeVisible({ timeout: 60_000 })
     await ctx.close()
   } }
 }

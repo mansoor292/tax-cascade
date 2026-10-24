@@ -23,6 +23,7 @@ import { accountForTin, taxnowFor } from '../taxnow/client.js'
 import type { ClientSummary } from './practice_read.js'
 import { fill8821 } from './f8821.js'
 import { idvView } from './signer_idv.js'
+import { proofView } from './signer_proof.js'
 
 export type Provider = 'taxnow' | 'fixture'
 export interface Practice {
@@ -224,7 +225,7 @@ export async function clientDetail(sb: SupabaseClient, p: Practice, clientId: st
       id: row.id, entity_id: row.entity_id, name: ent?.name ?? '', form_type: ent?.form_type ?? '', stage: row.stage, tin_last4: row.tin_last4,
       authorization_scope: row.authorization_scope, signed_at: row.signed_at, submitted_at: row.submitted_at, last_check_at: row.last_check_at,
       check_count: row.check_count, readable_at: row.readable_at, last_read_at: row.last_read_at, summary: row.summary ?? null,
-      signer: row.signature ? { name: row.signature.signer_name, title: row.signature.signer_title, id_verified_at: row.signature.id_verified_at ?? null, id_method: row.signature.id_method ?? null, method: row.signature.method, idv: idvView(row.signature.idv) } : null,
+      signer: row.signature ? { name: row.signature.signer_name, title: row.signature.signer_title, id_verified_at: row.signature.id_verified_at ?? null, id_method: row.signature.id_method ?? null, method: row.signature.method, idv: idvView(row.signature.idv), proof: proofView(row.signature.proof) } : null,
     },
     transcripts: transcripts.map(t => ({
       type: t.type, form: t.form, tax_year: t.tax_year, period_month: t.period_month, status: t.status, synced_at: t.synced_at, response_date: t.response_date,
@@ -347,7 +348,7 @@ export async function signRequest(sb: SupabaseClient, token: string) {
     practice: p!.name, taxpayer: ent?.name ?? '', form_type: ent?.form_type ?? '', tin_last4: c.tin_last4,
     designee: (({ source: _s, ...d }) => d)(designeeOf(p as Practice)), scope: c.authorization_scope, expires: c.sign_token_expires,
     // After signing, the same link carries the signer through the identity check.
-    signed: c.signature ? { name: c.signature.signer_name, verified: !!c.signature.id_verified_at, idv: idvView(c.signature.idv) } : null,
+    signed: c.signature ? { name: c.signature.signer_name, verified: !!c.signature.id_verified_at, idv: idvView(c.signature.idv), proof: proofView(c.signature.proof), business: ent?.form_type !== '1040' } : null,
   }
 }
 

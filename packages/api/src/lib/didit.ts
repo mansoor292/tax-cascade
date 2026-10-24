@@ -118,3 +118,33 @@ export async function validateUsIdentity(env: DiditEnv, input: UsIdentityInput):
   const d = r.database_validation ?? (r as UsIdentityResult)
   return { status: d.status, match_type: d.match_type, validations: d.validations ?? {}, services_used: d.services_used ?? [] }
 }
+
+export interface DocField { key: string; name: string; instruction: string; type?: 'text' | 'number' | 'date'; required?: boolean; is_full_name?: boolean }
+
+export interface DocumentResult {
+  request_id: string
+  status: string // Approved | In Review | Declined
+  extracted: Record<string, string | number | null>
+  name_match_score: number | null
+  warnings: Array<{ risk?: string; short_description?: string } & Record<string, unknown>>
+}
+
+/** Read the fields we name from one document (Didit "Document AI", $0.20).
+ *  The document is kept at Didit (save_api_request) as the evidence; nothing
+ *  of it is stored here beyond the fields read. Typically 5–30 s. */
+export async function readDocument(env: DiditEnv, p: { file: Buffer; fileName: string; mime: string; fields: DocField[]; expectedCompanyName?: string; vendorData?: string }): Promise<DocumentResult> {
+  const form = new FormData()
+  form.set('document', new Blob([new Uint8Array(p.file)], { type: p.mime }), p.fileName)
+  form.set('fields', JSON.stringify(p.fields))
+  if (p.expectedCompanyName) form.set('expected_company_name', p.expectedCompanyName)
+  if (p.vendorData) form.set('vendor_data', p.vendorData)
+  form.set('save_api_request', 'true')
+  const { apiKey } = config(env)
+  const r = await fetch(`${BASE}/v3/document-ai/`, { method: 'POST', headers: { 'x-api-key': apiKey }, body: form, signal: AbortSignal.timeout(60_000) })
+  const text = await r.text()
+  let body: any = null
+  try { body = text ? JSON.parse(text) : null } catch { /* not JSON */ }
+  if (!r.ok) throw new DiditError(r.status >= 500 ? 502 : r.status, `Didit ${r.status}: ${JSON.stringify(body ?? text).slice(0, 300)}`)
+  const d = body?.document_ai ?? {}
+  return { request_id: body?.request_id ?? '', status: d.status ?? '', extracted: d.extracted_data ?? {}, name_match_score: d.name_match_score ?? null, warnings: d.warnings ?? [] }
+}

@@ -11,6 +11,8 @@
  *   POST /api/sign/:token/verify   {ssn} → {url}: the signer's identity check at
  *                            Didit (services/signer_idv.ts); Didit sends them back
  *                            to /sign/:token, where GET pulls the result
+ *   POST /api/sign/:token/proof    {file_name, content_base64}: a business signer's
+ *                            proof they belong to the business (signer_proof.ts)
  *
  * The link outlives the signature: the signer goes on to the identity check
  * with it and Didit returns them to it (so Didit holds it as the callback). It
@@ -25,6 +27,7 @@ import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient } from '../lib/supabase.js'
 import { PracticeError, form8821ForToken, signRequest, submitSignature, tokenClient } from '../services/practice.js'
 import { refreshCheck, returnOrigin, startCheck } from '../services/signer_idv.js'
+import { proofView, submitProof } from '../services/signer_proof.js'
 
 const supabase = lazyServiceClient()
 const router = Router()
@@ -75,6 +78,17 @@ router.post('/:token/verify', async (req, res) => {
     const t = await tokenClient(supabase, req.params.token)
     const r = await startCheck(supabase, t.practice, t.clientId, req.body?.ssn, `${returnOrigin(req.get('origin'))}/sign/${req.params.token}`)
     res.json(r)
+  } catch (e: any) {
+    if (e instanceof PracticeError) return res.status(e.status).json({ error: e.message })
+    sendError(res, e)
+  }
+})
+
+router.post('/:token/proof', async (req, res) => {
+  if (!TOKEN.test(req.params.token)) return res.status(404).json({ error: 'This signature link is not valid.' })
+  try {
+    const t = await tokenClient(supabase, req.params.token)
+    res.json(proofView(await submitProof(supabase, t.practice, t.clientId, req.body ?? {})))
   } catch (e: any) {
     if (e instanceof PracticeError) return res.status(e.status).json({ error: e.message })
     sendError(res, e)

@@ -5,18 +5,19 @@
  *
  * After signing, the same link takes the signer through the identity check
  * Catipult must make before it submits the form (photo ID, selfie, SSN at
- * Didit); Didit sends them back here, and the page shows the outcome.
+ * Didit); Didit sends them back here, and the page shows the outcome. A
+ * business's signer then uploads one document showing they belong to it.
  */
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { SignHere, IdentityStart } from '@/pages/practice/Onboarding'
-import type { IdentityCheck } from '@/hooks/use-practice'
+import { SignHere, IdentityStart, ProofUpload } from '@/pages/practice/Onboarding'
+import type { IdentityCheck, MembershipProof } from '@/hooks/use-practice'
 
 interface SignRequest {
   practice: string; taxpayer: string; form_type: string; tin_last4: string | null
   designee: { name?: string; caf?: string; address?: string; city?: string; state?: string; zip?: string; phone?: string }
   scope: { income?: string[]; payroll?: string[]; from_year?: number; to_year?: number }; expires: string
-  signed: { name: string; verified: boolean; idv: IdentityCheck | null } | null
+  signed: { name: string; verified: boolean; idv: IdentityCheck | null; proof: MembershipProof | null; business: boolean } | null
 }
 
 const BASE = import.meta.env.VITE_API_URL || ''
@@ -43,6 +44,18 @@ export default function Sign() {
           <div className="ds-card p-4 flex flex-col gap-3">
             <h1>Signed. One more step: confirm it was you</h1>
             <p className="text-muted-foreground">Catipult sends this form to the IRS for {req.practice} and must first confirm the identity of the person who signed it.</p>
+            {idv?.status === 'approved' && req.signed.business && (
+              <div className="flex flex-col gap-2">
+                <p><strong>Your ID and SSN are confirmed.</strong> Last step: show that you belong to {req.taxpayer}.</p>
+                {req.signed.proof && req.signed.proof.status !== 'approved' && <p>Your last document was not accepted: {req.signed.proof.reason} You can upload another.</p>}
+                <ProofUpload business={req.taxpayer} onDone={() => { load() }} onUpload={async body => {
+                  const r = await fetch(`${BASE}/api/sign/${token}/proof`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+                  const j = await r.json().catch(() => ({}))
+                  if (!r.ok) throw new Error(j.error || 'Could not upload the document.')
+                  return j
+                }} />
+              </div>
+            )}
             {idv?.status === 'started' && (
               <div className="flex flex-col gap-2">
                 <p>Your identity check has not finished yet. If you closed it before the end, start it again.</p>
@@ -51,7 +64,7 @@ export default function Sign() {
             )}
             {idv?.status === 'review' && <p>Your check needs a closer look. Your preparer will be in touch; there is nothing more to do now.</p>}
             {idv?.status === 'declined' && <p>That check did not go through: {idv.reason} You can try again.</p>}
-            {idv?.status !== 'review' && <IdentityStart onStart={async ssn => {
+            {idv?.status !== 'review' && idv?.status !== 'approved' && <IdentityStart onStart={async ssn => {
               const r = await fetch(`${BASE}/api/sign/${token}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ssn }) })
               const j = await r.json().catch(() => ({}))
               if (!r.ok) throw new Error(j.error || 'Could not start the check.')

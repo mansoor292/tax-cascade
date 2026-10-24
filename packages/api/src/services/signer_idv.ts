@@ -29,7 +29,8 @@
  * lookup running, then dropped. No ID image is stored here; Didit keeps them.
  *
  * Business clients (Mansoor, 2026-10-24): the signer is verified as a person
- * first (this file); proof that they belong to the EIN is a separate step.
+ * first (this file); then they prove they belong to the business
+ * (signer_proof.ts). Only then is the signer verified (id_verified_at).
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { encryptedFields, encryptionEnabled, hydrate, ENCRYPTED_PRACTICE_CLIENT_FIELDS, PRACTICE_CLIENT_ENC_COLS } from '../lib/row_crypto.js'
@@ -106,24 +107,24 @@ export function verdict(d: { diditStatus: string; nameMatchesSigner: boolean; lo
   return { status: 'approved', reason: null }
 }
 
-type Row = { id: string; user_id: string; practice_id: string; stage: string; signature: any; tin: string | null; form_type?: string }
+export type Row = { id: string; user_id: string; practice_id: string; stage: string; signature: any; tin: string | null; form_type?: string; entity_name?: string }
 
-async function loadRow(sb: SupabaseClient, clientId: string, practiceId?: string): Promise<Row> {
+export async function loadRow(sb: SupabaseClient, clientId: string, practiceId?: string): Promise<Row> {
   const { data, error } = await sb.from('practice_client').select(`id, user_id, practice_id, entity_id, stage, signature, tin, ${PRACTICE_CLIENT_ENC_COLS}`).eq('id', clientId).maybeSingle()
   if (error) throw new PracticeError(500, error.message)
   if (!data || (practiceId && (data as any).practice_id !== practiceId)) throw new PracticeError(404, 'No such client in this practice.')
   await hydrate(sb, data as any, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
-  const { data: ent } = await sb.from('tax_entity').select('form_type').eq('id', (data as any).entity_id).single()
-  return { ...(data as any), form_type: ent?.form_type ?? '' }
+  const { data: ent } = await sb.from('tax_entity').select('form_type, name').eq('id', (data as any).entity_id).single()
+  return { ...(data as any), form_type: ent?.form_type ?? '', entity_name: ent?.name ?? '' }
 }
 
-async function saveSignature(sb: SupabaseClient, c: Row, signature: Record<string, unknown>) {
+export async function saveSignature(sb: SupabaseClient, c: Row, signature: Record<string, unknown>) {
   const patch = { signature, updated_at: new Date().toISOString() }
   const { error } = await sb.from('practice_client').update({ ...patch, ...(await encryptedFields(sb, c.user_id, patch, ENCRYPTED_PRACTICE_CLIENT_FIELDS)) }).eq('id', c.id)
   if (error) throw new PracticeError(500, error.message)
 }
 
-const isIndividual = (formType: string) => formType === '1040' || formType === 'individual'
+export const isIndividual = (formType: string) => formType === '1040' || formType === 'individual'
 
 /** Start (or restart) the signer's check. Returns where to send the signer. */
 export async function startCheck(sb: SupabaseClient, p: Pick<Practice, 'id' | 'provider'>, clientId: string, ssnIn: unknown, callback: string): Promise<{ url: string; session_id: string }> {
@@ -212,7 +213,10 @@ export async function refreshCheck(sb: SupabaseClient, clientId: string): Promis
       ssn_matches_taxpayer: ssnMatchesTaxpayer,
     },
   }
-  const signature = { ...c.signature, idv: next, ...(status === 'approved' ? { id_verified_at: now, id_method: `didit_${idv.environment}` } : {}) }
+  // An individual is verified now; a business signer once their proof that
+  // they belong to the business is accepted too (signer_proof.ts).
+  const done = status === 'approved' && (isIndividual(c.form_type ?? '') || c.signature.proof?.status === 'approved')
+  const signature = { ...c.signature, idv: next, ...(done ? { id_verified_at: now, id_method: `didit_${idv.environment}` } : {}) }
   // The signature link is left to expire: the signer may come back from Didit
   // after the preparer's page has already pulled the result, and should see it.
   await saveSignature(sb, c, signature)

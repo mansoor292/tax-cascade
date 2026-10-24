@@ -38,12 +38,18 @@ export interface IdentityCheck {
   person: { name: string; document: { type: string | null; issuing_state: string | null; expires: string | null } } | null
   checks: { id_document: string | null; liveness: string | null; face_match: string | null; name_matches_signer: boolean; ssn: string | null } | null
 }
+/** A business signer's proof they belong to the business: what was read from it. */
+export interface MembershipProof {
+  status: 'approved' | 'declined' | 'review'; environment: 'live' | 'sandbox'; uploaded_at: string; attempts: number; file_name: string; reason: string | null
+  read: { doc_kind: string | null; entity_name: string | null; ein_last4: string | null; person_name: string | null; role: string | null }
+  checks: { ein_matches: boolean | null; person_matches: boolean; entity_name_matches: boolean }
+}
 export interface ClientDetail {
   client: {
     id: string; entity_id: string; name: string; form_type: string; stage: Stage; tin_last4: string | null
     authorization_scope: { income?: string[]; payroll?: string[]; from_year?: number; to_year?: number; year_end_month?: number; imported?: boolean }
     signed_at: string | null; submitted_at: string | null; last_check_at: string | null; check_count: number; readable_at: string | null; last_read_at: string | null
-    summary: ClientSummary | null; signer: { name: string; title: string; id_verified_at: string | null; id_method: string | null; method: string; idv: IdentityCheck | null } | null
+    summary: ClientSummary | null; signer: { name: string; title: string; id_verified_at: string | null; id_method: string | null; method: string; idv: IdentityCheck | null; proof: MembershipProof | null } | null
   }
   transcripts: Transcript[]
   findings: Finding[]
@@ -130,6 +136,7 @@ export const practiceApi = {
   signInApp: (id: string, body: { signer_name: string; signer_title: string; typed_signature: string; agree: boolean }) =>
     api(`/api/practice/clients/${id}/sign`, { method: 'POST', body: JSON.stringify(body) }),
   verifySigner: (id: string, ssn: string) => api<{ url: string; session_id: string }>(`/api/practice/clients/${id}/verify`, { method: 'POST', body: JSON.stringify({ ssn }) }),
+  submitProof: (id: string, body: { file_name: string; content_base64: string }) => api<MembershipProof>(`/api/practice/clients/${id}/proof`, { method: 'POST', body: JSON.stringify(body) }),
   idVerified: (id: string, method: string) => api(`/api/practice/clients/${id}/id-verified`, { method: 'POST', body: JSON.stringify({ method }) }),
   submitted: (id: string) => api(`/api/practice/clients/${id}/submitted`, { method: 'POST' }),
   check: (id: string) => api<{ found: boolean }>(`/api/practice/clients/${id}/check`, { method: 'POST' }),
