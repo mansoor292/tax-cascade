@@ -8,6 +8,25 @@ import { testEmail, deleteUserByEmail, signUpViaApi, authed, createEntityViaApi 
  * the MCP server uses for context offload.
  */
 
+test.describe('calendar — concurrent first refreshes', () => {
+  // A page load and its redirect can refresh one account's calendar at the
+  // same moment. Both used to insert the same generated rows and the second
+  // answered 409 (all-pages.spec on a fresh account, 2026-10-24).
+  test('two refreshes at once both succeed on a fresh account', async ({ request, baseURL }) => {
+    for (let round = 0; round < 3; round++) {
+      const email = testEmail(`calrace${round}`)
+      const token = await signUpViaApi(email)
+      try {
+        await createEntityViaApi(token, { name: 'Race Corp', form_type: '1120S' })
+        const res = await Promise.all([0, 1, 2, 3].map(() => request.get(`${baseURL}/api/calendar`, { headers: authed(token) })))
+        expect(res.map(r => r.status())).toEqual([200, 200, 200, 200])
+      } finally {
+        await deleteUserByEmail(email)
+      }
+    }
+  })
+})
+
 test.describe('calendar obligations', () => {
   const email = testEmail('cal')
   let token = ''

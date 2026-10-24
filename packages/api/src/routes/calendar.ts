@@ -169,7 +169,11 @@ async function refreshForUser(userId: string, entityId?: string) {
     }))
 
   if (inserts.length) {
-    const { error: insErr } = await supabase.from('obligation').insert(inserts)
+    // Two refreshes of one account can run at once (a page load and its
+    // redirect): both see the same rows missing and both insert. The second
+    // used to fail on the unique key and answer 409 (all-pages.spec, a fresh
+    // account, 2026-10-24); a row the other refresh just wrote is now skipped.
+    const { error: insErr } = await supabase.from('obligation').upsert(inserts, { onConflict: 'entity_id,obligation_key', ignoreDuplicates: true })
     if (insErr) throw new Error(insErr.message)
   }
 
