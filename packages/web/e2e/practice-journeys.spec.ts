@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Browser } from '@playwright/test'
-import { signInThroughUi, signInViaApi, authed } from './helpers'
+import { signInThroughUi, authed } from './helpers'
 
 /**
  * The practice workspace (2026-10-24): persona P2, the tax preparer, walked
@@ -78,7 +78,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await signIn(page)
     await toPractice(page)
     await nav(page).getByRole('link', { name: 'TaxNow' }).click()
-    await expect(page.getByRole('heading', { name: 'TaxNow' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'TaxNow', exact: true })).toBeVisible()
     const gaps = page.getByRole('region', { name: 'Authorization gaps' })
     await expect(gaps).toContainText('2024-03, 2024-06, 2024-09')
     await gaps.getByRole('link', { name: 'Calloway Imaging Partners' }).click()
@@ -89,6 +89,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
   test('PJ5 Onboarding: add a client, the client signs by link, verify, submit, check → readable', async ({ page, browser }) => {
     await signIn(page)
     await toPractice(page)
+    await removeLeftoverTestClients(page)
     await nav(page).getByRole('link', { name: 'TaxNow' }).click()
     await page.getByRole('button', { name: 'Add client' }).click()
     const name = `E2E Onboarding ${Date.now()}`
@@ -114,8 +115,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
       await nav(page).getByRole('link', { name: 'Clients' }).click()
       await expect(page.getByRole('row', { name: new RegExp(name) })).toContainText('Readable')
     } finally {
-      const token = await signInViaApi(EMAIL, PASSWORD)
-      await page.request.delete(`/api/entities/${entityId}`, { headers: authed(token) })
+      await page.request.delete(`/api/entities/${entityId}`, { headers: authed(await sessionToken(page)) })
     }
   })
 
@@ -150,12 +150,30 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
   })
 })
 
+/** The signed-in page's own Supabase session token (what the app sends). */
+async function sessionToken(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)!
+      if (/^sb-.*-auth-token$/.test(k)) return JSON.parse(localStorage.getItem(k)!).access_token as string
+    }
+    return ''
+  })
+}
+
 async function clientEntityId(page: Page): Promise<string> {
-  const href = await page.getByRole('heading').first().evaluate(() => location.pathname)
-  const clientId = href.split('/').pop()!
-  const token = await signInViaApi(EMAIL, PASSWORD)
-  const r = await page.request.get(`/api/practice/clients/${clientId}`, { headers: authed(token) })
+  const clientId = new URL(page.url()).pathname.split('/').pop()!
+  const r = await page.request.get(`/api/practice/clients/${clientId}`, { headers: authed(await sessionToken(page)) })
   return (await r.json()).client.entity_id
+}
+
+/** A run that died mid-way leaves its client behind; clear them first. */
+async function removeLeftoverTestClients(page: Page) {
+  const h = { headers: authed(await sessionToken(page)) }
+  const { clients } = await (await page.request.get('/api/practice/clients', h)).json()
+  for (const c of clients as Array<{ name: string; entity_id: string }>) {
+    if (c.name.startsWith('E2E Onboarding')) await page.request.delete(`/api/entities/${c.entity_id}`, h)
+  }
 }
 
 /** The taxpayer opens the link with no login and signs. */
