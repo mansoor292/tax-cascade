@@ -31,12 +31,19 @@ export interface Transcript {
   parsed: { balanceCents: number | null; txns: Txn[]; formTitle: string; returnLines: Array<{ label: string; valueText: string }> } | null
   retr: Array<{ name: string; items: Array<{ key: string; value: string }> }> | null
 }
+/** The signer's identity check (Didit): where it stands, never the SSN beyond its last four. */
+export interface IdentityCheck {
+  status: 'started' | 'approved' | 'declined' | 'review'; didit_status: string; environment: 'live' | 'sandbox'
+  started_at: string; decided_at: string | null; attempts: number; ssn_last4: string; reason: string | null
+  person: { name: string; document: { type: string | null; issuing_state: string | null; expires: string | null } } | null
+  checks: { id_document: string | null; liveness: string | null; face_match: string | null; name_matches_signer: boolean; ssn: string | null } | null
+}
 export interface ClientDetail {
   client: {
     id: string; entity_id: string; name: string; form_type: string; stage: Stage; tin_last4: string | null
     authorization_scope: { income?: string[]; payroll?: string[]; from_year?: number; to_year?: number; year_end_month?: number; imported?: boolean }
     signed_at: string | null; submitted_at: string | null; last_check_at: string | null; check_count: number; readable_at: string | null; last_read_at: string | null
-    summary: ClientSummary | null; signer: { name: string; title: string; id_verified_at: string | null; method: string } | null
+    summary: ClientSummary | null; signer: { name: string; title: string; id_verified_at: string | null; id_method: string | null; method: string; idv: IdentityCheck | null } | null
   }
   transcripts: Transcript[]
   findings: Finding[]
@@ -122,6 +129,7 @@ export const practiceApi = {
   signLink: (id: string) => api<{ path: string; expires: string }>(`/api/practice/clients/${id}/sign-link`, { method: 'POST' }),
   signInApp: (id: string, body: { signer_name: string; signer_title: string; typed_signature: string; agree: boolean }) =>
     api(`/api/practice/clients/${id}/sign`, { method: 'POST', body: JSON.stringify(body) }),
+  verifySigner: (id: string, ssn: string) => api<{ url: string; session_id: string }>(`/api/practice/clients/${id}/verify`, { method: 'POST', body: JSON.stringify({ ssn }) }),
   idVerified: (id: string, method: string) => api(`/api/practice/clients/${id}/id-verified`, { method: 'POST', body: JSON.stringify({ method }) }),
   submitted: (id: string) => api(`/api/practice/clients/${id}/submitted`, { method: 'POST' }),
   check: (id: string) => api<{ found: boolean }>(`/api/practice/clients/${id}/check`, { method: 'POST' }),

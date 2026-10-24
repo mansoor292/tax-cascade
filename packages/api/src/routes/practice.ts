@@ -11,7 +11,8 @@
  *   GET   /api/practice/clients/:id/8821.pdf      the client's Form 8821, filled (full TIN while pending)
  *   POST  /api/practice/clients/:id/sign-link     a fresh signature link (token shown once)
  *   POST  /api/practice/clients/:id/sign          sign in the app {signer_name, signer_title, typed_signature, agree}
- *   POST  /api/practice/clients/:id/id-verified   the signer's identity was checked {method}
+ *   POST  /api/practice/clients/:id/verify        the signer is here: start their identity check {ssn} → {url}
+ *   POST  /api/practice/clients/:id/id-verified   platform admins only: a check made outside Didit {method}
  *   POST  /api/practice/clients/:id/submitted     the signed 8821 went in; daily checks begin
  *   POST  /api/practice/clients/:id/check         run the onboarding check now
  *   POST  /api/practice/clients/:id/read          queue a read from TaxNow (no IRS request)
@@ -34,6 +35,7 @@ import {
   form8821, issueSignLink, listClients, markIdVerified, markSubmitted, onboardingCheck, opportunities, requirePractice, signInApp, updatePractice,
 } from '../services/practice.js'
 import { enqueue, type TranscriptKey } from '../services/practice_jobs.js'
+import { refreshCheck, returnOrigin, startCheck } from '../services/signer_idv.js'
 
 const supabase = lazyServiceClient()
 const router = Router()
@@ -76,7 +78,14 @@ router.post('/clients', handle(async (req, res, userId) => {
 }))
 
 router.get('/clients/:id', handle(async (req, res, userId) => {
-  res.json(await clientDetail(supabase, await requirePractice(supabase, userId), req.params.id))
+  const p = await requirePractice(supabase, userId)
+  let d = await clientDetail(supabase, p, req.params.id)
+  // A signer's identity check still running: pull its result from Didit.
+  if (d.client.signer?.idv?.status === 'started') {
+    await refreshCheck(supabase, req.params.id)
+    d = await clientDetail(supabase, p, req.params.id)
+  }
+  res.json(d)
 }))
 
 router.get('/clients/:id/8821.pdf', handle(async (req, res, userId) => {
@@ -96,7 +105,13 @@ router.post('/clients/:id/sign', handle(async (req, res, userId) => {
   res.json(await signInApp(supabase, await requirePractice(supabase, userId), req.params.id, req.body ?? {}, userId))
 }))
 
+router.post('/clients/:id/verify', handle(async (req, res, userId) => {
+  const p = await requirePractice(supabase, userId)
+  res.json(await startCheck(supabase, p, req.params.id, req.body?.ssn, `${returnOrigin(req.get('origin'))}/app/practice/clients/${req.params.id}`))
+}))
+
 router.post('/clients/:id/id-verified', handle(async (req, res, userId) => {
+  if (!isPlatformAdmin(userId)) throw new PracticeError(403, 'Only Catipult staff can record a check made outside the identity service.')
   res.json(await markIdVerified(supabase, await requirePractice(supabase, userId), req.params.id, String(req.body?.method ?? 'manual')))
 }))
 

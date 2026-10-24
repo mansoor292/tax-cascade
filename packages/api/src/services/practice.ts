@@ -22,6 +22,7 @@ import {
 import { accountForTin, taxnowFor } from '../taxnow/client.js'
 import type { ClientSummary } from './practice_read.js'
 import { fill8821 } from './f8821.js'
+import { idvView } from './signer_idv.js'
 
 export type Provider = 'taxnow' | 'fixture'
 export interface Practice {
@@ -223,7 +224,7 @@ export async function clientDetail(sb: SupabaseClient, p: Practice, clientId: st
       id: row.id, entity_id: row.entity_id, name: ent?.name ?? '', form_type: ent?.form_type ?? '', stage: row.stage, tin_last4: row.tin_last4,
       authorization_scope: row.authorization_scope, signed_at: row.signed_at, submitted_at: row.submitted_at, last_check_at: row.last_check_at,
       check_count: row.check_count, readable_at: row.readable_at, last_read_at: row.last_read_at, summary: row.summary ?? null,
-      signer: row.signature ? { name: row.signature.signer_name, title: row.signature.signer_title, id_verified_at: row.signature.id_verified_at ?? null, method: row.signature.method } : null,
+      signer: row.signature ? { name: row.signature.signer_name, title: row.signature.signer_title, id_verified_at: row.signature.id_verified_at ?? null, id_method: row.signature.id_method ?? null, method: row.signature.method, idv: idvView(row.signature.idv) } : null,
     },
     transcripts: transcripts.map(t => ({
       type: t.type, form: t.form, tax_year: t.tax_year, period_month: t.period_month, status: t.status, synced_at: t.synced_at, response_date: t.response_date,
@@ -322,31 +323,48 @@ const SIGN_DAYS = 14
 /** A fresh signature link for the client. The token is shown once; only its hash is stored. */
 export async function issueSignLink(sb: SupabaseClient, p: Practice, clientId: string) {
   const c = await clientRow(sb, p, clientId)
-  if (!['draft', 'awaiting_signature'].includes(c.stage)) throw new PracticeError(409, 'This client’s 8821 is already signed.')
+  await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
+  // A signed client whose signer is not verified yet gets a link too: it
+  // opens straight on the identity check (signed in the app, checked on the
+  // signer's own phone).
+  const toVerify = c.stage === 'signed' && !c.signature?.id_verified_at
+  if (!['draft', 'awaiting_signature'].includes(c.stage) && !toVerify) throw new PracticeError(409, 'This client’s 8821 is already signed.')
   const token = randomBytes(24).toString('base64url')
   const expires = new Date(Date.now() + SIGN_DAYS * 86_400_000).toISOString()
-  const { error } = await sb.from('practice_client').update({ sign_token_hash: hashToken(token), sign_token_expires: expires, stage: 'awaiting_signature', updated_at: new Date().toISOString() }).eq('id', c.id)
+  const { error } = await sb.from('practice_client').update({ sign_token_hash: hashToken(token), sign_token_expires: expires, ...(toVerify ? {} : { stage: 'awaiting_signature' }), updated_at: new Date().toISOString() }).eq('id', c.id)
   if (error) throw new PracticeError(500, error.message)
   return { token, expires }
 }
 
 /** What the signer sees: the 8821 as it will be signed. Public (token only). */
 export async function signRequest(sb: SupabaseClient, token: string) {
-  const { data: c } = await sb.from('practice_client').select('id, practice_id, entity_id, stage, tin_last4, authorization_scope, sign_token_expires').eq('sign_token_hash', hashToken(token)).maybeSingle()
+  const { data: c } = await sb.from('practice_client').select(`id, user_id, practice_id, entity_id, stage, tin_last4, authorization_scope, sign_token_expires, signature, ${PRACTICE_CLIENT_ENC_COLS}`).eq('sign_token_hash', hashToken(token)).maybeSingle()
   if (!c || !c.sign_token_expires || new Date(c.sign_token_expires) < new Date()) throw new PracticeError(404, 'This signature link has expired or was replaced. Ask your preparer for a new one.')
+  await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
   const { data: p } = await sb.from('practice').select('id, user_id, name, designee_mode, designee, provider').eq('id', c.practice_id).single()
   const { data: ent } = await sb.from('tax_entity').select('name, form_type').eq('id', c.entity_id).single()
   return {
     practice: p!.name, taxpayer: ent?.name ?? '', form_type: ent?.form_type ?? '', tin_last4: c.tin_last4,
     designee: (({ source: _s, ...d }) => d)(designeeOf(p as Practice)), scope: c.authorization_scope, expires: c.sign_token_expires,
+    // After signing, the same link carries the signer through the identity check.
+    signed: c.signature ? { name: c.signature.signer_name, verified: !!c.signature.id_verified_at, idv: idvView(c.signature.idv) } : null,
   }
 }
 
 export interface Signature { signer_name: string; signer_title: string; typed_signature: string; agree: boolean }
 
+/** The client and practice behind a live signature link. */
+export async function tokenClient(sb: SupabaseClient, token: string): Promise<{ clientId: string; practice: Pick<Practice, 'id' | 'provider'> }> {
+  const { data: c } = await sb.from('practice_client').select('id, practice_id, sign_token_expires').eq('sign_token_hash', hashToken(token)).maybeSingle()
+  if (!c || !c.sign_token_expires || new Date(c.sign_token_expires) < new Date()) throw new PracticeError(404, 'This signature link has expired or was replaced. Ask your preparer for a new one.')
+  const { data: p } = await sb.from('practice').select('id, provider').eq('id', c.practice_id).single()
+  return { clientId: c.id, practice: p as Pick<Practice, 'id' | 'provider'> }
+}
+
 export async function submitSignature(sb: SupabaseClient, token: string, s: Signature, meta: { ip?: string; userAgent?: string }) {
   const { data: c } = await sb.from('practice_client').select('id, user_id, practice_id, stage, sign_token_expires').eq('sign_token_hash', hashToken(token)).maybeSingle()
   if (!c || !c.sign_token_expires || new Date(c.sign_token_expires) < new Date()) throw new PracticeError(404, 'This signature link has expired or was replaced.')
+  if (c.stage !== 'awaiting_signature' && c.stage !== 'draft') throw new PracticeError(409, 'This 8821 is already signed.')
   if (!s?.agree) throw new PracticeError(400, 'Confirm you are authorized to sign for the taxpayer.')
   const name = String(s.signer_name ?? '').trim(), title = String(s.signer_title ?? '').trim(), typed = String(s.typed_signature ?? '').trim()
   if (!name || !typed) throw new PracticeError(400, 'Your name and signature are required.')
@@ -365,13 +383,18 @@ export async function signInApp(sb: SupabaseClient, p: Practice, clientId: strin
 
 async function recordSignature(sb: SupabaseClient, c: { id: string; user_id: string }, sig: Record<string, unknown>) {
   const signature = { ...sig, signed_at: new Date().toISOString(), id_verified_at: null }
-  const patch = { signature, stage: 'signed', signed_at: signature.signed_at, sign_token_hash: null, sign_token_expires: null, updated_at: new Date().toISOString() }
+  // The signature link stays valid until it expires: the signer goes on to
+  // the identity check with it, and comes back to it from Didit (signer_idv.ts).
+  // Signed, it cannot sign again (submitSignature); verified, it only shows that.
+  const patch = { signature, stage: 'signed', signed_at: signature.signed_at, updated_at: new Date().toISOString() }
   const { error } = await sb.from('practice_client').update({ ...patch, ...(await encryptedFields(sb, c.user_id, patch, ENCRYPTED_PRACTICE_CLIENT_FIELDS)) }).eq('id', c.id)
   if (error) throw new PracticeError(500, error.message)
   return { ok: true }
 }
 
-/** Catipult verifies the signer's identity (2026-10-24: "we will handle ID verification"). */
+/** Catipult staff record a check made outside Didit (a video call with the
+ *  signer's ID, when the automated check cannot decide). Platform admins only
+ *  (routes/practice.ts); the signer's own check is services/signer_idv.ts. */
 export async function markIdVerified(sb: SupabaseClient, p: Practice, clientId: string, method: string) {
   const c = await clientRow(sb, p, clientId)
   await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
@@ -388,6 +411,8 @@ export async function markIdVerified(sb: SupabaseClient, p: Practice, clientId: 
 export async function markSubmitted(sb: SupabaseClient, p: Practice, clientId: string) {
   const c = await clientRow(sb, p, clientId)
   if (c.stage !== 'signed') throw new PracticeError(409, c.stage === 'submitted' ? 'Already submitted.' : 'Sign the 8821 first.')
+  await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
+  if (!c.signature?.id_verified_at) throw new PracticeError(409, 'Verify the signer’s identity first.')
   const { error } = await sb.from('practice_client').update({ stage: 'submitted', submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', c.id)
   if (error) throw new PracticeError(500, error.message)
   return { ok: true }

@@ -11,10 +11,15 @@ import { signInThroughUi, authed } from './helpers'
  * packages/api/scripts/practice/seed_demo.ts). Its TaxNow is the in-process
  * fixture: no real taxpayer, and an "IRS request" here never leaves the
  * server. The onboarding journey makes its own client and deletes it.
+ *
+ * The signer's identity check runs at Didit's sandbox (the demo practice is
+ * never sent to the live one): the test stands in for the camera by asking
+ * the sandbox to approve the session (DIDIT_SANDBOX_API_KEY, from SSM).
  */
 
 const EMAIL = process.env.PRACTICE_DEMO_EMAIL || ''
 const PASSWORD = process.env.PRACTICE_DEMO_PASSWORD || ''
+const DIDIT_SANDBOX_KEY = process.env.DIDIT_SANDBOX_API_KEY || ''
 
 async function signIn(page: Page) {
   test.skip(!EMAIL || !PASSWORD, 'PRACTICE_DEMO_EMAIL / PRACTICE_DEMO_PASSWORD not set')
@@ -86,7 +91,8 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await expect(page.getByText(/refused \(451\)/)).toBeVisible()
   })
 
-  test('PJ5 Onboarding: add a client, the client signs by link, verify, submit, check → readable', async ({ page, browser }) => {
+  test('PJ5 Onboarding: add a client, the client signs by link and proves who they are, submit, check → readable', async ({ page, browser }) => {
+    test.skip(!DIDIT_SANDBOX_KEY, 'DIDIT_SANDBOX_API_KEY not set')
     await signIn(page)
     await toPractice(page)
     await removeLeftoverTestClients(page)
@@ -106,11 +112,17 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
       await page.getByRole('button', { name: 'Copy signature link' }).click()
       const link = await page.getByLabel('Signature link').inputValue()
       expect(link).toMatch(/\/sign\/[A-Za-z0-9_-]{20,}$/)
-      await signAsClient(browser, link, name)
+      const signer = await signAsClient(browser, link, name)
 
       await page.reload()
       await expect(page.getByText(/Signed by Pat Example/)).toBeVisible()
-      await page.getByRole('button', { name: 'Mark identity verified' }).click()
+      // Not until Catipult has verified who signed: no button marks it done.
+      await expect(page.getByRole('button', { name: 'Mark submitted' })).toBeDisabled()
+      await expect(page.getByRole('button', { name: 'Mark identity verified' })).toHaveCount(0)
+      await expect(page.getByText(/Identity check in progress/)).toBeVisible()
+      await signer.finishCheck()
+      await page.reload()
+      await expect(page.getByText(/Verified: .*SSN ending 6789 confirmed \(test check\)/)).toBeVisible({ timeout: 20_000 })
       await page.getByRole('button', { name: 'Mark submitted' }).click()
       await expect(page.getByText(/Checked 0 times/)).toBeVisible()
       await page.getByRole('button', { name: 'Check now' }).click()
@@ -180,7 +192,8 @@ async function removeLeftoverTestClients(page: Page) {
   }
 }
 
-/** The taxpayer opens the link with no login and signs. */
+/** The taxpayer opens the link with no login, signs, and starts the identity
+ *  check; finishCheck() is the photo ID and selfie, done (sandbox). */
 async function signAsClient(browser: Browser, link: string, taxpayer: string) {
   const ctx = await browser.newContext()
   const p = await ctx.newPage()
@@ -196,6 +209,26 @@ async function signAsClient(browser: Browser, link: string, taxpayer: string) {
   await p.getByLabel('Signature (type your name)').fill('Pat Example')
   await p.getByLabel(/I am authorized/).check()
   await p.getByRole('button', { name: 'Sign' }).click()
-  await expect(p.getByRole('heading', { name: 'Signed. Thank you.' })).toBeVisible()
-  await ctx.close()
+  // The same link goes on to the identity check.
+  await expect(p.getByRole('heading', { name: /Signed\. One more step/ })).toBeVisible()
+  await p.getByLabel('Your Social Security number').fill('123-45-6789') // fictional
+  // The page leaves for Didit at once: keep the session id on the way through.
+  let session_id = ''
+  await p.route('**/api/sign/*/verify', async route => {
+    const resp = await route.fetch()
+    session_id = (await resp.json()).session_id
+    await route.fulfill({ response: resp })
+  })
+  await p.getByRole('button', { name: 'Start identity check' }).click()
+  await p.waitForURL(/didit\.me/)
+  expect(session_id).not.toBe('')
+  return { finishCheck: async () => {
+    // The sandbox stands in for the photo ID and the selfie.
+    const sim = await p.request.post(`https://verification.didit.me/v3/session/${session_id}/simulate/`, { headers: { 'x-api-key': DIDIT_SANDBOX_KEY }, data: { new_status: 'Approved', send_webhooks: false } })
+    expect(sim.ok()).toBe(true)
+    // Didit returns the signer to the link, which pulls the result.
+    await p.goto(link)
+    await expect(p.getByRole('heading', { name: 'Signed and verified. Thank you.' })).toBeVisible({ timeout: 20_000 })
+    await ctx.close()
+  } }
 }

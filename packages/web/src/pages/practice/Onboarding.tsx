@@ -2,24 +2,26 @@
  * A client not yet readable: the onboarding steps (Mansoor, 2026-10-24).
  * The 8821 names the practice's designee; the client signs through a link the
  * preparer copies to them, or the signer signs here; Catipult verifies the
- * signer's identity; the signed 8821 is submitted (how it goes in is still
+ * signer's identity (photo ID, selfie and SSN at Didit — api
+ * services/signer_idv.ts; the preparer cannot mark it done); the signed 8821 is submitted (how it goes in is still
  * being settled); then TaxNow is checked every morning until it can read the
  * client.
  */
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { practiceApi, download8821, type ClientDetail } from '@/hooks/use-practice'
+import { practiceApi, download8821, type ClientDetail, type IdentityCheck } from '@/hooks/use-practice'
 import { Button } from '@/components/ui/button'
 import { Pill } from '@/components/ds'
 import { FORM_NAME, ago } from '@/lib/practice-labels'
 import { usePracticeCtx } from './PracticeLayout'
 
 export default function Onboarding({ detail, onChange }: { detail: ClientDetail; onChange: () => void }) {
-  const { designee } = usePracticeCtx()
+  const { designee, admin } = usePracticeCtx()
   const c = detail.client
   const a = c.authorization_scope ?? {}
   const [link, setLink] = useState<string | null>(null)
   const [signing, setSigning] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const [busy, setBusy] = useState(false)
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true)
@@ -68,10 +70,34 @@ export default function Onboarding({ detail, onChange }: { detail: ClientDetail;
           {signing && <SignHere onSign={body => run(() => practiceApi.signInApp(c.id, body), 'Signed.')} />}
         </div>
       ), !signed)}
-      {step(3, 'Signer’s identity verified', verified, verified ? <p className="text-muted-foreground">Verified {ago(c.signer!.id_verified_at)}.</p> : (
+      {step(3, 'Signer’s identity verified', verified, verified ? (
+        <p className="text-muted-foreground">{verifiedLine(c.signer!.idv, c.signer!.id_method)} {ago(c.signer!.id_verified_at)}.</p>
+      ) : (
         <div className="flex flex-col gap-2">
-          <p className="text-muted-foreground">Catipult verifies who signed before the 8821 goes in.</p>
-          <div><Button variant="outline" disabled={!signed || busy} onClick={() => run(() => practiceApi.idVerified(c.id, 'manual'), 'Marked verified.')}>Mark identity verified</Button></div>
+          <p className="text-muted-foreground">Catipult checks the signer’s photo ID, a selfie and their Social Security number before the 8821 goes in. Signers who used the link are taken there right after signing; anyone else can do it from a new link on their phone, or here if they are with you.</p>
+          {c.signer?.idv && <CheckState idv={c.signer.idv} />}
+          {signed && c.signer?.idv?.status !== 'started' && (
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={busy} onClick={async () => {
+                setBusy(true)
+                try {
+                  const r = await practiceApi.signLink(c.id)
+                  const url = `${window.location.origin}${r.path}`
+                  setLink(url)
+                  await navigator.clipboard?.writeText(url).catch(() => undefined)
+                  toast.success('Identity check link copied.')
+                } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not make a link') }
+                setBusy(false)
+              }}>Copy identity check link</Button>
+              <Button variant="outline" onClick={() => setVerifying(v => !v)}>The signer is here: verify now</Button>
+            </div>
+          )}
+          {signed && c.signer?.idv?.status === 'started' && <div><Button variant="outline" onClick={onChange}>Refresh</Button></div>}
+          {link && signed && <input readOnly value={link} aria-label="Identity check link" className="border rounded-md px-2 h-8 bg-transparent text-sm num w-full" onFocus={e => e.currentTarget.select()} />}
+          {verifying && <IdentityStart who="the signer" onStart={ssn => practiceApi.verifySigner(c.id, ssn)} />}
+          {admin && signed && <div><Button variant="ghost" size="sm" disabled={busy} onClick={() => {
+            if (window.confirm('Record that Catipult staff checked this signer’s photo ID and SSN on a video call?')) run(() => practiceApi.idVerified(c.id, 'staff_video_call'), 'Recorded.')
+          }}>Staff: record a video-call check</Button></div>}
         </div>
       ), signed && !verified)}
       {step(4, 'Submitted', c.stage === 'submitted', c.stage === 'submitted' ? <p className="text-muted-foreground">Submitted {ago(c.submitted_at)}.</p> : (
@@ -108,6 +134,41 @@ export function SignHere({ onSign }: { onSign: (b: { signer_name: string; signer
       </div>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} /> I am authorized to sign this Form 8821 for the taxpayer.</label>
       <div><Button disabled={!name.trim() || !typed.trim() || !agree} onClick={() => onSign({ signer_name: name, signer_title: title, typed_signature: typed, agree })}>Sign</Button></div>
+    </div>
+  )
+}
+
+function verifiedLine(idv: IdentityCheck | null, method: string | null): string {
+  if (idv?.status === 'approved') {
+    const d = idv.person?.document
+    const doc = d?.type ? `${d.type.toLowerCase()}${d.issuing_state ? ` (${d.issuing_state})` : ''}` : 'photo ID'
+    return `Verified: ${doc} and selfie match ${idv.person?.name || 'the signer'}; SSN ending ${idv.ssn_last4} confirmed${idv.environment === 'sandbox' ? ' (test check)' : ''},`
+  }
+  return method === 'staff_video_call' ? 'Verified by Catipult staff on a video call,' : 'Verified'
+}
+
+/** Where a signer's identity check stands, for the preparer. */
+function CheckState({ idv }: { idv: IdentityCheck }) {
+  if (idv.status === 'started' && idv.didit_status === 'In Review') return <p className="text-sm"><Pill tone="warn">Under review at Didit</Pill> The ID check is being looked at by a person; it updates when they decide.</p>
+  if (idv.status === 'started') return <p className="text-sm">Identity check in progress (started {ago(idv.started_at)}). It updates when the signer finishes.</p>
+  if (idv.status === 'review') return <p className="text-sm"><Pill tone="warn">Needs review</Pill> {idv.reason}</p>
+  if (idv.status === 'declined') return <p className="text-sm"><Pill tone="bad">Not verified</Pill> {idv.reason} The signer can try again.</p>
+  return null
+}
+
+/** The signer's SSN, then off to the hosted ID + selfie check. */
+export function IdentityStart({ onStart, who = 'you' }: { onStart: (ssn: string) => Promise<{ url: string }>; who?: string }) {
+  const [ssn, setSsn] = useState('')
+  const [busy, setBusy] = useState(false)
+  const digits = ssn.replace(/\D/g, '')
+  return (
+    <div className="flex flex-col gap-2 rounded-md bg-muted p-3">
+      <p className="text-sm">{who === 'you' ? 'You' : 'The signer'} will photograph a driver’s license or passport and take a selfie (about two minutes), and the Social Security number is matched against credit records. The ID photos are kept by our verification provider, Didit, not by Catipult or the preparer.</p>
+      <div className="ds-field max-w-xs"><label htmlFor="idv-ssn">{who === 'you' ? 'Your' : 'The signer’s'} Social Security number</label><input id="idv-ssn" inputMode="numeric" autoComplete="off" value={ssn} onChange={e => setSsn(e.target.value)} placeholder="123-45-6789" /></div>
+      <div><Button disabled={digits.length !== 9 || busy} onClick={async () => {
+        setBusy(true)
+        try { const r = await onStart(digits); window.location.assign(r.url) } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not start the check'); setBusy(false) }
+      }}>Start identity check</Button></div>
     </div>
   )
 }
