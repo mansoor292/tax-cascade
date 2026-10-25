@@ -123,7 +123,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
       // Verified before anyone signs: nothing signed yet, and no button marks the check done.
       await expect(page.getByText(/Identity check in progress/)).toBeVisible()
       await expect(page.getByRole('button', { name: 'Mark identity verified' })).toHaveCount(0)
-      await expect(page.getByText(/^Signed by/)).toHaveCount(0)
+      await expect(page.getByText('Once the signer is verified.')).toBeVisible()
       await signer.finishCheck()
       await page.reload()
       await expect(page.getByText(/Verified: .*SSN ending 6789 confirmed; schedule k-1 names them \(shareholder\) for EIN ending 0006 \(test check\)/)).toBeVisible({ timeout: 20_000 })
