@@ -70,7 +70,7 @@ const practiceNav = [
   { to: '/app/practice', label: 'Clients', icon: Users, end: true },
   { to: '/app/practice/opportunities', label: 'Opportunities', icon: BadgeDollarSign },
   { to: '/app/practice/deadlines', label: 'Deadlines', icon: CalendarClock },
-  { to: '/app/practice/taxnow', label: 'TaxNow', icon: ShieldCheck },
+  { to: '/app/practice/irs-access', label: 'IRS access', icon: ShieldCheck },
   { to: '/app/practice/settings', label: 'Practice settings', icon: Settings2 },
 ]
 

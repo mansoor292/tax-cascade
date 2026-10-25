@@ -1,8 +1,8 @@
 /**
- * Practice → TaxNow: who can be read, how fresh each client's transcripts
+ * Practice → IRS access: who can be read, how fresh each client's transcripts
  * are, what the IRS refused (451), and onboarding new clients.
  *
- * Reading from TaxNow never asks the IRS for anything; an IRS request is
+ * Refreshing the IRS records on file never asks the IRS for anything; an IRS request is
  * made only from a client's IRS account tab, through the confirmation dialog.
  */
 import { useState } from 'react'
@@ -15,7 +15,7 @@ import { PageHeader, Pill, Tile } from '@/components/ds'
 import { STAGE, STATUS, STATUS_ORDER, FORM_NAME, ago } from '@/lib/practice-labels'
 import { usePracticeCtx } from './PracticeLayout'
 
-export default function TaxNow() {
+export default function IrsAccess() {
   const { practice, admin } = usePracticeCtx()
   const { data, loading, error, reload } = useCoverage()
   const [params, setParams] = useSearchParams()
@@ -36,13 +36,13 @@ export default function TaxNow() {
 
   return (
     <>
-      <PageHeader crumb={practice.name} title="TaxNow" actions={<>
+      <PageHeader crumb={practice.name} title="IRS access" actions={<>
         {admin && practice.provider === 'taxnow' && <ClaimButton onDone={reload} />}
         <Button onClick={() => setParams({ add: '1' })}>Add client</Button>
       </>} />
       <div className="ds-card px-4 py-3 mb-3 flex flex-wrap gap-4 items-center">
         <div className="flex flex-col gap-1 flex-1 min-w-[260px]">
-          <div className="flex gap-2 items-center"><h2>IRS access through TaxNow</h2><Pill tone="good">{practice.provider === 'fixture' ? 'Demo data' : 'Connected'}</Pill></div>
+          <div className="flex gap-2 items-center"><h2>IRS records</h2><Pill tone="good">{practice.provider === 'fixture' ? 'Demo data' : 'Connected'}</Pill></div>
           <span className="text-muted-foreground">Designee on new 8821s: {cov?.designee.name || 'not set'}{cov?.designee.caf ? ` · CAF ${cov.designee.caf}` : ''} ({cov?.designee.source === 'own' ? 'your own' : 'Catipult’s'}). Read every morning at 6:00 am Eastern; reading makes no IRS requests.</span>
         </div>
         <Button variant="outline" render={<Link to="/app/practice/settings" />}>Designee settings</Button>
@@ -57,7 +57,7 @@ export default function TaxNow() {
       {adding && <AddClient onClose={() => setParams({})} onCreated={id => { setParams({}); nav(`/app/practice/clients/${id}`) }} />}
 
       <section className="ds-card p-3 mb-3 flex flex-col gap-2" aria-label="Onboarding">
-        <div className="flex flex-wrap items-baseline gap-2"><h2>Onboarding</h2><span className="text-xs text-muted-foreground">Submitted clients are checked against TaxNow every morning.</span></div>
+        <div className="flex flex-wrap items-baseline gap-2"><h2>Onboarding</h2><span className="text-xs text-muted-foreground">Submitted clients are checked every morning until their IRS records can be read.</span></div>
         <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           {stages.map(st => {
             const items = onboarding.filter(c => st.match(c.stage))
@@ -133,11 +133,11 @@ function ClaimButton({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false)
   return (
     <Button variant="outline" disabled={busy} onClick={async () => {
-      if (!window.confirm('Bring every account in the platform TaxNow org that this practice does not hold yet into this practice? Each becomes a client with its own entity. No IRS requests are made.')) return
+      if (!window.confirm('Bring every IRS account Catipult already reads, and this practice does not hold yet, into this practice? Each becomes a client with its own entity. No IRS requests are made.')) return
       setBusy(true)
       try { const r = await practiceApi.claimAll(); toast.success(`${r.claimed} accounts brought in; their first read is queued.`); onDone() } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not bring them in') }
       setBusy(false)
-    }}>Bring in existing TaxNow accounts</Button>
+    }}>Bring in existing IRS accounts</Button>
   )
 }
 
@@ -153,7 +153,7 @@ function AddClient({ onClose, onCreated }: { onClose: () => void; onCreated: (id
   const toggle = (f: string) => setPayroll(p => (p.includes(f) ? p.filter(x => x !== f) : [...p, f]))
   return (
     <section className="ds-card p-4 mb-3 flex flex-col gap-3 border-primary" aria-label="New client">
-      <div className="flex flex-wrap items-baseline gap-2"><h2>New client</h2><span className="text-xs text-muted-foreground">Creates the client and its Form 8821 naming your designee. Once signed and submitted, TaxNow is checked every morning until the client can be read.</span></div>
+      <div className="flex flex-wrap items-baseline gap-2"><h2>New client</h2><span className="text-xs text-muted-foreground">Creates the client and its Form 8821 naming your designee. Once signed and submitted, Catipult checks every morning until the client’s IRS records can be read.</span></div>
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         <div className="ds-field"><label htmlFor="nc-name">Legal name</label><input id="nc-name" value={name} onChange={e => setName(e.target.value)} /></div>
         <div className="ds-field"><label htmlFor="nc-form">Files</label>
@@ -167,7 +167,7 @@ function AddClient({ onClose, onCreated }: { onClose: () => void; onCreated: (id
         <label className="flex items-center gap-1.5"><input type="checkbox" checked={income} onChange={e => setIncome(e.target.checked)} /> Income</label>
         {['941', '940', '943'].map(f => <label key={f} className="flex items-center gap-1.5"><input type="checkbox" checked={payroll.includes(f)} onChange={() => toggle(f)} /> {f}</label>)}
       </div>
-      <p className="text-xs text-muted-foreground">The EIN is stored encrypted only until TaxNow finds the client. After that only its last four digits are kept.</p>
+      <p className="text-xs text-muted-foreground">The EIN is stored encrypted only until the client’s IRS records can be read. After that only its last four digits are kept.</p>
       {err && <p className="text-sm text-bad">{err}</p>}
       <div className="flex gap-2">
         <Button disabled={!name.trim() || busy} onClick={async () => {

@@ -426,7 +426,7 @@ export async function markSubmitted(sb: SupabaseClient, p: Practice, clientId: s
   if (!c.signature?.id_verified_at) throw new PracticeError(409, 'Verify the signer’s identity first.')
   let listed: string[]
   try { listed = (await (await taxnowFor(p.provider)).listAccounts()).map(a => a.accountId) } catch {
-    throw new PracticeError(502, 'TaxNow could not be reached. Try again in a few minutes.')
+    throw new PracticeError(502, 'IRS records could not be reached right now. Try again in a few minutes.')
   }
   const { error } = await sb.from('practice_client').update({ stage: 'submitted', submitted_at: new Date().toISOString(), accounts_at_submit: listed, updated_at: new Date().toISOString() }).eq('id', c.id)
   if (error) throw new PracticeError(500, error.message)

@@ -9,8 +9,8 @@ import { signInThroughUi, authed } from './helpers'
  *
  * Runs on the fictional demo practice (login in SSM /tax-api/PRACTICE_DEMO_*;
  * `npm run test:e2e:clean` loads it; rebuilt by
- * packages/api/scripts/practice/seed_demo.ts). Its TaxNow is the in-process
- * fixture: no real taxpayer, and an "IRS request" here never leaves the
+ * packages/api/scripts/practice/seed_demo.ts). Its IRS-records provider is the
+ * in-process fixture: no real taxpayer, and an "IRS request" here never leaves the
  * server. The onboarding journey makes its own client and deletes it.
  *
  * The signer's identity check runs at Didit's sandbox (the demo practice is
@@ -80,11 +80,11 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await expect(page.getByRole('region', { name: 'Low officer pay' })).toContainText('Ostrander Millwork Inc')
   })
 
-  test('PJ4 TaxNow: a refused period (451) leads to the client’s authorization', async ({ page }) => {
+  test('PJ4 IRS access: a refused period (451) leads to the client’s authorization', async ({ page }) => {
     await signIn(page)
     await toPractice(page)
-    await nav(page).getByRole('link', { name: 'TaxNow' }).click()
-    await expect(page.getByRole('heading', { name: 'TaxNow', exact: true })).toBeVisible()
+    await nav(page).getByRole('link', { name: 'IRS access' }).click()
+    await expect(page.getByRole('heading', { name: 'IRS access', exact: true })).toBeVisible()
     const gaps = page.getByRole('region', { name: 'Authorization gaps' })
     await expect(gaps).toContainText('2024-03, 2024-06, 2024-09')
     await gaps.getByRole('link', { name: 'Calloway Imaging Partners' }).click()
@@ -97,11 +97,11 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await signIn(page)
     await toPractice(page)
     await removeLeftoverTestClients(page)
-    await nav(page).getByRole('link', { name: 'TaxNow' }).click()
+    await nav(page).getByRole('link', { name: 'IRS access' }).click()
     await page.getByRole('button', { name: 'Add client' }).click()
     const name = `E2E Onboarding ${Date.now()}`
     await page.getByLabel('Legal name').fill(name)
-    // Even last digit: the fixture TaxNow finds it. A fresh TIN each run, so
+    // Even last digit: the fixture provider finds it. A fresh TIN each run, so
     // the account is new to the org, as a first 8821 makes it (one a past run
     // left there would be someone else's, and wait for proof: PJ8).
     const ein = `${String(Math.floor(Math.random() * 1e5)).padStart(5, '0')}0006`
@@ -145,7 +145,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await signIn(page)
     await toPractice(page)
     await removeLeftoverTestClients(page)
-    await nav(page).getByRole('link', { name: 'TaxNow' }).click()
+    await nav(page).getByRole('link', { name: 'IRS access' }).click()
     await page.getByRole('button', { name: 'Add client' }).click()
     const name = `E2E Onboarding held elsewhere ${Date.now()}`
     await page.getByLabel('Legal name').fill(name)
@@ -166,7 +166,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
       await page.getByRole('button', { name: 'Mark submitted' }).click()
       await expect(page.getByText(/Checked 0 times/)).toBeVisible()
       await page.getByRole('button', { name: 'Check now' }).click()
-      // TaxNow finds the TIN, but only through the other firm's 8821: the
+      // The provider finds the TIN, but only through the other firm's 8821: the
       // client reads exactly as one not found yet.
       await expect(page.getByText('Not readable yet. Checked again tomorrow.')).toBeVisible({ timeout: 20_000 })
       await expect(page.getByText(/Checked 1 time,/)).toBeVisible()
@@ -193,6 +193,39 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await expect(send).toBeEnabled()
     await send.click()
     await expect(page.getByText(/queued/)).toBeVisible()
+  })
+
+  test('PJ9 No page names the backend: a preparer sees "IRS records", never the provider', async ({ page }) => {
+    // Mansoor, 2026-10-25: "catipult users should not know anything about the
+    // backend". Walks every practice page and every tab of a client, read
+    // from the DOM (tooltips and labels included), not just the visible text.
+    const named = async (where: string) => {
+      const html = await page.evaluate(() => { const b = document.body.cloneNode(true) as HTMLElement; b.querySelectorAll('script').forEach(s => s.remove()); return b.innerHTML })
+      expect(html, where).not.toMatch(/taxnow/i)
+      expect(page.url(), where).not.toMatch(/taxnow/i)
+    }
+    await signIn(page)
+    await toPractice(page)
+    await named('Clients')
+    for (const [link, heading] of [['Opportunities', 'Opportunities'], ['Deadlines', 'Deadlines'], ['IRS access', 'IRS access'], ['Practice settings', 'Practice settings']]) {
+      await nav(page).getByRole('link', { name: link }).click()
+      await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible()
+      await named(link)
+    }
+    await nav(page).getByRole('link', { name: 'Clients' }).click()
+    await page.getByRole('row', { name: /Calloway Imaging Partners/ }).getByRole('link').first().click()
+    await expect(page.getByRole('heading', { name: 'Calloway Imaging Partners' })).toBeVisible()
+    for (const tab of ['Overview', 'IRS account', 'Returns', 'Authorization']) {
+      await page.getByRole('tab', { name: tab }).click()
+      await expect(page.getByRole('tab', { name: tab })).toHaveAttribute('aria-selected', 'true')
+      await named(`Calloway: ${tab}`)
+    }
+    await page.getByRole('tab', { name: 'IRS account' }).click()
+    await expect(page.getByRole('button', { name: 'Refresh IRS records' })).toBeVisible()
+    await nav(page).getByRole('link', { name: 'Clients' }).click()
+    await page.getByRole('row', { name: /Tallow & Pine Interiors/ }).getByRole('link').first().click()
+    await expect(page.getByRole('heading', { name: 'Readable', exact: true })).toBeVisible()
+    await named('Tallow & Pine onboarding')
   })
 
   test('PJ7 Deadlines: what is due across clients, each opening its client', async ({ page }) => {

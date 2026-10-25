@@ -29,7 +29,7 @@ function CreatePractice({ onCreated }: { onCreated: () => void }) {
     <div className="max-w-xl">
       <PageHeader crumb="Practice" title="Set up your practice" />
       <div className="ds-card p-4 flex flex-col gap-3">
-        <p className="text-muted-foreground">A practice holds your clients. Each client gets its own entity, its IRS records are read through TaxNow once its Form 8821 is on file, and you see every client&apos;s status, deadlines and opportunities in one place.</p>
+        <p className="text-muted-foreground">A practice holds your clients. Each client gets its own entity, its IRS records are read once its Form 8821 is on file, and you see every client&apos;s status, deadlines and opportunities in one place.</p>
         <div className="ds-field">
           <label htmlFor="practice-name">Practice name</label>
           <input id="practice-name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Your firm's name" />

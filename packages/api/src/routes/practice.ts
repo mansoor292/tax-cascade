@@ -16,17 +16,23 @@
  *   POST  /api/practice/clients/:id/id-verified   platform admins only: a check made outside Didit {method}
  *   POST  /api/practice/clients/:id/submitted     the signed 8821 went in; daily checks begin
  *   POST  /api/practice/clients/:id/check         run the onboarding check now
- *   POST  /api/practice/clients/:id/read          queue a read from TaxNow (no IRS request)
+ *   POST  /api/practice/clients/:id/read          queue a refresh of the IRS records on file (no IRS request)
  *   POST  /api/practice/clients/:id/irs-requests  {transcripts:[{type,form,year,month}], confirm:true}
  *                                                  REAL IRS requests under the designee's CAF
  *   GET   /api/practice/opportunities       every finding across clients
- *   GET   /api/practice/coverage            the TaxNow page: access, ages, refusals, onboarding
+ *   GET   /api/practice/coverage            the IRS access page: access, ages, refusals, onboarding
  *   GET   /api/practice/jobs/:id            one background job's state
  *   POST  /api/practice/claim               admin only: assign platform-org accounts {account_ids | all:true}
  *
  * Nothing here returns a full TIN: it is write-only (POST clients) and wiped
  * once the client is readable. Mounted ahead of the SPA fallback (root
  * CLAUDE.md, fact 2).
+ *
+ * Nothing here names the provider either (Mansoor, 2026-10-25: "catipult
+ * users should not know anything about the backend"). A provider failure
+ * answers with IRS_UNREACHABLE and keeps its detail in the log; a failed
+ * job's stored error stays in taxnow_job for us and reaches the browser as
+ * JOB_FAILED.
  */
 import { Router } from 'express'
 import { sendError } from '../lib/http_error.js'
@@ -36,11 +42,14 @@ import {
   form8821, issueSignLink, listClients, markIdVerified, markSubmitted, onboardingCheck, opportunities, requirePractice, signInApp, updatePractice,
 } from '../services/practice.js'
 import { enqueue, type TranscriptKey } from '../services/practice_jobs.js'
+import { TaxNowError } from '../taxnow/client.js'
 import { refreshCheck, returnOrigin, startCheck } from '../services/signer_idv.js'
 import { proofView, submitProof } from '../services/signer_proof.js'
 
 const supabase = lazyServiceClient()
 const router = Router()
+const IRS_UNREACHABLE = 'IRS records could not be reached right now. Try again in a few minutes.'
+const JOB_FAILED = 'This did not finish. Try again in a few minutes.'
 
 type Handler = (req: any, res: any, userId: string) => Promise<unknown>
 const handle = (fn: Handler) => async (req: any, res: any) => {
@@ -50,6 +59,10 @@ const handle = (fn: Handler) => async (req: any, res: any) => {
     await fn(req, res, userId)
   } catch (e: any) {
     if (e instanceof PracticeError) return res.status(e.status).json({ error: e.message })
+    if (e instanceof TaxNowError) {
+      console.error('[practice] provider:', e.message)
+      return res.status(502).json({ error: IRS_UNREACHABLE })
+    }
     sendError(res, e)
   }
 }
@@ -136,7 +149,7 @@ router.post('/clients/:id/check', handle(async (req, res, userId) => {
 router.post('/clients/:id/read', handle(async (req, res, userId) => {
   const p = await requirePractice(supabase, userId)
   const d = await clientDetail(supabase, p, req.params.id)
-  if (!['readable', 'claimed'].includes(d.client.stage)) throw new PracticeError(409, 'TaxNow cannot read this client yet.')
+  if (!['readable', 'claimed'].includes(d.client.stage)) throw new PracticeError(409, 'This client’s IRS records cannot be read yet.')
   res.status(202).json({ job_id: await enqueue(supabase, { kind: 'read_client', practice_id: p.id, user_id: userId, payload: { client_id: req.params.id } }) })
 }))
 
@@ -150,7 +163,7 @@ router.post('/clients/:id/irs-requests', handle(async (req, res, userId) => {
   }
   const p = await requirePractice(supabase, userId)
   const d = await clientDetail(supabase, p, req.params.id)
-  if (!['readable', 'claimed'].includes(d.client.stage)) throw new PracticeError(409, 'TaxNow cannot read this client yet.')
+  if (!['readable', 'claimed'].includes(d.client.stage)) throw new PracticeError(409, 'This client’s IRS records cannot be read yet.')
   const job = await enqueue(supabase, {
     kind: 'irs_request', practice_id: p.id, user_id: userId, confirmed_by: userId,
     payload: { client_id: req.params.id, transcripts: ts.map(t => ({ type: t.type, form: String(t.form), year: +t.year, month: +t.month })) },
@@ -170,7 +183,7 @@ router.get('/jobs/:id', handle(async (req, res, userId) => {
   const { data } = await supabase.from('taxnow_job').select('id, kind, status, result, error, created_at, finished_at, user_id').eq('id', req.params.id).maybeSingle()
   if (!data || data.user_id !== userId) return res.status(404).json({ error: 'No such job.' })
   const { user_id: _u, ...job } = data
-  res.json({ job })
+  res.json({ job: { ...job, error: job.error ? JOB_FAILED : null } })
 }))
 
 router.post('/claim', handle(async (req, res, userId) => {

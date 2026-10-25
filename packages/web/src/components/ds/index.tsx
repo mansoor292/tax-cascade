@@ -57,7 +57,7 @@ export function IrsRequestDialog({ open, onOpenChange, count, scope, onConfirm }
         <DialogHeader>
           <DialogTitle>Request transcripts from the IRS?</DialogTitle>
           <DialogDescription>
-            TaxNow will ask the IRS for <strong>{count} transcript{count === 1 ? '' : 's'}</strong> under your designee&apos;s CAF number. Each one is a real IRS request with its own tracking number. Periods the 8821 does not cover come back refused (451).
+            Catipult will ask the IRS for <strong>{count} transcript{count === 1 ? '' : 's'}</strong> under your designee&apos;s CAF number. Each one is a real IRS request with its own tracking number. Periods the 8821 does not cover come back refused (451).
           </DialogDescription>
         </DialogHeader>
         <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{scope}</div>

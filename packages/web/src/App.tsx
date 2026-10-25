@@ -24,7 +24,7 @@ import PracticeClients from '@/pages/practice/Clients'
 import PracticeClient from '@/pages/practice/Client'
 import PracticeOpportunities from '@/pages/practice/Opportunities'
 import PracticeDeadlines from '@/pages/practice/Deadlines'
-import PracticeTaxNow from '@/pages/practice/TaxNow'
+import PracticeIrsAccess from '@/pages/practice/IrsAccess'
 import PracticeSettings from '@/pages/practice/PracticeSettings'
 import Sign from '@/pages/Sign'
 
@@ -81,7 +81,7 @@ export default function App() {
               <Route path="clients/:id" element={<PracticeClient />} />
               <Route path="opportunities" element={<PracticeOpportunities />} />
               <Route path="deadlines" element={<PracticeDeadlines />} />
-              <Route path="taxnow" element={<PracticeTaxNow />} />
+              <Route path="irs-access" element={<PracticeIrsAccess />} />
               <Route path="settings" element={<PracticeSettings />} />
             </Route>
           </Route>

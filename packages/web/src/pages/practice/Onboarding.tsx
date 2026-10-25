@@ -4,7 +4,7 @@
  * preparer copies to them, or the signer signs here; Catipult verifies the
  * signer's identity (photo ID, selfie and SSN at Didit — api
  * services/signer_idv.ts; the preparer cannot mark it done); the signed 8821 is submitted (how it goes in is still
- * being settled); then TaxNow is checked every morning until it can read the
+ * being settled); then Catipult checks every morning until it can read the
  * client.
  */
 import { useState } from 'react'
@@ -112,16 +112,16 @@ export default function Onboarding({ detail, onChange }: { detail: ClientDetail;
       ), signed && !verified)}
       {step(4, 'Submitted', c.stage === 'submitted', c.stage === 'submitted' ? <p className="text-muted-foreground">Submitted {ago(c.submitted_at)}.</p> : (
         <div className="flex flex-col gap-2">
-          <p className="text-muted-foreground">Once the signed 8821 has gone in, mark it submitted. Catipult then checks TaxNow every morning.</p>
+          <p className="text-muted-foreground">Once the signed 8821 has gone in, mark it submitted. Catipult then checks every morning until the client’s IRS records can be read.</p>
           <div><Button disabled={c.stage !== 'signed' || !verified || busy} onClick={() => run(() => practiceApi.submitted(c.id), 'Marked submitted. Checked every morning from now.')}>Mark submitted</Button></div>
         </div>
       ), signed && verified && c.stage === 'signed')}
-      {step(5, 'Readable in TaxNow', false, (
+      {step(5, 'Readable', false, (
         <div className="flex flex-col gap-2">
           <p className="text-muted-foreground">{c.stage === 'submitted' ? `Checked ${c.check_count} time${c.check_count === 1 ? '' : 's'}${c.last_check_at ? `, last ${ago(c.last_check_at)}` : ''}. Next check tomorrow at 6:00 am Eastern.` : 'Checked daily once submitted.'}</p>
           <div><Button variant="outline" disabled={c.stage !== 'submitted' || busy} onClick={async () => {
             setBusy(true)
-            try { const r = await practiceApi.check(c.id); if (r.found) toast.success('TaxNow can read this client now. Its first read has started.'); else toast.info('Not readable yet. Checked again tomorrow.'); onChange() } catch (e) { toast.error(e instanceof Error ? e.message : 'The check failed') }
+            try { const r = await practiceApi.check(c.id); if (r.found) toast.success('This client’s IRS records can be read now. The first read has started.'); else toast.info('Not readable yet. Checked again tomorrow.'); onChange() } catch (e) { toast.error(e instanceof Error ? e.message : 'The check failed') }
             setBusy(false)
           }}>Check now</Button></div>
         </div>

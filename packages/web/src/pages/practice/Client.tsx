@@ -37,7 +37,7 @@ export default function Client() {
       <div className="ds-card px-4 py-3 mb-3 flex flex-wrap gap-5 items-center">
         <div className="flex flex-col gap-1 flex-1 min-w-[240px]">
           <div className="flex gap-2 items-center flex-wrap"><span className="num text-muted-foreground">{FORM_NAME[s?.income_form ?? c.form_type] ?? c.form_type}</span><Pill tone={STAGE[c.stage].tone}>{STAGE[c.stage].label}</Pill></div>
-          <span className="text-xs text-muted-foreground">{c.tin_last4 ? `EIN ••-•••${c.tin_last4}` : 'EIN not on file'} · {readable ? `read from TaxNow ${ago(c.last_read_at)}` : 'not readable yet'}</span>
+          <span className="text-xs text-muted-foreground">{c.tin_last4 ? `EIN ••-•••${c.tin_last4}` : 'EIN not on file'} · {readable ? `IRS records read ${ago(c.last_read_at)}` : 'not readable yet'}</span>
         </div>
         {readable && [
           ['Balance due', money(s?.balance_due_cents ?? null)],
@@ -70,16 +70,16 @@ function ReadButton({ id, onDone }: { id: string; onDone: () => void }) {
       setBusy(true)
       try {
         const { job_id } = await practiceApi.read(id)
-        toast.info('Reading from TaxNow. No IRS requests are made.')
+        toast.info('Refreshing the IRS records on file. Nothing new is requested from the IRS.')
         for (let i = 0; i < 40; i++) {
           await new Promise(r => setTimeout(r, 3000))
           const { job } = await practiceApi.job(job_id)
-          if (job.status === 'done') { toast.success('Read from TaxNow.'); onDone(); break }
-          if (job.status === 'failed') { toast.error(job.error || 'The read failed.'); break }
+          if (job.status === 'done') { toast.success('IRS records refreshed.'); onDone(); break }
+          if (job.status === 'failed') { toast.error(job.error || 'The refresh failed.'); break }
         }
       } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not start the read') }
       setBusy(false)
-    }}>{busy ? 'Reading…' : 'Refresh from TaxNow'}</Button>
+    }}>{busy ? 'Reading…' : 'Refresh IRS records'}</Button>
   )
 }
 
@@ -142,7 +142,7 @@ function IrsAccount({ data, onRequested }: { data: ClientDetail; onRequested: ()
         </div>
         {never.length > 0 && (
           <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 items-center">
-            <span className="text-muted-foreground text-sm flex-1">{never.length} period{never.length === 1 ? '' : 's'} TaxNow has never pulled.</span>
+            <span className="text-muted-foreground text-sm flex-1">{never.length} period{never.length === 1 ? '' : 's'} never pulled from the IRS.</span>
             <Button variant="outline" size="sm" onClick={() => setAsking(never.map(t => ({ type: 'ACTR', form: t.form, year: t.tax_year, month: t.period_month })))}>Request {never.length} from IRS…</Button>
           </div>
         )}
@@ -179,7 +179,7 @@ function IrsAccount({ data, onRequested }: { data: ClientDetail; onRequested: ()
         scope={<>{data.client.name} · {asking?.slice(0, 6).map(t => `${FORM_NAME[t.form] ?? t.form} ${periodLabel(t.form, t.year, t.month)}`).join(', ')}{(asking?.length ?? 0) > 6 ? ` and ${asking!.length - 6} more` : ''}</>}
         onConfirm={async () => {
           const r = await practiceApi.irsRequests(data.client.id, asking!)
-          toast.success(`${r.count} request${r.count === 1 ? '' : 's'} queued. Results arrive as TaxNow reports them.`)
+          toast.success(`${r.count} request${r.count === 1 ? '' : 's'} queued. Results arrive as the IRS answers.`)
           setTimeout(onRequested, 4000)
         }}
       />
@@ -232,7 +232,7 @@ function Authorization({ data }: { data: ClientDetail }) {
       <div className="ds-card p-4 flex-[1_1_360px] flex flex-col gap-2">
         <h2>Form 8821 on file</h2>
         <span className="text-muted-foreground">Income: {(a.income ?? []).map(f => FORM_NAME[f] ?? f).join(', ') || '—'} · Employment: {(a.payroll ?? []).join(', ') || '—'}{a.from_year ? ` · ${a.from_year}–${a.to_year}` : ''}</span>
-        {a.imported && <span className="text-xs text-muted-foreground">Signed outside Catipult and brought in from TaxNow.</span>}
+        {a.imported && <span className="text-xs text-muted-foreground">Signed outside Catipult and brought in with its IRS records.</span>}
         {data.client.signer && <span className="text-xs text-muted-foreground">Signed by {data.client.signer.name}{data.client.signer.title ? `, ${data.client.signer.title}` : ''} · ID {data.client.signer.id_verified_at ? 'verified' : 'not yet verified'}</span>}
         <span className="text-xs text-muted-foreground">What the IRS actually honours shows in the period grid: a 451 refusal means the 8821 on file does not cover that form or period.</span>
         {!a.imported && <div><Button variant="outline" size="sm" onClick={() => download8821(data.client.id, data.client.name).catch(e => toast.error(e.message))}>Download 8821</Button></div>}

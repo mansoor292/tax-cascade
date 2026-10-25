@@ -42,7 +42,7 @@ export default function Clients() {
 
   return (
     <>
-      <PageHeader crumb={practice.name} title="Clients" actions={<Button render={<Link to="/app/practice/taxnow?add=1" />}>Add client</Button>} />
+      <PageHeader crumb={practice.name} title="Clients" actions={<Button render={<Link to="/app/practice/irs-access?add=1" />}>Add client</Button>} />
       <div className="ds-tiles mb-4">
         <Tile label="IRS holds" value={money(totals.holds, '$0')} sub="credits and refunds not received" to="/app/practice/opportunities?section=income" />
         <Tile label="Penalties that can come off" value={money(totals.penalties, '$0')} sub="unpaid or still refundable" to="/app/practice/opportunities?section=income" />
@@ -68,7 +68,7 @@ export default function Clients() {
               <thead><tr><th>Client</th><th>Return</th><th>IRS access</th><th>Filed through</th><th className="r">Balance due</th><th className="r">IRS holds</th><th className="r">Opportunities</th><th>Transcripts</th></tr></thead>
               <tbody>
                 {loading && !clients.length ? <tr><td colSpan={8} className="text-muted-foreground">Loading clients…</td></tr> : null}
-                {!loading && !clients.length ? <tr><td colSpan={8} className="text-muted-foreground">No clients yet. <Link className="ds-rowlink" to="/app/practice/taxnow?add=1">Add the first one</Link>.</td></tr> : null}
+                {!loading && !clients.length ? <tr><td colSpan={8} className="text-muted-foreground">No clients yet. <Link className="ds-rowlink" to="/app/practice/irs-access?add=1">Add the first one</Link>.</td></tr> : null}
                 {shown.map(c => {
                   const s = c.summary
                   const stage = STAGE[c.stage]

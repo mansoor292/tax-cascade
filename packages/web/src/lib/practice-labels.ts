@@ -10,7 +10,7 @@ export const STATUS: Record<PeriodStatus, { label: string; glyph: string; meanin
   activity_no_return: { label: 'Activity, no return', glyph: 'act', meaning: 'Activity on the period, no return yet. Often a quarter in progress.' },
   no_irs_account: { label: 'No IRS account', glyph: '–', meaning: '"Requested data not found": authorized, nothing there.' },
   not_authorized: { label: 'Refused (451)', glyph: '451', meaning: 'The IRS refused: the 8821 on file does not cover this form or period.' },
-  never_synced: { label: 'Never pulled', glyph: '?', meaning: 'TaxNow has never pulled this transcript. Requesting it is an IRS request.' },
+  never_synced: { label: 'Never pulled', glyph: '?', meaning: 'Never pulled from the IRS. Requesting it is an IRS request.' },
 }
 export const STATUS_ORDER: PeriodStatus[] = ['filed', 'no_return_filed', 'activity_no_return', 'no_irs_account', 'not_authorized', 'never_synced']
 
