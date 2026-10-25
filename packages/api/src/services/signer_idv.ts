@@ -152,7 +152,7 @@ export async function startCheck(sb: SupabaseClient, p: Pick<Practice, 'id' | 'p
   if (!ssn) throw new PracticeError(400, 'Enter the signer’s 9-digit Social Security number.')
   // An individual signs their own 8821: the SSN is the taxpayer's TIN.
   if (isIndividual(c.form_type ?? '') && c.tin && c.tin.replace(/\D/g, '') !== ssn) throw new PracticeError(400, 'For an individual, the signer’s SSN must be the taxpayer’s own.')
-  const prev = c.signature.idv as Idv | undefined
+  const prev = c.signature?.idv as Idv | undefined // none yet: the check now comes before signing
   let s
   try {
     s = await createSession(env, { vendorData: c.id, callback, metadata: { practice_client: c.id } })
