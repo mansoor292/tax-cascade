@@ -26,6 +26,7 @@ import PracticeOpportunities from '@/pages/practice/Opportunities'
 import PracticeDeadlines from '@/pages/practice/Deadlines'
 import PracticeIrsAccess from '@/pages/practice/IrsAccess'
 import PracticeSettings from '@/pages/practice/PracticeSettings'
+import PracticeFilingDesk from '@/pages/practice/FilingDesk'
 import Sign from '@/pages/Sign'
 
 /**
@@ -83,6 +84,7 @@ export default function App() {
               <Route path="deadlines" element={<PracticeDeadlines />} />
               <Route path="irs-access" element={<PracticeIrsAccess />} />
               <Route path="settings" element={<PracticeSettings />} />
+              <Route path="filing" element={<PracticeFilingDesk />} />
             </Route>
           </Route>
           {/* Legacy route redirects */}

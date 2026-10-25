@@ -49,7 +49,13 @@ export interface ClientDetail {
     id: string; entity_id: string; name: string; form_type: string; stage: Stage; tin_last4: string | null
     authorization_scope: { income?: string[]; payroll?: string[]; from_year?: number; to_year?: number; year_end_month?: number; imported?: boolean }
     signed_at: string | null; submitted_at: string | null; last_check_at: string | null; check_count: number; readable_at: string | null; last_read_at: string | null
-    summary: ClientSummary | null; signer: { name: string; title: string; id_verified_at: string | null; id_method: string | null; method: string; idv: IdentityCheck | null; proof: MembershipProof | null } | null
+    summary: ClientSummary | null
+    /** Verified first, signed second: `signed_at` is set only once they have drawn. */
+    signer: {
+      name: string; title: string; id_verified_at: string | null; id_method: string | null; method: 'link' | 'in_app' | null
+      idv: IdentityCheck | null; proof: MembershipProof | null; print_name: string | null; signed_copy_sha256: string | null
+    } | null
+    filing: { sent_at: string | null; confirmed_at: string | null }
   }
   transcripts: Transcript[]
   findings: Finding[]
@@ -60,6 +66,16 @@ export interface Coverage {
   gaps: Array<{ client_id: string; client_name: string; form: string; periods: string[] }>
   ages: { under_30: number; d30_90: number; d90_365: number; over_365: number; never: number; refused: number }
 }
+
+/** A signed 8821 on the staff filing desk. */
+export interface FilingItem {
+  id: string; client: string; form_type: string; practice: string; tin_last4: string | null; stage: Stage
+  signed_at: string; signer: string; test_check: boolean; sha256: string
+  submission: { sent_at: string; sent_by: string; sent_to: string; note: string | null; confirmed_at?: string; confirmation_note?: string | null } | null
+  confirmed_at: string | null
+}
+export interface DrawnSignature { signature_png: string; signer_title: string; agree: boolean }
+export interface CheckStart { signer_name?: string; signer_title?: string; ssn: string }
 
 function useResource<T>(path: string | null) {
   const [data, setData] = useState<T | null>(null)
@@ -83,18 +99,18 @@ function useResource<T>(path: string | null) {
 
 /** The practice, or `none` when this login has not created one yet. */
 export function usePractice() {
-  const [state, setState] = useState<{ practice: Practice | null; designee: Designee | null; admin: boolean; none: boolean }>({ practice: null, designee: null, admin: false, none: false })
+  const [state, setState] = useState<{ practice: Practice | null; designee: Designee | null; admin: boolean; staff: boolean; none: boolean }>({ practice: null, designee: null, admin: false, staff: false, none: false })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const r = await api<{ practice: Practice; designee: Designee; admin: boolean }>('/api/practice')
-      setState({ practice: r.practice, designee: r.designee, admin: r.admin, none: false })
+      const r = await api<{ practice: Practice; designee: Designee; admin: boolean; staff: boolean }>('/api/practice')
+      setState({ practice: r.practice, designee: r.designee, admin: r.admin, staff: !!r.staff, none: false })
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load'
-      if (/No practice yet/.test(msg)) setState({ practice: null, designee: null, admin: false, none: true })
+      if (/No practice yet/.test(msg)) setState({ practice: null, designee: null, admin: false, staff: false, none: true })
       else setError(msg)
     }
     setLoading(false)
@@ -113,19 +129,29 @@ export const useOpportunities = () => {
 }
 export const usePracticeClient = (id: string | undefined) => useResource<ClientDetail>(id ? `/api/practice/clients/${id}` : null)
 export const useCoverage = () => useResource<Coverage>('/api/practice/coverage')
+export const useFilingDesk = () => {
+  const r = useResource<{ items: FilingItem[] }>('/api/practice/filing')
+  return { items: r.data?.items ?? [], loading: r.loading, error: r.error, reload: r.reload }
+}
 
-/** Fetch the client's filled Form 8821 (authenticated) and save it. */
-export async function download8821(clientId: string, name: string) {
+async function savePdf(path: string, filename: string) {
   const { data } = await supabase.auth.getSession()
-  const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/practice/clients/${clientId}/8821.pdf`, { headers: data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {} })
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not make the 8821')
+  const res = await fetch(`${import.meta.env.VITE_API_URL || ''}${path}`, { headers: data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {} })
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not get the 8821')
   const url = URL.createObjectURL(await res.blob())
   const a = document.createElement('a')
   a.href = url
-  a.download = `${name.replace(/[^A-Za-z0-9]+/g, '_')}_8821.pdf`
+  a.download = filename
   a.click()
   URL.revokeObjectURL(url)
 }
+
+/** The client's Form 8821 (authenticated): the fillable draft, or once signed the signed copy. */
+export const download8821 = (clientId: string, name: string, signed = false) =>
+  savePdf(`/api/practice/clients/${clientId}/8821.pdf`, `${name.replace(/[^A-Za-z0-9]+/g, '_')}_8821${signed ? '_signed' : ''}.pdf`)
+/** Staff: the kept signed copy, exactly as it is sent. */
+export const downloadSigned8821 = (clientId: string, name: string) =>
+  savePdf(`/api/practice/filing/${clientId}/8821.pdf`, `${name.replace(/[^A-Za-z0-9]+/g, '_')}_8821_signed.pdf`)
 
 export const practiceApi = {
   create: (name: string) => api('/api/practice', { method: 'POST', body: JSON.stringify({ name }) }),
@@ -133,12 +159,12 @@ export const practiceApi = {
   createClient: (body: { name: string; form_type: string; tin?: string; year_end_month?: number; scope?: { income?: boolean; payroll?: string[] } }) =>
     api<{ id: string; entity_id: string }>('/api/practice/clients', { method: 'POST', body: JSON.stringify(body) }),
   signLink: (id: string) => api<{ path: string; expires: string }>(`/api/practice/clients/${id}/sign-link`, { method: 'POST' }),
-  signInApp: (id: string, body: { signer_name: string; signer_title: string; typed_signature: string; agree: boolean }) =>
-    api(`/api/practice/clients/${id}/sign`, { method: 'POST', body: JSON.stringify(body) }),
-  verifySigner: (id: string, ssn: string) => api<{ url: string; session_id: string }>(`/api/practice/clients/${id}/verify`, { method: 'POST', body: JSON.stringify({ ssn }) }),
+  signInApp: (id: string, body: DrawnSignature) => api(`/api/practice/clients/${id}/sign`, { method: 'POST', body: JSON.stringify(body) }),
+  verifySigner: (id: string, body: CheckStart) => api<{ url: string; session_id: string }>(`/api/practice/clients/${id}/verify`, { method: 'POST', body: JSON.stringify(body) }),
   submitProof: (id: string, body: { file_name: string; content_base64: string }) => api<MembershipProof>(`/api/practice/clients/${id}/proof`, { method: 'POST', body: JSON.stringify(body) }),
-  idVerified: (id: string, method: string) => api(`/api/practice/clients/${id}/id-verified`, { method: 'POST', body: JSON.stringify({ method }) }),
-  submitted: (id: string) => api(`/api/practice/clients/${id}/submitted`, { method: 'POST' }),
+  idVerified: (id: string, body: { method: string; signer_name?: string; signer_title?: string }) => api(`/api/practice/clients/${id}/id-verified`, { method: 'POST', body: JSON.stringify(body) }),
+  filingSent: (id: string, body: { sent_to: string; note?: string }) => api(`/api/practice/filing/${id}/sent`, { method: 'POST', body: JSON.stringify(body) }),
+  filingConfirmed: (id: string, body: { note?: string }) => api(`/api/practice/filing/${id}/confirmed`, { method: 'POST', body: JSON.stringify(body) }),
   check: (id: string) => api<{ found: boolean }>(`/api/practice/clients/${id}/check`, { method: 'POST' }),
   read: (id: string) => api<{ job_id: string }>(`/api/practice/clients/${id}/read`, { method: 'POST' }),
   irsRequests: (id: string, transcripts: Array<{ type: 'ACTR' | 'RETR'; form: string; year: number; month: number }>) =>

@@ -8,14 +8,20 @@
  *   GET   /api/practice/clients             every client with its roll-up
  *   POST  /api/practice/clients             new client {name, form_type, tin?, year_end_month?, scope?}
  *   GET   /api/practice/clients/:id         one client: transcripts, findings
- *   GET   /api/practice/clients/:id/8821.pdf      the client's Form 8821, filled (full TIN while pending)
+ *   GET   /api/practice/clients/:id/8821.pdf      the client's Form 8821: the fillable draft (full TIN while
+ *                                                  pending), or once signed the kept signed copy
  *   POST  /api/practice/clients/:id/sign-link     a fresh signature link (token shown once)
- *   POST  /api/practice/clients/:id/sign          sign in the app {signer_name, signer_title, typed_signature, agree}
- *   POST  /api/practice/clients/:id/verify        the signer is here: start their identity check {ssn} → {url}
+ *   POST  /api/practice/clients/:id/verify        the signer is here: start their identity check {signer_name, signer_title, ssn} → {url}
  *   POST  /api/practice/clients/:id/proof         a business signer's proof they belong to it {file_name, content_base64}
- *   POST  /api/practice/clients/:id/id-verified   platform admins only: a check made outside Didit {method}
- *   POST  /api/practice/clients/:id/submitted     the signed 8821 went in; daily checks begin
+ *   POST  /api/practice/clients/:id/sign          the verified signer is here and draws {signature_png, signer_title?, agree}
+ *   POST  /api/practice/clients/:id/id-verified   platform admins only: a check made outside Didit {method, signer_name?, signer_title?}
  *   POST  /api/practice/clients/:id/check         run the onboarding check now
+ *
+ *   Staff (practice_filing.ts — platform admins; the fictional-TaxNow practice for its own clients):
+ *   GET   /api/practice/filing                    signed 8821s to send, and sent ones awaiting TaxNow's confirmation
+ *   GET   /api/practice/filing/:id/8821.pdf       the kept signed copy, as sent
+ *   POST  /api/practice/filing/:id/sent           sent to TaxNow's staff {sent_to, note?}; daily checks begin
+ *   POST  /api/practice/filing/:id/confirmed      TaxNow's staff confirmed they submitted it {note?} → submission_confirmed_at
  *   POST  /api/practice/clients/:id/read          queue a refresh of the IRS records on file (no IRS request)
  *   POST  /api/practice/clients/:id/irs-requests  {transcripts:[{type,form,year,month}], confirm:true}
  *                                                  REAL IRS requests under the designee's CAF
@@ -39,8 +45,9 @@ import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 import {
   PracticeError, claimAccounts, clientDetail, coverage, createClient, createPractice, designeeOf, getPractice, isPlatformAdmin,
-  form8821, issueSignLink, listClients, markIdVerified, markSubmitted, onboardingCheck, opportunities, requirePractice, signInApp, updatePractice,
+  form8821, issueSignLink, listClients, markIdVerified, onboardingCheck, opportunities, requirePractice, updatePractice,
 } from '../services/practice.js'
+import { confirmFiled, filingQueue, markSent, sign, signedCopy, staffScope } from '../services/practice_filing.js'
 import { enqueue, type TranscriptKey } from '../services/practice_jobs.js'
 import { TaxNowError } from '../taxnow/client.js'
 import { refreshCheck, returnOrigin, startCheck } from '../services/signer_idv.js'
@@ -70,7 +77,8 @@ const handle = (fn: Handler) => async (req: any, res: any) => {
 router.get('/', handle(async (_req, res, userId) => {
   const p = await getPractice(supabase, userId)
   if (!p) return res.status(404).json({ error: 'No practice yet.', admin: isPlatformAdmin(userId) })
-  res.json({ practice: { id: p.id, name: p.name, designee_mode: p.designee_mode, designee: p.designee, provider: p.provider }, designee: designeeOf(p), admin: isPlatformAdmin(userId) })
+  const staff = await staffScope(supabase, userId)
+  res.json({ practice: { id: p.id, name: p.name, designee_mode: p.designee_mode, designee: p.designee, provider: p.provider }, designee: designeeOf(p), admin: isPlatformAdmin(userId), staff: staff === 'all' || staff.length > 0 })
 }))
 
 router.post('/', handle(async (req, res, userId) => {
@@ -104,7 +112,9 @@ router.get('/clients/:id', handle(async (req, res, userId) => {
 }))
 
 router.get('/clients/:id/8821.pdf', handle(async (req, res, userId) => {
-  const r = await form8821(supabase, await requirePractice(supabase, userId), req.params.id, { fullTin: true })
+  const p = await requirePractice(supabase, userId)
+  const d = await clientDetail(supabase, p, req.params.id) // ownership
+  const r = d.client.signer?.signed_copy_sha256 ? await signedCopy(supabase, req.params.id) : await form8821(supabase, p, req.params.id, { fullTin: true })
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `attachment; filename="${r.filename}"`)
   res.setHeader('Cache-Control', 'no-store')
@@ -117,12 +127,13 @@ router.post('/clients/:id/sign-link', handle(async (req, res, userId) => {
 }))
 
 router.post('/clients/:id/sign', handle(async (req, res, userId) => {
-  res.json(await signInApp(supabase, await requirePractice(supabase, userId), req.params.id, req.body ?? {}, userId))
+  await clientDetail(supabase, await requirePractice(supabase, userId), req.params.id) // ownership
+  res.json(await sign(supabase, req.params.id, req.body ?? {}, { method: 'in_app', userId }))
 }))
 
 router.post('/clients/:id/verify', handle(async (req, res, userId) => {
   const p = await requirePractice(supabase, userId)
-  res.json(await startCheck(supabase, p, req.params.id, req.body?.ssn, `${returnOrigin(req.get('origin'))}/app/practice/clients/${req.params.id}`))
+  res.json(await startCheck(supabase, p, req.params.id, req.body ?? {}, `${returnOrigin(req.get('origin'))}/app/practice/clients/${req.params.id}`))
 }))
 
 router.post('/clients/:id/proof', handle(async (req, res, userId) => {
@@ -131,11 +142,7 @@ router.post('/clients/:id/proof', handle(async (req, res, userId) => {
 
 router.post('/clients/:id/id-verified', handle(async (req, res, userId) => {
   if (!isPlatformAdmin(userId)) throw new PracticeError(403, 'Only Catipult staff can record a check made outside the identity service.')
-  res.json(await markIdVerified(supabase, await requirePractice(supabase, userId), req.params.id, String(req.body?.method ?? 'manual')))
-}))
-
-router.post('/clients/:id/submitted', handle(async (req, res, userId) => {
-  res.json(await markSubmitted(supabase, await requirePractice(supabase, userId), req.params.id))
+  res.json(await markIdVerified(supabase, await requirePractice(supabase, userId), req.params.id, req.body ?? {}))
 }))
 
 router.post('/clients/:id/check', handle(async (req, res, userId) => {
@@ -184,6 +191,31 @@ router.get('/jobs/:id', handle(async (req, res, userId) => {
   if (!data || data.user_id !== userId) return res.status(404).json({ error: 'No such job.' })
   const { user_id: _u, ...job } = data
   res.json({ job: { ...job, error: job.error ? JOB_FAILED : null } })
+}))
+
+router.get('/filing', handle(async (_req, res, userId) => {
+  res.json({ items: await filingQueue(supabase, userId) })
+}))
+
+router.get('/filing/:id/8821.pdf', handle(async (req, res, userId) => {
+  // Scope first: staff may open any practice's copy, nobody else this route.
+  const { data: c } = await supabase.from('practice_client').select('practice_id').eq('id', req.params.id).maybeSingle()
+  if (!c) throw new PracticeError(404, 'No such client.')
+  const scope = await staffScope(supabase, userId)
+  if (scope !== 'all' && !scope.includes(c.practice_id)) throw new PracticeError(403, 'Only Catipult staff can do this.')
+  const r = await signedCopy(supabase, req.params.id)
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="${r.filename}"`)
+  res.setHeader('Cache-Control', 'no-store')
+  res.send(r.pdf)
+}))
+
+router.post('/filing/:id/sent', handle(async (req, res, userId) => {
+  res.json(await markSent(supabase, userId, req.params.id, req.body ?? {}))
+}))
+
+router.post('/filing/:id/confirmed', handle(async (req, res, userId) => {
+  res.json(await confirmFiled(supabase, userId, req.params.id, req.body ?? {}))
 }))
 
 router.post('/claim', handle(async (req, res, userId) => {

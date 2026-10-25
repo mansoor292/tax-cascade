@@ -3,10 +3,21 @@
  *
  * Catipult creates the 8821 (Mansoor, 2026-10-24): taxpayer, the practice's
  * designee (its own CAF, or the platform's for practitioners without one),
- * the forms and periods to read, and — once signed — the signer's name and
- * title. Generated on request and streamed, never stored: while onboarding is
- * pending it carries the full TIN (decrypted for this response only); after
- * the client is readable the TIN has been wiped and only the last four print.
+ * the forms and periods to read. Two shapes:
+ *   - the DRAFT (fill8821): a fillable form, generated on request and never
+ *     stored, line 6 left blank. While onboarding is pending it carries the
+ *     full TIN (decrypted for this response only).
+ *   - the SIGNED copy (signed8821, 2026-10-25): what goes to TaxNow's staff,
+ *     who submit it to the IRS. The signer is verified first (Didit), then
+ *     draws a signature; their name prints as read off the verified ID, the
+ *     drawing sits on the signature line, the form is flattened so nothing
+ *     can be retyped, and a last page records who signed, how they were
+ *     verified, and when. It is made once, at signing, and kept (encrypted)
+ *     as the record of exactly what was sent (services/practice.ts).
+ *
+ * Line 6 of the blank has fields only for Print Name (f1_32) and Title
+ * (f1_33); Signature and Date are bare lines above them, so the drawing and
+ * the date are placed by position (SIG_BOX, DATE_AT, measured on Rev. 01-2021).
  *
  * Field names are the blank's widgets (data/irs_forms/f8821.pdf, Rev. as
  * downloaded from irs.gov/pub/irs-pdf/f8821.pdf); each one's meaning is the
@@ -15,7 +26,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PDFDocument, PDFName, PDFDict } from 'pdf-lib'
+import { PDFDocument, PDFName, PDFDict, StandardFonts, rgb } from 'pdf-lib'
 
 const BLANK = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'data', 'irs_forms', 'f8821.pdf')
 const P = 'topmostSubform[0].Page1[0].'
@@ -34,16 +45,34 @@ const F = {
     [`${P}Table_Line3[0].BodyRow2[0].f1_24[0]`, `${P}Table_Line3[0].BodyRow2[0].f1_25[0]`, `${P}Table_Line3[0].BodyRow2[0].f1_26[0]`, `${P}Table_Line3[0].BodyRow2[0].f1_27[0]`],
     [`${P}Table_Line3[0].BodyRow3[0].f1_28[0]`, `${P}Table_Line3[0].BodyRow3[0].f1_29[0]`, `${P}Table_Line3[0].BodyRow3[0].f1_30[0]`, `${P}Table_Line3[0].BodyRow3[0].f1_31[0]`],
   ],
-  signature: `${P}f1_32[0]`,    // 6. Taxpayer signature
+  printName: `${P}f1_32[0]`,    // 6. Print Name
   title: `${P}f1_33[0]`,        // 6. Title (if applicable)
 }
+
+// Line 6, page 1, in PDF points from the bottom left: the Signature line runs
+// x 58–430 at y 131, the Date column starts at x 436 on the same line. The
+// box dips a little below the line, as a hand signature does.
+const SIG_BOX = { x: 60, y: 124, width: 360, height: 34 }
+const DATE_AT = { x: 442, y: 135 }
 
 export interface F8821Input {
   taxpayer: { name: string; address?: string; phone?: string }
   tin: string                     // full TIN while pending, else masked (XX-XXX1234)
   designee: { name?: string; address?: string; city?: string; state?: string; zip?: string; caf?: string; ptin?: string; phone?: string; fax?: string }
   scope: { income?: string[]; payroll?: string[]; from_year?: number; to_year?: number; year_end_month?: number }
-  signer?: { name: string; title?: string; signedAt?: string; electronic?: boolean } | null
+}
+
+/** What a signed copy adds to the draft. */
+export interface SignedInput {
+  /** The name read off the signer's verified ID: it prints as line 6's Print Name. */
+  name: string
+  title?: string
+  /** ISO time of signing; its date prints on the Date line. */
+  signedAt: string
+  /** The signature as drawn, a PNG. */
+  png: Uint8Array
+  /** The record printed on the last page, one "label: value" per line. */
+  audit: Array<[string, string]>
 }
 
 const FORM_LABEL: Record<string, string> = { '1120S': '1120-S', '1120': '1120', '1065': '1065', '1040': '1040' }
@@ -66,7 +95,12 @@ export function line3Rows(scope: F8821Input['scope']): Array<[string, string, st
   return rows.slice(0, 3)
 }
 
+/** The draft: every field filled but line 6, still fillable. */
 export async function fill8821(input: F8821Input): Promise<Uint8Array> {
+  return (await filled(input)).save()
+}
+
+async function filled(input: F8821Input): Promise<PDFDocument> {
   const pdf = await PDFDocument.load(readFileSync(BLANK), { ignoreEncryption: true })
   // The blank is an XFA form; drop the XFA so viewers show the AcroForm values set here.
   const acro = pdf.catalog.lookupMaybe(PDFName.of('AcroForm'), PDFDict)
@@ -83,11 +117,57 @@ export async function fill8821(input: F8821Input): Promise<Uint8Array> {
   set(F.dPhone, d.phone)
   set(F.dFax, d.fax)
   line3Rows(input.scope).forEach((row, i) => row.forEach((v, j) => set(F.rows[i][j], v)))
-  if (input.signer) {
-    const when = input.signer.signedAt ? ` ${input.signer.signedAt.slice(0, 10)}` : ''
-    set(F.signature, input.signer.electronic ? `/s/ ${input.signer.name}${when}` : input.signer.name)
-    set(F.title, input.signer.title)
-  }
   form.updateFieldAppearances()
+  return pdf
+}
+
+/** The signed copy: the draft with line 6 completed, flattened, plus the
+ *  signing record as a last page. */
+export async function signed8821(input: F8821Input, s: SignedInput): Promise<Uint8Array> {
+  const pdf = await filled(input)
+  const form = pdf.getForm()
+  form.getTextField(F.printName).setText(s.name)
+  if (s.title) form.getTextField(F.title).setText(s.title)
+  form.updateFieldAppearances()
+  form.flatten()
+
+  const page = pdf.getPage(0)
+  const img = await pdf.embedPng(s.png)
+  // Fit the drawing in the box, keeping its shape, resting on the line.
+  const k = Math.min(SIG_BOX.width / img.width, SIG_BOX.height / img.height)
+  page.drawImage(img, { x: SIG_BOX.x, y: SIG_BOX.y, width: img.width * k, height: img.height * k })
+  const font = await pdf.embedFont(StandardFonts.Helvetica)
+  page.drawText(usDate(s.signedAt), { x: DATE_AT.x, y: DATE_AT.y, size: 10, font })
+
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
+  const audit = pdf.addPage([612, 792])
+  let y = 740
+  audit.drawText('Form 8821 — electronic signature record', { x: 50, y, size: 14, font: bold })
+  y -= 22
+  for (const line of wrap('The taxpayer signed page 1 of this form electronically, after their identity was verified as recorded below. This page is part of the signed form.', 90)) {
+    audit.drawText(line, { x: 50, y, size: 10, font, color: rgb(0.25, 0.25, 0.25) }); y -= 14
+  }
+  y -= 10
+  for (const [label, value] of s.audit) {
+    const lines = wrap(value, 62)
+    audit.drawText(label, { x: 50, y, size: 10, font: bold })
+    for (const line of lines) { audit.drawText(line, { x: 210, y, size: 10, font }); y -= 14 }
+    y -= 4
+  }
   return pdf.save()
+}
+
+export function usDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${m}/${d}/${y}`
+}
+
+function wrap(text: string, width: number): string[] {
+  const out: string[] = []
+  let cur = ''
+  for (const w of text.split(/\s+/)) {
+    if (cur && (cur + ' ' + w).length > width) { out.push(cur); cur = w } else cur = cur ? `${cur} ${w}` : w
+  }
+  if (cur) out.push(cur)
+  return out.length ? out : ['']
 }

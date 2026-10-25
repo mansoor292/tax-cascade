@@ -1,16 +1,23 @@
 /** The 8821 fill, on fictional values: each line lands in its box. */
 import { describe, it, expect } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
-import { fill8821, line3Rows, formatTin } from './f8821.js'
+import { fill8821, signed8821, line3Rows, formatTin, usDate, type F8821Input } from './f8821.js'
+import { scribblePng } from '../lib/scribble_png.js'
+
+const INPUT: F8821Input = {
+  taxpayer: { name: 'Example Fictional LLC', address: '1 Example Way\nSpringfield IL 62701' },
+  tin: '000000004',
+  designee: { name: 'Dana Fictional, EA', address: '2 Sample St', city: 'Springfield', state: 'IL', zip: '62701', caf: '0000-00000R', phone: '555-0100' },
+  scope: { income: ['1120S'], payroll: ['941', '940'], from_year: 2018, to_year: 2027, year_end_month: 6 },
+}
 
 describe('Form 8821', () => {
-  it('fills taxpayer, designee, line 3 and the signer', async () => {
+  it('the draft fills taxpayer, designee and line 3, leaves line 6 blank, and stays fillable', async () => {
     const bytes = await fill8821({
       taxpayer: { name: 'Example Fictional LLC', address: '1 Example Way\nSpringfield IL 62701' },
       tin: '000000004',
       designee: { name: 'Dana Fictional, EA', address: '2 Sample St', city: 'Springfield', state: 'IL', zip: '62701', caf: '0000-00000R', phone: '555-0100' },
       scope: { income: ['1120S'], payroll: ['941', '940'], from_year: 2018, to_year: 2027, year_end_month: 6 },
-      signer: { name: 'Pat Example', title: 'President', signedAt: '2026-10-24T12:00:00Z', electronic: true },
     })
     const form = (await PDFDocument.load(bytes)).getForm()
     const v = (n: string) => form.getTextField(`topmostSubform[0].Page1[0].${n}`).getText()
@@ -20,8 +27,18 @@ describe('Form 8821', () => {
     expect(v('Table_Line3[0].BodyRow1[0].f1_21[0]')).toBe('1120-S')
     expect(v('Table_Line3[0].BodyRow1[0].f1_22[0]')).toBe('Tax years ending June 2018 through June 2027')
     expect(v('Table_Line3[0].BodyRow2[0].f1_25[0]')).toBe('941, 940')
-    expect(v('f1_32[0]')).toBe('/s/ Pat Example 2026-10-24')
-    expect(v('f1_33[0]')).toBe('President')
+    expect(v('f1_32[0]') ?? '').toBe('')
+    expect(v('f1_33[0]') ?? '').toBe('')
+  })
+  it('the signed copy prints the verified name, is flattened, and ends with the signing record', async () => {
+    const bytes = await signed8821(INPUT, {
+      name: 'PAT EXAMPLE', title: 'President', signedAt: '2026-10-25T14:03:00Z', png: new Uint8Array(scribblePng()),
+      audit: [['Signed by', 'PAT EXAMPLE, President'], ['Identity verified', 'by Didit (TEST CHECK)']],
+    })
+    const pdf = await PDFDocument.load(bytes)
+    expect(pdf.getForm().getFields()).toHaveLength(0) // nothing left to retype
+    expect(pdf.getPageCount()).toBe(2)
+    expect(usDate('2026-10-25T14:03:00Z')).toBe('10/25/2026')
   })
   it('a masked TIN stays masked; December years read plainly', () => {
     expect(formatTin('XX-XXX0004')).toBe('XX-XXX0004')

@@ -22,7 +22,9 @@
  */
 import '../../src/bootstrap_env.js'
 import { serviceClient } from '../../src/lib/supabase.js'
-import { claimAccounts, createClient, issueSignLink, signInApp, markIdVerified, markSubmitted, type Practice } from '../../src/services/practice.js'
+import { claimAccounts, createClient, issueSignLink, markIdVerified, type Practice } from '../../src/services/practice.js'
+import { markSent, sign } from '../../src/services/practice_filing.js'
+import { scribblePng } from '../../src/lib/scribble_png.js'
 import { readClient, type ClientRow } from '../../src/services/practice_read.js'
 import { runJob } from '../../src/services/practice_jobs.js'
 import { FIXTURE_ACCOUNTS, FIXTURE_HELD_ELSEWHERE } from '../../src/taxnow/fixture.js'
@@ -78,9 +80,11 @@ async function main() {
   const waiting = await createClient(sb, practice, { name: 'Tallow & Pine Interiors', form_type: '1120S' })
   await issueSignLink(sb, practice, waiting.id)
   const submitted = await createClient(sb, practice, { name: 'Bluegill Landscaping LLC', form_type: '1120S', tin: '000000003' })
-  await signInApp(sb, practice, submitted.id, { signer_name: 'Pat Example', signer_title: 'Managing member', typed_signature: 'Pat Example', agree: true }, userId)
-  await markIdVerified(sb, practice, submitted.id, 'demo')
-  await markSubmitted(sb, practice, submitted.id)
+  // Verified first, then signed (practice_filing.ts); sent by the demo
+  // practice acting as staff, as only a fictional-TaxNow practice may.
+  await markIdVerified(sb, practice, submitted.id, { method: 'demo', signer_name: 'Pat Example', signer_title: 'Managing member' })
+  await sign(sb, submitted.id, { signature_png: scribblePng().toString('base64'), agree: true }, { method: 'in_app', userId })
+  await markSent(sb, userId, submitted.id, { sent_to: 'filing partner (demo)' })
   console.log(`demo practice ${p.id}: ${claimed.claimed} clients read, 2 onboarding`)
 }
 

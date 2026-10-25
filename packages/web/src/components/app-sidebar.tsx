@@ -19,6 +19,7 @@ import {
   BadgeDollarSign,
   ShieldCheck,
   Settings2,
+  Send,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -34,6 +35,7 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar'
 import { useEntities, type Entity } from '@/hooks/use-entities'
+import { usePractice } from '@/hooks/use-practice'
 import { Skeleton } from '@/components/ui/skeleton'
 import { maskTaxId } from '@/lib/mask'
 import { FORM_TYPE_LABEL } from '@/lib/labels'
@@ -98,6 +100,9 @@ export function AppSidebar() {
 }
 
 function PracticeSidebar() {
+  // Catipult staff also get the filing desk (api services/practice_filing.ts).
+  const { staff } = usePractice()
+  const links = staff ? [...practiceNav, { to: '/app/practice/filing', label: 'Filing desk', icon: Send, end: false }] : practiceNav
   return (
     <Sidebar>
       <SidebarHeader className="px-4 py-3">
@@ -113,7 +118,7 @@ function PracticeSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {practiceNav.map(l => (
+              {links.map(l => (
                 <SidebarMenuItem key={l.to}>
                   <SidebarMenuButton render={<NavLink to={l.to} end={l.end} />}>
                     <l.icon className="shrink-0" />

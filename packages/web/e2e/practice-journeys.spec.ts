@@ -92,7 +92,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await expect(page.getByText(/refused \(451\)/)).toBeVisible()
   })
 
-  test('PJ5 Onboarding: add a client, the client signs by link and proves who they are, submit, check → readable', async ({ page, browser }) => {
+  test('PJ5 Onboarding: add a client; by link the client proves who they are, then draws a signature; staff send it; check → readable', async ({ page, browser }) => {
     test.skip(!DIDIT_SANDBOX_KEY, 'DIDIT_SANDBOX_API_KEY not set')
     await signIn(page)
     await toPractice(page)
@@ -120,15 +120,23 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
       const signer = await signAsClient(browser, link, name, ein)
 
       await page.reload()
-      await expect(page.getByText(/Signed by Pat Example/)).toBeVisible()
-      // Not until Catipult has verified who signed: no button marks it done.
-      await expect(page.getByRole('button', { name: 'Mark submitted' })).toBeDisabled()
-      await expect(page.getByRole('button', { name: 'Mark identity verified' })).toHaveCount(0)
+      // Verified before anyone signs: nothing signed yet, and no button marks the check done.
       await expect(page.getByText(/Identity check in progress/)).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Mark identity verified' })).toHaveCount(0)
+      await expect(page.getByText(/^Signed by/)).toHaveCount(0)
       await signer.finishCheck()
       await page.reload()
       await expect(page.getByText(/Verified: .*SSN ending 6789 confirmed; schedule k-1 names them \(shareholder\) for EIN ending 0006 \(test check\)/)).toBeVisible({ timeout: 20_000 })
-      await page.getByRole('button', { name: 'Mark submitted' }).click()
+      await expect(page.getByText(/^Signed by Pat Example, President .*on the signature link/)).toBeVisible()
+      // The kept signed copy, as it is sent.
+      const signedDl = page.waitForEvent('download')
+      await page.getByRole('button', { name: 'Download signed 8821' }).click()
+      expect((await signedDl).suggestedFilename()).toMatch(/_8821_signed\.pdf$/)
+      // The preparer cannot send it: Catipult staff do.
+      await expect(page.getByRole('button', { name: 'Mark submitted' })).toHaveCount(0)
+      await expect(page.getByText('Catipult sends the signed 8821 for filing. There is nothing for you to do.')).toBeVisible()
+      await sendFromFilingDesk(page, name)
+      await expect(page.getByText(/^Sent .*Catipult records the confirmation/)).toBeVisible()
       await expect(page.getByText(/Checked 0 times/)).toBeVisible()
       await page.getByRole('button', { name: 'Check now' }).click()
       await expect(page.getByRole('tab', { name: 'IRS account' })).toBeVisible({ timeout: 20_000 })
@@ -140,7 +148,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     }
   })
 
-  test('PJ8 Onboarding an EIN another firm already holds: signed, verified, submitted — and still waiting, with nothing said about why', async ({ page, browser }) => {
+  test('PJ8 Onboarding an EIN another firm already holds: verified, signed, sent — still waiting, nothing said why — until the filing is confirmed', async ({ page, browser }) => {
     test.skip(!DIDIT_SANDBOX_KEY, 'DIDIT_SANDBOX_API_KEY not set')
     await signIn(page)
     await toPractice(page)
@@ -163,7 +171,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
       await signer.finishCheck()
       await page.reload()
       await expect(page.getByText(/Verified: .*EIN ending 8824/)).toBeVisible({ timeout: 20_000 })
-      await page.getByRole('button', { name: 'Mark submitted' }).click()
+      await sendFromFilingDesk(page, name)
       await expect(page.getByText(/Checked 0 times/)).toBeVisible()
       await page.getByRole('button', { name: 'Check now' }).click()
       // The provider finds the TIN, but only through the other firm's 8821: the
@@ -174,6 +182,18 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
       await expect(page.getByText(/another (firm|practice)|already (held|read)/i)).toHaveCount(0)
       await nav(page).getByRole('link', { name: 'Clients' }).click()
       await expect(page.getByRole('row', { name: new RegExp(name) })).not.toContainText('Readable')
+
+      // The filing partner confirms they submitted THIS 8821: that is the proof.
+      await nav(page).getByRole('link', { name: 'Filing desk' }).click()
+      const item = page.getByRole('region', { name: 'Sent, waiting for confirmation' }).getByRole('listitem', { name })
+      page.once('dialog', d => d.accept())
+      await item.getByRole('button', { name: 'Record filing confirmed' }).click()
+      await expect(page.getByText('Filing confirmed.')).toBeVisible()
+      await nav(page).getByRole('link', { name: 'Clients' }).click()
+      await page.getByRole('link', { name }).click()
+      await expect(page.getByText(/filing confirmed/)).toBeVisible()
+      await page.getByRole('button', { name: 'Check now' }).click()
+      await expect(page.getByRole('tab', { name: 'IRS account' })).toBeVisible({ timeout: 20_000 })
     } finally {
       await page.request.delete(`/api/entities/${entityId}`, { headers: authed(await sessionToken(page)) })
     }
@@ -207,7 +227,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await signIn(page)
     await toPractice(page)
     await named('Clients')
-    for (const [link, heading] of [['Opportunities', 'Opportunities'], ['Deadlines', 'Deadlines'], ['IRS access', 'IRS access'], ['Practice settings', 'Practice settings']]) {
+    for (const [link, heading] of [['Opportunities', 'Opportunities'], ['Deadlines', 'Deadlines'], ['IRS access', 'IRS access'], ['Practice settings', 'Practice settings'], ['Filing desk', 'Filing desk']]) {
       await nav(page).getByRole('link', { name: link }).click()
       await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible()
       await named(link)
@@ -269,9 +289,10 @@ async function removeLeftoverTestClients(page: Page) {
   }
 }
 
-/** The taxpayer opens the link with no login, signs, and starts the identity
- *  check; finishCheck() is the photo ID and selfie, done (sandbox), then a
- *  fictional K-1 naming the signer for this EIN. */
+/** The taxpayer's signer opens the link with no login and starts the
+ *  identity check; finishCheck() is the photo ID and selfie, done (sandbox),
+ *  then a fictional K-1 naming the signer for this EIN, then the drawn
+ *  signature — only possible once verified. */
 async function signAsClient(browser: Browser, link: string, taxpayer: string, ein: string) {
   const last4 = ein.slice(-4)
   const ctx = await browser.newContext()
@@ -283,13 +304,11 @@ async function signAsClient(browser: Browser, link: string, taxpayer: string, ei
   // The form itself, behind the same link, with the TIN as its last four.
   const pdf = await p.request.get(await p.getByRole('link', { name: /View the form/ }).getAttribute('href') ?? '')
   expect(pdf.headers()['content-type']).toContain('application/pdf')
-  await p.getByLabel("Signer's name").fill('Pat Example')
+  // Nothing to sign until the signer is verified.
+  await expect(p.getByText('Once your identity is confirmed, you draw your signature here.')).toBeVisible()
+  await expect(p.getByRole('button', { name: 'Sign' })).toHaveCount(0)
+  await p.getByLabel(/Your full legal name/).fill('Pat Example')
   await p.getByLabel('Title').fill('President')
-  await p.getByLabel('Signature (type your name)').fill('Pat Example')
-  await p.getByLabel(/I am authorized/).check()
-  await p.getByRole('button', { name: 'Sign' }).click()
-  // The same link goes on to the identity check.
-  await expect(p.getByRole('heading', { name: /Signed\. One more step/ })).toBeVisible()
   await p.getByLabel('Your Social Security number').fill('123-45-6789') // fictional
   // The page leaves for Didit at once: keep the session id on the way through.
   let session_id = ''
@@ -311,9 +330,39 @@ async function signAsClient(browser: Browser, link: string, taxpayer: string, ei
     await expect(p.getByText('Your ID and SSN are confirmed.')).toBeVisible({ timeout: 20_000 })
     await p.getByLabel('Document (PDF or photo)').setInputFiles({ name: 'k1-proof.pdf', mimeType: 'application/pdf', buffer: await fictionalK1(taxpayer, ein) })
     await p.getByRole('button', { name: 'Upload proof' }).click()
-    await expect(p.getByRole('heading', { name: 'Signed and verified. Thank you.' })).toBeVisible({ timeout: 60_000 })
+    await expect(p.getByText('Your identity is verified.')).toBeVisible({ timeout: 60_000 })
+    // Signs under the name read from the ID (the sandbox reads none: the stated one).
+    await expect(p.getByLabel('Name (from the verified ID)')).toHaveValue('Pat Example')
+    const sign = p.getByRole('button', { name: 'Sign' })
+    await p.getByLabel(/I am authorized/).check()
+    await expect(sign).toBeDisabled() // nothing drawn yet
+    await drawSignature(p)
+    await sign.click()
+    await expect(p.getByRole('heading', { name: 'Signed. Thank you.' })).toBeVisible({ timeout: 20_000 })
     await ctx.close()
   } }
+}
+
+/** Draw a signature on the pad, as a hand would. */
+async function drawSignature(p: Page) {
+  const box = (await p.getByRole('img', { name: 'Draw your signature' }).boundingBox())!
+  await p.mouse.move(box.x + 20, box.y + box.height / 2)
+  await p.mouse.down()
+  for (let i = 1; i <= 30; i++) await p.mouse.move(box.x + 20 + i * 8, box.y + box.height / 2 + Math.sin(i / 2) * 20)
+  await p.mouse.up()
+}
+
+/** Catipult staff send the signed copy (the demo practice, on the fictional
+ *  back end, is its own staff), then return to the client. */
+async function sendFromFilingDesk(page: Page, client: string) {
+  const back = page.url()
+  await nav(page).getByRole('link', { name: 'Filing desk' }).click()
+  const item = page.getByRole('region', { name: 'To send' }).getByRole('listitem', { name: client })
+  await expect(item).toContainText('Test check')
+  await item.getByLabel('Sent to').fill('filing partner (fictional)')
+  await item.getByRole('button', { name: 'Record as sent' }).click()
+  await expect(page.getByText(/Recorded as sent/)).toBeVisible()
+  await page.goto(back)
 }
 
 /** A one-page fictional Schedule K-1 naming Pat Example for this business:

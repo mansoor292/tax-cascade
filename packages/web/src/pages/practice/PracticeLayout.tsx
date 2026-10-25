@@ -10,15 +10,15 @@ import LoadError from '@/components/LoadError'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ds'
 
-export interface PracticeCtx { practice: Practice; designee: Designee | null; admin: boolean; reload: () => void }
+export interface PracticeCtx { practice: Practice; designee: Designee | null; admin: boolean; staff: boolean; reload: () => void }
 export const usePracticeCtx = () => useOutletContext<PracticeCtx>()
 
 export default function PracticeLayout() {
-  const { practice, designee, admin, none, loading, error, reload } = usePractice()
+  const { practice, designee, admin, staff, none, loading, error, reload } = usePractice()
   if (loading) return <div className="ds text-muted-foreground">Loading the practice…</div>
   if (error) return <LoadError message={error} onRetry={reload} />
   if (none || !practice) return <div className="ds"><CreatePractice onCreated={reload} /></div>
-  return <div className="ds"><Outlet context={{ practice, designee, admin, reload } satisfies PracticeCtx} /></div>
+  return <div className="ds"><Outlet context={{ practice, designee, admin, staff, reload } satisfies PracticeCtx} /></div>
 }
 
 function CreatePractice({ onCreated }: { onCreated: () => void }) {

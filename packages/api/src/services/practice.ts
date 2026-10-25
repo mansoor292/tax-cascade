@@ -16,6 +16,9 @@
  *    that its own 8821 went in (submission_confirmed_at) — and the practice
  *    is never told why, which would reveal another firm's client.
  *
+ * Signing, the kept signed copy, and how it goes in (staff send it to
+ * TaxNow's staff and record their confirmation) are practice_filing.ts.
+ *
  * The full TIN exists only while onboarding is pending: encrypted, sent to
  * TaxNow's TIN search by the daily check, wiped once the client is readable.
  * It is never returned by any endpoint and never logged.
@@ -32,6 +35,7 @@ import type { ClientSummary } from './practice_read.js'
 import { fill8821 } from './f8821.js'
 import { idvView } from './signer_idv.js'
 import { proofView } from './signer_proof.js'
+import { verifiedName } from './practice_filing.js'
 
 export type Provider = 'taxnow' | 'fixture'
 export interface Practice {
@@ -116,7 +120,7 @@ export function designeeOf(p: Practice): Record<string, string> & { source: 'pla
 
 // ─── Clients ────────────────────────────────────────────────────────────────
 
-const CLIENT_COLS = `id, practice_id, user_id, entity_id, stage, tin_last4, taxnow_account_id, taxnow_client_uri, authorization_scope, signed_at, submitted_at, last_check_at, check_count, readable_at, last_read_at, created_at, summary, signature, ${PRACTICE_CLIENT_ENC_COLS}`
+const CLIENT_COLS = `id, practice_id, user_id, entity_id, stage, tin_last4, taxnow_account_id, taxnow_client_uri, authorization_scope, signed_at, submitted_at, submission, submission_confirmed_at, last_check_at, check_count, readable_at, last_read_at, created_at, summary, signature, ${PRACTICE_CLIENT_ENC_COLS}`
 
 export interface ClientListRow {
   id: string
@@ -233,7 +237,14 @@ export async function clientDetail(sb: SupabaseClient, p: Practice, clientId: st
       id: row.id, entity_id: row.entity_id, name: ent?.name ?? '', form_type: ent?.form_type ?? '', stage: row.stage, tin_last4: row.tin_last4,
       authorization_scope: row.authorization_scope, signed_at: row.signed_at, submitted_at: row.submitted_at, last_check_at: row.last_check_at,
       check_count: row.check_count, readable_at: row.readable_at, last_read_at: row.last_read_at, summary: row.summary ?? null,
-      signer: row.signature ? { name: row.signature.signer_name, title: row.signature.signer_title, id_verified_at: row.signature.id_verified_at ?? null, id_method: row.signature.id_method ?? null, method: row.signature.method, idv: idvView(row.signature.idv), proof: proofView(row.signature.proof) } : null,
+      signer: row.signature ? {
+        name: row.signature.signer_name, title: row.signature.signer_title, id_verified_at: row.signature.id_verified_at ?? null, id_method: row.signature.id_method ?? null,
+        method: row.signature.method ?? null, idv: idvView(row.signature.idv), proof: proofView(row.signature.proof),
+        // Line 6 prints the verified name; the kept copy's hash is what was sent.
+        print_name: row.signature.print_name ?? (row.signature.id_verified_at ? verifiedName(row.signature) : null), signed_copy_sha256: row.signature.signed_copy?.sha256 ?? null,
+      } : null,
+      // Where its filing stands, in the preparer's terms: not who sent it or to whom.
+      filing: { sent_at: row.submission?.sent_at ?? null, confirmed_at: row.submission_confirmed_at ?? null },
     },
     transcripts: transcripts.map(t => ({
       type: t.type, form: t.form, tax_year: t.tax_year, period_month: t.period_month, status: t.status, synced_at: t.synced_at, response_date: t.response_date,
@@ -355,12 +366,15 @@ export async function signRequest(sb: SupabaseClient, token: string) {
   return {
     practice: p!.name, taxpayer: ent?.name ?? '', form_type: ent?.form_type ?? '', tin_last4: c.tin_last4,
     designee: (({ source: _s, ...d }) => d)(designeeOf(p as Practice)), scope: c.authorization_scope, expires: c.sign_token_expires,
-    // After signing, the same link carries the signer through the identity check.
-    signed: c.signature ? { name: c.signature.signer_name, verified: !!c.signature.id_verified_at, idv: idvView(c.signature.idv), proof: proofView(c.signature.proof), business: ent?.form_type !== '1040' } : null,
+    business: ent?.form_type !== '1040',
+    // The signer is verified first, then signs (practice_filing.ts): the
+    // page shows whichever step is next.
+    signer: c.signature ? {
+      name: c.signature.signer_name, title: c.signature.signer_title ?? '', verified: !!c.signature.id_verified_at, signed: !!c.signature.signed_at,
+      print_name: c.signature.id_verified_at ? verifiedName(c.signature) : null, idv: idvView(c.signature.idv), proof: proofView(c.signature.proof),
+    } : null,
   }
 }
-
-export interface Signature { signer_name: string; signer_title: string; typed_signature: string; agree: boolean }
 
 /** The client and practice behind a live signature link. */
 export async function tokenClient(sb: SupabaseClient, token: string): Promise<{ clientId: string; practice: Pick<Practice, 'id' | 'provider'> }> {
@@ -370,65 +384,22 @@ export async function tokenClient(sb: SupabaseClient, token: string): Promise<{ 
   return { clientId: c.id, practice: p as Pick<Practice, 'id' | 'provider'> }
 }
 
-export async function submitSignature(sb: SupabaseClient, token: string, s: Signature, meta: { ip?: string; userAgent?: string }) {
-  const { data: c } = await sb.from('practice_client').select('id, user_id, practice_id, stage, sign_token_expires').eq('sign_token_hash', hashToken(token)).maybeSingle()
-  if (!c || !c.sign_token_expires || new Date(c.sign_token_expires) < new Date()) throw new PracticeError(404, 'This signature link has expired or was replaced.')
-  if (c.stage !== 'awaiting_signature' && c.stage !== 'draft') throw new PracticeError(409, 'This 8821 is already signed.')
-  if (!s?.agree) throw new PracticeError(400, 'Confirm you are authorized to sign for the taxpayer.')
-  const name = String(s.signer_name ?? '').trim(), title = String(s.signer_title ?? '').trim(), typed = String(s.typed_signature ?? '').trim()
-  if (!name || !typed) throw new PracticeError(400, 'Your name and signature are required.')
-  if (typed.toLowerCase() !== name.toLowerCase()) throw new PracticeError(400, 'Type your name exactly as your signature.')
-  return recordSignature(sb, c, { signer_name: name, signer_title: title, method: 'link', signed_ip: meta.ip ?? null, user_agent: (meta.userAgent ?? '').slice(0, 200) })
-}
-
-/** An owner (or the practitioner, for themselves) signs in the app. */
-export async function signInApp(sb: SupabaseClient, p: Practice, clientId: string, s: Signature, userId: string) {
-  const c = await clientRow(sb, p, clientId)
-  if (!s?.agree) throw new PracticeError(400, 'Confirm you are authorized to sign for the taxpayer.')
-  const name = String(s.signer_name ?? '').trim()
-  if (!name || String(s.typed_signature ?? '').trim().toLowerCase() !== name.toLowerCase()) throw new PracticeError(400, 'Type your name exactly as your signature.')
-  return recordSignature(sb, c, { signer_name: name, signer_title: String(s.signer_title ?? '').trim(), method: 'in_app', signed_by_user: userId })
-}
-
-async function recordSignature(sb: SupabaseClient, c: { id: string; user_id: string }, sig: Record<string, unknown>) {
-  const signature = { ...sig, signed_at: new Date().toISOString(), id_verified_at: null }
-  // The signature link stays valid until it expires: the signer goes on to
-  // the identity check with it, and comes back to it from Didit (signer_idv.ts).
-  // Signed, it cannot sign again (submitSignature); verified, it only shows that.
-  const patch = { signature, stage: 'signed', signed_at: signature.signed_at, updated_at: new Date().toISOString() }
-  const { error } = await sb.from('practice_client').update({ ...patch, ...(await encryptedFields(sb, c.user_id, patch, ENCRYPTED_PRACTICE_CLIENT_FIELDS)) }).eq('id', c.id)
-  if (error) throw new PracticeError(500, error.message)
-  return { ok: true }
-}
-
 /** Catipult staff record a check made outside Didit (a video call with the
  *  signer's ID, when the automated check cannot decide). Platform admins only
  *  (routes/practice.ts); the signer's own check is services/signer_idv.ts. */
-export async function markIdVerified(sb: SupabaseClient, p: Practice, clientId: string, method: string) {
+export async function markIdVerified(sb: SupabaseClient, p: Practice, clientId: string, body: { method?: unknown; signer_name?: unknown; signer_title?: unknown }) {
   const c = await clientRow(sb, p, clientId)
   await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
-  if (!c.signature) throw new PracticeError(409, 'Nothing signed yet.')
-  const signature = { ...c.signature, id_verified_at: new Date().toISOString(), id_method: String(method || 'manual').slice(0, 60) }
+  if (c.signature?.id_verified_at) throw new PracticeError(409, 'The signer’s identity is already verified.')
+  // Verified before signing: the name staff checked is the name line 6 prints.
+  const name = String(c.signature?.signer_name ?? body.signer_name ?? '').trim().slice(0, 120)
+  if (!name) throw new PracticeError(400, 'Enter the signer’s full legal name, as it appears on their ID.')
+  const signature = {
+    ...(c.signature ?? { signer_title: String(body.signer_title ?? '').trim().slice(0, 80), signed_at: null }), signer_name: name,
+    id_verified_at: new Date().toISOString(), id_method: String(body.method || 'manual').slice(0, 60),
+  }
   const patch = { signature, updated_at: new Date().toISOString() }
   const { error } = await sb.from('practice_client').update({ ...patch, ...(await encryptedFields(sb, c.user_id, patch, ENCRYPTED_PRACTICE_CLIENT_FIELDS)) }).eq('id', c.id)
-  if (error) throw new PracticeError(500, error.message)
-  return { ok: true }
-}
-
-/** The signed 8821 has gone in (how it goes in is still being settled). From
- *  now the daily check looks for the client in TaxNow. The accounts the org
- *  lists right now are kept: one of them turning out to be this client's TIN
- *  is an account someone else's 8821 put there, not proof of this one. */
-export async function markSubmitted(sb: SupabaseClient, p: Practice, clientId: string) {
-  const c = await clientRow(sb, p, clientId)
-  if (c.stage !== 'signed') throw new PracticeError(409, c.stage === 'submitted' ? 'Already submitted.' : 'Sign the 8821 first.')
-  await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
-  if (!c.signature?.id_verified_at) throw new PracticeError(409, 'Verify the signer’s identity first.')
-  let listed: string[]
-  try { listed = (await (await taxnowFor(p.provider)).listAccounts()).map(a => a.accountId) } catch {
-    throw new PracticeError(502, 'IRS records could not be reached right now. Try again in a few minutes.')
-  }
-  const { error } = await sb.from('practice_client').update({ stage: 'submitted', submitted_at: new Date().toISOString(), accounts_at_submit: listed, updated_at: new Date().toISOString() }).eq('id', c.id)
   if (error) throw new PracticeError(500, error.message)
   return { ok: true }
 }
@@ -523,9 +494,10 @@ export function irsFormFor(formType: string): string {
 }
 
 /**
- * The client's Form 8821 as a PDF. `fullTin` prints the full TIN while it is
- * still held (onboarding pending, preparer only); the public signature page
- * gets the last four only.
+ * The client's Form 8821 as a fillable draft. `fullTin` prints the full TIN
+ * while it is still held (onboarding pending, preparer only); the public
+ * signature page gets the last four only. Line 6 stays blank: a signed 8821
+ * exists only as the kept copy (practice_filing.ts signedCopy).
  */
 export async function form8821(sb: SupabaseClient, p: Practice, clientId: string, opts: { fullTin: boolean }): Promise<{ pdf: Uint8Array; filename: string }> {
   const { data: c } = await sb.from('practice_client').select(`${CLIENT_COLS}, tin`).eq('practice_id', p.id).eq('id', clientId).maybeSingle() as { data: any }
@@ -537,7 +509,6 @@ export async function form8821(sb: SupabaseClient, p: Practice, clientId: string
   const pdf = await fill8821({
     taxpayer: { name: ent?.name ?? '', address: [ent?.address, [ent?.city, ent?.state, ent?.zip].filter(Boolean).join(' ')].filter(Boolean).join('\n') || undefined },
     tin, designee, scope: c.authorization_scope ?? {},
-    signer: c.signature ? { name: c.signature.signer_name, title: c.signature.signer_title, signedAt: c.signature.signed_at, electronic: true } : null,
   })
   return { pdf, filename: `${(ent?.name ?? 'client').replace(/[^A-Za-z0-9]+/g, '_')}_8821.pdf` }
 }

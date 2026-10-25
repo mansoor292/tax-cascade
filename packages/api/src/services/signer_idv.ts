@@ -11,13 +11,19 @@
  * and knows none of the practices' clients, so every signer is checked; the
  * preparer vouching for a client does not count.
  *
+ * The check comes BEFORE the signature (Mansoor, 2026-10-25): the signer
+ * states their name and title, is verified, and only then draws the
+ * signature; the 8821 prints the name read off their ID (practice.ts
+ * recordSignature). Until they sign, `signature` holds the stated name and
+ * the check with signed_at null.
+ *
  * How it runs (lib/didit.ts):
- *   - The signer enters their SSN on our page and is sent to Didit's hosted
- *     check: photo of the ID, live selfie, face match.
+ *   - The signer enters their name, title and SSN on our page and is sent to
+ *     Didit's hosted check: photo of the ID, live selfie, face match.
  *   - When Didit approves, the name, birth date and address read off the ID go
  *     with the SSN to Didit's US identity lookup (credit bureau + financial
  *     services). The SSN must match there.
- *   - The name on the ID must be the name the signer signed with; for an
+ *   - The name on the ID must be the name the signer stated; for an
  *     individual client the SSN must be the taxpayer's own.
  * Nothing is pushed to us that we then trust: results are pulled from Didit
  * (GET decision) whenever the signer comes back or the client is opened.
@@ -126,15 +132,23 @@ export async function saveSignature(sb: SupabaseClient, c: Row, signature: Recor
 
 export const isIndividual = (formType: string) => formType === '1040' || formType === 'individual'
 
+export interface CheckStart { ssn?: unknown; signer_name?: unknown; signer_title?: unknown }
+
 /** Start (or restart) the signer's check. Returns where to send the signer. */
-export async function startCheck(sb: SupabaseClient, p: Pick<Practice, 'id' | 'provider'>, clientId: string, ssnIn: unknown, callback: string): Promise<{ url: string; session_id: string }> {
+export async function startCheck(sb: SupabaseClient, p: Pick<Practice, 'id' | 'provider'>, clientId: string, body: CheckStart, callback: string): Promise<{ url: string; session_id: string }> {
   const env = envFor(p)
   // The SSN rides in the signature until the lookup runs: never unencrypted.
   if (env === 'live' && !encryptionEnabled()) throw new PracticeError(503, 'Identity checks need row encryption, which is off on this server.')
   const c = await loadRow(sb, clientId, p.id)
-  if (!c.signature) throw new PracticeError(409, 'Sign the 8821 first.')
-  if (c.signature.id_verified_at) throw new PracticeError(409, 'The signer’s identity is already verified.')
-  const ssn = normalizeSsn(ssnIn)
+  if (c.signature?.id_verified_at) throw new PracticeError(409, 'The signer’s identity is already verified.')
+  // A row signed before the order changed (signed, not yet verified) keeps
+  // the name it signed with; otherwise the signer states it here.
+  const signed = !!c.signature?.signed_at
+  if (!signed && !['draft', 'awaiting_signature'].includes(c.stage)) throw new PracticeError(409, 'This client’s 8821 is past signing.')
+  const name = signed ? String(c.signature.signer_name ?? '') : String(body.signer_name ?? c.signature?.signer_name ?? '').trim().slice(0, 120)
+  const title = signed ? String(c.signature.signer_title ?? '') : String(body.signer_title ?? c.signature?.signer_title ?? '').trim().slice(0, 80)
+  if (!name) throw new PracticeError(400, 'Enter the signer’s full legal name, as it appears on their ID.')
+  const ssn = normalizeSsn(body.ssn)
   if (!ssn) throw new PracticeError(400, 'Enter the signer’s 9-digit Social Security number.')
   // An individual signs their own 8821: the SSN is the taxpayer's TIN.
   if (isIndividual(c.form_type ?? '') && c.tin && c.tin.replace(/\D/g, '') !== ssn) throw new PracticeError(400, 'For an individual, the signer’s SSN must be the taxpayer’s own.')
@@ -151,7 +165,8 @@ export async function startCheck(sb: SupabaseClient, p: Pick<Practice, 'id' | 'p
     started_at: new Date().toISOString(), decided_at: null, attempts: (prev?.attempts ?? 0) + 1,
     ssn_last4: ssn.slice(5), ssn_pending: ssn, person: null, checks: null, reason: null,
   }
-  await saveSignature(sb, c, { ...c.signature, idv })
+  const base = signed ? c.signature : { ...(c.signature ?? {}), signer_name: name, signer_title: title, signed_at: null, id_verified_at: null }
+  await saveSignature(sb, c, { ...base, idv })
   return { url: s.url, session_id: s.session_id }
 }
 
@@ -170,9 +185,9 @@ export async function refreshCheck(sb: SupabaseClient, clientId: string): Promis
     return { ...idv, didit_status: d.status }
   }
   const id = d.id_verifications?.[0]
-  const signedName = String(c.signature.signer_name ?? '')
+  const signedName = String(c.signature.signer_name ?? '') // as stated before the check
   // The sandbox mocks the ID reader: a session approved by simulation reads
-  // no document, so the signed name stands in. Never for a live session.
+  // no document, so the stated name stands in. Never for a live session.
   const fromId = id ?? (idv.environment === 'sandbox' ? { ...splitName(signedName), full_name: signedName } : null)
   const nameOk = !!fromId && nameMatches(signedName, fromId)
   let lookup: UsIdentityResult | null = null
@@ -217,8 +232,8 @@ export async function refreshCheck(sb: SupabaseClient, clientId: string): Promis
   // they belong to the business is accepted too (signer_proof.ts).
   const done = status === 'approved' && (isIndividual(c.form_type ?? '') || c.signature.proof?.status === 'approved')
   const signature = { ...c.signature, idv: next, ...(done ? { id_verified_at: now, id_method: `didit_${idv.environment}` } : {}) }
-  // The signature link is left to expire: the signer may come back from Didit
-  // after the preparer's page has already pulled the result, and should see it.
+  // The signature link is left to expire: the signer comes back to it from
+  // Didit, and signs with it once verified.
   await saveSignature(sb, c, signature)
   return next
 }
