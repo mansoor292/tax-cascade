@@ -8,6 +8,14 @@
  *  - Each practice's clients are its own entities (tax_entity.practice_id),
  *    hidden from the owner pages; the same EIN may sit in two practices.
  *
+ *  - A practice reads an account only on its OWN authority (2026-10-25): an
+ *    8821 signed and ID-verified in Catipult, or an admin claim. Every 8821
+ *    names the platform's one CAF, so TaxNow finding a TIN proves only that
+ *    SOMEONE's 8821 is on file. When the account was already in the org at
+ *    submission, or another practice holds it, the client waits for proof
+ *    that its own 8821 went in (submission_confirmed_at) — and the practice
+ *    is never told why, which would reveal another firm's client.
+ *
  * The full TIN exists only while onboarding is pending: encrypted, sent to
  * TaxNow's TIN search by the daily check, wiped once the client is readable.
  * It is never returned by any endpoint and never logged.
@@ -408,29 +416,50 @@ export async function markIdVerified(sb: SupabaseClient, p: Practice, clientId: 
 }
 
 /** The signed 8821 has gone in (how it goes in is still being settled). From
- *  now the daily check looks for the client in TaxNow. */
+ *  now the daily check looks for the client in TaxNow. The accounts the org
+ *  lists right now are kept: one of them turning out to be this client's TIN
+ *  is an account someone else's 8821 put there, not proof of this one. */
 export async function markSubmitted(sb: SupabaseClient, p: Practice, clientId: string) {
   const c = await clientRow(sb, p, clientId)
   if (c.stage !== 'signed') throw new PracticeError(409, c.stage === 'submitted' ? 'Already submitted.' : 'Sign the 8821 first.')
   await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
   if (!c.signature?.id_verified_at) throw new PracticeError(409, 'Verify the signer’s identity first.')
-  const { error } = await sb.from('practice_client').update({ stage: 'submitted', submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', c.id)
+  let listed: string[]
+  try { listed = (await (await taxnowFor(p.provider)).listAccounts()).map(a => a.accountId) } catch {
+    throw new PracticeError(502, 'TaxNow could not be reached. Try again in a few minutes.')
+  }
+  const { error } = await sb.from('practice_client').update({ stage: 'submitted', submitted_at: new Date().toISOString(), accounts_at_submit: listed, updated_at: new Date().toISOString() }).eq('id', c.id)
   if (error) throw new PracticeError(500, error.message)
   return { ok: true }
+}
+
+/**
+ * May a found account become this client's? Only when this practice's own
+ * 8821 accounts for it: the account appeared after the submission and no
+ * other practice holds it, or the submission channel has proved the 8821
+ * went in. A client submitted before the snapshot existed has no list and
+ * waits for proof too.
+ */
+export function readableVerdict(o: { accountId: string; accountsAtSubmit: string[] | null; heldElsewhere: boolean; submissionConfirmedAt: string | null }): 'readable' | 'awaiting_proof' {
+  if (o.submissionConfirmedAt) return 'readable'
+  if (o.heldElsewhere || !o.accountsAtSubmit || o.accountsAtSubmit.includes(o.accountId)) return 'awaiting_proof'
+  return 'readable'
 }
 
 /**
  * One onboarding check: does TaxNow now hold this client? The TIN search
  * answers only when the platform org has a valid 8821 on file. When it does,
  * the client becomes readable, its TIN is wiped (last four kept), and a read
- * is queued.
+ * is queued. A found account that this practice's own 8821 does not account
+ * for (readableVerdict) is treated exactly like one not found yet, so the
+ * page never hints that another firm holds the client.
  *
  * Adding the account to the org's client list is a write to the platform
  * TaxNow org; it runs only with TAXNOW_ALLOW_ADD_CLIENT=1 (off until Mansoor
  * agrees), or always against the fixture.
  */
 export async function onboardingCheck(sb: SupabaseClient, clientId: string): Promise<{ found: boolean }> {
-  const { data: c } = await sb.from('practice_client').select(`${CLIENT_COLS}, tin`).eq('id', clientId).maybeSingle() as { data: any }
+  const { data: c } = await sb.from('practice_client').select(`${CLIENT_COLS}, tin, accounts_at_submit, submission_confirmed_at`).eq('id', clientId).maybeSingle() as { data: any }
   if (!c || c.stage !== 'submitted') return { found: false }
   await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
   const { data: p } = await sb.from('practice').select('id, user_id, name, designee_mode, designee, provider').eq('id', c.practice_id).single()
@@ -438,7 +467,13 @@ export async function onboardingCheck(sb: SupabaseClient, clientId: string): Pro
   const now = new Date().toISOString()
   const { data: held } = await sb.from('practice_client').select('taxnow_account_id').eq('practice_id', c.practice_id).not('taxnow_account_id', 'is', null)
   const accountId = c.tin && /^\d{9}$/.test(c.tin) ? await accountForTin(tn, c.tin, new Set((held ?? []).map(h => h.taxnow_account_id))) : null
-  if (!accountId) {
+  let verdict: 'readable' | 'awaiting_proof' | null = null
+  if (accountId) {
+    const { count } = await sb.from('practice_client').select('id', { count: 'exact', head: true })
+      .eq('taxnow_account_id', accountId).neq('practice_id', c.practice_id).in('stage', ['readable', 'claimed'])
+    verdict = readableVerdict({ accountId, accountsAtSubmit: c.accounts_at_submit ?? null, heldElsewhere: (count ?? 0) > 0, submissionConfirmedAt: c.submission_confirmed_at ?? null })
+  }
+  if (!accountId || verdict !== 'readable') {
     await sb.from('practice_client').update({ last_check_at: now, check_count: (c.check_count ?? 0) + 1 }).eq('id', c.id)
     return { found: false }
   }
@@ -446,7 +481,7 @@ export async function onboardingCheck(sb: SupabaseClient, clientId: string): Pro
   if (tn.provider === 'fixture' || process.env.TAXNOW_ALLOW_ADD_CLIENT === '1') clientUri = await tn.addClient(accountId, c.id)
   const { error } = await sb.from('practice_client').update({
     stage: 'readable', taxnow_account_id: accountId, taxnow_client_uri: clientUri, readable_at: now, last_check_at: now,
-    check_count: (c.check_count ?? 0) + 1, tin: null, tin_enc: null, updated_at: now,
+    check_count: (c.check_count ?? 0) + 1, tin: null, tin_enc: null, accounts_at_submit: null, updated_at: now,
   }).eq('id', c.id)
   if (error) throw new PracticeError(500, error.message)
   return { found: true }

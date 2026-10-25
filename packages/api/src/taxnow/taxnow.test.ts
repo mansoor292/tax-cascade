@@ -135,8 +135,14 @@ describe('insights from the returns', () => {
 
 describe('the fixture org', () => {
   it('finds an account by TIN only when the org would hold an 8821 (even last digit)', async () => {
-    expect(await accountForTin(tn, '000000002')).toBe('fx-new-0002')
+    expect(await accountForTin(tn, '000000002')).toMatch(/^fx-new-0002-[0-9a-f]{6}$/)
     expect(await accountForTin(tn, '000000001')).toBeNull()
+  })
+  it('gives each TIN its own account, and a fixture account\'s TIN finds that account', async () => {
+    const a = await accountForTin(tn, '100000002')
+    const b = await accountForTin(tn, '200000002')
+    expect(a).not.toBe(b)
+    expect(await accountForTin(tn, '000008824')).toBe('fx-lakeside')
   })
   it('an IRS request for a period the 8821 does not cover comes back 451', async () => {
     const task = await tn.startSync('fx-calloway', { type: 'ACTR', form: '1065', year: 2024, month: 6 })

@@ -12,8 +12,12 @@
  * Stateless on purpose (pm2 cluster): an "IRS request" here succeeds at once
  * and the transcript then reads "Requested data not found"; what the job
  * stores is in the database, not here. A TIN search finds an account when the
- * TIN's last digit is even, so onboarding can be walked end to end.
+ * TIN's last digit is even, so onboarding can be walked end to end; each such
+ * TIN gets an account of its own (keyed by its last four and a short hash), so
+ * one test run's client is never mistaken for another's. A TIN ending in a
+ * fixture account's last four is that account.
  */
+import { createHash } from 'node:crypto'
 import type { AccountRecord, AccountRef, TaskState, TaxNowApi, TranscriptRef } from './client.js'
 import { TaxNowError } from './client.js'
 
@@ -123,15 +127,27 @@ const ACCOUNTS: AccountSpec[] = [
       ...[3, 6, 9].map(m => ({ form: '1065', year: 2024, month: m, kind: 'refused' as const })),
     ],
   },
+  {
+    // In the org, but no demo client holds it: someone else's 8821 put it
+    // there. A practice entering its TIN must wait for proof of its own 8821
+    // (FIXTURE_HELD_ELSEWHERE; services/practice.ts readableVerdict).
+    id: 'fx-lakeside', name: 'Lakeside Orchard Supply Co', last4: '8824', income: '1120S',
+    periods: standardPeriods('1120S', [2024, 2025]),
+  },
 ]
 
-/** An account a TIN search turns up during onboarding (fictional). */
-function onboardedAccount(last4: string): AccountSpec {
+/** The fixture account no demo client holds. */
+export const FIXTURE_HELD_ELSEWHERE = 'fx-lakeside'
+
+/** An account a TIN search turns up during onboarding (fictional). `key` is
+ *  the TIN's last four, a dash, and a short hash of the whole TIN. */
+function onboardedAccount(key: string): AccountSpec {
   return {
-    id: `fx-new-${last4}`, name: 'New fictional client', last4, income: '1120S',
+    id: `fx-new-${key}`, name: 'New fictional client', last4: key.slice(0, 4), income: '1120S',
     periods: override(standardPeriods('1120S', [2023, 2024, 2025]), [{ form: '940', year: 2025, month: 12, kind: 'never' }]),
   }
 }
+const tinTag = (digits: string) => `${digits.slice(-4)}-${createHash('sha256').update(digits).digest('hex').slice(0, 6)}`
 
 function accountById(id: string): AccountSpec {
   const a = ACCOUNTS.find(x => x.id === id) ?? (id.startsWith('fx-new-') ? onboardedAccount(id.slice(7)) : null)
@@ -178,7 +194,7 @@ export class FixtureTaxNow implements TaxNowApi {
     const a = accountById(accountId)
     const income = a.income === '1065' ? ['1065'] : ['1120', '1120S']
     return {
-      accountId, type: 'business', name: a.name, tinUri: `/tins/fx-tin-${a.last4}`,
+      accountId, type: 'business', name: a.name, tinUri: `/tins/fx-tin-${a.id.startsWith('fx-new-') ? a.id.slice(7) : a.last4}`,
       tia: { designees: [{ type: 'caf', name: 'Fictional Designee' }, ...(a.id === 'fx-redwick' ? [{ type: 'org', name: 'Another Fictional Firm LLC' }] : [])], permissions: [{ type: 'payroll', forms: ['940', '941'], start: '2018-01-01', end: '2027-12-31' }, { type: 'income', forms: income, start: '2018-01-01', end: '2027-12-31' }] },
     }
   }
@@ -205,9 +221,12 @@ export class FixtureTaxNow implements TaxNowApi {
   async searchTin(tin: string): Promise<string | null> {
     const digits = tin.replace(/\D/g, '')
     if (digits.length !== 9) return null
+    const known = ACCOUNTS.find(a => a.last4 === digits.slice(-4))
+    if (known) return `/tins/fx-tin-${known.last4}`
     if (Number(digits.at(-1)) % 2 !== 0) return null
-    if (!this.onboarded.includes(digits.slice(-4))) this.onboarded.push(digits.slice(-4))
-    return `/tins/fx-tin-${digits.slice(-4)}`
+    const key = tinTag(digits)
+    if (!this.onboarded.includes(key)) this.onboarded.push(key)
+    return `/tins/fx-tin-${key}`
   }
   async addClient(accountId: string): Promise<string> { return `/orgs/fixture/clients/${accountId}` }
   async startSync(accountId: string, t: Pick<TranscriptRef, 'type' | 'form' | 'year' | 'month'>): Promise<string> {
@@ -222,5 +241,5 @@ export class FixtureTaxNow implements TaxNowApi {
   }
 }
 
-/** The fixture accounts a demo practice is seeded with. */
+/** Every fixture account; the demo practice is seeded with all but FIXTURE_HELD_ELSEWHERE. */
 export const FIXTURE_ACCOUNTS = ACCOUNTS.map(a => ({ accountId: a.id, name: a.name, last4: a.last4, income: a.income }))

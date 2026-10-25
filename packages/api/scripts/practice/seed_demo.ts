@@ -25,6 +25,7 @@ import { serviceClient } from '../../src/lib/supabase.js'
 import { claimAccounts, createClient, issueSignLink, signInApp, markIdVerified, markSubmitted, type Practice } from '../../src/services/practice.js'
 import { readClient, type ClientRow } from '../../src/services/practice_read.js'
 import { runJob } from '../../src/services/practice_jobs.js'
+import { FIXTURE_ACCOUNTS, FIXTURE_HELD_ELSEWHERE } from '../../src/taxnow/fixture.js'
 
 const EMAIL = process.env.PRACTICE_DEMO_EMAIL
 const PASSWORD = process.env.PRACTICE_DEMO_PASSWORD
@@ -56,7 +57,9 @@ async function main() {
   await sb.from('practice_member').insert({ practice_id: p.id, user_id: userId, role: 'owner' })
   const practice = p as Practice
 
-  const claimed = await claimAccounts(sb, practice, 'all')
+  // Every fixture account but the one no demo client holds (it stands for an
+  // account another firm's 8821 put in the org).
+  const claimed = await claimAccounts(sb, practice, FIXTURE_ACCOUNTS.map(a => a.accountId).filter(id => id !== FIXTURE_HELD_ELSEWHERE))
   for (const id of claimed.client_ids) {
     const { data: c } = await sb.from('practice_client').select('id, practice_id, user_id, entity_id, stage, taxnow_account_id, tin_last4').eq('id', id).single()
     const r = await readClient(sb, c as ClientRow, 'fixture')

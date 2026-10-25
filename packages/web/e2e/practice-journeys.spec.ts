@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Browser } from '@playwright/test'
+import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { signInThroughUi, authed } from './helpers'
 
 /**
@@ -100,7 +101,11 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await page.getByRole('button', { name: 'Add client' }).click()
     const name = `E2E Onboarding ${Date.now()}`
     await page.getByLabel('Legal name').fill(name)
-    await page.getByLabel(/EIN/).fill('000000006') // even last digit: the fixture TaxNow finds it
+    // Even last digit: the fixture TaxNow finds it. A fresh TIN each run, so
+    // the account is new to the org, as a first 8821 makes it (one a past run
+    // left there would be someone else's, and wait for proof: PJ8).
+    const ein = `${String(Math.floor(Math.random() * 1e5)).padStart(5, '0')}0006`
+    await page.getByLabel(/EIN/).fill(ein)
     await page.getByRole('button', { name: 'Create client and 8821' }).click()
     await expect(page.getByRole('heading', { name })).toBeVisible()
     const entityId = await clientEntityId(page)
@@ -112,7 +117,7 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
       await page.getByRole('button', { name: 'Copy signature link' }).click()
       const link = await page.getByLabel('Signature link').inputValue()
       expect(link).toMatch(/\/sign\/[A-Za-z0-9_-]{20,}$/)
-      const signer = await signAsClient(browser, link, name)
+      const signer = await signAsClient(browser, link, name, ein)
 
       await page.reload()
       await expect(page.getByText(/Signed by Pat Example/)).toBeVisible()
@@ -130,6 +135,45 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
       // Its first read runs in the background; the client then lists as readable.
       await nav(page).getByRole('link', { name: 'Clients' }).click()
       await expect(page.getByRole('row', { name: new RegExp(name) })).toContainText('Readable')
+    } finally {
+      await page.request.delete(`/api/entities/${entityId}`, { headers: authed(await sessionToken(page)) })
+    }
+  })
+
+  test('PJ8 Onboarding an EIN another firm already holds: signed, verified, submitted — and still waiting, with nothing said about why', async ({ page, browser }) => {
+    test.skip(!DIDIT_SANDBOX_KEY, 'DIDIT_SANDBOX_API_KEY not set')
+    await signIn(page)
+    await toPractice(page)
+    await removeLeftoverTestClients(page)
+    await nav(page).getByRole('link', { name: 'TaxNow' }).click()
+    await page.getByRole('button', { name: 'Add client' }).click()
+    const name = `E2E Onboarding held elsewhere ${Date.now()}`
+    await page.getByLabel('Legal name').fill(name)
+    // Ends in the last four of the fixture account no demo client holds:
+    // someone else's 8821 already put it in the platform org.
+    const ein = '100008824'
+    await page.getByLabel(/EIN/).fill(ein)
+    await page.getByRole('button', { name: 'Create client and 8821' }).click()
+    await expect(page.getByRole('heading', { name })).toBeVisible()
+    const entityId = await clientEntityId(page)
+    try {
+      await page.getByRole('button', { name: 'Copy signature link' }).click()
+      const link = await page.getByLabel('Signature link').inputValue()
+      const signer = await signAsClient(browser, link, name, ein)
+      await signer.finishCheck()
+      await page.reload()
+      await expect(page.getByText(/Verified: .*EIN ending 8824/)).toBeVisible({ timeout: 20_000 })
+      await page.getByRole('button', { name: 'Mark submitted' }).click()
+      await expect(page.getByText(/Checked 0 times/)).toBeVisible()
+      await page.getByRole('button', { name: 'Check now' }).click()
+      // TaxNow finds the TIN, but only through the other firm's 8821: the
+      // client reads exactly as one not found yet.
+      await expect(page.getByText('Not readable yet. Checked again tomorrow.')).toBeVisible({ timeout: 20_000 })
+      await expect(page.getByText(/Checked 1 time,/)).toBeVisible()
+      await expect(page.getByRole('tab', { name: 'IRS account' })).toHaveCount(0)
+      await expect(page.getByText(/another (firm|practice)|already (held|read)/i)).toHaveCount(0)
+      await nav(page).getByRole('link', { name: 'Clients' }).click()
+      await expect(page.getByRole('row', { name: new RegExp(name) })).not.toContainText('Readable')
     } finally {
       await page.request.delete(`/api/entities/${entityId}`, { headers: authed(await sessionToken(page)) })
     }
@@ -193,14 +237,16 @@ async function removeLeftoverTestClients(page: Page) {
 }
 
 /** The taxpayer opens the link with no login, signs, and starts the identity
- *  check; finishCheck() is the photo ID and selfie, done (sandbox). */
-async function signAsClient(browser: Browser, link: string, taxpayer: string) {
+ *  check; finishCheck() is the photo ID and selfie, done (sandbox), then a
+ *  fictional K-1 naming the signer for this EIN. */
+async function signAsClient(browser: Browser, link: string, taxpayer: string, ein: string) {
+  const last4 = ein.slice(-4)
   const ctx = await browser.newContext()
   const p = await ctx.newPage()
   await p.goto(link)
   await expect(p.getByRole('heading', { name: /Form 8821/ })).toBeVisible()
   await expect(p.getByText(taxpayer)).toBeVisible()
-  await expect(p.getByText(/EIN ending 0006/)).toBeVisible()
+  await expect(p.getByText(new RegExp(`EIN ending ${last4}`))).toBeVisible()
   // The form itself, behind the same link, with the TIN as its last four.
   const pdf = await p.request.get(await p.getByRole('link', { name: /View the form/ }).getAttribute('href') ?? '')
   expect(pdf.headers()['content-type']).toContain('application/pdf')
@@ -230,9 +276,27 @@ async function signAsClient(browser: Browser, link: string, taxpayer: string) {
     await p.goto(link)
     // A business: the signer then shows they belong to it (a fictional K-1).
     await expect(p.getByText('Your ID and SSN are confirmed.')).toBeVisible({ timeout: 20_000 })
-    await p.getByLabel('Document (PDF or photo)').setInputFiles('e2e/fixtures/sample-k1-proof.pdf')
+    await p.getByLabel('Document (PDF or photo)').setInputFiles({ name: 'k1-proof.pdf', mimeType: 'application/pdf', buffer: await fictionalK1(taxpayer, ein) })
     await p.getByRole('button', { name: 'Upload proof' }).click()
     await expect(p.getByRole('heading', { name: 'Signed and verified. Thank you.' })).toBeVisible({ timeout: 60_000 })
     await ctx.close()
   } }
+}
+
+/** A one-page fictional Schedule K-1 naming Pat Example for this business:
+ *  the proof a business signer uploads. Made per run, since each run's EIN
+ *  is fresh (the proof's EIN must be the client's). */
+async function fictionalK1(business: string, ein: string): Promise<Buffer> {
+  const doc = await PDFDocument.create()
+  const page = doc.addPage([612, 792])
+  const font = await doc.embedFont(StandardFonts.Helvetica)
+  const lines = [
+    'Schedule K-1 (Form 1120-S) 2024 (FICTIONAL TEST DOCUMENT)',
+    `Part I  A Corporation's EIN: ${ein.slice(0, 2)}-${ein.slice(2)}`,
+    `B Corporation's name: ${business}`,
+    "Part II  E Shareholder's name: Pat Example",
+    'G Shareholder percentage of stock ownership: 50%',
+  ]
+  lines.forEach((t, i) => page.drawText(t, { x: 50, y: 740 - 24 * i, size: 12, font }))
+  return Buffer.from(await doc.save())
 }
