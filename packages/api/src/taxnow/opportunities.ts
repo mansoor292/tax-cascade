@@ -52,7 +52,7 @@
  * raised where the IRS says no return is owed (590/591/594). deposits_no_return
  * is what is left: credit on a no-return period that is none of these.
  */
-import { FTA_CODES, NOT_ABATABLE, PENALTY_NAME, sectionOfForm } from './codes.js'
+import { FTA_CODES, INTEREST_CODES, NOT_ABATABLE, PENALTY_NAME, actionOf, familyOf, penaltyKeyOf, reversesOf, sectionOfForm } from './codes.js'
 import type { ParsedTranscript, PeriodStatus, Txn } from './transcript.js'
 
 export interface Period {
@@ -64,7 +64,7 @@ export interface Period {
 }
 
 export type OpportunityType =
-  | 'credit_held' | 'missing_return' | 'penalty_covid_kwong' | 'missing_return_unclear' | 'missing_return_pending' | 'deposits_no_return' | 'refund_not_reissued' | 'penalty_fta' | 'penalty_reasonable_cause'
+  | 'credit_held' | 'missing_return' | 'penalty_covid_kwong' | 'penalty_fta_after_payment' | 'missing_return_unclear' | 'missing_return_pending' | 'deposits_no_return' | 'refund_not_reissued' | 'penalty_fta' | 'penalty_reasonable_cause'
   | 'claim_pending' | 'claim_disallowed'
 
 export interface Opportunity {
@@ -75,6 +75,9 @@ export interface Opportunity {
   periodMonth: number
   amountCents: number | null
   note: string
+  /** Penalties: what abatement would pay back, and what it would take off the balance due. */
+  refundCents?: number
+  lowersOwedCents?: number
 }
 
 const d = (s: string | null | undefined) => (s ? new Date(s + 'T00:00:00Z') : null)
@@ -222,9 +225,13 @@ function missingReturn(p: Period, all: Period[]): [OpportunityType, string] | nu
 
 export function findOpportunities(periods: Period[], today: Date, maxYear = today.getUTCFullYear() - 1): Opportunity[] {
   const out: Opportunity[] = []
-  const add = (p: Period, type: OpportunityType, amountCents: number | null, note: string) =>
-    out.push({ section: sectionOfForm(p.form), type, form: p.form, taxYear: p.taxYear, periodMonth: p.periodMonth, amountCents, note })
+  const add = (p: Period, type: OpportunityType, amountCents: number | null, note: string, extra: Partial<Opportunity> = {}) =>
+    out.push({ section: sectionOfForm(p.form), type, form: p.form, taxYear: p.taxYear, periodMonth: p.periodMonth, amountCents, note, ...extra })
 
+  // Read each transaction's family, reversal and action from today's tables,
+  // not from when its transcript was stored: a stored transcript is not
+  // parsed again until the IRS record changes.
+  periods = periods.map(p => (p.parsed ? { ...p, parsed: { ...p.parsed, txns: p.parsed.txns.map(reclassify) } } : p))
   const withData = periods.filter(p => p.parsed && p.taxYear <= maxYear)
   const scorp = isScorp(periods)
 
@@ -265,48 +272,91 @@ export function findOpportunities(periods: Period[], today: Date, maxYear = toda
     }
   }
 
-  // Penalties: standing amount per code per period, then whether it can still pay.
+  // Penalties: what stands per family key per period, then what abatement is
+  // worth. A family's codes share one key (codes.ts penaltyKeyOf); interest
+  // is never a penalty.
+  const standingOf = (t: ParsedTranscript) => {
+    const m = new Map<string, number>()
+    for (const x of t.txns) if (x.family === 'penalty' || x.family === 'interest') m.set(penaltyKeyOf(x.code), (m.get(penaltyKeyOf(x.code)) ?? 0) + (x.amountCents ?? 0))
+    return m
+  }
+  const standingBy = new Map<string, Map<string, number>>()   // form|year|month -> key -> cents
   const assessed: Array<{ form: string; year: number; month: number; code: string }> = []
   const ftaUsed: Array<{ form: string; date: string }> = []
-  for (const p of periods) for (const x of p.parsed?.txns ?? []) {
-    if (x.family === 'penalty' && !x.reverses) assessed.push({ form: p.form, year: p.taxYear, month: p.periodMonth, code: x.code })
-    if (x.action === 'first_time_abatement' && x.date) ftaUsed.push({ form: p.form, date: x.date })
+  const ia: Array<{ date: string; inForce: boolean }> = []
+  for (const p of periods) {
+    if (!p.parsed) continue
+    standingBy.set(`${p.form}|${p.taxYear}|${p.periodMonth}`, standingOf(p.parsed))
+    for (const x of p.parsed.txns) {
+      if (x.family === 'penalty' && !x.reverses) assessed.push({ form: p.form, year: p.taxYear, month: p.periodMonth, code: x.code })
+      if (x.action === 'first_time_abatement' && x.date) ftaUsed.push({ form: p.form, date: x.date })
+      if ((x.action === 'installment_agreement' || x.action === 'installment_removed') && x.date) ia.push({ date: x.date, inForce: x.action === 'installment_agreement' })
+    }
   }
+  // An installment agreement in force (the latest of established/removed)
+  // meets first-time abatement's "paid or arranged to pay".
+  const agreement = ia.sort((a, b) => a.date.localeCompare(b.date)).at(-1)?.inForce ?? false
+  const REMOVED_PRIOR = '; but a penalty in the 3 years before was removed — if that was by first-time abatement, it is used up'
+
   for (const p of withData) {
     const t = p.parsed!
-    const standing = new Map<string, number>()
-    for (const x of t.txns) {
-      if (x.family !== 'penalty' && x.family !== 'interest') continue
-      const code = x.reverses ?? x.code
-      standing.set(code, (standing.get(code) ?? 0) + (x.amountCents ?? 0))
-    }
+    const standing = standingBy.get(`${p.form}|${p.taxYear}|${p.periodMonth}`)!
     const interest = standing.get('196') ?? 0
     const filed = receivedDate(t) ?? d(t.txns.find(x => x.code === '150')?.date)
-    for (const [code, amt] of standing) {
-      if (code === '196' || amt <= 50) continue
+    const window = refundWindow(t)
+    // What abatement is worth: the part of a penalty still owed only comes
+    // off the balance; the part paid comes back only inside the refund
+    // window. Which payment went to which charge is not on the transcript,
+    // so money back is counted conservatively (only what cannot be hiding in
+    // the balance due), and the balance due is handed to the period's
+    // penalties largest first, so the reductions never add up to more than is
+    // owed. (Prototype, 2026-10-26: a proportional split called 13,743 of a
+    // 99,660 late-payment penalty refundable on a period whose whole balance
+    // due WAS that penalty.)
+    const dueNow = Math.max(t.balanceCents ?? 0, 0)
+    let owedLeft = dueNow
+    let penTotal = 0, intTotal = 0
+    for (const [k, v] of standing) if (v > 50) { if (INTEREST_CODES.has(k)) intTotal += v; else penTotal += v }
+    const taxOwed = Math.max(0, dueNow - penTotal - intTotal)
+    const listed = [...standing].filter(([code, amt]) => !INTEREST_CODES.has(code) && amt > 50).sort((a, b) => b[1] - a[1])
+    for (const [code, amt] of listed) {
       const kw = kwong(p, code, filed, scorp)
       if (NOT_ABATABLE.has(code) && !kw) continue
       const pend = periodEndDay(p.taxYear, p.periodMonth)
       const lookback = addYears(pend, -3)
-      const prior = assessed.some(a => a.form === p.form && FTA_CODES.has(a.code) && lookback < periodEndDay(a.year, a.month) && periodEndDay(a.year, a.month) < pend)
+      // A prior penalty counts against first-time abatement only while it
+      // stands; one the IRS removed may have been removed BY first-time
+      // abatement, which the transcript does not always say: noted.
+      const earlier = assessed.filter(a => a.form === p.form && FTA_CODES.has(a.code) && lookback < periodEndDay(a.year, a.month) && periodEndDay(a.year, a.month) < pend)
+      const stands = (a: typeof earlier[number]) => (standingBy.get(`${a.form}|${a.year}|${a.month}`)?.get(penaltyKeyOf(a.code)) ?? 0) > 50
+      const prior = earlier.some(stands)
+      const removedPrior = earlier.some(a => !stands(a))
       const used = ftaUsed.some(u => u.form === p.form && d(u.date)! >= lookback && d(u.date)! <= today)
-      let viable: string
-      if ((t.balanceCents ?? 0) > 0) viable = 'unpaid, so abatement lowers the balance due'
-      else {
-        const w = refundWindow(t)
-        if (w && w >= today) viable = `paid; refundable until ${iso(w)}`
-        else continue
-      }
+      const lowers = Math.min(amt, owedLeft)
+      owedLeft -= lowers
+      const paidPart = Math.max(0, amt - dueNow)
+      const refund = paidPart > 50 && window && window >= today ? paidPart : 0
+      if (lowers < 50 && refund < 50) continue
+      let viable = paidPart < 50 ? 'unpaid, so abatement lowers the balance due; no refund'
+        : lowers < 50 ? `paid; refundable until ${iso(window!)}`
+          : `partly paid: abatement lowers the balance due by up to ${money(lowers)} and ${refund ? `refunds at least ${money(refund)} (until ${iso(window!)})` : 'the paid part is outside the refund window'}`
+      if (taxOwed > 50) viable += `; about ${money(taxOwed)} of tax is still owed on the period, which abatement does not touch`
       const label = PENALTY_NAME[code] ?? `TC ${code}`
       const intNote = interest > 0 ? `; interest on the period ${money(interest)}` : ''
       const ftaFits = FTA_CODES.has(code) && !prior && !used
+      // First-time abatement also needs the tax paid or an installment agreement.
+      const ftaWaits = ftaFits && taxOwed > 50 && !agreement
+      const removed = removedPrior ? REMOVED_PRIOR : ''
+      const money_ = { refundCents: refund, lowersOwedCents: lowers }
       if (kw) {
-        add(p, 'penalty_covid_kwong', amt, `${cap(label)} penalty (TC ${code}); ${kw}; ${viable}; first-time abatement ${ftaFits ? 'also fits' : 'does not fit'}${interest > 0 ? `; interest on the period ${money(interest)} (the window may take some off too)` : ''}.`)
+        add(p, 'penalty_covid_kwong', amt, `${cap(label)} penalty (TC ${code}); ${kw}; ${viable}; first-time abatement ${ftaFits ? `also fits${ftaWaits ? ' once the tax is paid' : ''}` : 'does not fit'}${interest > 0 ? `; interest on the period ${money(interest)} (the window may take some off too)` : ''}.`, money_)
+      } else if (ftaWaits) {
+        add(p, 'penalty_fta_after_payment', amt, `${cap(label)} penalty (TC ${code}); first-time abatement fits once the tax is paid or an installment agreement is in place${removed}; ${viable}${intNote}.`, money_)
       } else if (ftaFits) {
-        add(p, 'penalty_fta', amt, `${cap(label)} penalty (TC ${code}); first-time abatement fits; ${viable}${intNote}.`)
+        add(p, 'penalty_fta', amt, `${cap(label)} penalty (TC ${code}); first-time abatement fits${removed}; ${viable}${intNote}.`, money_)
       } else {
         const why = !FTA_CODES.has(code) ? 'not a first-time-abatement penalty' : prior ? 'a penalty in the 3 years before' : 'first-time abatement used in the last 3 years'
-        add(p, 'penalty_reasonable_cause', amt, `${cap(label)} penalty (TC ${code}); ${why}; ${viable}${intNote}.`)
+        add(p, 'penalty_reasonable_cause', amt, `${cap(label)} penalty (TC ${code}); ${why}; ${viable}${intNote}.`, money_)
       }
     }
   }
@@ -326,6 +376,8 @@ export function findOpportunities(periods: Period[], today: Date, maxYear = toda
   }
   return merged.sort((a, b) => a.taxYear - b.taxYear || a.form.localeCompare(b.form) || a.periodMonth - b.periodMonth || a.type.localeCompare(b.type))
 }
+
+const reclassify = (x: Txn): Txn => ({ ...x, family: familyOf(x.code), reverses: reversesOf(x.code), action: actionOf(x.code, x.explanation) })
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 

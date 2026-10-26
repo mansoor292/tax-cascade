@@ -140,6 +140,9 @@ export interface FindingRow {
   period_month: number | null
   amount_cents: number | null
   note: string
+  /** Penalties: what abatement would refund, and take off the balance due. */
+  refund_cents?: number
+  lowers_owed_cents?: number
 }
 
 export interface ClientSummary {
@@ -183,7 +186,7 @@ export async function computeFindings(supabase: SupabaseClient, client: ClientRo
   const insights: Insight[] = findInsights(profiles, { retentionRefunds: retentionRefundsByYear(periods), estimatesByDec15: est, assessedTax: tax, secondReturnPosted: secondReturn })
 
   const findings: FindingRow[] = [
-    ...opps.map(o => ({ section: o.section, type: o.type, severity: o.type.startsWith('claim') ? 'review' : 'opportunity', form: o.form, tax_year: o.taxYear, period_month: o.periodMonth, amount_cents: o.amountCents, note: o.note })),
+    ...opps.map(o => ({ section: o.section, type: o.type, severity: o.type.startsWith('claim') ? 'review' : 'opportunity', form: o.form, tax_year: o.taxYear, period_month: o.periodMonth, amount_cents: o.amountCents, note: o.note, ...(o.refundCents != null ? { refund_cents: o.refundCents, lowers_owed_cents: o.lowersOwedCents } : {}) })),
     ...insights.map(i => ({ section: i.section, type: i.type, severity: i.severity, form: i.form, tax_year: i.taxYear, period_month: null, amount_cents: i.amountCents, note: i.note })),
   ]
 
@@ -215,7 +218,7 @@ async function replaceFindings(supabase: SupabaseClient, client: ClientRow, find
   if (!findings.length) return
   const rows = []
   for (const f of findings) {
-    const detail = { amount_cents: f.amount_cents, note: f.note }
+    const detail = { amount_cents: f.amount_cents, note: f.note, ...(f.refund_cents != null ? { refund_cents: f.refund_cents, lowers_owed_cents: f.lowers_owed_cents } : {}) }
     const base = { user_id: client.user_id, practice_id: client.practice_id, practice_client_id: client.id, section: f.section, type: f.type, severity: f.severity, form: f.form, tax_year: f.tax_year, period_month: f.period_month, detail }
     rows.push({ ...base, ...(await encryptedFields(supabase, client.user_id, base, ENCRYPTED_FINDING_FIELDS)) })
   }

@@ -66,16 +66,24 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await expect(page.getByText('Account balance').locator('..')).toContainText('−$8,140')
   })
 
-  test('PJ3 Penalties: first-time abatement fits, payroll kept in its own section', async ({ page }) => {
+  test('PJ3 Penalties: first-time abatement fits, refund or off the balance, payroll kept in its own section', async ({ page }) => {
     await signIn(page)
     await toPractice(page)
     await nav(page).getByRole('link', { name: 'Opportunities' }).click()
     const fta = page.getByRole('region', { name: 'Penalty, first-time abatement' })
     await expect(fta.getByRole('row', { name: /Ostrander Millwork Inc/ })).toContainText(/refundable until 2027-08-19/)
+    // Paid: abatement is money back.
+    await expect(fta.getByRole('row', { name: /Ostrander Millwork Inc/ })).toContainText('refund $2,550')
     // Income first; the 941 deposit penalty is not in the income section.
     await expect(fta.getByRole('row', { name: /Redwick Staffing Group/ })).toHaveCount(0)
     await page.getByRole('tab', { name: /Payroll/ }).click()
     await expect(page.getByRole('region', { name: 'Penalty, first-time abatement' }).getByRole('row', { name: /Redwick Staffing Group/ })).toContainText('$1,840')
+    // Unpaid: abatement takes it off the balance due.
+    await expect(page.getByRole('region', { name: 'Penalty, first-time abatement' }).getByRole('row', { name: /Redwick Staffing Group/ })).toContainText('off balance $1,840')
+    // Tax still owed and no installment agreement: first-time abatement waits for the tax.
+    const waits = page.getByRole('region', { name: 'Penalty, FTA once tax is paid' }).getByRole('row', { name: /Northgate Tool & Die Co/ })
+    await expect(waits).toContainText('$2,500')
+    await expect(waits).toContainText('about 12,000.00 of tax is still owed')
     await page.getByRole('tab', { name: /Risks from the returns/ }).click()
     await expect(page.getByRole('region', { name: 'Low officer pay' })).toContainText('Ostrander Millwork Inc')
   })

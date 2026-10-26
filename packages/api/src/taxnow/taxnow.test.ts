@@ -250,6 +250,56 @@ describe('the COVID window (Kwong)', () => {
   })
 })
 
+describe('penalties, how they are read', () => {
+  const t = (code: string, explanation: string, date: string, amountCents: number) =>
+    ({ seq: 0, code, family: familyOf(code), action: actionOf(code, explanation), reverses: reversesOf(code), explanation, description: explanation, cycle: null, date, amountCents, dln: null, secondaryDate: null, otherForm: null, otherPeriod: null })
+  const late = (cents: number) => t('166', 'Penalty for filing a tax return late', '2024-06-03', cents)
+  /** Meridian's 2023 1120 (filed, received 2024-03-15) with this balance and these transactions; `y2022` goes on 2022. */
+  async function meridian2023(balanceCents: number, txns: ReturnType<typeof t>[], y2022: ReturnType<typeof t>[] = []) {
+    const ps = await periodsOf('fx-meridian')
+    for (const [year, extra, bal] of [[2023, txns, balanceCents], [2022, y2022, null]] as const) {
+      const p = ps.find(x => x.form === '1120' && x.taxYear === year)!
+      p.parsed = { ...p.parsed!, ...(bal != null ? { balanceCents: bal } : {}), txns: [...p.parsed!.txns, ...extra] }
+    }
+    return findOpportunities(ps, today).filter(o => o.taxYear === 2023 && o.type.startsWith('penalty'))
+  }
+  it('either removal code takes off either code of its family', async () => {
+    // A TC 166 removed by a TC 161 the same day: nothing stands.
+    expect(await meridian2023(0, [late(500000), t('161', 'Removed penalty for filing a tax return late', '2024-06-03', -500000)])).toEqual([])
+  })
+  it('interest is never a penalty', async () => {
+    expect(await meridian2023(90000, [t('336', 'Interest charged for late payment', '2024-06-03', 90000)])).toEqual([])
+  })
+  it('a partly paid penalty: what abatement takes off the balance and what it refunds, apart', async () => {
+    const [o] = await meridian2023(200000, [late(500000)])
+    expect(o).toMatchObject({ type: 'penalty_fta', amountCents: 500000, lowersOwedCents: 200000, refundCents: 300000 })
+    expect(o.note).toMatch(/partly paid: abatement lowers the balance due by up to 2,000.00 and refunds at least 3,000.00 \(until 2027-03-15\)/)
+    // Unpaid in full: no refund. Paid in full: no lowering.
+    expect(await meridian2023(500000, [late(500000)])).toMatchObject([{ refundCents: 0, lowersOwedCents: 500000 }])
+    expect(await meridian2023(0, [late(500000)])).toMatchObject([{ refundCents: 500000, lowersOwedCents: 0 }])
+  })
+  it('first-time abatement waits while tax is still owed, unless an installment agreement is in force', async () => {
+    const [o] = await meridian2023(1200000, [late(500000)])
+    expect(o).toMatchObject({ type: 'penalty_fta_after_payment', lowersOwedCents: 500000, refundCents: 0 })
+    expect(o.note).toMatch(/fits once the tax is paid or an installment agreement is in place; .*about 7,000.00 of tax is still owed on the period/)
+    const ia = t('971', 'Installment agreement established', '2025-01-10', 0)
+    expect((await meridian2023(1200000, [late(500000), ia]))[0].type).toBe('penalty_fta')
+    expect((await meridian2023(1200000, [late(500000), ia, t('971', 'Removed installment agreement', '2025-09-10', 0)]))[0].type).toBe('penalty_fta_after_payment')
+  })
+  it('a prior penalty the IRS removed does not count against first-time abatement, but is noted', async () => {
+    const removed = [t('166', 'Penalty for filing a tax return late', '2023-06-01', 100000), t('167', 'Removed penalty for filing a tax return late', '2023-09-01', -100000)]
+    const [o] = await meridian2023(500000, [late(500000)], removed)
+    expect(o.type).toBe('penalty_fta')
+    expect(o.note).toMatch(/but a penalty in the 3 years before was removed — if that was by first-time abatement, it is used up/)
+    // Still standing, it does count.
+    expect((await meridian2023(500000, [late(500000)], removed.slice(0, 1)))[0].type).toBe('penalty_reasonable_cause')
+  })
+  it('a stored transcript is read with today’s code tables, not those it was parsed with', async () => {
+    const stale = { ...late(500000), family: 'other' as const }
+    expect(await meridian2023(500000, [stale])).toMatchObject([{ type: 'penalty_fta', amountCents: 500000 }])
+  })
+})
+
 describe('insights from the returns', () => {
   async function insightsOf(id: string) {
     const periods = await periodsOf(id)

@@ -9,7 +9,7 @@ import { usePracticeClients, useOpportunities, type ClientRow } from '@/hooks/us
 import LoadError from '@/components/LoadError'
 import { Button } from '@/components/ui/button'
 import { PageHeader, Pill, Tile } from '@/components/ds'
-import { STAGE, FORM_NAME, money, ago } from '@/lib/practice-labels'
+import { STAGE, FORM_NAME, PENALTIES, money, ago } from '@/lib/practice-labels'
 import { usePracticeCtx } from './PracticeLayout'
 
 type Filter = 'all' | 'readable' | 'onboarding' | 'opportunities'
@@ -28,7 +28,7 @@ export default function Clients() {
     const count = (types: string[]) => findings.filter(f => types.includes(f.type)).length
     return {
       holds: sum(['credit_held', 'refund_not_reissued']),
-      penalties: sum(['penalty_fta', 'penalty_reasonable_cause']),
+      penalties: sum(PENALTIES),
       kwong: sum(['penalty_covid_kwong']),
       missing: count(['missing_return']),
       missingOther: count(['missing_return_unclear', 'missing_return_pending']),

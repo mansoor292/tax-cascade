@@ -9,7 +9,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useOpportunities, type Finding } from '@/hooks/use-practice'
 import LoadError from '@/components/LoadError'
 import { PageHeader, Pill, Tabs, Tile } from '@/components/ds'
-import { FINDING, FINDING_ORDER, SECTION, FORM_NAME, money, periodLabel } from '@/lib/practice-labels'
+import { FINDING, FINDING_ORDER, PENALTIES, SECTION, FORM_NAME, money, periodLabel } from '@/lib/practice-labels'
 import { usePracticeCtx } from './PracticeLayout'
 
 type Section = 'income' | 'payroll' | 'risk'
@@ -27,6 +27,8 @@ export default function Opportunities() {
     return m
   }, [findings])
   const sum = (fs: Finding[], types: string[]) => fs.filter(f => types.includes(f.type)).reduce((a, f) => a + (f.amount_cents ?? 0), 0)
+  // A penalty's worth splits into money back and money no longer owed.
+  const split = (types: string[], part: 'refund_cents' | 'lowers_owed_cents') => findings.filter(f => types.includes(f.type)).reduce((a, f) => a + (f[part] ?? 0), 0)
   const groups = FINDING_ORDER
     .map(type => ({ type, rows: bySection[section].filter(f => f.type === type).sort((a, b) => (b.amount_cents ?? 0) - (a.amount_cents ?? 0)) }))
     .filter(g => g.rows.length)
@@ -37,7 +39,7 @@ export default function Opportunities() {
       <PageHeader crumb={practice.name} title="Opportunities" />
       <div className="ds-tiles mb-4">
         <Tile label="IRS holds" value={money(sum(findings, ['credit_held', 'refund_not_reissued']), '$0')} sub={`income ${money(sum(bySection.income, ['credit_held', 'refund_not_reissued']), '$0')} · payroll ${money(sum(bySection.payroll, ['credit_held', 'refund_not_reissued']), '$0')}`} />
-        <Tile label="Penalties that can come off" value={money(sum(findings, ['penalty_fta', 'penalty_reasonable_cause']), '$0')} sub={`income ${money(sum(bySection.income, ['penalty_fta', 'penalty_reasonable_cause']), '$0')} · payroll ${money(sum(bySection.payroll, ['penalty_fta', 'penalty_reasonable_cause']), '$0')}${sum(findings, ['penalty_covid_kwong']) ? ` · COVID window ${money(sum(findings, ['penalty_covid_kwong']), '$0')} more, contested` : ''}`} />
+        <Tile label="Penalties that can come off" value={money(sum(findings, PENALTIES), '$0')} sub={`refunds ${money(split(PENALTIES, 'refund_cents'), '$0')} · off balances due ${money(split(PENALTIES, 'lowers_owed_cents'), '$0')}${sum(findings, ['penalty_covid_kwong']) ? ` · COVID window ${money(sum(findings, ['penalty_covid_kwong']), '$0')} more, contested` : ''}`} />
         <Tile label="Missing returns" value={findings.filter(f => f.type === 'missing_return').length} sub={`${findings.filter(f => f.type === 'missing_return_unclear').length} unclear · ${findings.filter(f => f.type === 'missing_return_pending').length} recent`} />
         <Tile label="Claims in flight" value={findings.filter(f => f.type === 'claim_pending').length} sub={`${findings.filter(f => f.type === 'claim_disallowed').length} disallowed`} />
         <Tile label="Amendment candidates" value={findings.filter(f => f.type === 'erc_refund_as_income').length} sub="retention credit booked as income" />
@@ -70,7 +72,12 @@ export default function Opportunities() {
                           <td><Link className="ds-rowlink" onClick={e => e.stopPropagation()} to={`/app/practice/clients/${f.practice_client_id}?form=${f.form}&year=${f.tax_year}${f.period_month ? `&month=${f.period_month}` : ''}`}>{f.client_name}</Link></td>
                           <td className="num">{FORM_NAME[f.form] ?? f.form}</td>
                           <td className="num">{periodLabel(f.form, f.tax_year, f.period_month)}</td>
-                          <td className="r num">{g.type === 'revenue_swing' ? money(f.amount_cents) : money(f.amount_cents)}</td>
+                          <td className="r num">
+                            {money(f.amount_cents)}
+                            {f.refund_cents != null && (
+                              <span className="block text-[11px] text-muted-foreground">{[f.refund_cents ? `refund ${money(f.refund_cents)}` : '', f.lowers_owed_cents ? `off balance ${money(f.lowers_owed_cents)}` : ''].filter(Boolean).join(' · ')}</span>
+                            )}
+                          </td>
                           <td className="text-muted-foreground">{f.note}</td>
                         </tr>
                       ))}

@@ -24,6 +24,8 @@ export interface ClientRow {
 export interface Finding {
   id: string; practice_client_id: string; client_name?: string; section: 'income' | 'payroll' | 'risk'; type: string; severity: string
   form: string; tax_year: number; period_month: number | null; amount_cents: number | null; note: string
+  /** Penalties: what abatement would refund, and take off the balance due. */
+  refund_cents?: number | null; lowers_owed_cents?: number | null
 }
 export interface Txn { seq: number; code: string; explanation: string; date: string | null; amountCents: number | null; family: string; action: string | null }
 export interface Transcript {

@@ -30,7 +30,8 @@ export const FINDING: Record<string, { label: string; kind: string; tone: 'good'
   missing_return_unclear: { label: 'Missing return, unclear', kind: 'Missing', tone: 'warn', rule: 'The same evidence, but the IRS record points elsewhere: deposits moved to another period (TC 652), a return marked secured that never posted (599), a duplicate or amended return with no original, or the delinquency closed (593/597/598).' },
   missing_return_pending: { label: 'Missing return, recent', kind: 'Missing', tone: 'info', rule: 'Past due by 120 days or less: the return may still be processing.' },
   deposits_no_return: { label: 'Deposits, no return due yet', kind: 'Money', tone: 'mute', rule: 'Credit on a period the IRS shows "No tax return filed" that is none of the above: not due yet, or no evidence a return is owed. Not money owed back until a return posts.' },
-  penalty_fta: { label: 'Penalty, first-time abatement', kind: 'Penalty', tone: 'warn', rule: 'Late filing, late payment or deposit penalty still standing, with none in the 3 years before. Counts only if unpaid or inside the refund window.' },
+  penalty_fta: { label: 'Penalty, first-time abatement', kind: 'Penalty', tone: 'warn', rule: 'Late filing, late payment or deposit penalty still standing, with none still standing in the 3 years before. Unpaid, abatement takes it off the balance due; paid, it refunds only inside the refund window.' },
+  penalty_fta_after_payment: { label: 'Penalty, FTA once tax is paid', kind: 'Penalty', tone: 'info', rule: 'First-time abatement fits, but tax is still owed on the period and no installment agreement is in force: it becomes available once the tax is paid or an agreement is in place.' },
   penalty_reasonable_cause: { label: 'Penalty, reasonable cause', kind: 'Penalty', tone: 'warn', rule: 'Any other abatable penalty still standing. Estimated-tax penalties and collection fees are left out.' },
   penalty_covid_kwong: { label: 'Penalty, COVID window (Kwong)', kind: 'Penalty', tone: 'warn', rule: 'Late filing, late payment, deposit or estimated-tax penalty on a deadline from 2020-01-20 to 2023-07-10, which IRC 7508A(d) postponed (Kwong v. United States, Ct. Fed. Cl. 2025). The IRS does not accept it: a position to argue, not settled law. Counts only if unpaid or inside the refund window.' },
   claim_pending: { label: 'Claim pending', kind: 'Claim', tone: 'info', rule: 'TC 971 claim forwarded with nothing posted after it. The transcript does not carry the amount.' },
@@ -45,6 +46,9 @@ export const FINDING: Record<string, { label: string; kind: string; tone: 'good'
   shareholder_loan: { label: 'Loans to shareholders', kind: 'Risk', tone: 'bad', rule: 'Balance-sheet loans to shareholders at year end.' },
   revenue_swing: { label: 'Revenue swing', kind: 'Info', tone: 'mute', rule: 'Gross receipts moved more than 50%.' },
 }
+/** Penalties that can come off, in the tiles' totals. The COVID window is contested, so it is named beside them. */
+export const PENALTIES = ['penalty_fta', 'penalty_fta_after_payment', 'penalty_reasonable_cause']
+
 /** Display order within a section: money first, then missing, penalties, claims, the returns. */
 export const FINDING_ORDER = Object.keys(FINDING)
 

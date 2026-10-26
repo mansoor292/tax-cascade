@@ -117,6 +117,8 @@ const ACCOUNTS: AccountSpec[] = [
       { form: '1120', year: 2021, month: 12, kind: 'filed', balance: '-$4,575.00', tx: [['150', 'Tax return filed', '04-12-2022', '$18,005.00'], ['806', 'Credit for withheld taxes', '04-15-2022', '-$22,580.00'], ['846', 'Refund issued', '03-06-2023', '$4,575.00'], ['740', 'Undelivered refund returned to IRS', '04-17-2023', '-$4,575.00']] },
       { form: '1120', year: 2023, month: 12, kind: 'filed', tx: [['150', 'Tax return filed', '04-15-2024', '$31,000.00'], ['660', 'Estimated tax payment', '04-17-2023', '-$7,750.00'], ['660', 'Estimated tax payment', '06-15-2023', '-$7,750.00'], ['660', 'Estimated tax payment', '09-15-2023', '-$7,750.00'], ['660', 'Estimated tax payment', '12-15-2023', '-$7,750.00']] },
       { form: '1120', year: 2024, month: 12, kind: 'filed', tx: [['150', 'Tax return filed', '04-15-2025', '$36,000.00'], ['660', 'Estimated tax payment', '04-15-2024', '-$8,000.00'], ['660', 'Estimated tax payment', '06-17-2024', '-$8,000.00'], ['660', 'Estimated tax payment', '09-16-2024', '-$8,000.00'], ['660', 'Estimated tax payment', '12-13-2024', '-$8,000.00'], ['176', 'Penalty for underpaying estimated tax', '04-15-2025', '$3,212.00'], ['670', 'Payment', '04-15-2025', '-$7,212.00']] },
+      // Filed late with the tax still owed: first-time abatement fits once it is paid.
+      { form: '941', year: 2024, month: 6, kind: 'filed', balance: '$14,500.00', tx: [['150', 'Tax return filed', '09-16-2024', '$12,000.00'], ['166', 'Penalty for filing a tax return late', '09-16-2024', '$2,500.00']] },
     ]),
     retr: {
       2023: { 'Gross Receipts': '$3,300,000.00', 'Taxable Income Per Computer': '$147,600.00', 'Total Income Tax': '$31,000.00', 'Received Date': '04-15-2024' },

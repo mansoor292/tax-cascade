@@ -216,7 +216,7 @@ async function findingRows(sb: SupabaseClient, p: Practice, clientId?: string): 
     if ((data ?? []).length < 1000) break
   }
   await hydrateAll(sb, out, ENCRYPTED_FINDING_FIELDS)
-  return out.map(f => ({ id: f.id, practice_client_id: f.practice_client_id, section: f.section, type: f.type, severity: f.severity, form: f.form, tax_year: f.tax_year, period_month: f.period_month, amount_cents: f.detail?.amount_cents ?? null, note: f.detail?.note ?? '' }))
+  return out.map(f => ({ id: f.id, practice_client_id: f.practice_client_id, section: f.section, type: f.type, severity: f.severity, form: f.form, tax_year: f.tax_year, period_month: f.period_month, amount_cents: f.detail?.amount_cents ?? null, note: f.detail?.note ?? '', refund_cents: f.detail?.refund_cents ?? null, lowers_owed_cents: f.detail?.lowers_owed_cents ?? null }))
 }
 
 export async function opportunities(sb: SupabaseClient, p: Practice) {

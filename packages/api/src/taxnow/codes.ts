@@ -68,6 +68,25 @@ for (const [c, r] of Object.entries({
 // (estimated-tax, late-filing, dishonored-payment penalties), not reversals.
 for (const c of ['173', '163', '283']) REVERSES.delete(c)
 
+// A penalty family shares one key (2026-10-26, Mansoor's review): either
+// removal code takes off either assessment code, so a TC 166 removed by a
+// TC 161 must net to nothing. Read per code, a $323K late-filing penalty
+// removed the same day stood. Odd codes reverse the key; even codes count as it.
+const PENALTY_KEY: Record<string, string> = {
+  '160': '166', '161': '166', '166': '166', '167': '166', '270': '276', '271': '276', '276': '276', '277': '276',
+  '170': '176', '171': '176', '176': '176', '177': '176', '180': '186', '181': '186', '186': '186', '187': '186',
+}
+for (const [c, k] of Object.entries(PENALTY_KEY)) if (Number(c) % 2 === 1) REVERSES.set(c, k)
+
+/** The code a penalty or interest charge stands under: what it reverses, its
+ *  family's key, or itself. */
+export function penaltyKeyOf(code: string): string {
+  return REVERSES.get(code) ?? PENALTY_KEY[code] ?? code
+}
+
+/** Interest charges and their reversals: never a penalty. */
+export const INTEREST_CODES = new Set(['196', '197', '336', '337', '190', '191', '340', '341'])
+
 export function reversesOf(code: string): string | null {
   return REVERSES.get(code) ?? null
 }
