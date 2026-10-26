@@ -16,6 +16,22 @@
  *    Paid penalties outside it are dropped (one org: 185 of them, $283K).
  *  - Estimated-tax penalties and collection fees are not abatable.
  * Penalty amounts are assessed less reversed, not matched to payments.
+ *
+ * Missing returns (prototype rule of 2026-10-26). The IRS opens an empty
+ * period for every year an 8821 lists, so a "No tax return filed" period
+ * holding only the representative entry (TC 960) says nothing about whether a
+ * return was due: about 230 such periods across the two prototype orgs. A
+ * period counts only when it is past due as of its last pull (the extended
+ * date if a TC 460 posted) AND something shows a return was owed: deposits,
+ * an extension, an IRS non-filing inquiry (TC 140), returns posted before and
+ * after it, the return posted the year before, or payroll filed that year (an
+ * 1120/1065 the client has filed before: an LLC with employees may report on
+ * a 1065 or its owner's 1040). It is "unclear" when the record points
+ * elsewhere (deposits moved out, TC 652; a return secured, 599, that never
+ * posted; a duplicate or amended return with no original; the delinquency
+ * closed, 593/597/598), "pending" within 120 days of the due date, and never
+ * raised where the IRS says no return is owed (590/591/594). deposits_no_return
+ * is what is left: credit on a no-return period that is none of these.
  */
 import { FTA_CODES, NOT_ABATABLE, PENALTY_NAME, sectionOfForm } from './codes.js'
 import type { ParsedTranscript, PeriodStatus, Txn } from './transcript.js'
@@ -29,7 +45,7 @@ export interface Period {
 }
 
 export type OpportunityType =
-  | 'credit_held' | 'deposits_no_return' | 'refund_not_reissued' | 'penalty_fta' | 'penalty_reasonable_cause'
+  | 'credit_held' | 'missing_return' | 'missing_return_unclear' | 'missing_return_pending' | 'deposits_no_return' | 'refund_not_reissued' | 'penalty_fta' | 'penalty_reasonable_cause'
   | 'claim_pending' | 'claim_disallowed'
 
 export interface Opportunity {
@@ -64,6 +80,71 @@ function periodEndDay(year: number, month: number) {
   return new Date(Date.UTC(year, month - 1, 28))
 }
 
+const INCOME_FORMS = new Set(['1120', '1065', '1040', '990', '990EZ'])
+const RETURN_FORMS = new Set([...INCOME_FORMS, '940', '941', '943', '944'])
+const NOT_OWED = new Set(['590', '591', '594'])   // not liable / no longer liable / return filed earlier
+const CLOSED: Record<string, string> = { '593': 'taxpayer not located', '597': 'delinquency surveyed', '598': 'delinquency shelved' }
+const PENDING_DAYS = 120   // a return filed near its due date can take this long to post
+const DAY = 86_400_000
+
+const monthEnd = (y: number, m: number) => new Date(Date.UTC(y, m, 0))
+/** n months after `day`: on day `dom` of that month, or its last day. */
+function monthsAfter(day: Date, n: number, dom?: number) {
+  const k = day.getUTCMonth() + n
+  const y = day.getUTCFullYear() + Math.floor(k / 12), m = (k % 12) + 1
+  return dom ? new Date(Date.UTC(y, m - 1, dom)) : monthEnd(y, m)
+}
+/** [due, extended due or null]. Weekend and holiday shifts are ignored; the pending window absorbs them. */
+function dueDates(form: string, pe: Date, scorp: boolean): [Date, Date | null] {
+  if (form === '941') return [monthsAfter(pe, 1), null]
+  if (form === '940' || form === '943' || form === '944') return [new Date(Date.UTC(pe.getUTCFullYear() + 1, 0, 31)), null]
+  const due = form === '1065' || (form === '1120' && scorp) ? monthsAfter(pe, 3, 15)
+    : form === '990' || form === '990EZ' ? monthsAfter(pe, 5, 15)
+      : monthsAfter(pe, 4, 15)   // 1120, 1040
+  return [due, monthsAfter(due, 6, 15)]
+}
+
+/** [type, note] for a "No tax return filed" period that looks owed, else null. */
+function missingReturn(p: Period, all: Period[]): [OpportunityType, string] | null {
+  const t = p.parsed!
+  const asof = d(t.requestDate)
+  if (!RETURN_FORMS.has(p.form) || !asof) return null
+  const txs = t.txns
+  const codes = new Set(txs.map(x => x.code))
+  if ([...NOT_OWED].some(c => codes.has(c))) return null
+  const pe = monthEnd(p.taxYear, p.periodMonth)
+  const scorp = all.some(o => o.form === '1120' && /1120S/.test(o.parsed?.formTitle ?? ''))
+  const [due, ext] = dueDates(p.form, pe, scorp)
+  const extended = !!ext && codes.has('460')
+  const last = extended ? ext! : due
+  if (asof <= last) return null
+  const filed = all.filter(o => o.form === p.form && o.status === 'filed').map(o => monthEnd(o.taxYear, o.periodMonth).getTime())
+  const ev: string[] = [], doubt: string[] = []
+  const paid = txs.some(x => (x.family === 'payment' || x.family === 'credit_in') && (x.amountCents ?? 0) < 0)
+  if (t.balanceCents != null && t.balanceCents < 0) ev.push('deposits still on the period')
+  else if (paid) {
+    if (codes.has('388') && !codes.has('389')) ev.push('deposits made then written off (refund time expired)')
+    else if (codes.has('652')) { ev.push('deposits made'); doubt.push('the deposits were moved to another period') }
+    else ev.push('deposits made')
+  }
+  if (extended) ev.push('extension filed')
+  if (codes.has('140')) ev.push('IRS non-filing inquiry')
+  if (filed.some(x => x < pe.getTime()) && filed.some(x => x > pe.getTime())) ev.push('returns posted for periods before and after')
+  if (INCOME_FORMS.has(p.form)) {
+    if (filed.includes(monthEnd(p.taxYear - 1, p.periodMonth).getTime())) ev.push('return posted the year before')
+    if ((p.form === '1120' || p.form === '1065') && filed.length
+      && all.some(o => o.status === 'filed' && o.taxYear === p.taxYear && ['941', '943', '944'].includes(o.form))) ev.push('payroll returns filed that year')
+  }
+  if (!ev.length) return null
+  for (const [c, w] of Object.entries(CLOSED)) if (codes.has(c)) doubt.push(`IRS closed the delinquency without a return (${w})`)
+  if (codes.has('599')) doubt.push('IRS marked a return secured but none posted here')
+  if (codes.has('976') || txs.some(x => x.action === 'misposted_return' || x.action === 'duplicate_return')) doubt.push('a duplicate or amended return posted here with no original')
+  const head = `The IRS shows no return; due ${iso(last)}${extended ? ' (extended)' : ''}`
+  const late = Math.round((asof.getTime() - last.getTime()) / DAY)
+  if (late <= PENDING_DAYS) return ['missing_return_pending', `${head}; not posted ${late} days later; evidence: ${ev.join(', ')}`]
+  return [doubt.length ? 'missing_return_unclear' : 'missing_return', `${head}; evidence: ${ev.join(', ')}${doubt.length ? `; doubt: ${doubt.join(', ')}` : ''}`]
+}
+
 export function findOpportunities(periods: Period[], today: Date, maxYear = today.getUTCFullYear() - 1): Opportunity[] {
   const out: Opportunity[] = []
   const add = (p: Period, type: OpportunityType, amountCents: number | null, note: string) =>
@@ -76,6 +157,7 @@ export function findOpportunities(periods: Period[], today: Date, maxYear = toda
     const txs = [...t.txns].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
     const openHold = txs.filter(x => x.code === '570' || x.code === '810').length > txs.filter(x => x.code === '571' || x.code === '811').length
     const bal = t.balanceCents
+    const mr = p.status === 'no_return_filed' ? missingReturn(p, periods) : null
 
     if (bal != null && bal < 0) {
       if (p.status === 'filed') {
@@ -87,9 +169,11 @@ export function findOpportunities(periods: Period[], today: Date, maxYear = toda
       } else if (p.status === 'no_return_filed') {
         const w = refundWindow(t)
         const when = w ? `refund window ${w < today ? 'closed' : 'open to'} ${iso(w)}` : 'refund window unknown'
-        add(p, 'deposits_no_return', -bal, `The IRS shows no return filed; ${when}${openHold ? '; a hold is open' : ''}.`)
+        if (mr) add(p, mr[0], -bal, `${mr[1]}; ${when}${openHold ? '; a hold is open' : ''}.`)
+        else add(p, 'deposits_no_return', -bal, `The IRS shows no return filed; ${when}${openHold ? '; a hold is open' : ''}.`)
       }
     }
+    if (mr && !(bal != null && bal < 0)) add(p, mr[0], null, `${mr[1]}.`)
     for (const x of txs) {
       if ((x.code === '740' || x.code === '841') && !txs.some(y => y.code === '846' && y.date && x.date && y.date > x.date)) {
         add(p, 'refund_not_reissued', Math.abs(x.amountCents ?? 0), `TC ${x.code} ${x.description} ${x.date ?? ''}`.trim() + '; not reissued.')

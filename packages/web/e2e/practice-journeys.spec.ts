@@ -199,6 +199,22 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     }
   })
 
+  test('PJ10 Missing returns: tile → Opportunities; owed, recent and payroll kept apart', async ({ page }) => {
+    await signIn(page)
+    await toPractice(page)
+    await page.getByRole('link', { name: /Missing returns/ }).click()
+    await expect(page.getByRole('heading', { name: 'Opportunities' })).toBeVisible()
+    // Past due, deposits on the period and the 2023 return posted: owed.
+    const owed = page.getByRole('region', { name: 'Missing return', exact: true })
+    await expect(owed.getByRole('row', { name: /Meridian Bakeshop Inc/ }).first()).toContainText('$7,330')
+    await expect(owed).toContainText('deposits still on the period')
+    // Extended to 2026-10-15 and read four days later: may still be processing.
+    await expect(page.getByRole('region', { name: 'Missing return, recent' }).getByRole('row', { name: /Juniper Freight LLC/ })).toContainText('$12,000')
+    await expect(owed.getByRole('row', { name: /Juniper Freight LLC/ })).toHaveCount(0)
+    await page.getByRole('tab', { name: /Payroll/ }).click()
+    await expect(page.getByRole('region', { name: 'Missing return', exact: true }).getByRole('row', { name: /Ostrander Millwork Inc/ })).toContainText('$420')
+  })
+
   test('PJ6 IRS requests always pass through the confirmation', async ({ page }) => {
     await signIn(page)
     await toPractice(page)

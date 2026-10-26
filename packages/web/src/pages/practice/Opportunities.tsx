@@ -38,7 +38,7 @@ export default function Opportunities() {
       <div className="ds-tiles mb-4">
         <Tile label="IRS holds" value={money(sum(findings, ['credit_held', 'refund_not_reissued']), '$0')} sub={`income ${money(sum(bySection.income, ['credit_held', 'refund_not_reissued']), '$0')} · payroll ${money(sum(bySection.payroll, ['credit_held', 'refund_not_reissued']), '$0')}`} />
         <Tile label="Penalties that can come off" value={money(sum(findings, ['penalty_fta', 'penalty_reasonable_cause']), '$0')} sub={`income ${money(sum(bySection.income, ['penalty_fta', 'penalty_reasonable_cause']), '$0')} · payroll ${money(sum(bySection.payroll, ['penalty_fta', 'penalty_reasonable_cause']), '$0')}`} />
-        <Tile label="Missing returns" value={findings.filter(f => f.type === 'deposits_no_return').length} sub="IRS shows no return, deposits on file" />
+        <Tile label="Missing returns" value={findings.filter(f => f.type === 'missing_return').length} sub={`${findings.filter(f => f.type === 'missing_return_unclear').length} unclear · ${findings.filter(f => f.type === 'missing_return_pending').length} recent`} />
         <Tile label="Claims in flight" value={findings.filter(f => f.type === 'claim_pending').length} sub={`${findings.filter(f => f.type === 'claim_disallowed').length} disallowed`} />
         <Tile label="Amendment candidates" value={findings.filter(f => f.type === 'erc_refund_as_income').length} sub="retention credit booked as income" />
         <Tile label="Risks" value={bySection.risk.filter(f => f.severity === 'risk').length} sub="officer pay · distributions · loans" />

@@ -72,13 +72,56 @@ describe('transcript HTML', () => {
   })
 })
 
+describe('missing returns', () => {
+  const tx = (code: string, explanation: string, date: string, amountCents: number) =>
+    ({ seq: 0, code, family: familyOf(code), action: actionOf(code, explanation), reverses: reversesOf(code), explanation, description: explanation, cycle: null, date, amountCents, dln: null, secondaryDate: null, otherForm: null, otherPeriod: null })
+  /** Meridian with its 2024 1120 changed: the deposits gone, these codes added. */
+  async function meridian2024(...extra: ReturnType<typeof tx>[]) {
+    const ps = await periodsOf('fx-meridian')
+    const p = ps.find(x => x.form === '1120' && x.taxYear === 2024)!
+    p.parsed = { ...p.parsed!, balanceCents: 0, txns: [...p.parsed!.txns, ...extra] }
+    return findOpportunities(ps, today).filter(o => o.form === '1120' && o.taxYear === 2024)
+  }
+
+  it('an empty period the 8821 opened is not a missing return; payroll filed that year makes it one', async () => {
+    // Meridian 2025: "No tax return filed" with nothing on it, and no 1120 posted for 2024.
+    const ps = await periodsOf('fx-meridian')
+    const y2025 = (list: Period[]) => findOpportunities(list, today).filter(o => o.form === '1120' && o.taxYear === 2025)
+    expect(y2025(ps)).toMatchObject([{ type: 'missing_return', amountCents: null }])
+    expect(y2025(ps)[0].note).toMatch(/evidence: payroll returns filed that year\.$/)
+    expect(y2025(ps.filter(p => !(p.taxYear === 2025 && p.form !== '1120')))).toEqual([])
+  })
+  it('within 120 days of the extended due date it is pending', async () => {
+    const j = findOpportunities(await periodsOf('fx-juniper'), today).find(o => o.form === '1120' && o.taxYear === 2025)
+    expect(j).toMatchObject({ type: 'missing_return_pending', amountCents: 1200000 })
+    expect(j!.note).toMatch(/due 2026-10-15 \(extended\); not posted 4 days later; evidence: deposits still on the period, extension filed, return posted the year before/)
+  })
+  it('a payroll return counts too, in the payroll section', async () => {
+    const o = findOpportunities(await periodsOf('fx-ostrander'), today).find(x => x.form === '940' && x.taxYear === 2023)
+    expect(o).toMatchObject({ type: 'missing_return', section: 'payroll', amountCents: 42000 })
+  })
+  it('deposits moved to another period make it unclear', async () => {
+    const [o] = await meridian2024(tx('652', 'Reversed payment moved to another period', '06-01-2025', 733000))
+    expect(o).toMatchObject({ type: 'missing_return_unclear', amountCents: null })
+    expect(o.note).toMatch(/doubt: the deposits were moved to another period/)
+  })
+  it('a delinquency the IRS closed, or a return secured that never posted, makes it unclear', async () => {
+    expect((await meridian2024(tx('598', 'Delinquency shelved', '2025-09-01', 0)))[0].type).toBe('missing_return_unclear')
+    expect((await meridian2024(tx('599', 'Return secured', '2025-09-01', 0)))[0].note).toMatch(/return secured but none posted here/)
+  })
+  it('where the IRS says no return is owed, nothing is raised', async () => {
+    expect(await meridian2024(tx('590', 'Not liable for this tax period', '2025-09-01', 0))).toEqual([])
+  })
+})
+
 describe('opportunities', () => {
-  it('a credit on a filed period is held; on a period with no return it is deposits waiting', async () => {
+  it('a credit on a filed period is held; on a past-due period with no return it is a missing return', async () => {
     const j = findOpportunities(await periodsOf('fx-juniper'), today)
     expect(j.find(o => o.type === 'credit_held')).toMatchObject({ form: '1120', taxYear: 2023, amountCents: 814000, section: 'income' })
     const m = findOpportunities(await periodsOf('fx-meridian'), today)
-    expect(m.find(o => o.type === 'deposits_no_return')).toMatchObject({ taxYear: 2024, amountCents: 733000 })
-    expect(m.some(o => o.type === 'credit_held')).toBe(false)
+    expect(m.find(o => o.type === 'missing_return')).toMatchObject({ taxYear: 2024, amountCents: 733000 })
+    expect(m.find(o => o.type === 'missing_return')!.note).toMatch(/due 2025-04-15; evidence: deposits still on the period, return posted the year before/)
+    expect(m.some(o => o.type === 'credit_held' || o.type === 'deposits_no_return')).toBe(false)
   })
   it('an undelivered refund is one opportunity, not also a credit held', async () => {
     const n = findOpportunities(await periodsOf('fx-northgate'), today)
