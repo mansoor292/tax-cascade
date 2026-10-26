@@ -14,6 +14,12 @@
  *    paid and inside the refund window, estimated as three years from the
  *    return's received date or two years from the period's last payment.
  *    Paid penalties outside it are dropped (one org: 185 of them, $283K).
+ *  - Money on a period with no return (2026-10-26): the late return is itself
+ *    the claim, and the period's payments count as paid on the original due
+ *    date — a 941/943/944's on April 15 of the next year (IRC 6513(c)), an
+ *    income return's on its due date, or its extended date if a TC 460
+ *    posted — so they come back if it is filed within 3 years of that date.
+ *    Last payment + 2 years alone closed years that are still open.
  *  - Estimated-tax penalties and collection fees are not abatable.
  * Penalty amounts are assessed less reversed, not matched to payments.
  *
@@ -29,7 +35,8 @@
  * a 1065 or its owner's 1040). It is "unclear" when the record points
  * elsewhere (deposits moved out, TC 652; a return secured, 599, that never
  * posted; a duplicate or amended return with no original; the delinquency
- * closed, 593/597/598), "pending" within 120 days of the due date, and never
+ * closed, 593/597/598; an individual, 1040, whose only evidence is the filing
+ * pattern), "pending" within 120 days of the due date, and never
  * raised where the IRS says no return is owed (590/591/594). deposits_no_return
  * is what is left: credit on a no-return period that is none of these.
  */
@@ -59,7 +66,9 @@ export interface Opportunity {
 }
 
 const d = (s: string | null | undefined) => (s ? new Date(s + 'T00:00:00Z') : null)
-const addYears = (x: Date, n: number) => new Date(Date.UTC(x.getUTCFullYear() + n, x.getUTCMonth(), x.getUTCDate()))
+/** x + n years; 29 February falls back to the 28th (the prototype met one on an export). */
+const addYears = (x: Date, n: number) => new Date(Date.UTC(x.getUTCFullYear() + n, x.getUTCMonth(),
+  x.getUTCMonth() === 1 && x.getUTCDate() === 29 ? 28 : x.getUTCDate()))
 const iso = (x: Date) => x.toISOString().slice(0, 10)
 const money = (c: number) => (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -67,12 +76,14 @@ function receivedDate(p: ParsedTranscript): Date | null {
   return d(p.returnLines.find(l => l.key === 'received_date')?.valueDate)
 }
 
-/** The latest date a refund of a payment on this period can still be claimed. */
-function refundWindow(p: ParsedTranscript): Date | null {
+/** The latest date a refund of a payment on this period can still be claimed.
+ *  `deemedPaid`, for a period with no return: the date its payments count as
+ *  paid, whose 3 years the late return can still claim within. */
+function refundWindow(p: ParsedTranscript, deemedPaid: Date | null = null): Date | null {
   const rec = receivedDate(p)
   const pays = p.txns.filter(t => (t.family === 'payment' || t.family === 'credit_in') && t.date).map(t => d(t.date)!)
   const lastPay = pays.length ? new Date(Math.max(...pays.map(x => x.getTime()))) : null
-  const wins = [rec && addYears(rec, 3), lastPay && addYears(lastPay, 2)].filter((x): x is Date => !!x)
+  const wins = [rec && addYears(rec, 3), lastPay && addYears(lastPay, 2), deemedPaid && addYears(deemedPaid, 3)].filter((x): x is Date => !!x)
   return wins.length ? new Date(Math.max(...wins.map(x => x.getTime()))) : null
 }
 
@@ -80,10 +91,12 @@ function periodEndDay(year: number, month: number) {
   return new Date(Date.UTC(year, month - 1, 28))
 }
 
-const INCOME_FORMS = new Set(['1120', '1065', '1040', '990', '990EZ'])
+const INCOME_FORMS = new Set(['1120', '1065', '1040', '1041', '990', '990EZ'])
 const RETURN_FORMS = new Set([...INCOME_FORMS, '940', '941', '943', '944'])
 const NOT_OWED = new Set(['590', '591', '594'])   // not liable / no longer liable / return filed earlier
 const CLOSED: Record<string, string> = { '593': 'taxpayer not located', '597': 'delinquency surveyed', '598': 'delinquency shelved' }
+// Evidence an individual's filing pattern gives, and no more (see missingReturn).
+const PATTERN = new Set(['return posted the year before', 'returns posted for periods before and after'])
 const PENDING_DAYS = 120   // a return filed near its due date can take this long to post
 const DAY = 86_400_000
 
@@ -100,8 +113,20 @@ function dueDates(form: string, pe: Date, scorp: boolean): [Date, Date | null] {
   if (form === '940' || form === '943' || form === '944') return [new Date(Date.UTC(pe.getUTCFullYear() + 1, 0, 31)), null]
   const due = form === '1065' || (form === '1120' && scorp) ? monthsAfter(pe, 3, 15)
     : form === '990' || form === '990EZ' ? monthsAfter(pe, 5, 15)
-      : monthsAfter(pe, 4, 15)   // 1120, 1040
+      : monthsAfter(pe, 4, 15)   // 1120, 1040, 1041 (a 1041 extension runs to Sept 30, read here as Oct 15)
   return [due, monthsAfter(due, 6, 15)]
+}
+
+const isScorp = (all: Period[]) => all.some(o => o.form === '1120' && /1120S/.test(o.parsed?.formTitle ?? ''))
+
+/** When a no-return period's payments count as paid: April 15 of the next
+ *  year for a 941/943/944 (IRC 6513(c)); otherwise the due date, extended if
+ *  a TC 460 posted. Null for a form with no return rule. */
+function deemedPaid(p: Period, scorp: boolean): Date | null {
+  if (!RETURN_FORMS.has(p.form)) return null
+  if (['941', '943', '944'].includes(p.form)) return new Date(Date.UTC(p.taxYear + 1, 3, 15))
+  const [due, ext] = dueDates(p.form, monthEnd(p.taxYear, p.periodMonth), scorp)
+  return ext && p.parsed?.txns.some(x => x.code === '460') ? ext : due
 }
 
 /** [type, note] for a "No tax return filed" period that looks owed, else null. */
@@ -113,8 +138,7 @@ function missingReturn(p: Period, all: Period[]): [OpportunityType, string] | nu
   const codes = new Set(txs.map(x => x.code))
   if ([...NOT_OWED].some(c => codes.has(c))) return null
   const pe = monthEnd(p.taxYear, p.periodMonth)
-  const scorp = all.some(o => o.form === '1120' && /1120S/.test(o.parsed?.formTitle ?? ''))
-  const [due, ext] = dueDates(p.form, pe, scorp)
+  const [due, ext] = dueDates(p.form, pe, isScorp(all))
   const extended = !!ext && codes.has('460')
   const last = extended ? ext! : due
   if (asof <= last) return null
@@ -136,6 +160,13 @@ function missingReturn(p: Period, all: Period[]): [OpportunityType, string] | nu
       && all.some(o => o.status === 'filed' && o.taxYear === p.taxYear && ['941', '943', '944'].includes(o.form))) ev.push('payroll returns filed that year')
   }
   if (!ev.length) return null
+  // An individual's filing pattern alone proves little (prototype, first
+  // export: 1,783 such 1040 periods held only the 8821's TC 960): there may
+  // have been no filing requirement, or the return is a joint one under the
+  // spouse's number. Money, an extension or an IRS inquiry is needed.
+  if (p.form === '1040' && ev.every(e => PATTERN.has(e))) {
+    doubt.push('an individual with a filing pattern only (no return may have been required, or it is joint under the spouse)')
+  }
   for (const [c, w] of Object.entries(CLOSED)) if (codes.has(c)) doubt.push(`IRS closed the delinquency without a return (${w})`)
   if (codes.has('599')) doubt.push('IRS marked a return secured but none posted here')
   if (codes.has('976') || txs.some(x => x.action === 'misposted_return' || x.action === 'duplicate_return')) doubt.push('a duplicate or amended return posted here with no original')
@@ -151,6 +182,7 @@ export function findOpportunities(periods: Period[], today: Date, maxYear = toda
     out.push({ section: sectionOfForm(p.form), type, form: p.form, taxYear: p.taxYear, periodMonth: p.periodMonth, amountCents, note })
 
   const withData = periods.filter(p => p.parsed && p.taxYear <= maxYear)
+  const scorp = isScorp(periods)
 
   for (const p of withData) {
     const t = p.parsed!
@@ -167,7 +199,7 @@ export function findOpportunities(periods: Period[], today: Date, maxYear = toda
         const refundedAfter = txs.some(x => x.code === '846' && x.date && lastCredit && x.date >= lastCredit)
         add(p, 'credit_held', -bal, `Credit on the account since ${lastCredit ?? 'an unknown date'}; ${refundedAfter ? 'a refund was issued since but a balance remains' : 'no refund issued'}${openHold ? '; a freeze or hold is open' : ''}.`)
       } else if (p.status === 'no_return_filed') {
-        const w = refundWindow(t)
+        const w = refundWindow(t, deemedPaid(p, scorp))
         const when = w ? `refund window ${w < today ? 'closed' : 'open to'} ${iso(w)}` : 'refund window unknown'
         if (mr) add(p, mr[0], -bal, `${mr[1]}; ${when}${openHold ? '; a hold is open' : ''}.`)
         else add(p, 'deposits_no_return', -bal, `The IRS shows no return filed; ${when}${openHold ? '; a hold is open' : ''}.`)

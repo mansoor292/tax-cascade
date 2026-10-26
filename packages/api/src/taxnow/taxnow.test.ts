@@ -45,6 +45,15 @@ describe('transaction codes', () => {
     expect(reversesOf('841')).toBe('846')
     expect(familyOf('999')).toBe('other')
   })
+  it('173, 163 and 283 are assessments, not reversals; 577 lifts 576', () => {
+    expect(familyOf('173')).toBe('penalty')
+    expect(reversesOf('173')).toBeNull()
+    expect(reversesOf('163')).toBeNull()
+    expect(reversesOf('283')).toBeNull()
+    expect(reversesOf('281')).toBe('280')
+    expect(reversesOf('577')).toBe('576')
+    expect(familyOf('713')).toBe('credit_in')
+  })
 })
 
 describe('transcript HTML', () => {
@@ -111,6 +120,43 @@ describe('missing returns', () => {
   })
   it('where the IRS says no return is owed, nothing is raised', async () => {
     expect(await meridian2024(tx('590', 'Not liable for this tax period', '2025-09-01', 0))).toEqual([])
+  })
+
+  /** Meridian's 1120s read as another form; with `bare`, the 2024 deposits taken off. */
+  async function meridianAs(form: string, bare: boolean) {
+    const ps = (await periodsOf('fx-meridian')).map(p => (p.form === '1120' ? { ...p, form } : p))
+    const p = ps.find(x => x.form === form && x.taxYear === 2024)!
+    if (bare) p.parsed = { ...p.parsed!, balanceCents: 0, txns: p.parsed!.txns.filter(x => x.family !== 'payment') }
+    return findOpportunities(ps, today).filter(o => o.form === form && o.taxYear === 2024)
+  }
+  it('an individual whose only evidence is the filing pattern is unclear; money makes it a missing return', async () => {
+    const [bare] = await meridianAs('1040', true)
+    expect(bare).toMatchObject({ type: 'missing_return_unclear', amountCents: null })
+    expect(bare.note).toMatch(/evidence: return posted the year before; doubt: an individual with a filing pattern only/)
+    expect(await meridianAs('1040', false)).toMatchObject([{ type: 'missing_return', amountCents: 733000 }])
+    // A business with the same pattern is a missing return.
+    expect(await meridianAs('1120', true)).toMatchObject([{ type: 'missing_return' }])
+  })
+  it('a trust or estate return (1041) is read too', async () => {
+    const [o] = await meridianAs('1041', false)
+    expect(o).toMatchObject({ type: 'missing_return', amountCents: 733000 })
+    expect(o.note).toMatch(/due 2025-04-15;/)
+  })
+  it('money on a period with no return can be claimed 3 years from when it counts as paid', async () => {
+    // Income: the due date (last payment + 2 years would have said 2026-12-16).
+    expect((await meridianAs('1120', false))[0].note).toMatch(/refund window open to 2028-04-15/)
+    // Extended: the extended date.
+    const j = findOpportunities(await periodsOf('fx-juniper'), today).find(o => o.form === '1120' && o.taxYear === 2025)
+    expect(j!.note).toMatch(/refund window open to 2029-10-15/)
+    // A 940: its due date, January 31 (the deposit + 2 years closed in January 2026).
+    const o = findOpportunities(await periodsOf('fx-ostrander'), today).find(x => x.form === '940' && x.taxYear === 2023)
+    expect(o!.note).toMatch(/refund window open to 2027-01-31/)
+  })
+  it('a payment on 29 February counts 2 years to the 28th', async () => {
+    const ps = await periodsOf('fx-meridian')
+    const p = ps.find(x => x.form === '1120' && x.taxYear === 2024)!
+    p.parsed = { ...p.parsed!, txns: [...p.parsed!.txns, tx('670', 'Payment', '2032-02-29', -100)] }
+    expect(findOpportunities(ps, today).find(o => o.taxYear === 2024)!.note).toMatch(/refund window open to 2034-02-28/)
   })
 })
 
