@@ -215,6 +215,23 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     await expect(page.getByRole('region', { name: 'Missing return', exact: true }).getByRole('row', { name: /Ostrander Millwork Inc/ })).toContainText('$420')
   })
 
+  test('PJ11 Penalties in the COVID window: tile → Opportunities; kept apart from abatement and reasonable cause', async ({ page }) => {
+    await signIn(page)
+    await toPractice(page)
+    // Contested, so outside the tile's total and named beside it.
+    const tile = page.getByRole('link', { name: /Penalties that can come off/ })
+    await expect(tile).toContainText('$3,940 more under the COVID window')
+    await tile.click()
+    await expect(page.getByRole('heading', { name: 'Opportunities' })).toBeVisible()
+    // Redwick 2022: due 2023-04-15, filed 2023-11-20, within 5 months of the window's end.
+    const kwong = page.getByRole('region', { name: 'Penalty, COVID window (Kwong)' })
+    const row = kwong.getByRole('row', { name: /Redwick Staffing Group/ })
+    await expect(row).toContainText('$3,940')
+    await expect(row).toContainText('only the months before 2023-07-10')
+    // Its 2024 penalty, due after the window, stays with reasonable cause.
+    await expect(page.getByRole('region', { name: 'Penalty, reasonable cause' }).getByRole('row', { name: /Redwick Staffing Group/ })).toContainText('$2,700')
+  })
+
   test('PJ6 IRS requests always pass through the confirmation', async ({ page }) => {
     await signIn(page)
     await toPractice(page)

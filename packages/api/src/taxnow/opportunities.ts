@@ -9,7 +9,10 @@
  *    quarters or a missing return). One prototype org had ~4.5M of the second
  *    kind that a naive "credit balance" sum would have called money owed back.
  *  - A cancelled or undelivered refund (TC 841/740 with no TC 846 after it)
- *    puts the money back on the account: one opportunity, not two.
+ *    puts the money back on the account: one opportunity, not two. It is
+ *    owed back only while the period still holds a credit, and no more than
+ *    that credit (2026-10-26, Mansoor: an undelivered refund a later
+ *    assessment absorbed left the client owed nothing).
  *  - A penalty counts only if it can still pay: unpaid (the period owes), or
  *    paid and inside the refund window, estimated as three years from the
  *    return's received date or two years from the period's last payment.
@@ -20,7 +23,16 @@
  *    income return's on its due date, or its extended date if a TC 460
  *    posted — so they come back if it is filed within 3 years of that date.
  *    Last payment + 2 years alone closed years that are still open.
- *  - Estimated-tax penalties and collection fees are not abatable.
+ *  - Estimated-tax penalties and collection fees are not abatable, except
+ *    under the COVID window below.
+ *  - COVID window (Kwong v. United States, Ct. Fed. Cl. 2025, 179 Fed. Cl.
+ *    382): IRC 7508A(d) postponed every deadline from 2020-01-20 to 60 days
+ *    after the incident ended, 2023-07-10, so late-filing, late-payment,
+ *    deposit and estimated-tax penalties on those deadlines may come off.
+ *    The IRS does not accept it (its regulation caps the postponement at a
+ *    year): a litigating position, not settled law. Mansoor asked for these
+ *    on their own (2026-10-26), so they leave the first-time-abatement and
+ *    reasonable-cause lists, with first-time abatement's fit noted.
  * Penalty amounts are assessed less reversed, not matched to payments.
  *
  * Missing returns (prototype rule of 2026-10-26). The IRS opens an empty
@@ -52,7 +64,7 @@ export interface Period {
 }
 
 export type OpportunityType =
-  | 'credit_held' | 'missing_return' | 'missing_return_unclear' | 'missing_return_pending' | 'deposits_no_return' | 'refund_not_reissued' | 'penalty_fta' | 'penalty_reasonable_cause'
+  | 'credit_held' | 'missing_return' | 'penalty_covid_kwong' | 'missing_return_unclear' | 'missing_return_pending' | 'deposits_no_return' | 'refund_not_reissued' | 'penalty_fta' | 'penalty_reasonable_cause'
   | 'claim_pending' | 'claim_disallowed'
 
 export interface Opportunity {
@@ -104,7 +116,7 @@ const monthEnd = (y: number, m: number) => new Date(Date.UTC(y, m, 0))
 /** n months after `day`: on day `dom` of that month, or its last day. */
 function monthsAfter(day: Date, n: number, dom?: number) {
   const k = day.getUTCMonth() + n
-  const y = day.getUTCFullYear() + Math.floor(k / 12), m = (k % 12) + 1
+  const y = day.getUTCFullYear() + Math.floor(k / 12), m = (((k % 12) + 12) % 12) + 1   // n may be negative
   return dom ? new Date(Date.UTC(y, m - 1, dom)) : monthEnd(y, m)
 }
 /** [due, extended due or null]. Weekend and holiday shifts are ignored; the pending window absorbs them. */
@@ -115,6 +127,38 @@ function dueDates(form: string, pe: Date, scorp: boolean): [Date, Date | null] {
     : form === '990' || form === '990EZ' ? monthsAfter(pe, 5, 15)
       : monthsAfter(pe, 4, 15)   // 1120, 1040, 1041 (a 1041 extension runs to Sept 30, read here as Oct 15)
   return [due, monthsAfter(due, 6, 15)]
+}
+
+const KWONG_START = new Date(Date.UTC(2020, 0, 20)), KWONG_END = new Date(Date.UTC(2023, 6, 10))
+const LATE_FILING = new Set(['160', '166', '163', '234', '246']), LATE_PAYMENT = new Set(['270', '276'])
+const DEPOSIT = new Set(['180', '186']), ESTIMATED = new Set(['170', '176', '173'])
+const inKwong = (x: Date) => x >= KWONG_START && x <= KWONG_END
+
+/** What the COVID window takes off a penalty whose deadline fell in it, or
+ *  null. `filed`: when the return was received (a late-filing penalty). */
+function kwong(p: Period, code: string, filed: Date | null, scorp: boolean): string | null {
+  const pe = monthEnd(p.taxYear, p.periodMonth)
+  if (ESTIMATED.has(code)) {
+    // Installments: the 15th of months 4, 6, 9 and 12 of the year (an individual's last one in January).
+    const due = (p.form === '1040' ? [4, 6, 9, 13] : [4, 6, 9, 12]).map(n => monthsAfter(pe, n - 12, 15))
+    const n = due.filter(inKwong).length
+    if (!n) return null
+    return n === due.length ? 'estimated-tax installments all due in the COVID window (postponed to 2023-07-10): the whole penalty'
+      : `${n} of ${due.length} estimated-tax installments due in the COVID window: only their part`
+  }
+  if (DEPOSIT.has(code)) return inKwong(pe) ? 'deposits due in the COVID window (postponed to 2023-07-10)' : null
+  if (!LATE_FILING.has(code) && !LATE_PAYMENT.has(code)) return null
+  if (!RETURN_FORMS.has(p.form)) return null
+  const [due] = dueDates(p.form, pe, scorp)
+  if (!inKwong(due)) return null
+  if (LATE_PAYMENT.has(code)) return `payment due ${iso(due)}, in the COVID window: the part that ran before 2023-07-10`
+  // Filed by 2023-07-10, none of it was late; a little after, only the months
+  // before it fall away. Past the penalty's cap counted from 2023-07-10 (5
+  // months; 12 for the per-shareholder/partner penalty), nothing changes.
+  if (filed && filed <= KWONG_END) return `return due ${iso(due)}, filed ${iso(filed)}: on time under the postponement, the whole penalty`
+  const capMonths = code === '246' || code === '234' ? 12 : 5
+  if (filed && filed <= monthsAfter(KWONG_END, capMonths, 10)) return `return due ${iso(due)}, filed ${iso(filed)}: only the months before 2023-07-10`
+  return null
 }
 
 const isScorp = (all: Period[]) => all.some(o => o.form === '1120' && /1120S/.test(o.parsed?.formTitle ?? ''))
@@ -207,8 +251,11 @@ export function findOpportunities(periods: Period[], today: Date, maxYear = toda
     }
     if (mr && !(bal != null && bal < 0)) add(p, mr[0], null, `${mr[1]}.`)
     for (const x of txs) {
-      if ((x.code === '740' || x.code === '841') && !txs.some(y => y.code === '846' && y.date && x.date && y.date > x.date)) {
-        add(p, 'refund_not_reissued', Math.abs(x.amountCents ?? 0), `TC ${x.code} ${x.description} ${x.date ?? ''}`.trim() + '; not reissued.')
+      // Owed back only while the money is still on the account: a later
+      // assessment or offset can absorb it. Capped at the credit still there.
+      const credit = -(bal ?? 0)
+      if ((x.code === '740' || x.code === '841') && credit > 0 && !txs.some(y => y.code === '846' && y.date && x.date && y.date > x.date)) {
+        add(p, 'refund_not_reissued', Math.min(Math.abs(x.amountCents ?? 0), credit), `TC ${x.code} ${x.description} ${x.date ?? ''}`.trim() + '; not reissued.')
       }
       if (x.action === 'claim_forwarded') {
         const after = txs.some(y => y.date && x.date && y.date > x.date && ['assessment', 'refundable_credit', 'refund', 'credit_out'].includes(y.family))
@@ -234,8 +281,11 @@ export function findOpportunities(periods: Period[], today: Date, maxYear = toda
       standing.set(code, (standing.get(code) ?? 0) + (x.amountCents ?? 0))
     }
     const interest = standing.get('196') ?? 0
+    const filed = receivedDate(t) ?? d(t.txns.find(x => x.code === '150')?.date)
     for (const [code, amt] of standing) {
-      if (code === '196' || amt <= 50 || NOT_ABATABLE.has(code)) continue
+      if (code === '196' || amt <= 50) continue
+      const kw = kwong(p, code, filed, scorp)
+      if (NOT_ABATABLE.has(code) && !kw) continue
       const pend = periodEndDay(p.taxYear, p.periodMonth)
       const lookback = addYears(pend, -3)
       const prior = assessed.some(a => a.form === p.form && FTA_CODES.has(a.code) && lookback < periodEndDay(a.year, a.month) && periodEndDay(a.year, a.month) < pend)
@@ -249,7 +299,10 @@ export function findOpportunities(periods: Period[], today: Date, maxYear = toda
       }
       const label = PENALTY_NAME[code] ?? `TC ${code}`
       const intNote = interest > 0 ? `; interest on the period ${money(interest)}` : ''
-      if (FTA_CODES.has(code) && !prior && !used) {
+      const ftaFits = FTA_CODES.has(code) && !prior && !used
+      if (kw) {
+        add(p, 'penalty_covid_kwong', amt, `${cap(label)} penalty (TC ${code}); ${kw}; ${viable}; first-time abatement ${ftaFits ? 'also fits' : 'does not fit'}${interest > 0 ? `; interest on the period ${money(interest)} (the window may take some off too)` : ''}.`)
+      } else if (ftaFits) {
         add(p, 'penalty_fta', amt, `${cap(label)} penalty (TC ${code}); first-time abatement fits; ${viable}${intNote}.`)
       } else {
         const why = !FTA_CODES.has(code) ? 'not a first-time-abatement penalty' : prior ? 'a penalty in the 3 years before' : 'first-time abatement used in the last 3 years'

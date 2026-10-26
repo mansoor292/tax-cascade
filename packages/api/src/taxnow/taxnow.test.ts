@@ -180,16 +180,73 @@ describe('opportunities', () => {
     expect(o.find(x => x.type === 'penalty_fta')).toMatchObject({ form: '1120', taxYear: 2023, amountCents: 255000 })
     expect(o.find(x => x.type === 'penalty_fta')!.note).toMatch(/paid; refundable until 2027-08-19/)
     const r = findOpportunities(await periodsOf('fx-redwick'), today)
-    expect(r.find(x => x.type === 'penalty_reasonable_cause' && x.taxYear === 2022)).toMatchObject({ amountCents: 394000 })
+    expect(r.find(x => x.type === 'penalty_reasonable_cause')).toMatchObject({ taxYear: 2024, amountCents: 270000 })
+    expect(r.find(x => x.type === 'penalty_reasonable_cause')!.note).toMatch(/a penalty in the 3 years before; unpaid/)
     expect(r.find(x => x.type === 'penalty_fta' && x.form === '941')).toMatchObject({ section: 'payroll', amountCents: 184000 })
   })
   it('estimated-tax penalties are never abatement opportunities', async () => {
     const n = findOpportunities(await periodsOf('fx-northgate'), today)
     expect(n.some(o => o.type.startsWith('penalty') && o.note.includes('TC 176'))).toBe(false)
   })
+  it('an undelivered refund counts only while the credit is still there, and no more than it', async () => {
+    const at = async (balanceCents: number) => {
+      const ps = await periodsOf('fx-northgate')
+      const p = ps.find(x => x.form === '1120' && x.taxYear === 2021)!
+      p.parsed = { ...p.parsed!, balanceCents }
+      return findOpportunities(ps, today).filter(o => o.taxYear === 2021)
+    }
+    // A later assessment absorbed it: nothing is owed back.
+    expect(await at(0)).toEqual([])
+    expect(await at(25000)).toEqual([])
+    // Part absorbed: the credit left, not the refund.
+    expect(await at(-100000)).toMatchObject([{ type: 'refund_not_reissued', amountCents: 100000 }])
+  })
   it('a claim with nothing posted after it is pending', async () => {
     const h = findOpportunities(await periodsOf('fx-harbor-point'), today)
     expect(h.find(o => o.type === 'claim_pending' && o.taxYear === 2023)).toBeTruthy()
+  })
+})
+
+describe('the COVID window (Kwong)', () => {
+  const pen = (code: string, explanation: string, date: string, amountCents: number) =>
+    ({ seq: 0, code, family: familyOf(code), action: null, reverses: reversesOf(code), explanation, description: explanation, cycle: null, date, amountCents, dln: null, secondaryDate: null, otherForm: null, otherPeriod: null })
+  /** Meridian's 1120 for `year` (month `month`), unpaid, with this penalty on it. */
+  async function withPenalty(year: number, x: ReturnType<typeof pen>, month = 12) {
+    const ps = await periodsOf('fx-meridian')
+    const p = ps.find(o => o.form === '1120' && o.taxYear === year)!
+    p.periodMonth = month
+    p.parsed = { ...p.parsed!, balanceCents: x.amountCents, txns: [...p.parsed!.txns, x] }
+    return findOpportunities(ps, today).filter(o => o.taxYear === year && o.type.startsWith('penalty'))
+  }
+  it('a late return due in the window and filed soon after its end: part of the penalty', async () => {
+    const r = findOpportunities(await periodsOf('fx-redwick'), today).find(o => o.taxYear === 2022 && o.form === '1120')!
+    expect(r).toMatchObject({ type: 'penalty_covid_kwong', amountCents: 394000, section: 'income' })
+    expect(r.note).toMatch(/return due 2023-04-15, filed 2023-11-20: only the months before 2023-07-10; unpaid.*; first-time abatement does not fit; interest on the period 1,211.00 \(the window may take some off too\)\.$/)
+  })
+  it('filed past the penalty’s cap after the window, it is not a COVID-window penalty', async () => {
+    // Due 2022-04-15, filed 2024-01-10: more than 5 months after 2023-07-10.
+    const ps = await periodsOf('fx-meridian')
+    const p = ps.find(o => o.form === '1120' && o.taxYear === 2021)!
+    p.parsed = { ...p.parsed!, balanceCents: 50000, returnLines: [{ ...p.parsed!.returnLines[0], valueDate: '2024-01-10' }], txns: [...p.parsed!.txns, pen('166', 'Penalty for filing a tax return late', '2024-01-10', 50000)] }
+    expect(findOpportunities(ps, today).filter(o => o.taxYear === 2021).map(o => o.type)).toEqual(['penalty_fta'])
+  })
+  it('estimated-tax penalties come in, whole or in part by installment', async () => {
+    const whole = await withPenalty(2021, pen('176', 'Penalty for underpaying estimated tax', '2022-04-15', 30000))
+    expect(whole).toMatchObject([{ type: 'penalty_covid_kwong', amountCents: 30000 }])
+    expect(whole[0].note).toMatch(/installments all due in the COVID window .*: the whole penalty/)
+    expect((await withPenalty(2023, pen('176', 'Penalty for underpaying estimated tax', '2024-04-15', 30000)))[0].note).toMatch(/2 of 4 estimated-tax installments/)
+    // Outside the window an estimated-tax penalty is still not abatable.
+    expect(await withPenalty(2024, pen('176', 'Penalty for underpaying estimated tax', '2025-04-15', 30000))).toEqual([])
+  })
+  it('a fiscal year’s installments are counted back from its own year end', async () => {
+    // June 2024 year end: installments 2023-10-15 … 2024-06-15, all after the window.
+    expect(await withPenalty(2024, pen('176', 'Penalty for underpaying estimated tax', '2024-08-15', 30000), 6)).toEqual([])
+  })
+  it('a deposit penalty counts by the period it was due for', async () => {
+    const ps = await periodsOf('fx-redwick')
+    const p = ps.find(o => o.form === '941' && o.taxYear === 2024 && o.periodMonth === 3)!
+    p.taxYear = 2023
+    expect(findOpportunities(ps, today).find(o => o.form === '941' && o.taxYear === 2023 && o.periodMonth === 3)).toMatchObject({ type: 'penalty_covid_kwong', section: 'payroll' })
   })
 })
 

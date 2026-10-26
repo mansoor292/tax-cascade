@@ -29,6 +29,7 @@ export default function Clients() {
     return {
       holds: sum(['credit_held', 'refund_not_reissued']),
       penalties: sum(['penalty_fta', 'penalty_reasonable_cause']),
+      kwong: sum(['penalty_covid_kwong']),
       missing: count(['missing_return']),
       missingOther: count(['missing_return_unclear', 'missing_return_pending']),
       claims: count(['claim_pending']),
@@ -46,7 +47,7 @@ export default function Clients() {
       <PageHeader crumb={practice.name} title="Clients" actions={<Button render={<Link to="/app/practice/irs-access?add=1" />}>Add client</Button>} />
       <div className="ds-tiles mb-4">
         <Tile label="IRS holds" value={money(totals.holds, '$0')} sub="credits and refunds not received" to="/app/practice/opportunities?section=income" />
-        <Tile label="Penalties that can come off" value={money(totals.penalties, '$0')} sub="unpaid or still refundable" to="/app/practice/opportunities?section=income" />
+        <Tile label="Penalties that can come off" value={money(totals.penalties, '$0')} sub={`unpaid or still refundable${totals.kwong ? ` · ${money(totals.kwong, '$0')} more under the COVID window` : ''}`} to="/app/practice/opportunities?section=income" />
         <Tile label="Missing returns" value={totals.missing} sub={`past due, a return was owed${totals.missingOther ? ` · ${totals.missingOther} unclear or recent` : ''}`} to="/app/practice/opportunities?section=income" />
         <Tile label="Claims in flight" value={totals.claims} sub="forwarded, nothing posted" to="/app/practice/opportunities?section=income" />
         <Tile label="Amendment candidates" value={totals.amend} sub="retention credit booked as income" to="/app/practice/opportunities?section=income" />

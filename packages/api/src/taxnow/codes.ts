@@ -107,7 +107,7 @@ export const FTA_CODES = new Set(['166', '160', '276', '270', '186', '180', '246
 export const NOT_ABATABLE = new Set(['170', '173', '176', '360'])
 
 export const PENALTY_NAME: Record<string, string> = {
-  '166': 'late filing', '160': 'late filing', '276': 'late payment', '270': 'late payment', '186': 'deposit',
+  '166': 'late filing', '160': 'late filing', '163': 'late filing', '276': 'late payment', '270': 'late payment', '186': 'deposit',
   '180': 'deposit', '246': 'late filing (per shareholder/partner)', '176': 'estimated tax', '170': 'estimated tax', '173': 'estimated tax',
   '286': 'dishonored payment', '280': 'dishonored payment', '234': 'daily delinquency', '240': 'miscellaneous', '196': 'interest',
 }

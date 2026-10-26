@@ -91,7 +91,10 @@ const ACCOUNTS: AccountSpec[] = [
     id: 'fx-redwick', name: 'Redwick Staffing Group', last4: '3306', income: '1120',
     periods: override(standardPeriods('1120', YEARS), [
       { form: '1120', year: 2020, month: 12, kind: 'filed', tx: [['150', 'Tax return filed', '05-10-2021', '$12,000.00'], ['166', 'Penalty for filing a tax return late', '05-10-2021', '$600.00'], ['670', 'Payment', '05-10-2021', '-$12,600.00']] },
-      { form: '1120', year: 2022, month: 12, kind: 'filed', balance: '$32,255.00', tx: [['150', 'Tax return filed', '11-20-2023', '$27,104.00'], ['166', 'Penalty for filing a tax return late', '11-20-2023', '$3,940.00'], ['196', 'Interest charged for late payment', '11-20-2023', '$1,211.00']] },
+      // Due 2023-04-15 in the COVID window, filed within 5 months of its end: the window takes part of it.
+      { form: '1120', year: 2022, month: 12, kind: 'filed', balance: '$32,255.00', tx: [['150', 'Tax return filed', '11-20-2023', '$27,104.00'], ['166', 'Penalty for filing a tax return late', '11-20-2023', '$3,940.00'], ['196', 'Interest charged for late payment', '11-20-2023', '$1,211.00']], lines: [['Return due date or return received date (whichever is later):', '11-20-2023']] },
+      // Due after the window, a late-filing penalty two years before: reasonable cause.
+      { form: '1120', year: 2024, month: 12, kind: 'filed', balance: '$2,700.00', tx: [['150', 'Tax return filed', '12-05-2025', '$30,000.00'], ['166', 'Penalty for filing a tax return late', '12-05-2025', '$2,700.00'], ['670', 'Payment', '12-05-2025', '-$30,000.00']], lines: [['Return due date or return received date (whichever is later):', '12-05-2025']] },
       { form: '941', year: 2024, month: 3, kind: 'filed', balance: '$1,840.00', tx: [['150', 'Tax return filed', '04-30-2024', '$84,200.00'], ['650', 'Federal tax deposit', '04-30-2024', '-$84,200.00'], ['186', 'Penalty for late deposit', '05-20-2024', '$1,840.00']] },
       { form: '941', year: 2021, month: 6, kind: 'filed', tx: [['150', 'Tax return filed', '07-30-2021', '$92,000.00'], ['650', 'Federal tax deposit', '06-30-2021', '-$92,000.00'], ['766', 'Credit to your account', '01-10-2023', '-$112,000.00'], ['846', 'Refund issued', '02-06-2023', '$112,000.00']] },
     ]).concat([2020, 2021, 2022, 2023].map(y => ({ form: '943', year: y, month: 12, kind: 'refused' as const }))),
