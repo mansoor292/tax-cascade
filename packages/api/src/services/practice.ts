@@ -30,7 +30,7 @@ import {
   ENCRYPTED_PRACTICE_CLIENT_FIELDS, ENCRYPTED_FINDING_FIELDS, ENCRYPTED_TRANSCRIPT_FIELDS,
   PRACTICE_CLIENT_ENC_COLS, FINDING_ENC_COLS, TRANSCRIPT_ENC_COLS,
 } from '../lib/row_crypto.js'
-import { accountForTin, taxnowFor } from '../taxnow/client.js'
+import { TaxNowError, accountForTin, taxnowFor, type AccountRecord } from '../taxnow/client.js'
 import type { ClientSummary } from './practice_read.js'
 import { fill8821 } from './f8821.js'
 import { idvView } from './signer_idv.js'
@@ -45,6 +45,15 @@ export interface Practice {
   designee_mode: 'platform' | 'own'
   designee: Record<string, string>
   provider: Provider
+  /** The TaxNow org it reads through ('platform', or an org whose key we hold for it: taxnow/client.ts). */
+  taxnow_org: string
+}
+
+export const PRACTICE_COLS = 'id, user_id, name, designee_mode, designee, provider, taxnow_org'
+
+/** The TaxNow this practice reads through. */
+export function taxnowOf(p: Pick<Practice, 'provider' | 'taxnow_org'>) {
+  return taxnowFor(p.provider, p.taxnow_org)
 }
 
 export class PracticeError extends Error {
@@ -69,7 +78,7 @@ export function isPlatformAdmin(userId: string | null): boolean {
 }
 
 export async function getPractice(sb: SupabaseClient, userId: string): Promise<Practice | null> {
-  const { data, error } = await sb.from('practice').select('id, user_id, name, designee_mode, designee, provider').eq('user_id', userId).maybeSingle()
+  const { data, error } = await sb.from('practice').select(PRACTICE_COLS).eq('user_id', userId).maybeSingle()
   if (error) throw new PracticeError(500, error.message)
   return data as Practice | null
 }
@@ -84,7 +93,7 @@ export async function createPractice(sb: SupabaseClient, userId: string, name: s
   const existing = await getPractice(sb, userId)
   if (existing) return existing
   if (!name?.trim()) throw new PracticeError(400, 'A practice needs a name.')
-  const { data, error } = await sb.from('practice').insert({ user_id: userId, name: name.trim() }).select('id, user_id, name, designee_mode, designee, provider').single()
+  const { data, error } = await sb.from('practice').insert({ user_id: userId, name: name.trim() }).select(PRACTICE_COLS).single()
   if (error) throw new PracticeError(500, error.message)
   await sb.from('practice_member').insert({ practice_id: data.id, user_id: userId, role: 'owner' })
   return data as Practice
@@ -108,7 +117,7 @@ export async function updatePractice(sb: SupabaseClient, p: Practice, body: { na
     if (d.caf && !/^[0-9A-Z-]{4,20}$/i.test(d.caf)) throw new PracticeError(400, 'A CAF number is letters and digits.')
     patch.designee = d
   }
-  const { data, error } = await sb.from('practice').update(patch).eq('id', p.id).select('id, user_id, name, designee_mode, designee, provider').single()
+  const { data, error } = await sb.from('practice').update(patch).eq('id', p.id).select(PRACTICE_COLS).single()
   if (error) throw new PracticeError(500, error.message)
   return data as Practice
 }
@@ -361,7 +370,7 @@ export async function signRequest(sb: SupabaseClient, token: string) {
   const { data: c } = await sb.from('practice_client').select(`id, user_id, practice_id, entity_id, stage, tin_last4, authorization_scope, sign_token_expires, signature, ${PRACTICE_CLIENT_ENC_COLS}`).eq('sign_token_hash', hashToken(token)).maybeSingle()
   if (!c || !c.sign_token_expires || new Date(c.sign_token_expires) < new Date()) throw new PracticeError(404, 'This signature link has expired or was replaced. Ask your preparer for a new one.')
   await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
-  const { data: p } = await sb.from('practice').select('id, user_id, name, designee_mode, designee, provider').eq('id', c.practice_id).single()
+  const { data: p } = await sb.from('practice').select(PRACTICE_COLS).eq('id', c.practice_id).single()
   const { data: ent } = await sb.from('tax_entity').select('name, form_type').eq('id', c.entity_id).single()
   return {
     practice: p!.name, taxpayer: ent?.name ?? '', form_type: ent?.form_type ?? '', tin_last4: c.tin_last4,
@@ -433,8 +442,8 @@ export async function onboardingCheck(sb: SupabaseClient, clientId: string): Pro
   const { data: c } = await sb.from('practice_client').select(`${CLIENT_COLS}, tin, accounts_at_submit, submission_confirmed_at`).eq('id', clientId).maybeSingle() as { data: any }
   if (!c || c.stage !== 'submitted') return { found: false }
   await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
-  const { data: p } = await sb.from('practice').select('id, user_id, name, designee_mode, designee, provider').eq('id', c.practice_id).single()
-  const tn = await taxnowFor((p as Practice).provider)
+  const { data: p } = await sb.from('practice').select(PRACTICE_COLS).eq('id', c.practice_id).single()
+  const tn = await taxnowOf(p as Practice)
   const now = new Date().toISOString()
   const { data: held } = await sb.from('practice_client').select('taxnow_account_id').eq('practice_id', c.practice_id).not('taxnow_account_id', 'is', null)
   const accountId = c.tin && /^\d{9}$/.test(c.tin) ? await accountForTin(tn, c.tin, new Set((held ?? []).map(h => h.taxnow_account_id))) : null
@@ -464,28 +473,53 @@ export async function onboardingCheck(sb: SupabaseClient, clientId: string): Pro
  * of its own, with its own entity, stage 'claimed'. An account the practice
  * already holds is skipped.
  */
-export async function claimAccounts(sb: SupabaseClient, p: Practice, accountIds: string[] | 'all') {
-  const tn = await taxnowFor(p.provider)
+export async function claimAccounts(sb: SupabaseClient, p: Practice, accountIds: string[] | 'all', opts: { scope?: { income: string[]; payroll: string[] } } = {}) {
+  const tn = await taxnowOf(p)
   const listed = await tn.listAccounts()
   const wanted = accountIds === 'all' ? listed : listed.filter(a => accountIds.includes(a.accountId))
   const { data: held } = await sb.from('practice_client').select('taxnow_account_id').eq('practice_id', p.id).not('taxnow_account_id', 'is', null)
   const have = new Set((held ?? []).map(h => h.taxnow_account_id))
   const created: string[] = []
+  let unreadable = 0
   for (const a of wanted) {
     if (have.has(a.accountId)) continue
-    const acct = await tn.getAccount(a.accountId)
+    let acct: AccountRecord
+    try { acct = await tn.getAccount(a.accountId) } catch (e) {
+      // Listed but not ours to read (the org is not a designee on its 8821).
+      if (e instanceof TaxNowError && e.status === 403) { unreadable++; continue }
+      throw e
+    }
     const income = acct.tia.permissions.find(x => x.type === 'income')?.forms ?? []
     const form = acct.type === 'individual' ? '1040' : income.includes('1065') && !income.includes('1120') ? '1065' : income.includes('1120S') && !income.includes('1120') ? '1120S' : '1120'
     const { data: ent, error: e1 } = await sb.from('tax_entity').insert({ user_id: p.user_id, practice_id: p.id, name: acct.name || a.name || 'Unnamed client', entity_type: FORM_TO_TYPE[form], form_type: form }).select('id').single()
     if (e1) throw new PracticeError(500, e1.message)
     const { data: row, error: e2 } = await sb.from('practice_client').insert({
       practice_id: p.id, user_id: p.user_id, entity_id: ent.id, stage: 'claimed', taxnow_account_id: a.accountId,
-      authorization_scope: { income, payroll: acct.tia.permissions.find(x => x.type === 'payroll')?.forms ?? [], imported: true },
+      // TaxNow's record can overstate an 8821 (the BCL org's lists income forms
+      // its 8821s do not cover — Mansoor, 2026-10-24: 941 only); the admin's
+      // own scope, when given, is the record.
+      authorization_scope: { ...(opts.scope ?? { income, payroll: acct.tia.permissions.find(x => x.type === 'payroll')?.forms ?? [] }), imported: true },
     }).select('id').single()
     if (e2) throw new PracticeError(500, e2.message)
     created.push(row.id)
   }
-  return { claimed: created.length, skipped: wanted.length - created.length, client_ids: created }
+  return { claimed: created.length, skipped: wanted.length - created.length - unreadable, unreadable, client_ids: created }
+}
+
+/**
+ * The forms of an IRS request that a claimed client's recorded authorization
+ * does not cover. A claimed client's 8821 was signed outside Catipult, and the
+ * scope recorded at the claim is what it covers (BCL's: 941 only, though its
+ * TaxNow record lists more). Each request is a real IRS pull under the
+ * designee's CAF, so one outside that scope is refused here, not by the IRS.
+ * Clients onboarded in Catipult carry their own 8821's scope and are not
+ * checked here.
+ */
+export function formsOutsideScope(scope: unknown, ts: Array<{ form: string | number }>): string[] {
+  const s = scope as { imported?: boolean; income?: unknown; payroll?: unknown } | null
+  if (!s?.imported || !Array.isArray(s.income) || !Array.isArray(s.payroll)) return []
+  const covered = new Set([...s.income, ...s.payroll].map(f => irsFormFor(String(f))))
+  return [...new Set(ts.map(t => String(t.form)).filter(f => !covered.has(f)))]
 }
 
 /** The entity's form as TaxNow reads it: an S-corp's transcripts are in the 1120 module. */
@@ -517,6 +551,6 @@ export async function form8821(sb: SupabaseClient, p: Practice, clientId: string
 export async function form8821ForToken(sb: SupabaseClient, token: string) {
   const { data: c } = await sb.from('practice_client').select('id, practice_id, sign_token_expires').eq('sign_token_hash', hashToken(token)).maybeSingle()
   if (!c || !c.sign_token_expires || new Date(c.sign_token_expires) < new Date()) throw new PracticeError(404, 'This signature link has expired or was replaced.')
-  const { data: p } = await sb.from('practice').select('id, user_id, name, designee_mode, designee, provider').eq('id', c.practice_id).single()
+  const { data: p } = await sb.from('practice').select(PRACTICE_COLS).eq('id', c.practice_id).single()
   return form8821(sb, p as Practice, c.id, { fullTin: false })
 }

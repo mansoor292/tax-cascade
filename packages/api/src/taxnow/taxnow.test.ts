@@ -11,7 +11,7 @@ import { parseTranscriptHtml, statusWithoutHtml, returnFormOf } from './transcri
 import { findOpportunities, retentionRefundsByYear, type Period } from './opportunities.js'
 import { findInsights, profileFromRetr } from './insights.js'
 import { FixtureTaxNow, FIXTURE_ACCOUNTS } from './fixture.js'
-import { accountForTin } from './client.js'
+import { accountForTin, orgCredentials, taxnowFor } from './client.js'
 
 const tn = new FixtureTaxNow()
 const today = new Date('2026-10-24T00:00:00Z')
@@ -150,5 +150,40 @@ describe('the fixture org', () => {
   })
   it('holds only fictional accounts', () => {
     expect(FIXTURE_ACCOUNTS.every(a => a.accountId.startsWith('fx-'))).toBe(true)
+  })
+})
+
+// 2026-10-27: a practice names the TaxNow org it reads through. The platform
+// org keeps the unsuffixed names; any other org reads its own suffixed pair,
+// and nothing else is ever borrowed for it.
+describe('TaxNow orgs', () => {
+  const env = { TAXNOW_API_KEY: 'k-platform', TAXNOW_ORG_ID: 'o-platform', TAXNOW_API_KEY_BCL: 'k-bcl', TAXNOW_ORG_ID_BCL: 'o-bcl', TAXNOW_API_KEY_HALF: 'k-half' }
+
+  it('reads the platform org from the unsuffixed names', () => {
+    expect(orgCredentials('platform', env)).toEqual({ key: 'k-platform', orgId: 'o-platform' })
+  })
+
+  it('reads another org from its own suffixed names', () => {
+    expect(orgCredentials('bcl', env)).toEqual({ key: 'k-bcl', orgId: 'o-bcl' })
+  })
+
+  it('never falls back to the platform key for an org that is not configured', () => {
+    expect(orgCredentials('half', env)).toBeNull()      // key without an org id
+    expect(orgCredentials('hrlogics', env)).toBeNull()  // nothing at all
+  })
+
+  it('refuses names that could reach other variables', () => {
+    for (const bad of ['BCL', 'bcl;x', '', '1bcl', 'a'.repeat(40)]) expect(orgCredentials(bad, env)).toBeNull()
+  })
+
+  it('reads through the org it was asked for', async () => {
+    const saved = { ...process.env }
+    Object.assign(process.env, env)
+    try {
+      expect((await taxnowFor('taxnow', 'bcl')).orgId).toBe('o-bcl')
+      expect((await taxnowFor('taxnow')).orgId).toBe('o-platform')
+      await expect(taxnowFor('taxnow', 'hrlogics')).rejects.toThrow(/not configured/)
+      expect((await taxnowFor('fixture', 'bcl')).provider).toBe('fixture')
+    } finally { process.env = saved }
   })
 })

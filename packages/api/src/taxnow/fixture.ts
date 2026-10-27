@@ -185,6 +185,7 @@ const SYNCED = '2026-10-19T10:00:00Z'
 
 export class FixtureTaxNow implements TaxNowApi {
   readonly provider = 'fixture' as const
+  readonly orgId = 'fixture'
   async listAccounts(): Promise<AccountRef[]> { return ACCOUNTS.map(a => ({ accountId: a.id, name: a.name })).concat(this.onboarded.map(l => ({ accountId: `fx-new-${l}`, name: 'New fictional client' }))) }
   // TINs a search has found: their accounts then list, as a newly signed
   // 8821 makes an account appear in the real org. Per process; harmless,

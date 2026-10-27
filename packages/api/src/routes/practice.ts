@@ -1,6 +1,7 @@
 /**
  * Practice routes (services/practice.ts): one preparer's clients, read and
- * onboarded through the platform TaxNow org.
+ * onboarded through the practice's TaxNow org (the platform org, or one whose
+ * key Catipult holds for that practice — practice.taxnow_org).
  *
  *   GET   /api/practice                     the practice (404 when none yet)
  *   POST  /api/practice                     create it {name}
@@ -24,7 +25,8 @@
  *   POST  /api/practice/filing/:id/confirmed      TaxNow's staff confirmed they submitted it {note?} → submission_confirmed_at
  *   POST  /api/practice/clients/:id/read          queue a refresh of the IRS records on file (no IRS request)
  *   POST  /api/practice/clients/:id/irs-requests  {transcripts:[{type,form,year,month}], confirm:true}
- *                                                  REAL IRS requests under the designee's CAF
+ *                                                  REAL IRS requests under the designee's CAF; a claimed
+ *                                                  client's are refused outside its recorded scope
  *   GET   /api/practice/opportunities       every finding across clients
  *   GET   /api/practice/coverage            the IRS access page: access, ages, refusals, onboarding
  *   GET   /api/practice/jobs/:id            one background job's state
@@ -45,7 +47,7 @@ import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 import {
   PracticeError, claimAccounts, clientDetail, coverage, createClient, createPractice, designeeOf, getPractice, isPlatformAdmin,
-  form8821, issueSignLink, listClients, markIdVerified, onboardingCheck, opportunities, requirePractice, updatePractice,
+  form8821, formsOutsideScope, issueSignLink, listClients, markIdVerified, onboardingCheck, opportunities, requirePractice, updatePractice,
 } from '../services/practice.js'
 import { confirmFiled, filingQueue, markSent, sign, signedCopy, staffScope } from '../services/practice_filing.js'
 import { enqueue, type TranscriptKey } from '../services/practice_jobs.js'
@@ -171,6 +173,8 @@ router.post('/clients/:id/irs-requests', handle(async (req, res, userId) => {
   const p = await requirePractice(supabase, userId)
   const d = await clientDetail(supabase, p, req.params.id)
   if (!['readable', 'claimed'].includes(d.client.stage)) throw new PracticeError(409, 'This client’s IRS records cannot be read yet.')
+  const outside = formsOutsideScope(d.client.authorization_scope, ts)
+  if (outside.length) throw new PracticeError(409, `This client’s authorization does not cover Form ${outside.join(', ')}.`)
   const job = await enqueue(supabase, {
     kind: 'irs_request', practice_id: p.id, user_id: userId, confirmed_by: userId,
     payload: { client_id: req.params.id, transcripts: ts.map(t => ({ type: t.type, form: String(t.form), year: +t.year, month: +t.month })) },

@@ -65,7 +65,7 @@ export async function readClient(supabase: SupabaseClient, client: ClientRow, pr
   // Who else can see this client: other firms named as designees on the
   // account's 8821 record (our own org and the CAF designee left out).
   const account = await tn.getAccount(accountId)
-  const ownOrg = process.env.TAXNOW_ORG_ID ?? ''
+  const ownOrg = tn.orgId
   const otherViewers = account.tia.designees
     .filter(d => d.type !== 'caf' && !(ownOrg && (d.uri ?? '').endsWith(ownOrg)))
     .map(d => d.name).filter(Boolean)

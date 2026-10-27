@@ -40,11 +40,11 @@ export async function enqueue(sb: SupabaseClient, job: { kind: JobKind; user_id?
   return data?.id as string | null
 }
 
-async function clientFor(sb: SupabaseClient, clientId: string): Promise<{ client: ClientRow; provider: 'taxnow' | 'fixture' } | null> {
+async function clientFor(sb: SupabaseClient, clientId: string): Promise<{ client: ClientRow; provider: 'taxnow' | 'fixture'; org: string } | null> {
   const { data: c } = await sb.from('practice_client').select('id, practice_id, user_id, entity_id, stage, taxnow_account_id, tin_last4').eq('id', clientId).maybeSingle()
   if (!c) return null
-  const { data: p } = await sb.from('practice').select('provider').eq('id', c.practice_id).single()
-  return { client: c as ClientRow, provider: (p?.provider ?? 'taxnow') as 'taxnow' | 'fixture' }
+  const { data: p } = await sb.from('practice').select('provider, taxnow_org').eq('id', c.practice_id).single()
+  return { client: c as ClientRow, provider: (p?.provider ?? 'taxnow') as 'taxnow' | 'fixture', org: p?.taxnow_org ?? 'platform' }
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -54,7 +54,7 @@ export async function runJob(sb: SupabaseClient, job: { id: string; kind: JobKin
     case 'read_client': {
       const c = await clientFor(sb, job.payload.client_id)
       if (!c || !c.client.taxnow_account_id) return { skipped: true }
-      return readClient(sb, c.client, c.provider)
+      return readClient(sb, c.client, c.provider, await taxnowFor(c.provider, c.org))
     }
     case 'onboarding_check': {
       const r = await onboardingCheck(sb, job.payload.client_id)
@@ -65,7 +65,7 @@ export async function runJob(sb: SupabaseClient, job: { id: string; kind: JobKin
       if (!job.confirmed_by) throw new Error('An IRS request must be confirmed by a person.')
       const c = await clientFor(sb, job.payload.client_id)
       if (!c || !c.client.taxnow_account_id) return { skipped: true }
-      const tn = await taxnowFor(c.provider)
+      const tn = await taxnowFor(c.provider, c.org)
       const results: Array<{ form: string; year: number; month: number; status: string; code?: string | number }> = []
       for (const t of (job.payload.transcripts ?? []) as TranscriptKey[]) {
         let status = 'failed'
@@ -81,7 +81,7 @@ export async function runJob(sb: SupabaseClient, job: { id: string; kind: JobKin
         await recordIrsOutcome(sb, c.client, t, String(code) === '451')
         results.push({ form: t.form, year: t.year, month: t.month, status, ...(code !== undefined ? { code } : {}) })
       }
-      await readClient(sb, c.client, c.provider)
+      await readClient(sb, c.client, c.provider, tn)
       return { results }
     }
     case 'daily': {

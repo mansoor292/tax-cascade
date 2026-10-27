@@ -367,6 +367,11 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   update_version_set:         { title: 'Rename, file or abandon a version set', ...WRITE },
   review_version_set:         { title: 'Check a version set ties (breaks)', ...WRITE },
   golden_view:                { title: 'One year across every source (golden view)', ...RO },
+  practice_clients:           { title: 'Practice clients and their IRS roll-up', ...RO },
+  practice_client:            { title: 'One practice client: IRS periods and findings', ...RO },
+  practice_opportunities:     { title: 'Findings across practice clients', ...RO },
+  practice_coverage:          { title: 'Practice IRS access and record ages', ...RO },
+  practice_refresh:           { title: 'Re-read practice clients\' IRS records on file', ...WRITE },
 }
 
 function extractApiKey(req: Request): string | null {
@@ -1629,6 +1634,116 @@ Form-specific extras:
   }, async ({ extension_type, inputs }) => {
     return text(await call('POST', '/api/returns/extension/validate', { extension_type, inputs }))
   })
+
+  // ─── Practice tools ───
+  // A practice is a preparer's book of clients whose IRS account and return
+  // transcripts are read for them (services/practice*.ts). Exposed over MCP on
+  // 2026-10-27 so other sessions can work a practice's clients — the first
+  // being the Better Choice Lenders practice, under its own login, so its key
+  // sees that practice and nothing else. Every tool reads the CALLER's
+  // practice: the API key decides which one.
+  //
+  // Read-only apart from practice_refresh, which re-reads what is already on
+  // file and never sends a request to the IRS. IRS requests stay in the app,
+  // where a person confirms each one. Trimmed at this layer like
+  // list_entities: a client's periods come without their transactions unless
+  // one period is asked for.
+  // `call` hands back error bodies ({error}) as data; here they are errors.
+  const pcall = async (method: string, path: string): Promise<any> => {
+    const r = await call(method, path)
+    if (r && typeof r === 'object' && typeof r.error === 'string') throw new Error(r.error)
+    return r
+  }
+  const practiceOr404 = async <T>(fn: () => Promise<T>): Promise<T | ReturnType<typeof text>> => {
+    try { return await fn() } catch (e: any) {
+      if (/No practice yet/.test(String(e?.message ?? ''))) return text('This account has no practice. Practices are set up in the app (Practice → Clients).')
+      throw e
+    }
+  }
+
+  server.tool('practice_clients',
+    'List the clients of the practice this API key belongs to, each with its IRS roll-up: stage (claimed/readable = records are read; draft…submitted = onboarding), the entity it is filed under (entity_id, form_type), TIN last four, summary (balance due, credit held, deposits awaiting a return, penalties, filed-through year, next due — amounts in cents, as of last_read_at), period status counts, and findings counted by section with their total in cents. Records are the IRS transcripts as last pulled — oldest_sync says how old the oldest one is. Start here, then practice_client for one client.',
+    {
+      stage: z.string().optional().describe('Only clients at this stage, e.g. "claimed"'),
+      name: z.string().optional().describe('Only clients whose name contains this text (case-insensitive)'),
+    },
+    async ({ stage, name }) => practiceOr404(async () => {
+      const [{ practice }, { clients }] = await Promise.all([pcall('GET', '/api/practice'), pcall('GET', '/api/practice/clients')])
+      const rows = (clients as any[])
+        .filter(c => !stage || c.stage === stage)
+        .filter(c => !name || String(c.name).toLowerCase().includes(name.toLowerCase()))
+      return text({ practice: { name: practice?.name }, count: rows.length, clients: rows })
+    }))
+
+  server.tool('practice_client',
+    'One practice client: its stage and authorization scope, roll-up summary, findings (each with section, type, severity, form, period, amount in cents and a note saying why), and every IRS period on file — form, tax year, period month, status (filed / no_return_filed / activity_no_return / no_irs_account / never_synced = listed but never pulled / not_authorized = the IRS refused it under this 8821), when it was pulled, the balance and accruals in cents and how many transactions it holds. Pass form + year (and month) to get those periods in full: every transaction (IRS code, date, amount in cents, explanation) and the posted return lines. A period that was never pulled has no data — say so, never read it as "no activity".',
+    {
+      client_id: z.string().describe('Practice client id (from practice_clients)'),
+      form: z.string().optional().describe('IRS form of the period(s) to open in full, e.g. "941", "1120", "1040"'),
+      year: z.number().optional().describe('Tax year of the period(s) to open in full'),
+      month: z.number().optional().describe('Period month (3/6/9/12 for quarters); omit for every period of that form and year'),
+    },
+    async ({ client_id, form, year, month }) => practiceOr404(async () => {
+      const d = await pcall('GET', `/api/practice/clients/${encodeURIComponent(client_id)}`)
+      const open = (t: any) => !!form && String(t.form) === String(form) && (year === undefined || t.tax_year === year) && (month === undefined || t.period_month === month)
+      const periods = (d.transcripts as any[])
+        .sort((a, b) => String(a.form).localeCompare(String(b.form)) || a.tax_year - b.tax_year || a.period_month - b.period_month || String(a.type).localeCompare(String(b.type)))
+        .map(t => {
+          const p = t.parsed
+          const brief = {
+            type: t.type, form: t.form, tax_year: t.tax_year, period_month: t.period_month, status: t.status, synced_at: t.synced_at, response_date: t.response_date,
+            ...(p ? { balance_cents: p.balanceCents, balance_plus_accruals_cents: p.balancePlusAccrualsCents, accrued_interest_cents: p.accruedInterestCents, accrued_penalty_cents: p.accruedPenaltyCents, accruals_as_of: p.accruedInterestAsOf, transactions: (p.txns ?? []).length } : {}),
+          }
+          if (!open(t)) return brief
+          return { ...brief, ...(p ? { transactions: p.txns, return_lines: p.returnLines } : {}), ...(t.retr ? { return_transcript: t.retr } : {}) }
+        })
+      const { signer, ...client } = d.client ?? {}
+      return text({ client, findings: d.findings, periods })
+    }))
+
+  server.tool('practice_opportunities',
+    'Findings across every client of this API key\'s practice — money the IRS may owe or that can come off a balance (penalty abatement, credits held, refunds not reissued), missing returns, and risks — each with the client, section (income / payroll / risk), type, severity, form, period, amount in cents and a note giving the evidence. These are leads read from IRS transcripts, not conclusions: check the period with practice_client before acting. Filters narrow the list; with none, everything comes back.',
+    {
+      client_id: z.string().optional().describe('Only this client'),
+      section: z.enum(['income', 'payroll', 'risk']).optional().describe('Only this section'),
+      type: z.string().optional().describe('Only this finding type, e.g. "missing_return" or a prefix ending in "*" like "penalty_*"'),
+      min_amount_cents: z.number().optional().describe('Only findings at or above this amount (cents)'),
+      limit: z.number().optional().describe('Max findings, largest amount first (default 200)'),
+    },
+    async ({ client_id, section, type, min_amount_cents, limit }) => practiceOr404(async () => {
+      const { findings } = await pcall('GET', '/api/practice/opportunities')
+      const typeOk = (t: string) => !type || (type.endsWith('*') ? t.startsWith(type.slice(0, -1)) : t === type)
+      const rows = (findings as any[])
+        .filter(f => (!client_id || f.practice_client_id === client_id) && (!section || f.section === section) && typeOk(f.type) && (min_amount_cents === undefined || (f.amount_cents ?? 0) >= min_amount_cents))
+        .sort((a, b) => (b.amount_cents ?? 0) - (a.amount_cents ?? 0))
+      const n = Math.max(1, Math.min(limit ?? 200, 2000))
+      return text({ total: rows.length, shown: Math.min(n, rows.length), findings: rows.slice(0, n) })
+    }))
+
+  server.tool('practice_coverage',
+    'How complete and how fresh this API key\'s practice\'s IRS records are: per client, period status counts and the oldest pull; periods the IRS refused under the 8821 (gaps); and how old the pulled transcripts are (under 30 days … over a year, never pulled, refused).',
+    {},
+    async () => practiceOr404(async () => {
+      const c = await pcall('GET', '/api/practice/coverage')
+      const { designee: _d, provider: _p, ...rest } = c ?? {}
+      return text(rest)
+    }))
+
+  server.tool('practice_refresh',
+    'Re-read the IRS records already on file for one client (client_id) or every readable client (all: true): newly pulled transcripts are fetched, stored, and the client\'s findings recomputed. This NEVER sends a request to the IRS — a period never pulled stays never pulled; asking the IRS is done in the app, where a person confirms it. Runs in the background (job ids come back); every client is also re-read daily at 6:00 ET.',
+    {
+      client_id: z.string().optional().describe('The client to re-read'),
+      all: z.boolean().optional().describe('Re-read every readable client'),
+    },
+    async ({ client_id, all }) => practiceOr404(async () => {
+      if (!!client_id === !!all) throw new Error('Pass exactly one of client_id or all: true')
+      const ids = client_id ? [client_id] : ((await pcall('GET', '/api/practice/clients')).clients as any[]).filter(c => ['readable', 'claimed'].includes(c.stage)).map(c => c.id)
+      const jobs: Array<{ client_id: string; job_id?: string; error?: string }> = []
+      for (const id of ids) {
+        try { jobs.push({ client_id: id, job_id: (await pcall('POST', `/api/practice/clients/${encodeURIComponent(id)}/read`)).job_id }) } catch (e: any) { jobs.push({ client_id: id, error: String(e?.message ?? e) }) }
+      }
+      return text({ queued: jobs.filter(j => j.job_id).length, jobs })
+    }))
 
   return server
 }

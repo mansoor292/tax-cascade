@@ -59,4 +59,66 @@ describe('the MCP server', () => {
       expect(JSON.parse(res.content[0].text).error).toContain('already recorded as filed')
     })
   })
+
+  // 2026-10-27: a practice's clients over MCP, for the key that owns it. A
+  // client's periods come without their transactions unless one is opened,
+  // the signer's details never come, and nothing here asks the IRS.
+  describe('practice tools', () => {
+    afterEach(() => { vi.unstubAllGlobals() })
+    type Tools = Record<string, { annotations?: { readOnlyHint?: boolean }; handler: (args: any, extra: any) => Promise<{ content: Array<{ text: string }> }> }>
+    const tools = () => (createServer('test-key') as unknown as { _registeredTools: Tools })._registeredTools
+    const txn = (code: string) => ({ code, date: '2024-04-15', amountCents: 100, explanation: 'x' })
+    const detail = {
+      client: { id: 'c1', name: 'Fictional Co', stage: 'claimed', signer: { name: 'Should Not Appear' } },
+      findings: [{ id: 'f1', type: 'penalty_fta', amount_cents: 5000 }],
+      transcripts: [
+        { type: 'ACTR', form: '941', tax_year: 2024, period_month: 3, status: 'filed', synced_at: 's', response_date: 'r', parsed: { balanceCents: 0, txns: [txn('150'), txn('610')], returnLines: [{ label: 'a' }] }, retr: null },
+        { type: 'ACTR', form: '941', tax_year: 2024, period_month: 6, status: 'filed', synced_at: 's', response_date: 'r', parsed: { balanceCents: 7, txns: [txn('150')], returnLines: [] }, retr: null },
+        { type: 'ACTR', form: '1120', tax_year: 2023, period_month: 12, status: 'never_synced', synced_at: null, response_date: null, parsed: null, retr: null },
+      ],
+    }
+
+    it('are read-only except the refresh, which only re-reads what is on file', () => {
+      const t = tools()
+      for (const n of ['practice_clients', 'practice_client', 'practice_opportunities', 'practice_coverage']) expect(t[n]?.annotations?.readOnlyHint).toBe(true)
+      expect(t.practice_refresh?.annotations?.readOnlyHint).toBe(false)
+    })
+
+    it('lists periods without transactions, and opens only the one asked for', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => detail }) as Response))
+      const brief = JSON.parse((await tools().practice_client.handler({ client_id: 'c1' }, {})).content[0].text)
+      expect(brief.client.signer).toBeUndefined()
+      expect(brief.periods.map((p: any) => `${p.form} ${p.period_month} ${p.transactions}`)).toEqual(['1120 12 undefined', '941 3 2', '941 6 1'])
+      const open = JSON.parse((await tools().practice_client.handler({ client_id: 'c1', form: '941', year: 2024, month: 3 }, {})).content[0].text)
+      expect(open.periods[1].transactions.map((x: any) => x.code)).toEqual(['150', '610'])
+      expect(open.periods[2].transactions).toBe(1)
+    })
+
+    it('says plainly when the key has no practice', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => ({ error: 'No practice yet.' }) }) as Response))
+      expect((await tools().practice_clients.handler({}, {})).content[0].text).toMatch(/has no practice/)
+    })
+
+    it('refreshes through the read route, never the IRS-request route', async () => {
+      const urls: string[] = []
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        urls.push(url)
+        return { json: async () => url.endsWith('/clients') ? { clients: [{ id: 'c1', stage: 'claimed' }, { id: 'c2', stage: 'draft' }] } : { job_id: 'j1' } } as Response
+      }))
+      const r = JSON.parse((await tools().practice_refresh.handler({ all: true }, {})).content[0].text)
+      expect(r.queued).toBe(1)
+      expect(urls.some(u => u.endsWith('/api/practice/clients/c1/read'))).toBe(true)
+      expect(urls.some(u => u.includes('irs-requests'))).toBe(false)
+    })
+
+    it('sorts findings largest first and filters by type prefix', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => ({ findings: [
+        { practice_client_id: 'c1', section: 'income', type: 'penalty_fta', amount_cents: 100 },
+        { practice_client_id: 'c1', section: 'income', type: 'missing_return', amount_cents: null },
+        { practice_client_id: 'c2', section: 'payroll', type: 'penalty_covid_kwong', amount_cents: 900 },
+      ] }) }) as Response))
+      const r = JSON.parse((await tools().practice_opportunities.handler({ type: 'penalty_*' }, {})).content[0].text)
+      expect(r.findings.map((f: any) => f.amount_cents)).toEqual([900, 100])
+    })
+  })
 })

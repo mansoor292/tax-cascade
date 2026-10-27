@@ -37,13 +37,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { encrypt, decrypt, getDek } from '../lib/crypto.js'
 import { encryptedFields, encryptionEnabled, hydrate, hydrateAll, ENCRYPTED_PRACTICE_CLIENT_FIELDS, PRACTICE_CLIENT_ENC_COLS } from '../lib/row_crypto.js'
 import { s3GetObject, s3PutObject } from '../lib/s3.js'
-import { taxnowFor } from '../taxnow/client.js'
 import { signed8821, type F8821Input } from './f8821.js'
-import { PracticeError, designeeOf, getPractice, isPlatformAdmin, type Practice } from './practice.js'
+import { PRACTICE_COLS, PracticeError, designeeOf, getPractice, isPlatformAdmin, taxnowOf, type Practice } from './practice.js'
 import { isIndividual, type Idv } from './signer_idv.js'
 import type { Proof } from './signer_proof.js'
 
-const PRACTICE_COLS = 'id, user_id, name, designee_mode, designee, provider'
 const ROW_COLS = `id, user_id, practice_id, entity_id, stage, tin, tin_last4, authorization_scope, signature, signed_at, submitted_at, submission, submission_confirmed_at, sign_token_expires, ${PRACTICE_CLIENT_ENC_COLS}`
 
 /** What the signer sends: the drawing, and the title if it changed. */
@@ -234,7 +232,7 @@ export async function markSent(sb: SupabaseClient, userId: string, clientId: str
   if (!sentTo) throw new PracticeError(400, 'Say where it was sent (the filing partner’s address).')
   const p = await loadPractice(sb, c.practice_id)
   let listed: string[]
-  try { listed = (await (await taxnowFor(p.provider)).listAccounts()).map(a => a.accountId) } catch {
+  try { listed = (await (await taxnowOf(p)).listAccounts()).map(a => a.accountId) } catch {
     throw new PracticeError(502, 'IRS records could not be reached right now. Try again in a few minutes.')
   }
   const now = new Date().toISOString()

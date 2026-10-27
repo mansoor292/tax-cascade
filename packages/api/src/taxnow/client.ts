@@ -39,6 +39,8 @@ export interface TaskState { status: 'pending' | 'running' | 'succeeded' | 'fail
 
 export interface TaxNowApi {
   readonly provider: 'taxnow' | 'fixture'
+  /** The TaxNow org this reads through (its own designee is left out of "who else can see"). */
+  readonly orgId: string
   listAccounts(): Promise<AccountRef[]>
   getAccount(accountId: string): Promise<AccountRecord>
   listTranscripts(accountId: string): Promise<TranscriptRef[]>
@@ -63,7 +65,7 @@ const last = (uri: string | undefined | null) => (uri ?? '').split('/').filter(B
 
 export class HttpTaxNow implements TaxNowApi {
   readonly provider = 'taxnow' as const
-  constructor(private key: string, private orgId: string, private base = BASE) {}
+  constructor(private key: string, readonly orgId: string, private base = BASE) {}
 
   private async req(method: string, path: string, body?: unknown, accept = 'application/json'): Promise<any> {
     const res = await fetch(this.base + path, {
@@ -161,14 +163,36 @@ export async function accountForTin(tn: TaxNowApi, tin: string, known: Set<strin
 
 let fixture: TaxNowApi | null = null
 
+/**
+ * Which TaxNow org a practice reads through. 'platform' is the org Catipult
+ * faces TaxNow under (TAXNOW_API_KEY / TAXNOW_ORG_ID). Any other name is an
+ * org whose key Catipult holds for one practice — the "bring your own TaxNow
+ * Pro key" case Mansoor allowed (2026-10-25) — read from
+ * TAXNOW_API_KEY_<NAME> / TAXNOW_ORG_ID_<NAME> (SSM /tax-api/*). Keys never
+ * live in a table: practice.taxnow_org holds only the name.
+ *
+ * Why (2026-10-27): the Better Choice Lenders org has its own key and its own
+ * clients (accounts in one org answer 403 to the other's key), and Mansoor
+ * wanted it as a practice of its own under its own login — one org per
+ * practice still holds.
+ */
+export const ORG_NAME = /^[a-z][a-z0-9_]{0,31}$/
+
+export function orgCredentials(org: string, env: NodeJS.ProcessEnv = process.env): { key: string; orgId: string } | null {
+  if (!ORG_NAME.test(org)) return null
+  const suffix = org === 'platform' ? '' : `_${org.toUpperCase()}`
+  const key = env[`TAXNOW_API_KEY${suffix}`]
+  const orgId = env[`TAXNOW_ORG_ID${suffix}`]
+  return key && orgId ? { key, orgId } : null
+}
+
 /** The TaxNow a practice reads through. 'fixture' never leaves the process. */
-export async function taxnowFor(provider: 'taxnow' | 'fixture'): Promise<TaxNowApi> {
+export async function taxnowFor(provider: 'taxnow' | 'fixture', org = 'platform'): Promise<TaxNowApi> {
   if (provider === 'fixture') {
     if (!fixture) fixture = new (await import('./fixture.js')).FixtureTaxNow()
     return fixture
   }
-  const key = process.env.TAXNOW_API_KEY
-  const org = process.env.TAXNOW_ORG_ID
-  if (!key || !org) throw new TaxNowError(503, 'TaxNow is not configured on this server (TAXNOW_API_KEY / TAXNOW_ORG_ID).')
-  return new HttpTaxNow(key, org)
+  const creds = orgCredentials(org)
+  if (!creds) throw new TaxNowError(503, `TaxNow org '${org}' is not configured on this server.`)
+  return new HttpTaxNow(creds.key, creds.orgId)
 }
