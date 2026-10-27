@@ -23,6 +23,8 @@ interface SignRequest {
 }
 
 const BASE = import.meta.env.VITE_API_URL || ''
+/** Didit's states for a check the signer never got going with. */
+const NOT_BEGUN = ['Not Started', 'Abandoned', 'Expired', 'Kyc Expired']
 
 async function post<T>(path: string, body: unknown, fallback: string): Promise<T> {
   const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -35,13 +37,27 @@ export default function Sign() {
   const { token } = useParams()
   const [req, setReq] = useState<SignRequest | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loadedAt, setLoadedAt] = useState(0)
   const load = () => fetch(`${BASE}/api/sign/${token}`).then(async r => {
     const body = await r.json().catch(() => ({}))
-    if (!r.ok) setError(body.error || 'This link is not valid.'); else { setError(null); setReq(body) }
+    if (!r.ok) setError(body.error || 'This link is not valid.'); else { setError(null); setReq(body); setLoadedAt(Date.now()) }
   }).catch(() => setError('Could not load this page. Try again in a moment.'))
   useEffect(() => { load() }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
   const s = req?.signer
   const idv = s?.idv
+  // Back from Didit before its decision is in: wait for it here rather than
+  // offer the form, whose resubmission started a new check over an approved
+  // one (2026-10-27). The form shows only if the signer never got going.
+  // Half an hour on, an unfinished check may be started again (the server's
+  // rule too: signer_idv.ts restartBlocked); Didit's "In Review" can take hours.
+  const recent = !!idv && loadedAt - new Date(idv.started_at).getTime() < 30 * 60_000
+  const inReview = idv?.status === 'started' && idv.didit_status === 'In Review'
+  const finishing = idv?.status === 'started' && !NOT_BEGUN.includes(idv.didit_status) && !inReview && recent
+  useEffect(() => {
+    if (!finishing) return
+    const t = setInterval(load, 4000)
+    return () => clearInterval(t)
+  }, [finishing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="ds min-h-screen bg-background text-foreground flex justify-center px-4 py-10">
@@ -75,15 +91,17 @@ export default function Sign() {
                         <ProofUpload business={req.taxpayer} onDone={() => { load() }} onUpload={body => post<MembershipProof>(`/api/sign/${token}/proof`, body, 'Could not upload the document.')} />
                       </div>
                     )}
-                    {idv?.status === 'started' && (
-                      <div className="flex flex-col gap-2">
-                        <p>Your identity check has not finished yet. If you closed it before the end, start it again.</p>
-                        <div><button className="ds-rowlink text-sm" onClick={load}>Check again</button></div>
+                    {finishing && (
+                      <div className="flex flex-col gap-2" role="status">
+                        <p><strong>Finishing your identity check…</strong> This page updates on its own; it can take a minute.</p>
+                        <div><button className="ds-rowlink text-sm" onClick={load}>Check now</button></div>
                       </div>
                     )}
+                    {inReview && <p>Your check is with Didit for a closer look. There is nothing more to do now; this page will show the result.</p>}
+                    {idv?.status === 'started' && !finishing && !inReview && <p>Your identity check was not started or not finished. Start it again below.</p>}
                     {idv?.status === 'review' && <p>Your check needs a closer look. Your preparer will be in touch; there is nothing more to do now.</p>}
                     {idv?.status === 'declined' && <p>That check did not go through: {idv.reason} You can try again.</p>}
-                    {idv?.status !== 'review' && idv?.status !== 'approved' && (
+                    {idv?.status !== 'review' && idv?.status !== 'approved' && !finishing && !inReview && (
                       <IdentityStart stated={s ? { name: s.name, title: s.title } : null} onStart={body => post<{ url: string }>(`/api/sign/${token}/verify`, body, 'Could not start the check.')} />
                     )}
                   </>

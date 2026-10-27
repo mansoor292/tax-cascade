@@ -1,6 +1,6 @@
 /** The signer's identity check: when it counts as verified. Fictional names. */
 import { describe, it, expect } from 'vitest'
-import { envFor, nameMatches, normalizeSsn, returnOrigin, verdict } from './signer_idv.js'
+import { envFor, lookupRetryable, nameMatches, normalizeSsn, restartBlocked, returnOrigin, verdict } from './signer_idv.js'
 
 const lookup = (identification_number: string, match_type = 'full_match') => ({ status: 'Approved', match_type, validations: { identification_number, full_name: 'full_match' }, services_used: ['usa_states_credit_bureau'] })
 
@@ -49,5 +49,29 @@ describe('signer identity inputs', () => {
     expect(returnOrigin('https://p5173.dev.catalogshub.com')).toBe('https://p5173.dev.catalogshub.com')
     expect(returnOrigin('https://evil.example')).toBe(process.env.API_BASE_URL || 'https://fin.catipult.ai')
     expect(returnOrigin(undefined)).toBe(process.env.API_BASE_URL || 'https://fin.catipult.ai')
+  })
+})
+
+// 2026-10-27: a live test signer came back from Didit approved, was shown the
+// form again, resubmitted, and the new session replaced the approved one. The
+// SSN they typed was made up; a lookup Didit refuses must end the check with a
+// reason, not leave it "started" forever.
+describe('a check that may still finish', () => {
+  const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString()
+  it('is never replaced once Didit has it, nor while Didit reviews it', () => {
+    for (const didit_status of ['Approved', 'In Progress', 'Resubmitted', 'Awaiting User']) expect(restartBlocked({ status: 'started', didit_status, started_at: at(2) })).toMatch(/still finishing/)
+    expect(restartBlocked({ status: 'started', didit_status: 'In Review', started_at: at(120) })).toMatch(/closer look/)
+  })
+  it('may be started again when the signer never got going, or left it for half an hour', () => {
+    for (const didit_status of ['Not Started', 'Abandoned', 'Expired']) expect(restartBlocked({ status: 'started', didit_status, started_at: at(1) })).toBeNull()
+    expect(restartBlocked({ status: 'started', didit_status: 'In Progress', started_at: at(31) })).toBeNull()
+    expect(restartBlocked({ status: 'declined', didit_status: 'Approved', started_at: at(1) })).toBeNull()
+  })
+  it('a lookup Didit refuses ends as a decline that says why; only outages are retried', () => {
+    const v = verdict({ diditStatus: 'Approved', nameMatchesSigner: true, lookup: null, ssnMatchesTaxpayer: null, lookupRefused: true })
+    expect(v.status).toBe('declined')
+    expect(v.reason).toMatch(/SSN entered could not be checked/)
+    expect([400, 404, 422].map(lookupRetryable)).toEqual([false, false, false])
+    expect([429, 500, 502, 503].map(lookupRetryable)).toEqual([true, true, true, true])
   })
 })

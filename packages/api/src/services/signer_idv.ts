@@ -100,12 +100,29 @@ export function splitName(name: string): { first_name: string; last_name: string
 }
 
 /** The verdict once Didit has decided, from everything we know. Pure. */
-export function verdict(d: { diditStatus: string; nameMatchesSigner: boolean; lookup: UsIdentityResult | null; ssnMatchesTaxpayer: boolean | null }): { status: IdvStatus; reason: string | null } {
+/** Didit answers a lookup it could not serve with a 5xx (or 429): try again
+ *  later. Any other refusal is about what was sent, and stays refused. */
+export function lookupRetryable(status: number): boolean {
+  return status >= 500 || status === 429
+}
+
+/** Why a running check may not be replaced by a new one, or null when it may:
+ *  the signer never started it, or left it unfinished for half an hour. */
+export function restartBlocked(idv: Pick<Idv, 'status' | 'didit_status' | 'started_at'>, now = Date.now()): string | null {
+  if (idv.status !== 'started') return null
+  if (['Not Started', 'Abandoned', 'Expired', 'Kyc Expired'].includes(idv.didit_status)) return null
+  if (idv.didit_status === 'In Review') return 'Your identity check is with Didit for a closer look. There is nothing more to do now.'
+  if (now - new Date(idv.started_at).getTime() > 30 * 60_000) return null
+  return 'Your identity check is still finishing. Wait a moment and reload this page.'
+}
+
+export function verdict(d: { diditStatus: string; nameMatchesSigner: boolean; lookup: UsIdentityResult | null; ssnMatchesTaxpayer: boolean | null; lookupRefused?: boolean }): { status: IdvStatus; reason: string | null } {
   if (d.diditStatus === 'Declined') return { status: 'declined', reason: 'The ID or selfie check failed.' }
   if (['Abandoned', 'Expired', 'Kyc Expired'].includes(d.diditStatus)) return { status: 'declined', reason: 'The signer did not finish the identity check.' }
   if (d.diditStatus !== 'Approved') return { status: 'review', reason: 'The ID check needs a manual review at Didit.' }
   if (d.ssnMatchesTaxpayer === false) return { status: 'declined', reason: 'The SSN entered is not the taxpayer’s.' }
   if (!d.nameMatchesSigner) return { status: 'review', reason: 'The name on the ID is not the name signed on the 8821.' }
+  if (d.lookupRefused) return { status: 'declined', reason: 'The SSN entered could not be checked against credit and financial records. Check the number and try again.' }
   if (!d.lookup) return { status: 'review', reason: 'The SSN could not be checked.' }
   if (d.lookup.validations.identification_number !== 'full_match') {
     return { status: d.lookup.match_type === 'no_match' ? 'declined' : 'review', reason: 'Credit and financial records do not confirm this SSN for the person on the ID.' }
@@ -152,7 +169,17 @@ export async function startCheck(sb: SupabaseClient, p: Pick<Practice, 'id' | 'p
   if (!ssn) throw new PracticeError(400, 'Enter the signer’s 9-digit Social Security number.')
   // An individual signs their own 8821: the SSN is the taxpayer's TIN.
   if (isIndividual(c.form_type ?? '') && c.tin && c.tin.replace(/\D/g, '') !== ssn) throw new PracticeError(400, 'For an individual, the signer’s SSN must be the taxpayer’s own.')
-  const prev = c.signature?.idv as Idv | undefined // none yet: the check now comes before signing
+  let prev = c.signature?.idv as Idv | undefined // none yet: the check now comes before signing
+  // A check still marked running may have finished at Didit since anyone
+  // last looked. Starting a new session over it threw away an approved check
+  // on 2026-10-27 (the signer came back from Didit, saw the form, submitted
+  // again): read it first, and replace it only if the signer never got going.
+  if (prev?.status === 'started') {
+    prev = (await refreshCheck(sb, clientId)) ?? prev
+    const why = restartBlocked(prev)
+    if (why) throw new PracticeError(409, why)
+  }
+  if (prev?.status === 'approved' || prev?.status === 'review') throw new PracticeError(409, 'Your identity check already finished. Reload this page.')
   let s
   try {
     s = await createSession(env, { vendorData: c.id, callback, metadata: { practice_client: c.id } })
@@ -191,6 +218,7 @@ export async function refreshCheck(sb: SupabaseClient, clientId: string): Promis
   const fromId = id ?? (idv.environment === 'sandbox' ? { ...splitName(signedName), full_name: signedName } : null)
   const nameOk = !!fromId && nameMatches(signedName, fromId)
   let lookup: UsIdentityResult | null = null
+  let lookupRefused = false
   if (d.status === 'Approved' && fromId && idv.ssn_pending) {
     const a = id?.parsed_address
     try {
@@ -204,11 +232,17 @@ export async function refreshCheck(sb: SupabaseClient, clientId: string): Promis
       })
     } catch (e) {
       if (!(e instanceof DiditError)) throw e
-      return idv // the lookup failed to answer: retried on the next look, the SSN still held
+      // Didit down or busy: retried on the next look, the SSN still held.
+      if (lookupRetryable(e.status)) return idv
+      // Didit refused the lookup as sent (a 4xx: an SSN it will not check).
+      // Retrying cannot change that, and holding the check at "started" left
+      // the signer on a blank form with no reason (2026-10-27, a test with a
+      // made-up SSN): it ends here as a decline that says why.
+      lookupRefused = true
     }
   }
   const ssnMatchesTaxpayer = isIndividual(c.form_type ?? '') && c.tin && idv.ssn_pending ? c.tin.replace(/\D/g, '') === idv.ssn_pending : null
-  const v = verdict({ diditStatus: d.status, nameMatchesSigner: nameOk, lookup, ssnMatchesTaxpayer })
+  const v = verdict({ diditStatus: d.status, nameMatchesSigner: nameOk, lookup, ssnMatchesTaxpayer, lookupRefused })
   // Didit may still move a check it holds for review; keep polling those.
   const status: IdvStatus = d.status === 'In Review' ? 'started' : v.status
   const now = new Date().toISOString()
