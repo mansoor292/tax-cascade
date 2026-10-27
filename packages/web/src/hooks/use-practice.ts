@@ -6,11 +6,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 
-export type PeriodStatus = 'filed' | 'no_return_filed' | 'activity_no_return' | 'no_irs_account' | 'not_authorized' | 'never_synced'
-export type Stage = 'draft' | 'awaiting_signature' | 'signed' | 'submitted' | 'readable' | 'claimed'
+export type PeriodStatus = 'filed' | 'no_return_filed' | 'activity_no_return' | 'no_irs_account' | 'not_authorized' | 'never_synced' | 'no_transactions'
+export type Stage = 'draft' | 'awaiting_signature' | 'signed' | 'submitted' | 'readable' | 'claimed' | 'imported'
 
 export interface Designee { name?: string; caf?: string; ptin?: string; address?: string; city?: string; state?: string; zip?: string; phone?: string; fax?: string; source?: 'platform' | 'own' }
-export interface Practice { id: string; name: string; designee_mode: 'platform' | 'own'; designee: Designee; provider: 'taxnow' | 'fixture' }
+export interface Practice { id: string; name: string; designee_mode: 'platform' | 'own'; designee: Designee; provider: 'taxnow' | 'fixture' | 'import' }
 export interface ClientSummary {
   balance_due_cents: number; credit_held_cents: number; deposits_awaiting_cents: number; penalties_standing_cents: number
   filed_through: number | null; income_form: string | null; oldest_sync: string | null; newest_sync: string | null; other_viewers?: string[]
@@ -20,14 +20,32 @@ export interface ClientRow {
   summary: ClientSummary | null; status_counts: Partial<Record<PeriodStatus, number>>
   findings: { count: number; amount_cents: number; by_section: Record<string, number> }
   last_read_at: string | null; oldest_sync: string | null; submitted_at: string | null; last_check_at: string | null; check_count: number; signed: boolean
+  /** An imported client's number in the export. */
+  import_key: string | null
 }
 export interface Finding {
   id: string; practice_client_id: string; client_name?: string; section: 'income' | 'payroll' | 'risk'; type: string; severity: string
   form: string; tax_year: number; period_month: number | null; amount_cents: number | null; note: string
   /** Penalties: what abatement would refund, and take off the balance due. */
   refund_cents?: number | null; lowers_owed_cents?: number | null
+  rules_version?: string | null
+  /** Stable across recomputes: what a verdict is keyed by. */
+  key: string
+  verdict: Verdict | null
 }
-export interface Txn { seq: number; code: string; explanation: string; date: string | null; amountCents: number | null; family: string; action: string | null }
+export interface Verdict { verdict: 'valid' | 'invalid' | 'unsure'; note: string; amount_cents: number | null; rules_version: string | null; decided_at: string }
+/** An import of an export, or a re-run of the analysis. Counts only. */
+export interface Run {
+  id: string; kind: 'import' | 'analysis'; status: 'uploading' | 'queued' | 'running' | 'done' | 'failed'
+  file_name: string | null; bytes: number | null; as_of: string | null; rules_version: string; sha256: string | null
+  stats: { rows?: number; clients?: number; periods?: number; transactions?: number; by_status?: Record<string, number>; by_form?: Record<string, number> } | null
+  changes: {
+    clients_added: number; clients_absent: number; clients_seen: number; clients_changed: number; periods_written: number; periods_unchanged: number; periods_removed: number
+    findings_before: number; findings_after: number; findings_new: Record<string, number>; findings_gone: Record<string, number>; changed_clients: string[]
+  } | null
+  error: string | null; created_at: string; started_at: string | null; finished_at: string | null; batches_total: number | null; batches_done: number | null
+}
+export interface Txn { seq: number; code: string; explanation: string; date: string | null; amountCents: number | null; family: string; action: string | null; reverses?: string | null }
 export interface Transcript {
   type: 'ACTR' | 'RETR'; form: string; tax_year: number; period_month: number; status: PeriodStatus; synced_at: string | null; response_date: string | null
   parsed: { balanceCents: number | null; txns: Txn[]; formTitle: string; returnLines: Array<{ label: string; valueText: string }> } | null
@@ -48,7 +66,7 @@ export interface MembershipProof {
 }
 export interface ClientDetail {
   client: {
-    id: string; entity_id: string; name: string; form_type: string; stage: Stage; tin_last4: string | null
+    id: string; entity_id: string; name: string; form_type: string; stage: Stage; tin_last4: string | null; import_key?: string | null
     authorization_scope: { income?: string[]; payroll?: string[]; from_year?: number; to_year?: number; year_end_month?: number; imported?: boolean }
     signed_at: string | null; submitted_at: string | null; last_check_at: string | null; check_count: number; readable_at: string | null; last_read_at: string | null
     summary: ClientSummary | null
@@ -131,6 +149,10 @@ export const useOpportunities = () => {
 }
 export const usePracticeClient = (id: string | undefined) => useResource<ClientDetail>(id ? `/api/practice/clients/${id}` : null)
 export const useCoverage = () => useResource<Coverage>('/api/practice/coverage')
+export const useRuns = () => {
+  const r = useResource<{ runs: Run[] }>('/api/practice/imports')
+  return { runs: r.data?.runs ?? [], loading: r.loading, error: r.error, reload: r.reload }
+}
 export const useFilingDesk = () => {
   const r = useResource<{ items: FilingItem[] }>('/api/practice/filing')
   return { items: r.data?.items ?? [], loading: r.loading, error: r.error, reload: r.reload }
@@ -172,5 +194,12 @@ export const practiceApi = {
   irsRequests: (id: string, transcripts: Array<{ type: 'ACTR' | 'RETR'; form: string; year: number; month: number }>) =>
     api<{ job_id: string; count: number }>(`/api/practice/clients/${id}/irs-requests`, { method: 'POST', body: JSON.stringify({ transcripts, confirm: true }) }),
   job: (id: string) => api<{ job: { status: string; error: string | null; result: unknown } }>(`/api/practice/jobs/${id}`),
+  beginImport: (body: { file_name: string; bytes: number; as_of?: string }) =>
+    api<{ run_id: string; upload_url: string; content_type: string }>('/api/practice/imports', { method: 'POST', body: JSON.stringify(body) }),
+  importUploaded: (id: string) => api<{ run: Run }>(`/api/practice/imports/${id}/uploaded`, { method: 'POST' }),
+  run: (id: string) => api<{ run: Run }>(`/api/practice/imports/${id}`),
+  rerun: () => api<{ run: Run }>('/api/practice/analysis', { method: 'POST' }),
+  verdict: (body: { client_id: string; key: string; verdict: 'valid' | 'invalid' | 'unsure' | 'clear'; note?: string }) =>
+    api<{ verdict: Verdict | null }>('/api/practice/verdicts', { method: 'PUT', body: JSON.stringify(body) }),
   claimAll: () => api<{ claimed: number; skipped: number }>('/api/practice/claim', { method: 'POST', body: JSON.stringify({ all: true }) }),
 }

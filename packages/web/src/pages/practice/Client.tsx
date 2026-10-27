@@ -2,7 +2,8 @@
  * Practice → one client. Overview (its findings), IRS account (every form ×
  * year in the six statuses; a period opens its transactions), Returns (the
  * entity's own pages), Authorization (the 8821 and its gaps). A client still
- * onboarding opens on its onboarding steps instead.
+ * onboarding opens on its onboarding steps instead. An imported client (from
+ * an export, 2026-10-26) shows its records with no 8821 and nothing to request.
  */
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -28,8 +29,11 @@ export default function Client() {
   if (error) return <LoadError message={error} onRetry={reload} />
   if (loading || !data) return <p className="text-muted-foreground">Loading…</p>
   const c = data.client
+  const imported = c.stage === 'imported'
   const readable = c.stage === 'readable' || c.stage === 'claimed'
+  const shows = readable || imported
   const s = c.summary
+  const asOf = data.transcripts.find(t => t.response_date)?.response_date
 
   return (
     <>
@@ -37,9 +41,9 @@ export default function Client() {
       <div className="ds-card px-4 py-3 mb-3 flex flex-wrap gap-5 items-center">
         <div className="flex flex-col gap-1 flex-1 min-w-[240px]">
           <div className="flex gap-2 items-center flex-wrap"><span className="num text-muted-foreground">{FORM_NAME[s?.income_form ?? c.form_type] ?? c.form_type}</span><Pill tone={STAGE[c.stage].tone}>{STAGE[c.stage].label}</Pill></div>
-          <span className="text-xs text-muted-foreground">{c.tin_last4 ? `EIN ••-•••${c.tin_last4}` : 'EIN not on file'} · {readable ? `IRS records read ${ago(c.last_read_at)}` : 'not readable yet'}</span>
+          <span className="text-xs text-muted-foreground">{imported ? `From the export${asOf ? ` as of ${asOf}` : ''} · no TIN, no 8821 with us` : <>{c.tin_last4 ? `EIN ••-•••${c.tin_last4}` : 'EIN not on file'} · {readable ? `IRS records read ${ago(c.last_read_at)}` : 'not readable yet'}</>}</span>
         </div>
-        {readable && [
+        {shows && [
           ['Balance due', money(s?.balance_due_cents ?? null)],
           ['IRS holds', money(s?.credit_held_cents ?? null)],
           ['Deposits waiting on a return', money(s?.deposits_awaiting_cents ?? null)],
@@ -48,14 +52,14 @@ export default function Client() {
           <div key={String(l)} className="flex flex-col min-w-[110px]"><span className="text-[11.5px] text-muted-foreground">{l}</span><span className="num text-base font-medium">{v}</span></div>
         ))}
       </div>
-      {!readable ? <Onboarding detail={data} onChange={reload} /> : (
+      {!shows ? <Onboarding detail={data} onChange={reload} /> : (
         <>
-          <Tabs<Tab> value={tab} onChange={setTab} tabs={[{ value: 'overview', label: 'Overview' }, { value: 'irs', label: 'IRS account' }, { value: 'returns', label: 'Returns' }, { value: 'auth', label: 'Authorization' }]} />
+          <Tabs<Tab> value={tab} onChange={setTab} tabs={[{ value: 'overview', label: 'Overview' }, { value: 'irs', label: 'IRS account' }, { value: 'returns', label: 'Returns' }, ...(imported ? [] : [{ value: 'auth' as Tab, label: 'Authorization' }])]} />
           <div className="mt-3">
             {tab === 'overview' && <Overview data={data} onOpen={(form, year, month) => setParams({ tab: 'irs', form, year: String(year), ...(month ? { month: String(month) } : {}) })} />}
             {tab === 'irs' && <IrsAccount data={data} onRequested={reload} />}
             {tab === 'returns' && <Returns data={data} />}
-            {tab === 'auth' && <Authorization data={data} />}
+            {tab === 'auth' && !imported && <Authorization data={data} />}
           </div>
         </>
       )}

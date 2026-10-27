@@ -32,6 +32,14 @@
  *   GET   /api/practice/jobs/:id            one background job's state
  *   POST  /api/practice/claim               admin only: assign platform-org accounts {account_ids | all:true}
  *
+ *   An imported book (practice_import.ts; provider 'import', clients from an export, never read or signed for):
+ *   GET   /api/practice/imports             its imports and re-runs, newest first, the running one with progress
+ *   POST  /api/practice/imports             {file_name, bytes, as_of?} → {run_id, upload_url}: PUT the CSV there
+ *   POST  /api/practice/imports/:id/uploaded   the upload finished: queue the import
+ *   GET   /api/practice/imports/:id         one run with its progress and what it changed
+ *   POST  /api/practice/analysis            re-run the analysis over every client under the current rules (any practice)
+ *   PUT   /api/practice/verdicts            a reviewer's verdict on a finding {client_id, key, verdict: valid|invalid|unsure|clear, note?}
+ *
  * Nothing here returns a full TIN: it is write-only (POST clients) and wiped
  * once the client is readable. Mounted ahead of the SPA fallback (root
  * CLAUDE.md, fact 2).
@@ -47,8 +55,9 @@ import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 import {
   PracticeError, claimAccounts, clientDetail, coverage, createClient, createPractice, designeeOf, getPractice, isPlatformAdmin,
-  form8821, formsOutsideScope, issueSignLink, listClients, markIdVerified, onboardingCheck, opportunities, requirePractice, updatePractice,
+  form8821, formsOutsideScope, issueSignLink, listClients, liveProvider, markIdVerified, onboardingCheck, opportunities, requirePractice, setVerdict, updatePractice,
 } from '../services/practice.js'
+import { beginImport, listRuns, runStatus, startAnalysis, uploadDone } from '../services/practice_import.js'
 import { confirmFiled, filingQueue, markSent, sign, signedCopy, staffScope } from '../services/practice_filing.js'
 import { enqueue, type TranscriptKey } from '../services/practice_jobs.js'
 import { TaxNowError } from '../taxnow/client.js'
@@ -115,6 +124,7 @@ router.get('/clients/:id', handle(async (req, res, userId) => {
 
 router.get('/clients/:id/8821.pdf', handle(async (req, res, userId) => {
   const p = await requirePractice(supabase, userId)
+  liveProvider(p)
   const d = await clientDetail(supabase, p, req.params.id) // ownership
   const r = d.client.signer?.signed_copy_sha256 ? await signedCopy(supabase, req.params.id) : await form8821(supabase, p, req.params.id, { fullTin: true })
   res.setHeader('Content-Type', 'application/pdf')
@@ -129,17 +139,22 @@ router.post('/clients/:id/sign-link', handle(async (req, res, userId) => {
 }))
 
 router.post('/clients/:id/sign', handle(async (req, res, userId) => {
-  await clientDetail(supabase, await requirePractice(supabase, userId), req.params.id) // ownership
+  const p = await requirePractice(supabase, userId)
+  liveProvider(p)
+  await clientDetail(supabase, p, req.params.id) // ownership
   res.json(await sign(supabase, req.params.id, req.body ?? {}, { method: 'in_app', userId }))
 }))
 
 router.post('/clients/:id/verify', handle(async (req, res, userId) => {
   const p = await requirePractice(supabase, userId)
+  liveProvider(p)
   res.json(await startCheck(supabase, p, req.params.id, req.body ?? {}, `${returnOrigin(req.get('origin'))}/app/practice/clients/${req.params.id}`))
 }))
 
 router.post('/clients/:id/proof', handle(async (req, res, userId) => {
-  res.json(proofView(await submitProof(supabase, await requirePractice(supabase, userId), req.params.id, req.body ?? {})))
+  const p = await requirePractice(supabase, userId)
+  liveProvider(p)
+  res.json(proofView(await submitProof(supabase, p, req.params.id, req.body ?? {})))
 }))
 
 router.post('/clients/:id/id-verified', handle(async (req, res, userId) => {
@@ -158,6 +173,7 @@ router.post('/clients/:id/check', handle(async (req, res, userId) => {
 router.post('/clients/:id/read', handle(async (req, res, userId) => {
   const p = await requirePractice(supabase, userId)
   const d = await clientDetail(supabase, p, req.params.id)
+  if (d.client.stage === 'imported') throw new PracticeError(409, 'This client comes from an export and is never read from the IRS. Import a newer export, or re-run the analysis.')
   if (!['readable', 'claimed'].includes(d.client.stage)) throw new PracticeError(409, 'This client’s IRS records cannot be read yet.')
   res.status(202).json({ job_id: await enqueue(supabase, { kind: 'read_client', practice_id: p.id, user_id: userId, payload: { client_id: req.params.id } }) })
 }))
@@ -172,6 +188,7 @@ router.post('/clients/:id/irs-requests', handle(async (req, res, userId) => {
   }
   const p = await requirePractice(supabase, userId)
   const d = await clientDetail(supabase, p, req.params.id)
+  if (d.client.stage === 'imported') throw new PracticeError(409, 'This client comes from an export and is never read from the IRS. Import a newer export, or re-run the analysis.')
   if (!['readable', 'claimed'].includes(d.client.stage)) throw new PracticeError(409, 'This client’s IRS records cannot be read yet.')
   const outside = formsOutsideScope(d.client.authorization_scope, ts)
   if (outside.length) throw new PracticeError(409, `This client’s authorization does not cover Form ${outside.join(', ')}.`)
@@ -230,6 +247,30 @@ router.post('/claim', handle(async (req, res, userId) => {
   const r = await claimAccounts(supabase, p, ids)
   for (const id of r.client_ids) await enqueue(supabase, { kind: 'read_client', practice_id: p.id, user_id: userId, payload: { client_id: id } })
   res.json(r)
+}))
+
+router.get('/imports', handle(async (_req, res, userId) => {
+  res.json({ runs: await listRuns(supabase, await requirePractice(supabase, userId)) })
+}))
+
+router.post('/imports', handle(async (req, res, userId) => {
+  res.status(201).json(await beginImport(supabase, await requirePractice(supabase, userId), userId, req.body ?? {}))
+}))
+
+router.post('/imports/:id/uploaded', handle(async (req, res, userId) => {
+  res.json({ run: await uploadDone(supabase, await requirePractice(supabase, userId), req.params.id, enqueue) })
+}))
+
+router.get('/imports/:id', handle(async (req, res, userId) => {
+  res.json({ run: await runStatus(supabase, await requirePractice(supabase, userId), req.params.id) })
+}))
+
+router.post('/analysis', handle(async (_req, res, userId) => {
+  res.status(202).json({ run: await startAnalysis(supabase, await requirePractice(supabase, userId), userId, enqueue) })
+}))
+
+router.put('/verdicts', handle(async (req, res, userId) => {
+  res.json({ verdict: await setVerdict(supabase, await requirePractice(supabase, userId), userId, req.body ?? {}) })
 }))
 
 export default router

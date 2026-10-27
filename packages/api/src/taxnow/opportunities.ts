@@ -55,6 +55,11 @@
 import { FTA_CODES, INTEREST_CODES, NOT_ABATABLE, PENALTY_NAME, actionOf, familyOf, penaltyKeyOf, reversesOf, sectionOfForm } from './codes.js'
 import type { ParsedTranscript, PeriodStatus, Txn } from './transcript.js'
 
+/** The rules' version, stored on every finding and run so a reviewer can
+ *  tell findings computed under older rules (Re-run analysis brings them
+ *  up). Bump it with any change to what these rules or insights.ts find. */
+export const RULES_VERSION = '2026-10-26'
+
 export interface Period {
   form: string
   taxYear: number

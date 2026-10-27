@@ -19,13 +19,16 @@
  *                       it lists December year-ends)
  *   never_synced        TaxNow has never pulled it
  * The last two have no HTML; statusWithoutHtml() decides between them.
+ * An imported export adds a seventh, no_transactions: the export lists the
+ * period with nothing in it (taxnow/export.ts) — it cannot say which of the
+ * "nothing" answers the IRS gave.
  *
  * Port of ~/taxnow-data/tools/parse_tx_html.py + build_db.py.
  */
 import { parse as parseHtml, type HTMLElement } from 'node-html-parser'
 import { familyOf, reversesOf, actionOf, type Family, type Action } from './codes.js'
 
-export type PeriodStatus = 'filed' | 'no_return_filed' | 'activity_no_return' | 'no_irs_account' | 'not_authorized' | 'never_synced'
+export type PeriodStatus = 'filed' | 'no_return_filed' | 'activity_no_return' | 'no_irs_account' | 'not_authorized' | 'never_synced' | 'no_transactions'
 
 export interface Txn {
   seq: number
@@ -62,7 +65,7 @@ export interface ParsedTranscript {
   accruedPenaltyAsOf: string | null
   returnLines: ReturnLine[]
   txns: Txn[]
-  status: Exclude<PeriodStatus, 'not_authorized' | 'never_synced'>
+  status: Exclude<PeriodStatus, 'not_authorized' | 'never_synced' | 'no_transactions'>
 }
 
 const MONEY = /^(-?)\$([\d,]+\.\d{2})$/

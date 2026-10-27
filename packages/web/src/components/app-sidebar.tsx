@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Settings2,
   Send,
+  Upload,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -75,6 +76,13 @@ const practiceNav = [
   { to: '/app/practice/irs-access', label: 'IRS access', icon: ShieldCheck },
   { to: '/app/practice/settings', label: 'Practice settings', icon: Settings2 },
 ]
+// An imported book (2026-10-26): clients from an export, no 8821s, no deadlines kept.
+const importNav = [
+  { to: '/app/practice', label: 'Clients', icon: Users, end: true },
+  { to: '/app/practice/opportunities', label: 'Opportunities', icon: BadgeDollarSign },
+  { to: '/app/practice/imports', label: 'Imports', icon: Upload },
+  { to: '/app/practice/settings', label: 'Practice settings', icon: Settings2 },
+]
 
 /**
  * Two workspaces under one login (2026-10-24): "My returns" (the owner's own
@@ -101,8 +109,9 @@ export function AppSidebar() {
 
 function PracticeSidebar() {
   // Catipult staff also get the filing desk (api services/practice_filing.ts).
-  const { staff } = usePractice()
-  const links = staff ? [...practiceNav, { to: '/app/practice/filing', label: 'Filing desk', icon: Send, end: false }] : practiceNav
+  const { staff, practice } = usePractice()
+  const nav = practice?.provider === 'import' ? importNav : practiceNav
+  const links = staff ? [...nav, { to: '/app/practice/filing', label: 'Filing desk', icon: Send, end: false }] : nav
   return (
     <Sidebar>
       <SidebarHeader className="px-4 py-3">

@@ -16,14 +16,20 @@
  * 'irs_request' is the only job that does: a real IRS pull per transcript
  * under the designee's CAF. The table refuses one without confirmed_by and
  * confirmed_at (a person pressed "Send requests" in a confirmation dialog).
+ *
+ * An imported book (services/practice_import.ts) runs as 'import_start' then
+ * one 'import_batch' per few hundred clients; a re-run of the analysis as
+ * 'analysis_batch' jobs. None of them reads TaxNow: imported clients have no
+ * TaxNow account and their stage, 'imported', is never in the daily run.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { serviceClient } from '../lib/supabase.js'
 import { taxnowFor } from '../taxnow/client.js'
 import { readClient, recordIrsOutcome, type ClientRow } from './practice_read.js'
 import { onboardingCheck } from './practice.js'
+import { runAnalysisBatch, runImportBatch, runImportStart } from './practice_import.js'
 
-export type JobKind = 'read_client' | 'onboarding_check' | 'irs_request' | 'daily'
+export type JobKind = 'read_client' | 'onboarding_check' | 'irs_request' | 'daily' | 'import_start' | 'import_batch' | 'analysis_batch'
 export interface TranscriptKey { type: 'ACTR' | 'RETR'; form: string; year: number; month: number }
 
 export async function enqueue(sb: SupabaseClient, job: { kind: JobKind; user_id?: string | null; practice_id?: string | null; payload?: Record<string, unknown>; run_key?: string; confirmed_by?: string }) {
@@ -84,6 +90,9 @@ export async function runJob(sb: SupabaseClient, job: { id: string; kind: JobKin
       await readClient(sb, c.client, c.provider, tn)
       return { results }
     }
+    case 'import_start': return runImportStart(sb, job.payload.run_id, enqueue)
+    case 'import_batch': return runImportBatch(sb, job.payload.run_id, job.payload.numbers ?? [])
+    case 'analysis_batch': return runAnalysisBatch(sb, job.payload.run_id, job.payload.client_ids ?? [])
     case 'daily': {
       const { data: clients } = await sb.from('practice_client').select('id, practice_id, user_id, stage').in('stage', ['submitted', 'readable', 'claimed'])
       let n = 0

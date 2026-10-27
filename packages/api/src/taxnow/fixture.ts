@@ -249,3 +249,50 @@ export class FixtureTaxNow implements TaxNowApi {
 
 /** Every fixture account; the demo practice is seeded with all but FIXTURE_HELD_ELSEWHERE. */
 export const FIXTURE_ACCOUNTS = ACCOUNTS.map(a => ({ accountId: a.id, name: a.name, last4: a.last4, income: a.income }))
+
+/**
+ * The fictional book as a TaxNow transaction export (taxnow/export.ts), for
+ * the imported-book demo and its tests: the accounts above under made-up
+ * client numbers, plus one individual. A period TaxNow never pulled (or the
+ * IRS refused) is not in an export; "Requested data not found" is a period
+ * with no rows.
+ *
+ * Variant 2 is a later export of the same book: Northgate paid its 2024 Q2
+ * payroll tax (so first-time abatement no longer waits on it), Meridian is
+ * gone from it, and a new individual appears.
+ */
+export const FIXTURE_EXPORT_NUMBERS: Record<string, string> = {
+  'fx-harbor-point': '1001', 'fx-ostrander': '1002', 'fx-juniper': '1003', 'fx-redwick': '1004', 'fx-meridian': '1005', 'fx-northgate': '1006', 'fx-lakeside': '1008',
+}
+
+export function fixtureExportCsv(variant: 1 | 2 = 1): string {
+  const out = ['client_id,form_number,tax_year,tax_period,transaction_index,code,explanation,transaction_date,transaction_amount']
+  const date = (v: string) => { const [m, d, y] = v.split('-'); return `${Number(m)}/${Number(d)}/${y.slice(2)}` }
+  const dollars = (v: string) => v.replace(/[$,]/g, '')
+  const q = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+  const emit = (client: string, p: PeriodSpec) => {
+    if (p.kind === 'never' || p.kind === 'refused') return
+    let tx: Tx[] = p.tx ?? []
+    if (!p.tx && p.kind === 'filed') tx = [['150', 'Tax return filed', p.form === '941' ? '04-30-' + (p.year + (p.month === 12 ? 1 : 0)) : '03-15-' + (p.year + 1), '$0.00']]
+    const lead = `${client},${p.form},${p.year},${p.month}`
+    if (p.kind === 'none' || (p.kind === 'nrf' && !tx.length)) { out.push(`${lead},0,${p.kind === 'nrf' ? 'n/a,No tax return filed' : ','},,`); return }
+    tx.forEach((t, i) => out.push(`${lead},${i},${t[0]},${q(t[1])},${date(t[2])},${dollars(t[3])}`))
+  }
+  for (const a of ACCOUNTS) {
+    const n = FIXTURE_EXPORT_NUMBERS[a.id]
+    if (!n || (variant === 2 && a.id === 'fx-meridian')) continue
+    for (const p of a.periods) {
+      if (variant === 2 && a.id === 'fx-northgate' && p.form === '941' && p.year === 2024 && p.month === 6) {
+        emit(n, { ...p, tx: [...(p.tx ?? []), ['670', 'Payment', '10-01-2026', '-$12,000.00']] })
+      } else emit(n, p)
+    }
+  }
+  // An individual, numbered negative as some export clients are: a refund held on 2022.
+  const person: PeriodSpec[] = [
+    { form: '1040', year: 2022, month: 12, kind: 'filed', tx: [['150', 'Tax return filed', '04-10-2023', '$4,000.00'], ['806', 'Credit for withheld taxes, W-2', '04-15-2023', '-$5,250.00']] },
+    { form: '1040', year: 2023, month: 12, kind: 'filed' },
+  ]
+  for (const p of person) emit('-1010', p)
+  if (variant === 2) emit('1011', { form: '1040', year: 2024, month: 12, kind: 'filed' })
+  return out.join('\n') + '\n'
+}

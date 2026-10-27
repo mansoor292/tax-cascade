@@ -11,8 +11,9 @@ export const STATUS: Record<PeriodStatus, { label: string; glyph: string; meanin
   no_irs_account: { label: 'No IRS account', glyph: '–', meaning: '"Requested data not found": authorized, nothing there.' },
   not_authorized: { label: 'Refused (451)', glyph: '451', meaning: 'The IRS refused: the 8821 on file does not cover this form or period.' },
   never_synced: { label: 'Never pulled', glyph: '?', meaning: 'Never pulled from the IRS. Requesting it is an IRS request.' },
+  no_transactions: { label: 'Nothing posted', glyph: '0', meaning: 'Listed in the export with no transactions: it does not say whether the IRS had an account for it.' },
 }
-export const STATUS_ORDER: PeriodStatus[] = ['filed', 'no_return_filed', 'activity_no_return', 'no_irs_account', 'not_authorized', 'never_synced']
+export const STATUS_ORDER: PeriodStatus[] = ['filed', 'no_return_filed', 'activity_no_return', 'no_irs_account', 'not_authorized', 'never_synced', 'no_transactions']
 
 export const STAGE: Record<Stage, { label: string; tone: 'good' | 'warn' | 'bad' | 'info' | 'mute' }> = {
   draft: { label: 'Draft', tone: 'mute' },
@@ -21,6 +22,14 @@ export const STAGE: Record<Stage, { label: string; tone: 'good' | 'warn' | 'bad'
   submitted: { label: 'Submitted · checked daily', tone: 'info' },
   readable: { label: 'Readable', tone: 'good' },
   claimed: { label: 'Readable', tone: 'good' },
+  imported: { label: 'Imported', tone: 'info' },
+}
+
+/** A reviewer's verdict on a finding, in plain words. */
+export const VERDICT: Record<'valid' | 'invalid' | 'unsure', { label: string; tone: 'good' | 'bad' | 'warn' }> = {
+  valid: { label: 'Valid', tone: 'good' },
+  invalid: { label: 'Not valid', tone: 'bad' },
+  unsure: { label: 'Unsure', tone: 'warn' },
 }
 
 export const FINDING: Record<string, { label: string; kind: string; tone: 'good' | 'warn' | 'bad' | 'info' | 'mute'; rule: string }> = {

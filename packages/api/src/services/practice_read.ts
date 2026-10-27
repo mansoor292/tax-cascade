@@ -20,7 +20,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { encryptedFields, hydrateAll, ENCRYPTED_TRANSCRIPT_FIELDS, ENCRYPTED_FINDING_FIELDS, ENCRYPTED_PRACTICE_CLIENT_FIELDS, TRANSCRIPT_ENC_COLS } from '../lib/row_crypto.js'
 import { taxnowFor, type TaxNowApi, type TranscriptRef } from '../taxnow/client.js'
 import { parseTranscriptHtml, returnFormOf, type ParsedTranscript, type PeriodStatus } from '../taxnow/transcript.js'
-import { findOpportunities, retentionRefundsByYear, type Period, type Opportunity } from '../taxnow/opportunities.js'
+import { findOpportunities, retentionRefundsByYear, RULES_VERSION, type Period, type Opportunity } from '../taxnow/opportunities.js'
 import { findInsights, profileFromRetr, type Insight, type ReturnProfile } from '../taxnow/insights.js'
 import { profilesFromReturns } from './practice_profiles.js'
 
@@ -34,7 +34,7 @@ export interface ClientRow {
   tin_last4: string | null
 }
 
-interface StoredTranscript {
+export interface StoredTranscript {
   id: string
   type: string
   form: string
@@ -125,10 +125,17 @@ export async function readClient(supabase: SupabaseClient, client: ClientRow, pr
   await replaceFindings(supabase, client, findings)
 
   const last4 = client.tin_last4 ?? all.map(t => (t.parsed as ParsedTranscript | null)?.tinLast4).find(Boolean) ?? null
-  const patch: Record<string, any> = { last_read_at: new Date().toISOString(), summary, updated_at: new Date().toISOString(), ...(last4 && !client.tin_last4 ? { tin_last4: last4 } : {}) }
+  const patch: Record<string, any> = { last_read_at: new Date().toISOString(), summary, status_counts: statusCountsOf(all), updated_at: new Date().toISOString(), ...(last4 && !client.tin_last4 ? { tin_last4: last4 } : {}) }
   const { error: e2 } = await supabase.from('practice_client').update({ ...patch, ...(await encryptedFields(supabase, client.user_id, patch, ENCRYPTED_PRACTICE_CLIENT_FIELDS)) }).eq('id', client.id)
   if (e2) throw new Error(e2.message)
   return { transcripts: all.length, fetched, findings: findings.length }
+}
+
+/** Account transcripts by status, stored on the client beside its summary (the list reads it). */
+export function statusCountsOf(rows: Array<Pick<StoredTranscript, 'type' | 'status'>>): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const r of rows) if (r.type === 'ACTR') out[r.status] = (out[r.status] ?? 0) + 1
+  return out
 }
 
 export interface FindingRow {
@@ -158,7 +165,9 @@ export interface ClientSummary {
   other_viewers?: string[]
 }
 
-export async function computeFindings(supabase: SupabaseClient, client: ClientRow, rows: StoredTranscript[], today: Date): Promise<{ findings: FindingRow[]; summary: ClientSummary }> {
+/** `returns: false` skips the returns held in Catipult (an imported client has none, and at
+ *  8,834 clients the per-client lookup is most of the time). */
+export async function computeFindings(supabase: SupabaseClient, client: Pick<ClientRow, 'entity_id' | 'user_id'>, rows: StoredTranscript[], today: Date, opts: { returns?: boolean } = {}): Promise<{ findings: FindingRow[]; summary: ClientSummary }> {
   const periods: Period[] = rows.filter(r => r.type === 'ACTR').map(r => ({
     form: r.form, taxYear: r.tax_year, periodMonth: r.period_month, status: r.status, parsed: r.status === 'never_synced' || r.status === 'not_authorized' ? null : (r.parsed as ParsedTranscript),
   }))
@@ -167,7 +176,7 @@ export async function computeFindings(supabase: SupabaseClient, client: ClientRo
   // Return profiles: the IRS return transcripts, and any return held in
   // Catipult for this client's entity where the IRS has none for that year.
   const retr: ReturnProfile[] = rows.filter(r => r.type === 'RETR' && r.parsed?.retr).map(r => profileFromRetr(r.parsed.retr))
-  const own = await profilesFromReturns(supabase, client.entity_id, client.user_id)
+  const own = opts.returns === false ? [] : await profilesFromReturns(supabase, client.entity_id, client.user_id)
   const years = new Set(retr.map(p => p.taxYear))
   const profiles = [...retr, ...own.filter(p => !years.has(p.taxYear))].sort((a, b) => a.taxYear - b.taxYear)
 
@@ -213,17 +222,53 @@ export async function computeFindings(supabase: SupabaseClient, client: ClientRo
 }
 
 async function replaceFindings(supabase: SupabaseClient, client: ClientRow, findings: FindingRow[]) {
-  const { error: d } = await supabase.from('practice_finding').delete().eq('practice_client_id', client.id)
-  if (d) throw new Error(d.message)
-  if (!findings.length) return
-  const rows = []
-  for (const f of findings) {
-    const detail = { amount_cents: f.amount_cents, note: f.note, ...(f.refund_cents != null ? { refund_cents: f.refund_cents, lowers_owed_cents: f.lowers_owed_cents } : {}) }
-    const base = { user_id: client.user_id, practice_id: client.practice_id, practice_client_id: client.id, section: f.section, type: f.type, severity: f.severity, form: f.form, tax_year: f.tax_year, period_month: f.period_month, detail }
-    rows.push({ ...base, ...(await encryptedFields(supabase, client.user_id, base, ENCRYPTED_FINDING_FIELDS)) })
+  await replaceFindingsMany(supabase, [{ client, findings }])
+}
+
+/** Replace the findings of several clients at once (an import batch writes a few hundred). */
+export async function replaceFindingsMany(supabase: SupabaseClient, entries: Array<{ client: Pick<ClientRow, 'id' | 'user_id' | 'practice_id'>; findings: FindingRow[] }>) {
+  for (let i = 0; i < entries.length; i += 100) {
+    const ids = entries.slice(i, i + 100).map(e => e.client.id)
+    const { error: d } = await supabase.from('practice_finding').delete().in('practice_client_id', ids)
+    if (d) throw new Error(d.message)
   }
-  const { error } = await supabase.from('practice_finding').insert(rows)
-  if (error) throw new Error(error.message)
+  const rows = []
+  for (const { client, findings } of entries) {
+    for (const f of findings) {
+      const detail = { amount_cents: f.amount_cents, note: f.note, ...(f.refund_cents != null ? { refund_cents: f.refund_cents, lowers_owed_cents: f.lowers_owed_cents } : {}) }
+      const base = { user_id: client.user_id, practice_id: client.practice_id, practice_client_id: client.id, section: f.section, type: f.type, severity: f.severity, form: f.form, tax_year: f.tax_year, period_month: f.period_month, rules_version: RULES_VERSION, detail }
+      rows.push({ ...base, ...(await encryptedFields(supabase, client.user_id, base, ENCRYPTED_FINDING_FIELDS)) })
+    }
+  }
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await supabase.from('practice_finding').insert(rows.slice(i, i + 500))
+    if (error) throw new Error(error.message)
+  }
+}
+
+/**
+ * A finding's identity across recomputes and re-imports, for a reviewer's
+ * verdict: type, form, period and — for a penalty — its code, read off the
+ * note's "(TC 276)". No amount: the key sits in a plain column. Findings
+ * that would still collide (rare) are told apart by their order.
+ */
+export function findingKey(f: { type: string; form: string; tax_year: number; period_month: number | null; note: string }): string {
+  const tc = /\(TC ?(\d{3})\)/.exec(f.note)?.[1] ?? ''
+  return [f.type, f.form, f.tax_year, f.period_month ?? '', tc].join('|')
+}
+
+/** findingKey for each of a client's findings, with a #2, #3… on collisions. */
+export function findingKeys<T extends { type: string; form: string; tax_year: number; period_month: number | null; note: string; amount_cents?: number | null }>(fs: T[]): string[] {
+  const seen = new Map<string, number>()
+  const order = fs.map((f, i) => i).sort((a, b) => (fs[b].amount_cents ?? 0) - (fs[a].amount_cents ?? 0))
+  const out = new Array<string>(fs.length)
+  for (const i of order) {
+    const k = findingKey(fs[i])
+    const n = (seen.get(k) ?? 0) + 1
+    seen.set(k, n)
+    out[i] = n === 1 ? k : `${k}#${n}`
+  }
+  return out
 }
 
 /** Record an IRS request's outcome on the period (a 451 marks it refused). */

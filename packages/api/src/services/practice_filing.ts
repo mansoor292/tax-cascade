@@ -38,7 +38,7 @@ import { encrypt, decrypt, getDek } from '../lib/crypto.js'
 import { encryptedFields, encryptionEnabled, hydrate, hydrateAll, ENCRYPTED_PRACTICE_CLIENT_FIELDS, PRACTICE_CLIENT_ENC_COLS } from '../lib/row_crypto.js'
 import { s3GetObject, s3PutObject } from '../lib/s3.js'
 import { signed8821, type F8821Input } from './f8821.js'
-import { PRACTICE_COLS, PracticeError, designeeOf, getPractice, isPlatformAdmin, taxnowOf, type Practice } from './practice.js'
+import { PRACTICE_COLS, PracticeError, designeeOf, getPractice, isPlatformAdmin, liveProvider, taxnowOf, type Practice } from './practice.js'
 import { isIndividual, type Idv } from './signer_idv.js'
 import type { Proof } from './signer_proof.js'
 
@@ -231,6 +231,7 @@ export async function markSent(sb: SupabaseClient, userId: string, clientId: str
   const sentTo = String(body.sent_to ?? '').trim().slice(0, 200)
   if (!sentTo) throw new PracticeError(400, 'Say where it was sent (the filing partner’s address).')
   const p = await loadPractice(sb, c.practice_id)
+  liveProvider(p)   // an imported book has no filing partner: a 400, not "records could not be reached"
   let listed: string[]
   try { listed = (await (await taxnowOf(p)).listAccounts()).map(a => a.accountId) } catch {
     throw new PracticeError(502, 'IRS records could not be reached right now. Try again in a few minutes.')

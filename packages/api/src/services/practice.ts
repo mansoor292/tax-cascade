@@ -27,17 +27,18 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   encryptedFields, encryptionEnabled, hydrate, hydrateAll,
-  ENCRYPTED_PRACTICE_CLIENT_FIELDS, ENCRYPTED_FINDING_FIELDS, ENCRYPTED_TRANSCRIPT_FIELDS,
-  PRACTICE_CLIENT_ENC_COLS, FINDING_ENC_COLS, TRANSCRIPT_ENC_COLS,
+  ENCRYPTED_PRACTICE_CLIENT_FIELDS, ENCRYPTED_FINDING_FIELDS, ENCRYPTED_TRANSCRIPT_FIELDS, ENCRYPTED_VERDICT_FIELDS,
+  PRACTICE_CLIENT_ENC_COLS, FINDING_ENC_COLS, TRANSCRIPT_ENC_COLS, VERDICT_ENC_COLS,
 } from '../lib/row_crypto.js'
+import { unpackParsed } from '../taxnow/export.js'
 import { TaxNowError, accountForTin, taxnowFor, type AccountRecord } from '../taxnow/client.js'
-import type { ClientSummary } from './practice_read.js'
+import { findingKeys, type ClientSummary } from './practice_read.js'
 import { fill8821 } from './f8821.js'
 import { idvView } from './signer_idv.js'
 import { proofView } from './signer_proof.js'
 import { verifiedName } from './practice_filing.js'
 
-export type Provider = 'taxnow' | 'fixture'
+export type Provider = 'taxnow' | 'fixture' | 'import'
 export interface Practice {
   id: string
   user_id: string
@@ -51,9 +52,9 @@ export interface Practice {
 
 export const PRACTICE_COLS = 'id, user_id, name, designee_mode, designee, provider, taxnow_org'
 
-/** The TaxNow this practice reads through. */
+/** The TaxNow this practice reads through. An imported book has none (liveProvider refuses it). */
 export function taxnowOf(p: Pick<Practice, 'provider' | 'taxnow_org'>) {
-  return taxnowFor(p.provider, p.taxnow_org)
+  return taxnowFor(liveProvider(p), p.taxnow_org)
 }
 
 export class PracticeError extends Error {
@@ -70,6 +71,16 @@ export function platformDesignee(): Record<string, string> {
     address: process.env.PLATFORM_DESIGNEE_ADDRESS || '',
     phone: process.env.PLATFORM_DESIGNEE_PHONE || '',
   }
+}
+
+/**
+ * The IRS-records provider of a practice that reads its clients on their
+ * 8821s. An imported book (provider 'import') has none: its clients come
+ * from an export and are never read, signed for or requested.
+ */
+export function liveProvider(p: Pick<Practice, 'provider'>): 'taxnow' | 'fixture' {
+  if (p.provider === 'import') throw new PracticeError(400, 'This practice is an imported book: its clients come from an export, not from 8821s.')
+  return p.provider
 }
 
 export function isPlatformAdmin(userId: string | null): boolean {
@@ -129,7 +140,7 @@ export function designeeOf(p: Practice): Record<string, string> & { source: 'pla
 
 // ─── Clients ────────────────────────────────────────────────────────────────
 
-const CLIENT_COLS = `id, practice_id, user_id, entity_id, stage, tin_last4, taxnow_account_id, taxnow_client_uri, authorization_scope, signed_at, submitted_at, submission, submission_confirmed_at, last_check_at, check_count, readable_at, last_read_at, created_at, summary, signature, ${PRACTICE_CLIENT_ENC_COLS}`
+const CLIENT_COLS = `id, practice_id, user_id, entity_id, stage, tin_last4, import_key, status_counts, taxnow_account_id, taxnow_client_uri, authorization_scope, signed_at, submitted_at, submission, submission_confirmed_at, last_check_at, check_count, readable_at, last_read_at, created_at, summary, signature, ${PRACTICE_CLIENT_ENC_COLS}`
 
 export interface ClientListRow {
   id: string
@@ -147,17 +158,42 @@ export interface ClientListRow {
   last_check_at: string | null
   check_count: number
   signed: boolean
+  /** An imported client's number in the export (no TIN, no name). */
+  import_key: string | null
+}
+
+/** Every row of a practice-wide select, past PostgREST's 1,000-row page (an imported book has
+ *  8,834 clients). After the first page, four pages at a time: one by one, 9 pages took 1.4 s. */
+async function allRows<T = any>(page: (from: number, to: number) => PromiseLike<{ data: any[] | null; error: { message: string } | null }>): Promise<T[]> {
+  const take = (r: { data: any[] | null; error: { message: string } | null }) => {
+    if (r.error) throw new PracticeError(500, r.error.message)
+    return (r.data ?? []) as T[]
+  }
+  const out = take(await page(0, 999))
+  if (out.length < 1000) return out
+  for (let base = 1000; ; base += 4000) {
+    const pages = (await Promise.all([0, 1, 2, 3].map(i => page(base + i * 1000, base + i * 1000 + 999)))).map(take)
+    for (const rows of pages) {
+      out.push(...rows)
+      if (rows.length < 1000) return out
+    }
+  }
+}
+
+/** The practice's entities by id, read by practice (an id list that long does not fit a URL). */
+async function practiceEntities(sb: SupabaseClient, p: Practice): Promise<Map<string, { id: string; name: string; form_type: string }>> {
+  const ents = await allRows<{ id: string; name: string; form_type: string }>((a, b) => sb.from('tax_entity').select('id, name, form_type').eq('practice_id', p.id).order('id').range(a, b))
+  return new Map(ents.map(e => [e.id, e]))
 }
 
 export async function listClients(sb: SupabaseClient, p: Practice): Promise<ClientListRow[]> {
-  const { data: rows, error } = await sb.from('practice_client').select(CLIENT_COLS).eq('practice_id', p.id).order('created_at')
-  if (error) throw new PracticeError(500, error.message)
+  const [rows, entById, findings] = await Promise.all([
+    allRows((a, b) => sb.from('practice_client').select(CLIENT_COLS).eq('practice_id', p.id).order('created_at').order('id').range(a, b)),
+    practiceEntities(sb, p), findingRows(sb, p),
+  ])
   const clients = await hydrateAll(sb, rows as any[], ENCRYPTED_PRACTICE_CLIENT_FIELDS)
-  const entityIds = clients.map(c => c.entity_id)
-  const { data: ents } = entityIds.length ? await sb.from('tax_entity').select('id, name, form_type').in('id', entityIds) : { data: [] as any[] }
-  const entById = new Map((ents ?? []).map((e: any) => [e.id, e]))
-  const counts = await statusCounts(sb, clients.map(c => c.id))
-  const findings = await findingRows(sb, p)
+  // Clients last written before status_counts existed: counted in the database, once.
+  const counted = clients.some(c => c.status_counts == null) ? await statusCounts(sb, p) : new Map<string, Record<string, number>>()
   const byClient = new Map<string, { count: number; amount_cents: number; by_section: Record<string, number> }>()
   for (const f of findings) {
     const b = byClient.get(f.practice_client_id) ?? { count: 0, amount_cents: 0, by_section: {} }
@@ -168,28 +204,18 @@ export async function listClients(sb: SupabaseClient, p: Practice): Promise<Clie
   }
   return clients.map(c => ({
     id: c.id, entity_id: c.entity_id, name: entById.get(c.entity_id)?.name ?? '', form_type: entById.get(c.entity_id)?.form_type ?? '',
-    stage: c.stage, tin_last4: c.tin_last4, summary: c.summary ?? null, status_counts: counts.get(c.id) ?? {},
+    stage: c.stage, tin_last4: c.tin_last4, summary: c.summary ?? null, status_counts: c.status_counts ?? counted.get(c.id) ?? {},
     findings: byClient.get(c.id) ?? { count: 0, amount_cents: 0, by_section: {} }, last_read_at: c.last_read_at,
     oldest_sync: c.summary?.oldest_sync ?? null, submitted_at: c.submitted_at, last_check_at: c.last_check_at, check_count: c.check_count,
-    signed: !!c.signed_at,
+    signed: !!c.signed_at, import_key: c.import_key ?? null,
   }))
 }
 
-async function statusCounts(sb: SupabaseClient, clientIds: string[]): Promise<Map<string, Record<string, number>>> {
-  const out = new Map<string, Record<string, number>>()
-  if (!clientIds.length) return out
-  // Plain columns only: counting needs no decrypt. Paged past PostgREST's 1,000-row cap.
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await sb.from('taxnow_transcript').select('practice_client_id, status').eq('type', 'ACTR').in('practice_client_id', clientIds).range(from, from + 999)
-    if (error) throw new PracticeError(500, error.message)
-    for (const r of data ?? []) {
-      const m = out.get(r.practice_client_id) ?? {}
-      m[r.status] = (m[r.status] ?? 0) + 1
-      out.set(r.practice_client_id, m)
-    }
-    if ((data ?? []).length < 1000) break
-  }
-  return out
+
+async function statusCounts(sb: SupabaseClient, p: Practice): Promise<Map<string, Record<string, number>>> {
+  const { data, error } = await sb.rpc('practice_status_counts', { p_practice: p.id })
+  if (error) throw new PracticeError(500, error.message)
+  return new Map(Object.entries((data ?? {}) as Record<string, Record<string, number>>))
 }
 
 export interface FindingOut {
@@ -203,20 +229,59 @@ export interface FindingOut {
   period_month: number | null
   amount_cents: number | null
   note: string
+  refund_cents: number | null
+  lowers_owed_cents: number | null
+  rules_version: string | null
+  /** Stable across recomputes: what a reviewer's verdict is keyed by. */
+  key: string
+  verdict: VerdictOut | null
 }
 
+export interface VerdictOut { verdict: 'valid' | 'invalid' | 'unsure'; note: string; amount_cents: number | null; rules_version: string | null; decided_at: string }
+
 async function findingRows(sb: SupabaseClient, p: Practice, clientId?: string): Promise<FindingOut[]> {
-  const out: any[] = []
-  for (let from = 0; ; from += 1000) {
-    let q = sb.from('practice_finding').select(`id, user_id, practice_client_id, section, type, severity, form, tax_year, period_month, detail, ${FINDING_ENC_COLS}`).eq('practice_id', p.id)
+  const [out, verdicts] = await Promise.all([allRows<any>((a, b) => {
+    let q = sb.from('practice_finding').select(`id, user_id, practice_client_id, section, type, severity, form, tax_year, period_month, rules_version, detail, ${FINDING_ENC_COLS}`).eq('practice_id', p.id)
     if (clientId) q = q.eq('practice_client_id', clientId)
-    const { data, error } = await q.range(from, from + 999)
-    if (error) throw new PracticeError(500, error.message)
-    out.push(...(data ?? []))
-    if ((data ?? []).length < 1000) break
-  }
+    return q.order('id').range(a, b)
+  }), verdictRows(sb, p, clientId)])
   await hydrateAll(sb, out, ENCRYPTED_FINDING_FIELDS)
-  return out.map(f => ({ id: f.id, practice_client_id: f.practice_client_id, section: f.section, type: f.type, severity: f.severity, form: f.form, tax_year: f.tax_year, period_month: f.period_month, amount_cents: f.detail?.amount_cents ?? null, note: f.detail?.note ?? '', refund_cents: f.detail?.refund_cents ?? null, lowers_owed_cents: f.detail?.lowers_owed_cents ?? null }))
+  const rows = out.map(f => ({ id: f.id, practice_client_id: f.practice_client_id, section: f.section, type: f.type, severity: f.severity, form: f.form, tax_year: f.tax_year, period_month: f.period_month, amount_cents: f.detail?.amount_cents ?? null, note: f.detail?.note ?? '', refund_cents: f.detail?.refund_cents ?? null, lowers_owed_cents: f.detail?.lowers_owed_cents ?? null, rules_version: f.rules_version ?? null, key: '', verdict: null as VerdictOut | null }))
+  const byClient = new Map<string, typeof rows>()
+  for (const r of rows) (byClient.get(r.practice_client_id) ?? byClient.set(r.practice_client_id, []).get(r.practice_client_id)!).push(r)
+  for (const fs of byClient.values()) findingKeys(fs).forEach((k, i) => { fs[i].key = k })
+  for (const r of rows) r.verdict = verdicts.get(`${r.practice_client_id}|${r.key}`) ?? null
+  return rows
+}
+
+async function verdictRows(sb: SupabaseClient, p: Practice, clientId?: string): Promise<Map<string, VerdictOut>> {
+  const rows = await allRows<any>((a, b) => {
+    let q = sb.from('practice_finding_verdict').select(`user_id, practice_client_id, finding_key, verdict, rules_version, decided_at, detail, ${VERDICT_ENC_COLS}`).eq('practice_id', p.id)
+    if (clientId) q = q.eq('practice_client_id', clientId)
+    return q.order('id').range(a, b)
+  })
+  await hydrateAll(sb, rows, ENCRYPTED_VERDICT_FIELDS)
+  return new Map(rows.map(v => [`${v.practice_client_id}|${v.finding_key}`, { verdict: v.verdict, note: v.detail?.note ?? '', amount_cents: v.detail?.amount_cents ?? null, rules_version: v.rules_version, decided_at: v.decided_at }]))
+}
+
+/** A reviewer's verdict on one finding: valid, not valid, unsure — or 'clear' to take it back. */
+export async function setVerdict(sb: SupabaseClient, p: Practice, userId: string, body: { client_id?: unknown; key?: unknown; verdict?: unknown; note?: unknown }) {
+  const clientId = String(body.client_id ?? '')
+  const key = String(body.key ?? '')
+  const verdict = String(body.verdict ?? '')
+  if (!['valid', 'invalid', 'unsure', 'clear'].includes(verdict)) throw new PracticeError(400, 'verdict is valid, invalid, unsure or clear.')
+  const finding = (await findingRows(sb, p, clientId)).find(f => f.key === key)
+  if (!finding) throw new PracticeError(404, 'No such finding. It may have changed since the page loaded; reload it.')
+  if (verdict === 'clear') {
+    const { error } = await sb.from('practice_finding_verdict').delete().eq('practice_client_id', clientId).eq('finding_key', key)
+    if (error) throw new PracticeError(500, error.message)
+    return null
+  }
+  const detail = { note: String(body.note ?? '').slice(0, 2000), amount_cents: finding.amount_cents }
+  const base = { practice_id: p.id, user_id: p.user_id, practice_client_id: clientId, finding_key: key, verdict, detail, rules_version: finding.rules_version, decided_by: userId, decided_at: new Date().toISOString() }
+  const { error } = await sb.from('practice_finding_verdict').upsert({ ...base, ...(await encryptedFields(sb, p.user_id, base, ENCRYPTED_VERDICT_FIELDS)) }, { onConflict: 'practice_client_id,finding_key' })
+  if (error) throw new PracticeError(500, error.message)
+  return { verdict, note: detail.note, amount_cents: detail.amount_cents, rules_version: finding.rules_version, decided_at: base.decided_at }
 }
 
 export async function opportunities(sb: SupabaseClient, p: Practice) {
@@ -225,11 +290,11 @@ export async function opportunities(sb: SupabaseClient, p: Practice) {
 }
 
 async function listClientNames(sb: SupabaseClient, p: Practice): Promise<Map<string, string>> {
-  const { data } = await sb.from('practice_client').select('id, entity_id').eq('practice_id', p.id)
-  const ids = (data ?? []).map(r => r.entity_id)
-  const { data: ents } = ids.length ? await sb.from('tax_entity').select('id, name').in('id', ids) : { data: [] as any[] }
-  const name = new Map((ents ?? []).map((e: any) => [e.id, e.name]))
-  return new Map((data ?? []).map(r => [r.id, name.get(r.entity_id) ?? '']))
+  const [rows, ents] = await Promise.all([
+    allRows<{ id: string; entity_id: string }>((a, b) => sb.from('practice_client').select('id, entity_id').eq('practice_id', p.id).order('id').range(a, b)),
+    practiceEntities(sb, p),
+  ])
+  return new Map(rows.map(r => [r.id, ents.get(r.entity_id)?.name ?? '']))
 }
 
 export async function clientDetail(sb: SupabaseClient, p: Practice, clientId: string) {
@@ -239,11 +304,11 @@ export async function clientDetail(sb: SupabaseClient, p: Practice, clientId: st
   await hydrate(sb, row, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
   const { data: ent } = await sb.from('tax_entity').select('id, name, form_type, fiscal_year_end').eq('id', row.entity_id).single()
   const { data: tx } = await sb.from('taxnow_transcript').select(`id, user_id, type, form, tax_year, period_month, status, synced_at, response_date, parsed, ${TRANSCRIPT_ENC_COLS}`).eq('practice_client_id', clientId)
-  const transcripts = await hydrateAll(sb, (tx ?? []) as any[], ENCRYPTED_TRANSCRIPT_FIELDS)
+  const transcripts = (await hydrateAll(sb, (tx ?? []) as any[], ENCRYPTED_TRANSCRIPT_FIELDS)).map(t => ({ ...t, parsed: t.type === 'ACTR' ? unpackParsed(t.parsed) : t.parsed }))
   const findings = await findingRows(sb, p, clientId)
   return {
     client: {
-      id: row.id, entity_id: row.entity_id, name: ent?.name ?? '', form_type: ent?.form_type ?? '', stage: row.stage, tin_last4: row.tin_last4,
+      id: row.id, entity_id: row.entity_id, name: ent?.name ?? '', form_type: ent?.form_type ?? '', stage: row.stage, tin_last4: row.tin_last4, import_key: row.import_key ?? null,
       authorization_scope: row.authorization_scope, signed_at: row.signed_at, submitted_at: row.submitted_at, last_check_at: row.last_check_at,
       check_count: row.check_count, readable_at: row.readable_at, last_read_at: row.last_read_at, summary: row.summary ?? null,
       signer: row.signature ? {
@@ -267,18 +332,19 @@ export async function clientDetail(sb: SupabaseClient, p: Practice, clientId: st
 
 export async function coverage(sb: SupabaseClient, p: Practice) {
   const clients = await listClients(sb, p)
-  const { data: gapsRows } = await sb.from('taxnow_transcript').select('practice_client_id, form, tax_year, period_month').in('practice_client_id', clients.map(c => c.id).concat(['00000000-0000-0000-0000-000000000000'])).eq('status', 'not_authorized')
+  // Filtered through the client's practice (an id list that long does not fit a URL).
+  const gapsRows = await allRows<any>((a, b) => sb.from('taxnow_transcript').select('practice_client_id, form, tax_year, period_month, practice_client!inner(practice_id)').eq('practice_client.practice_id', p.id).eq('status', 'not_authorized').order('id').range(a, b))
   const gaps = new Map<string, { client_id: string; form: string; periods: string[] }>()
-  for (const g of gapsRows ?? []) {
+  for (const g of gapsRows) {
     const k = `${g.practice_client_id}|${g.form}`
     const e = gaps.get(k) ?? { client_id: g.practice_client_id, form: g.form, periods: [] as string[] }
     e.periods.push(`${g.tax_year}-${String(g.period_month).padStart(2, '0')}`)
     gaps.set(k, e)
   }
-  const { data: syncRows } = await sb.from('taxnow_transcript').select('synced_at, status').in('practice_client_id', clients.map(c => c.id).concat(['00000000-0000-0000-0000-000000000000'])).eq('type', 'ACTR')
+  const syncRows = await allRows<any>((a, b) => sb.from('taxnow_transcript').select('synced_at, status, practice_client!inner(practice_id)').eq('practice_client.practice_id', p.id).eq('type', 'ACTR').order('id').range(a, b))
   const now = Date.now()
   const ages = { under_30: 0, d30_90: 0, d90_365: 0, over_365: 0, never: 0, refused: 0 }
-  for (const r of syncRows ?? []) {
+  for (const r of syncRows) {
     if (r.status === 'not_authorized') { ages.refused++; continue }
     if (!r.synced_at) { ages.never++; continue }
     const days = (now - new Date(r.synced_at).getTime()) / 86_400_000
@@ -304,6 +370,7 @@ export interface NewClient {
 }
 
 export async function createClient(sb: SupabaseClient, p: Practice, body: NewClient) {
+  liveProvider(p)
   const name = String(body.name ?? '').trim()
   if (!name) throw new PracticeError(400, 'The client needs a legal name.')
   const form = body.form_type
@@ -351,6 +418,7 @@ const SIGN_DAYS = 14
 
 /** A fresh signature link for the client. The token is shown once; only its hash is stored. */
 export async function issueSignLink(sb: SupabaseClient, p: Practice, clientId: string) {
+  liveProvider(p)
   const c = await clientRow(sb, p, clientId)
   await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
   // A signed client whose signer is not verified yet gets a link too: it
@@ -443,6 +511,7 @@ export async function onboardingCheck(sb: SupabaseClient, clientId: string): Pro
   if (!c || c.stage !== 'submitted') return { found: false }
   await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
   const { data: p } = await sb.from('practice').select(PRACTICE_COLS).eq('id', c.practice_id).single()
+  if ((p as Practice).provider === 'import') return { found: false }
   const tn = await taxnowOf(p as Practice)
   const now = new Date().toISOString()
   const { data: held } = await sb.from('practice_client').select('taxnow_account_id').eq('practice_id', c.practice_id).not('taxnow_account_id', 'is', null)

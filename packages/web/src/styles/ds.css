@@ -104,6 +104,8 @@ a.ds-tile:hover, button.ds-tile:hover { background: var(--muted); }
 .ds-cell.st-no_irs_account, .ds-swatch.st-no_irs_account { background: var(--st-none); color: var(--st-none-fg); }
 .ds-cell.st-not_authorized, .ds-swatch.st-not_authorized { background: var(--st-451); color: var(--st-451-fg); }
 .ds-cell.st-never_synced, .ds-swatch.st-never_synced { background: transparent; color: var(--st-never-fg); border: 1px dashed var(--st-never-line); }
+/* An imported period listed with nothing posted: the export cannot say which "nothing" the IRS gave. */
+.ds-cell.st-no_transactions, .ds-swatch.st-no_transactions { background: var(--st-none); color: var(--st-none-fg); opacity: .7; }
 .ds-cell.st-empty { background: transparent; border: 1px dotted var(--border); cursor: default; }
 .ds-swatch { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 18px; border-radius: 3px; font-family: "IBM Plex Mono", monospace; font-size: 10px; }
 

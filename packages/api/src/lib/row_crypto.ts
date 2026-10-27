@@ -147,6 +147,8 @@ export const ENCRYPTED_PRACTICE_CLIENT_FIELDS: FieldSpec = { json: ['signature',
 export const ENCRYPTED_TRANSCRIPT_FIELDS: FieldSpec = { json: ['parsed'] }
 /** practice_finding: the amount and the sentence that explains it. */
 export const ENCRYPTED_FINDING_FIELDS: FieldSpec = { json: ['detail'] }
+/** practice_finding_verdict: the reviewer's note and the amount judged. */
+export const ENCRYPTED_VERDICT_FIELDS: FieldSpec = { json: ['detail'] }
 
 /**
  * Ciphertext sibling columns for selects that name columns explicitly.
@@ -173,6 +175,7 @@ export const VERSION_ENC_COLS = 'changes_enc, note_enc'
 export const PRACTICE_CLIENT_ENC_COLS = 'signature_enc, summary_enc, tin_enc'
 export const TRANSCRIPT_ENC_COLS = 'parsed_enc'
 export const FINDING_ENC_COLS = 'detail_enc'
+export const VERDICT_ENC_COLS = 'detail_enc'
 
 /**
  * Produce `*_enc` columns for any fields in `payload` that are set. Caller
