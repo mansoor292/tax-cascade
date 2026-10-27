@@ -40,9 +40,11 @@ describe('signer identity inputs', () => {
     expect(normalizeSsn('123 45 6789')).toBe('123456789')
     for (const bad of ['12345678', '000-12-3456', '666123456', '900123456', '123-00-4567', '123-45-0000', 'abc']) expect(normalizeSsn(bad)).toBeNull()
   })
-  it('the demo practice runs in the sandbox, every other practice live', () => {
+  it('the demo practice runs in the sandbox, every other practice live — but a test client always in the sandbox', () => {
     expect(envFor({ provider: 'fixture' })).toBe('sandbox')
     expect(envFor({ provider: 'taxnow' })).toBe('live')
+    expect(envFor({ provider: 'taxnow' }, { test: false })).toBe('live')
+    expect(envFor({ provider: 'taxnow' }, { test: true })).toBe('sandbox')
   })
   it('Didit returns the signer only to our own pages', () => {
     expect(returnOrigin('https://fin.catipult.ai')).toBe('https://fin.catipult.ai')

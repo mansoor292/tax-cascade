@@ -82,6 +82,15 @@ export interface DiditDecision {
   face_matches?: Array<{ status: string; score?: number }> | null
 }
 
+/** Sandbox only: settle a session as if the signer had finished it (the
+ *  sandbox has no real camera behind it). Never callable for a live session. */
+export async function simulateSession(env: DiditEnv, sessionId: string, status: 'Approved' | 'Declined'): Promise<void> {
+  if (env !== 'sandbox') throw new DiditError(400, 'Only a sandbox session can be simulated.')
+  await call(env, `/v3/session/${encodeURIComponent(sessionId)}/simulate/`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ new_status: status, send_webhooks: false }),
+  })
+}
+
 export async function getDecision(env: DiditEnv, sessionId: string): Promise<DiditDecision> {
   return call<DiditDecision>(env, `/v3/session/${encodeURIComponent(sessionId)}/decision/`)
 }

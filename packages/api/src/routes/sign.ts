@@ -13,6 +13,10 @@
  *                            to /sign/:token, where GET pulls the result
  *   POST /api/sign/:token/proof    {file_name, content_base64}: a business signer's
  *                            proof they belong to the business (signer_proof.ts)
+ *   POST /api/sign/:token/test-approve   a test client only (practice_client.test):
+ *                            settle its sandbox check as approved
+ *   GET  /api/sign/:token/signed.pdf     a test client only: the signed copy, shown
+ *                            at the end of the test flow
  *   POST /api/sign/:token    {signature_png, signer_title?, agree}: last, the
  *                            verified signer draws (services/practice_filing.ts)
  *
@@ -27,8 +31,8 @@ import { Router } from 'express'
 import { sendError } from '../lib/http_error.js'
 import { lazyServiceClient } from '../lib/supabase.js'
 import { PracticeError, form8821ForToken, signRequest, tokenClient } from '../services/practice.js'
-import { sign } from '../services/practice_filing.js'
-import { refreshCheck, returnOrigin, startCheck } from '../services/signer_idv.js'
+import { sign, testSignedCopy } from '../services/practice_filing.js'
+import { approveTestCheck, idvView, refreshCheck, returnOrigin, startCheck } from '../services/signer_idv.js'
 import { proofView, submitProof } from '../services/signer_proof.js'
 
 const supabase = lazyServiceClient()
@@ -81,6 +85,34 @@ router.post('/:token/verify', async (req, res) => {
     const t = await tokenClient(supabase, req.params.token)
     const r = await startCheck(supabase, t.practice, t.clientId, req.body ?? {}, `${returnOrigin(req.get('origin'))}/sign/${req.params.token}`)
     res.json(r)
+  } catch (e: any) {
+    if (e instanceof PracticeError) return res.status(e.status).json({ error: e.message })
+    sendError(res, e)
+  }
+})
+
+// A test client only (practice_client.test): the signer stands in for the
+// camera, and sees the signed copy at the end.
+router.post('/:token/test-approve', async (req, res) => {
+  if (!TOKEN.test(req.params.token)) return res.status(404).json({ error: 'This signature link is not valid.' })
+  try {
+    const t = await tokenClient(supabase, req.params.token)
+    res.json({ idv: idvView(await approveTestCheck(supabase, t.clientId)) })
+  } catch (e: any) {
+    if (e instanceof PracticeError) return res.status(e.status).json({ error: e.message })
+    sendError(res, e)
+  }
+})
+
+router.get('/:token/signed.pdf', async (req, res) => {
+  if (!TOKEN.test(req.params.token)) return res.status(404).json({ error: 'This signature link is not valid.' })
+  try {
+    const t = await tokenClient(supabase, req.params.token)
+    const r = await testSignedCopy(supabase, t.clientId)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="${r.filename}"`)
+    res.setHeader('Cache-Control', 'no-store')
+    res.send(r.pdf)
   } catch (e: any) {
     if (e instanceof PracticeError) return res.status(e.status).json({ error: e.message })
     sendError(res, e)

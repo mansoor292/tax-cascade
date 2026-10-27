@@ -26,7 +26,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PDFDocument, PDFName, PDFDict, StandardFonts, rgb } from 'pdf-lib'
+import { PDFDocument, PDFName, PDFDict, StandardFonts, degrees, rgb } from 'pdf-lib'
 
 const BLANK = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'data', 'irs_forms', 'f8821.pdf')
 const P = 'topmostSubform[0].Page1[0].'
@@ -78,6 +78,8 @@ export interface F8821Input {
     isp?: boolean
   }
   scope: { income?: string[]; payroll?: string[]; from_year?: number; to_year?: number; year_end_month?: number }
+  /** A test client's form: stamped across page 1 so it can never be filed. */
+  test?: boolean
 }
 
 /** What a signed copy adds to the draft. */
@@ -145,8 +147,22 @@ async function filled(input: F8821Input): Promise<PDFDocument> {
   if (d.isp) form.getCheckBox(F.isp).check()
   line3Rows(input.scope).forEach((row, i) => row.forEach((v, j) => set(F.rows[i][j], v)))
   form.updateFieldAppearances()
+  if (input.test) {
+    const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
+    // Centred across the page at 35°, sized to fit inside its margins.
+    const page = pdf.getPage(0), a = (35 * Math.PI) / 180
+    const size = Math.min(44, (page.getWidth() - 100) / (bold.widthOfTextAtSize(TEST_STAMP, 1) * Math.cos(a)))
+    const w = bold.widthOfTextAtSize(TEST_STAMP, size)
+    page.drawText(TEST_STAMP, {
+      x: page.getWidth() / 2 - (w / 2) * Math.cos(a), y: page.getHeight() / 2 - (w / 2) * Math.sin(a) - 60,
+      size, font: bold, color: rgb(0.85, 0.1, 0.1), opacity: 0.35, rotate: degrees(35),
+    })
+  }
   return pdf
 }
+
+/** Printed across a test client's 8821 (practice_client.test). */
+export const TEST_STAMP = 'TEST — NOT FOR FILING'
 
 /** The signed copy: the draft with line 6 completed, flattened, plus the
  *  signing record as a last page. */

@@ -90,7 +90,7 @@ export async function submitProof(sb: SupabaseClient, p: Pick<Practice, 'id' | '
   if (!file.length) throw new PracticeError(400, 'The file is empty.')
   if (file.length > MAX_BYTES) throw new PracticeError(413, 'The file is over 7 MB. A photo or a single page is enough.')
 
-  const env = envFor(p)
+  const env = envFor(p, c)
   let r: DocumentResult
   try {
     r = await readDocument(env, { file, fileName, mime, fields: FIELDS, expectedCompanyName: c.entity_name || undefined, vendorData: c.id })

@@ -17,6 +17,8 @@ export interface ClientSummary {
 }
 export interface ClientRow {
   id: string; entity_id: string; name: string; form_type: string; stage: Stage; tin_last4: string | null
+  /** A test client (Didit sandbox; its 8821 stamped not for filing). */
+  test?: boolean
   summary: ClientSummary | null; status_counts: Partial<Record<PeriodStatus, number>>
   findings: { count: number; amount_cents: number; by_section: Record<string, number> }
   last_read_at: string | null; oldest_sync: string | null; submitted_at: string | null; last_check_at: string | null; check_count: number; signed: boolean
@@ -66,7 +68,7 @@ export interface MembershipProof {
 }
 export interface ClientDetail {
   client: {
-    id: string; entity_id: string; name: string; form_type: string; stage: Stage; tin_last4: string | null; import_key?: string | null
+    id: string; entity_id: string; name: string; form_type: string; stage: Stage; tin_last4: string | null; import_key?: string | null; test?: boolean
     authorization_scope: { income?: string[]; payroll?: string[]; from_year?: number; to_year?: number; year_end_month?: number; imported?: boolean }
     signed_at: string | null; submitted_at: string | null; last_check_at: string | null; check_count: number; readable_at: string | null; last_read_at: string | null
     summary: ClientSummary | null
@@ -180,7 +182,7 @@ export const downloadSigned8821 = (clientId: string, name: string) =>
 export const practiceApi = {
   create: (name: string) => api('/api/practice', { method: 'POST', body: JSON.stringify({ name }) }),
   update: (body: Partial<Pick<Practice, 'name' | 'designee_mode' | 'designee'>>) => api('/api/practice', { method: 'PATCH', body: JSON.stringify(body) }),
-  createClient: (body: { name: string; form_type: string; tin?: string; year_end_month?: number; scope?: { income?: boolean; payroll?: string[] } }) =>
+  createClient: (body: { name: string; form_type: string; tin?: string; year_end_month?: number; scope?: { income?: boolean; payroll?: string[] }; test?: boolean }) =>
     api<{ id: string; entity_id: string }>('/api/practice/clients', { method: 'POST', body: JSON.stringify(body) }),
   signLink: (id: string) => api<{ path: string; expires: string }>(`/api/practice/clients/${id}/sign-link`, { method: 'POST' }),
   signInApp: (id: string, body: DrawnSignature) => api(`/api/practice/clients/${id}/sign`, { method: 'POST', body: JSON.stringify(body) }),

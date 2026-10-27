@@ -37,7 +37,7 @@ export default function Client() {
 
   return (
     <>
-      <PageHeader crumb={`${practice.name} · Clients`} title={c.name} actions={readable ? <ReadButton id={c.id} onDone={reload} /> : undefined} />
+      <PageHeader crumb={`${practice.name} · Clients`} title={c.test ? `${c.name} (test)` : c.name} actions={readable ? <ReadButton id={c.id} onDone={reload} /> : undefined} />
       <div className="ds-card px-4 py-3 mb-3 flex flex-wrap gap-5 items-center">
         <div className="flex flex-col gap-1 flex-1 min-w-[240px]">
           <div className="flex gap-2 items-center flex-wrap"><span className="num text-muted-foreground">{FORM_NAME[s?.income_form ?? c.form_type] ?? c.form_type}</span><Pill tone={STAGE[c.stage].tone}>{STAGE[c.stage].label}</Pill></div>

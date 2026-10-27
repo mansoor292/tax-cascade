@@ -19,6 +19,8 @@ interface SignRequest {
   practice: string; taxpayer: string; form_type: string; tin_last4: string | null; business: boolean
   designee: { name?: string; caf?: string; address?: string; city?: string; state?: string; zip?: string; phone?: string }
   scope: { income?: string[]; payroll?: string[]; from_year?: number; to_year?: number }; expires: string
+  /** A test client: test-mode identity check, a stamped 8821, the signed copy shown at the end. */
+  test?: boolean; signed_copy?: boolean
   signer: { name: string; title: string; verified: boolean; signed: boolean; print_name: string | null; idv: IdentityCheck | null; proof: MembershipProof | null } | null
 }
 
@@ -63,9 +65,22 @@ export default function Sign() {
     <div className="ds min-h-screen bg-background text-foreground flex justify-center px-4 py-10">
       <div className="w-full max-w-2xl flex flex-col gap-4">
         <div className="flex items-center gap-2"><div className="w-6 h-6 rounded bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">C</div><span className="font-semibold">Catipult</span></div>
+        {req?.test && (
+          <div className="ds-card p-3 text-sm" role="note" style={{ background: 'var(--ds-warn-weak)', borderColor: 'var(--ds-warn)' }}>
+            <strong>Test mode.</strong> Nothing here is real: the identity check runs in Didit’s test mode, and this Form 8821 is stamped “TEST — NOT FOR FILING”.
+          </div>
+        )}
         {error && <div className="ds-card p-4">{error}</div>}
         {req && s?.signed && (
-          <div className="ds-card p-4"><h1>Signed. Thank you.</h1><p className="text-muted-foreground mt-2">Your identity was verified and your Form 8821 is signed. {req.practice} sees it in Catipult. You can close this page.</p></div>
+          <div className="ds-card p-4 flex flex-col gap-3">
+            <div><h1>Signed. Thank you.</h1><p className="text-muted-foreground mt-2">Your identity was verified and your Form 8821 is signed. {req.practice} sees it in Catipult. You can close this page.</p></div>
+            {req.signed_copy && (
+              <>
+                <iframe title="Signed Form 8821" src={`${BASE}/api/sign/${token}/signed.pdf`} className="w-full rounded border" style={{ height: '80vh', minHeight: 480 }} />
+                <a className="ds-rowlink text-sm" href={`${BASE}/api/sign/${token}/signed.pdf`} target="_blank" rel="noreferrer">Open the signed PDF</a>
+              </>
+            )}
+          </div>
         )}
         {req && !s?.signed && (
           <>
@@ -89,6 +104,14 @@ export default function Sign() {
                         <p><strong>Your ID and SSN are confirmed.</strong> Next: show that you belong to {req.taxpayer}.</p>
                         {s?.proof && s.proof.status !== 'approved' && <p>Your last document was not accepted: {s.proof.reason} You can upload another.</p>}
                         <ProofUpload business={req.taxpayer} onDone={() => { load() }} onUpload={body => post<MembershipProof>(`/api/sign/${token}/proof`, body, 'Could not upload the document.')} />
+                      </div>
+                    )}
+                    {req.test && idv?.status === 'started' && idv.environment === 'sandbox' && (
+                      <div className="flex flex-col gap-2">
+                        <p>Test mode: approve the check here, in place of the photo ID and selfie.</p>
+                        <div><button className="ds-rowlink text-sm" onClick={async () => {
+                          try { await post(`/api/sign/${token}/test-approve`, {}, 'Could not approve the test check.'); await load() } catch (e) { setError(e instanceof Error ? e.message : 'Could not approve the test check.') }
+                        }}>Approve the check (test mode)</button></div>
                       </div>
                     )}
                     {finishing && (

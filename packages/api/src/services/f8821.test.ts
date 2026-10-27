@@ -1,7 +1,8 @@
 /** The 8821 fill, on fictional values: each line lands in its box. */
 import { describe, it, expect } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
-import { fill8821, signed8821, line3Rows, formatTin, usDate, type F8821Input } from './f8821.js'
+import { fill8821, signed8821, line3Rows, formatTin, usDate, TEST_STAMP, type F8821Input } from './f8821.js'
+import { readLayout } from '../catalog/pdf_layout.js'
 import { scribblePng } from '../lib/scribble_png.js'
 
 const INPUT: F8821Input = {
@@ -49,6 +50,14 @@ describe('Form 8821', () => {
     const form = (await PDFDocument.load(await fill8821(INPUT))).getForm()
     expect(form.getTextField('topmostSubform[0].Page1[0].f1_15[0]').getText() ?? '').toBe('')
     expect(form.getCheckBox('topmostSubform[0].Page1[0].c1_10[0]').isChecked()).toBe(false)
+  })
+
+  // 2026-10-27: a test client's 8821 can never pass for a real one.
+  it('a test client’s draft and signed copy carry the TEST stamp; a real one’s never', async () => {
+    const text = async (bytes: Uint8Array) => (await readLayout(bytes)).flatMap(pg => pg.runs.map(r => r.text)).join(' ')
+    expect(await text(await fill8821({ ...INPUT, test: true }))).toContain(TEST_STAMP)
+    expect(await text(await signed8821({ ...INPUT, test: true }, { name: 'Pat Example', signedAt: '2026-10-27T12:00:00Z', png: scribblePng(), audit: [['Signed', 'test']] }))).toContain(TEST_STAMP)
+    expect(await text(await fill8821(INPUT))).not.toContain('NOT FOR FILING')
   })
 
   it('the signed copy prints the verified name, is flattened, and ends with the signing record', async () => {

@@ -148,6 +148,7 @@ function AddClient({ onClose, onCreated }: { onClose: () => void; onCreated: (id
   const [yem, setYem] = useState(12)
   const [income, setIncome] = useState(true)
   const [payroll, setPayroll] = useState<string[]>(['941', '940'])
+  const [test, setTest] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const toggle = (f: string) => setPayroll(p => (p.includes(f) ? p.filter(x => x !== f) : [...p, f]))
@@ -167,12 +168,13 @@ function AddClient({ onClose, onCreated }: { onClose: () => void; onCreated: (id
         <label className="flex items-center gap-1.5"><input type="checkbox" checked={income} onChange={e => setIncome(e.target.checked)} /> Income</label>
         {['941', '940', '943'].map(f => <label key={f} className="flex items-center gap-1.5"><input type="checkbox" checked={payroll.includes(f)} onChange={() => toggle(f)} /> {f}</label>)}
       </div>
+      <label className="flex items-start gap-1.5 text-sm"><input type="checkbox" className="mt-1" checked={test} onChange={e => setTest(e.target.checked)} /> <span>Test client: walk the signing flow without a real signer. The identity check runs in test mode, the 8821 is stamped “TEST — NOT FOR FILING”, and the client is never looked for at the IRS.</span></label>
       <p className="text-xs text-muted-foreground">The EIN is stored encrypted only until the client’s IRS records can be read. After that only its last four digits are kept.</p>
       {err && <p className="text-sm text-bad">{err}</p>}
       <div className="flex gap-2">
         <Button disabled={!name.trim() || busy} onClick={async () => {
           setBusy(true); setErr(null)
-          try { const r = await practiceApi.createClient({ name: name.trim(), form_type: form, tin: tin.replace(/\D/g, '') || undefined, year_end_month: yem, scope: { income, payroll } }); toast.success('Client created. Next: the signature.'); onCreated(r.id) }
+          try { const r = await practiceApi.createClient({ name: name.trim(), form_type: form, tin: tin.replace(/\D/g, '') || undefined, year_end_month: yem, scope: { income, payroll }, ...(test ? { test: true } : {}) }); toast.success('Client created. Next: the signature.'); onCreated(r.id) }
           catch (e) { setErr(e instanceof Error ? e.message : 'Could not create the client') }
           setBusy(false)
         }}>Create client and 8821</Button>

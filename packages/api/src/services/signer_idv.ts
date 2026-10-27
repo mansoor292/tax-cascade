@@ -40,7 +40,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { encryptedFields, encryptionEnabled, hydrate, ENCRYPTED_PRACTICE_CLIENT_FIELDS, PRACTICE_CLIENT_ENC_COLS } from '../lib/row_crypto.js'
-import { DiditError, createSession, getDecision, validateUsIdentity, type DiditDecision, type DiditEnv, type UsIdentityResult } from '../lib/didit.js'
+import { DiditError, createSession, getDecision, simulateSession, validateUsIdentity, type DiditDecision, type DiditEnv, type UsIdentityResult } from '../lib/didit.js'
 import { PracticeError, type Practice } from './practice.js'
 
 export type IdvStatus = 'started' | 'approved' | 'declined' | 'review'
@@ -70,10 +70,13 @@ export interface Idv {
 
 const FINAL = new Set(['approved', 'declined'])
 
-/** The environment is the practice's, never the caller's: the fictional demo
- *  practice (provider 'fixture') runs in Didit's sandbox, real ones live. */
-export function envFor(p: Pick<Practice, 'provider'>): DiditEnv {
-  return p.provider === 'fixture' ? 'sandbox' : 'live'
+/** The environment is the practice's and the client's, never the caller's:
+ *  the fictional demo practice (provider 'fixture') runs in Didit's sandbox,
+ *  and so does a client the practice created as a test (practice_client.test,
+ *  2026-10-27); everything else is live. A test client's 8821 is stamped not
+ *  for filing, so a sandbox result never stands behind a real one. */
+export function envFor(p: Pick<Practice, 'provider'>, c?: { test?: boolean | null }): DiditEnv {
+  return p.provider === 'fixture' || c?.test === true ? 'sandbox' : 'live'
 }
 
 export function normalizeSsn(s: unknown): string | null {
@@ -130,10 +133,10 @@ export function verdict(d: { diditStatus: string; nameMatchesSigner: boolean; lo
   return { status: 'approved', reason: null }
 }
 
-export type Row = { id: string; user_id: string; practice_id: string; stage: string; signature: any; tin: string | null; form_type?: string; entity_name?: string }
+export type Row = { id: string; user_id: string; practice_id: string; stage: string; signature: any; tin: string | null; test?: boolean; form_type?: string; entity_name?: string }
 
 export async function loadRow(sb: SupabaseClient, clientId: string, practiceId?: string): Promise<Row> {
-  const { data, error } = await sb.from('practice_client').select(`id, user_id, practice_id, entity_id, stage, signature, tin, ${PRACTICE_CLIENT_ENC_COLS}`).eq('id', clientId).maybeSingle()
+  const { data, error } = await sb.from('practice_client').select(`id, user_id, practice_id, entity_id, stage, signature, tin, test, ${PRACTICE_CLIENT_ENC_COLS}`).eq('id', clientId).maybeSingle()
   if (error) throw new PracticeError(500, error.message)
   if (!data || (practiceId && (data as any).practice_id !== practiceId)) throw new PracticeError(404, 'No such client in this practice.')
   await hydrate(sb, data as any, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
@@ -153,10 +156,10 @@ export interface CheckStart { ssn?: unknown; signer_name?: unknown; signer_title
 
 /** Start (or restart) the signer's check. Returns where to send the signer. */
 export async function startCheck(sb: SupabaseClient, p: Pick<Practice, 'id' | 'provider'>, clientId: string, body: CheckStart, callback: string): Promise<{ url: string; session_id: string }> {
-  const env = envFor(p)
+  const c = await loadRow(sb, clientId, p.id)
+  const env = envFor(p, c)
   // The SSN rides in the signature until the lookup runs: never unencrypted.
   if (env === 'live' && !encryptionEnabled()) throw new PracticeError(503, 'Identity checks need row encryption, which is off on this server.')
-  const c = await loadRow(sb, clientId, p.id)
   if (c.signature?.id_verified_at) throw new PracticeError(409, 'The signer’s identity is already verified.')
   // A row signed before the order changed (signed, not yet verified) keeps
   // the name it signed with; otherwise the signer states it here.
@@ -195,6 +198,21 @@ export async function startCheck(sb: SupabaseClient, p: Pick<Practice, 'id' | 'p
   const base = signed ? c.signature : { ...(c.signature ?? {}), signer_name: name, signer_title: title, signed_at: null, id_verified_at: null }
   await saveSignature(sb, c, { ...base, idv })
   return { url: s.url, session_id: s.session_id }
+}
+
+/** A test client's signer stands in for the camera: the sandbox session is
+ *  settled as approved, then read like any other. Refused for anything but a
+ *  test client's sandbox check. */
+export async function approveTestCheck(sb: SupabaseClient, clientId: string): Promise<Idv | null> {
+  const c = await loadRow(sb, clientId)
+  const idv = c.signature?.idv as Idv | undefined
+  if (!c.test || idv?.environment !== 'sandbox') throw new PracticeError(403, 'Only a test client’s check can be approved this way.')
+  if (idv.status !== 'started') return idv
+  try { await simulateSession('sandbox', idv.session_id, 'Approved') } catch (e) {
+    if (e instanceof DiditError) throw new PracticeError(502, 'The test check could not be approved right now. Try again in a moment.')
+    throw e
+  }
+  return refreshCheck(sb, clientId)
 }
 
 /** Pull Didit's result for a check still running; record the verdict. */

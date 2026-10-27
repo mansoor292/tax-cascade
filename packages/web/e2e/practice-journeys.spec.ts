@@ -156,6 +156,59 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
     }
   })
 
+  // 2026-10-27: Mansoor wanted to show the signing flow end to end on a real
+  // practice without a real signer. A test client runs its identity check in
+  // Didit's test mode (the signer approves it on the page), its 8821 is
+  // stamped not for filing, and the signature page ends on the signed copy.
+  test('PJ10 A test client: the whole signing flow in test mode, ending on the signed 8821 shown on the page', async ({ page, browser }) => {
+    test.skip(!DIDIT_SANDBOX_KEY, 'DIDIT_SANDBOX_API_KEY not set')
+    await signIn(page)
+    await toPractice(page)
+    await removeLeftoverTestClients(page)
+    await nav(page).getByRole('link', { name: 'IRS access' }).click()
+    await page.getByRole('button', { name: 'Add client' }).click()
+    const name = `E2E Onboarding test mode ${Date.now()}`
+    await page.getByLabel('Legal name').fill(name)
+    await page.getByLabel(/EIN/).fill(`${String(Math.floor(Math.random() * 1e5)).padStart(5, '0')}0008`)
+    await page.getByLabel(/Test client/).check()
+    await page.getByRole('button', { name: 'Create client and 8821' }).click()
+    await expect(page.getByRole('heading', { name: `${name} (test)` })).toBeVisible()
+    const entityId = await clientEntityId(page)
+    try {
+      await page.getByRole('button', { name: 'Copy signature link' }).click()
+      const link = await page.getByLabel('Signature link').inputValue()
+      const ctx = await browser.newContext()
+      const p = await ctx.newPage()
+      await p.goto(link)
+      await expect(p.getByText(/Test mode\. Nothing here is real/)).toBeVisible()
+      await p.getByLabel(/Your full legal name/).fill('Pat Example')
+      await p.getByLabel('Title').fill('President')
+      await p.getByLabel('Your Social Security number').fill('123-45-6789') // fictional
+      await p.getByRole('button', { name: 'Start identity check' }).click()
+      await p.waitForURL(/didit\.me/)
+      // Back on the link: the signer approves the test check in place of the camera.
+      await p.goto(link)
+      await p.getByRole('button', { name: 'Approve the check (test mode)' }).click()
+      await expect(p.getByText('Your ID and SSN are confirmed.')).toBeVisible({ timeout: 20_000 })
+      await p.getByLabel('Document (PDF or photo)').setInputFiles({ name: 'k1-proof.pdf', mimeType: 'application/pdf', buffer: await fictionalK1(name, '000000008') })
+      await p.getByRole('button', { name: 'Upload proof' }).click()
+      await expect(p.getByText('Your identity is verified.')).toBeVisible({ timeout: 60_000 })
+      await p.getByLabel(/I am authorized/).check()
+      await drawSignature(p)
+      await p.getByRole('button', { name: 'Sign' }).click()
+      await expect(p.getByRole('heading', { name: 'Signed. Thank you.' })).toBeVisible({ timeout: 20_000 })
+      // The end of the test: the signed 8821 itself, on the page.
+      const frame = p.locator('iframe[title="Signed Form 8821"]')
+      await expect(frame).toBeVisible()
+      const pdf = await p.request.get(new URL(await frame.getAttribute('src') ?? '', link).toString())
+      expect(pdf.headers()['content-type']).toContain('application/pdf')
+      expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-')
+      await ctx.close()
+    } finally {
+      await page.request.delete(`/api/entities/${entityId}`, { headers: authed(await sessionToken(page)) })
+    }
+  })
+
   test('PJ8 Onboarding an EIN another firm already holds: verified, signed, sent — still waiting, nothing said why — until the filing is confirmed', async ({ page, browser }) => {
     test.skip(!DIDIT_SANDBOX_KEY, 'DIDIT_SANDBOX_API_KEY not set')
     await signIn(page)

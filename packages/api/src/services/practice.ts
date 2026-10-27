@@ -150,7 +150,7 @@ export function designeeOf(p: Practice): Record<string, string> & { source: 'pla
 
 // ─── Clients ────────────────────────────────────────────────────────────────
 
-const CLIENT_COLS = `id, practice_id, user_id, entity_id, stage, tin_last4, import_key, status_counts, taxnow_account_id, taxnow_client_uri, authorization_scope, signed_at, submitted_at, submission, submission_confirmed_at, last_check_at, check_count, readable_at, last_read_at, created_at, summary, signature, ${PRACTICE_CLIENT_ENC_COLS}`
+const CLIENT_COLS = `id, practice_id, user_id, entity_id, stage, test, tin_last4, import_key, status_counts, taxnow_account_id, taxnow_client_uri, authorization_scope, signed_at, submitted_at, submission, submission_confirmed_at, last_check_at, check_count, readable_at, last_read_at, created_at, summary, signature, ${PRACTICE_CLIENT_ENC_COLS}`
 
 export interface ClientListRow {
   id: string
@@ -214,7 +214,7 @@ export async function listClients(sb: SupabaseClient, p: Practice): Promise<Clie
   }
   return clients.map(c => ({
     id: c.id, entity_id: c.entity_id, name: entById.get(c.entity_id)?.name ?? '', form_type: entById.get(c.entity_id)?.form_type ?? '',
-    stage: c.stage, tin_last4: c.tin_last4, summary: c.summary ?? null, status_counts: c.status_counts ?? counted.get(c.id) ?? {},
+    stage: c.stage, test: c.test === true, tin_last4: c.tin_last4, summary: c.summary ?? null, status_counts: c.status_counts ?? counted.get(c.id) ?? {},
     findings: byClient.get(c.id) ?? { count: 0, amount_cents: 0, by_section: {} }, last_read_at: c.last_read_at,
     oldest_sync: c.summary?.oldest_sync ?? null, submitted_at: c.submitted_at, last_check_at: c.last_check_at, check_count: c.check_count,
     signed: !!c.signed_at, import_key: c.import_key ?? null,
@@ -318,7 +318,7 @@ export async function clientDetail(sb: SupabaseClient, p: Practice, clientId: st
   const findings = await findingRows(sb, p, clientId)
   return {
     client: {
-      id: row.id, entity_id: row.entity_id, name: ent?.name ?? '', form_type: ent?.form_type ?? '', stage: row.stage, tin_last4: row.tin_last4, import_key: row.import_key ?? null,
+      id: row.id, entity_id: row.entity_id, name: ent?.name ?? '', form_type: ent?.form_type ?? '', stage: row.stage, test: row.test === true, tin_last4: row.tin_last4, import_key: row.import_key ?? null,
       authorization_scope: row.authorization_scope, signed_at: row.signed_at, submitted_at: row.submitted_at, last_check_at: row.last_check_at,
       check_count: row.check_count, readable_at: row.readable_at, last_read_at: row.last_read_at, summary: row.summary ?? null,
       signer: row.signature ? {
@@ -377,6 +377,8 @@ export interface NewClient {
   tin?: string
   year_end_month?: number
   scope?: { income?: boolean; payroll?: string[]; from_year?: number; to_year?: number }
+  /** A test client: Didit sandbox, an 8821 stamped not for filing, never looked for at TaxNow. */
+  test?: boolean
 }
 
 export async function createClient(sb: SupabaseClient, p: Practice, body: NewClient) {
@@ -405,7 +407,7 @@ export async function createClient(sb: SupabaseClient, p: Practice, body: NewCli
   }).select('id').single()
   if (e1) throw new PracticeError(500, e1.message)
   const base: Record<string, any> = {
-    practice_id: p.id, user_id: p.user_id, entity_id: ent.id, stage: 'awaiting_signature', authorization_scope: scope,
+    practice_id: p.id, user_id: p.user_id, entity_id: ent.id, stage: 'awaiting_signature', authorization_scope: scope, test: body.test === true,
     tin_last4: tin ? tin.slice(-4) : null, ...(tin ? { tin } : {}),
   }
   const { data: row, error: e2 } = await sb.from('practice_client').insert({ ...base, ...(await encryptedFields(sb, p.user_id, base, ENCRYPTED_PRACTICE_CLIENT_FIELDS)) }).select('id').single()
@@ -445,7 +447,7 @@ export async function issueSignLink(sb: SupabaseClient, p: Practice, clientId: s
 
 /** What the signer sees: the 8821 as it will be signed. Public (token only). */
 export async function signRequest(sb: SupabaseClient, token: string) {
-  const { data: c } = await sb.from('practice_client').select(`id, user_id, practice_id, entity_id, stage, tin_last4, authorization_scope, sign_token_expires, signature, ${PRACTICE_CLIENT_ENC_COLS}`).eq('sign_token_hash', hashToken(token)).maybeSingle()
+  const { data: c } = await sb.from('practice_client').select(`id, user_id, practice_id, entity_id, stage, test, tin_last4, authorization_scope, sign_token_expires, signature, ${PRACTICE_CLIENT_ENC_COLS}`).eq('sign_token_hash', hashToken(token)).maybeSingle()
   if (!c || !c.sign_token_expires || new Date(c.sign_token_expires) < new Date()) throw new PracticeError(404, 'This signature link has expired or was replaced. Ask your preparer for a new one.')
   await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
   const { data: p } = await sb.from('practice').select(PRACTICE_COLS).eq('id', c.practice_id).single()
@@ -454,6 +456,11 @@ export async function signRequest(sb: SupabaseClient, token: string) {
     practice: p!.name, taxpayer: ent?.name ?? '', form_type: ent?.form_type ?? '', tin_last4: c.tin_last4,
     designee: (({ source: _s, ...d }) => d)(designeeOf(p as Practice)), scope: c.authorization_scope, expires: c.sign_token_expires,
     business: ent?.form_type !== '1040',
+    // A test client: the page says so, lets the signer approve the sandbox
+    // check, and shows the signed copy at the end (a real client's carries
+    // the full TIN, so it is never served behind the link).
+    test: c.test === true,
+    signed_copy: c.test === true && !!c.signature?.signed_copy,
     // The signer is verified first, then signs (practice_filing.ts): the
     // page shows whichever step is next.
     signer: c.signature ? {
@@ -518,7 +525,8 @@ export function readableVerdict(o: { accountId: string; accountsAtSubmit: string
  */
 export async function onboardingCheck(sb: SupabaseClient, clientId: string): Promise<{ found: boolean }> {
   const { data: c } = await sb.from('practice_client').select(`${CLIENT_COLS}, tin, accounts_at_submit, submission_confirmed_at`).eq('id', clientId).maybeSingle() as { data: any }
-  if (!c || c.stage !== 'submitted') return { found: false }
+  // A test client's 8821 is stamped not for filing: TaxNow is never asked about it.
+  if (!c || c.stage !== 'submitted' || c.test) return { found: false }
   await hydrate(sb, c, ENCRYPTED_PRACTICE_CLIENT_FIELDS)
   const { data: p } = await sb.from('practice').select(PRACTICE_COLS).eq('id', c.practice_id).single()
   if ((p as Practice).provider === 'import') return { found: false }
@@ -621,7 +629,7 @@ export async function form8821(sb: SupabaseClient, p: Practice, clientId: string
   const { source: _s, ...designee } = designeeOf(p)
   const pdf = await fill8821({
     taxpayer: { name: ent?.name ?? '', address: [ent?.address, [ent?.city, ent?.state, ent?.zip].filter(Boolean).join(' ')].filter(Boolean).join('\n') || undefined },
-    tin, designee, scope: c.authorization_scope ?? {},
+    tin, designee, scope: c.authorization_scope ?? {}, test: c.test === true,
   })
   return { pdf, filename: `${(ent?.name ?? 'client').replace(/[^A-Za-z0-9]+/g, '_')}_8821.pdf` }
 }

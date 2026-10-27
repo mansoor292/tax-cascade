@@ -42,7 +42,7 @@ import { PRACTICE_COLS, PracticeError, designeeOf, getPractice, isPlatformAdmin,
 import { isIndividual, type Idv } from './signer_idv.js'
 import type { Proof } from './signer_proof.js'
 
-const ROW_COLS = `id, user_id, practice_id, entity_id, stage, tin, tin_last4, authorization_scope, signature, signed_at, submitted_at, submission, submission_confirmed_at, sign_token_expires, ${PRACTICE_CLIENT_ENC_COLS}`
+const ROW_COLS = `id, user_id, practice_id, entity_id, stage, tin, tin_last4, authorization_scope, test, signature, signed_at, submitted_at, submission, submission_confirmed_at, sign_token_expires, ${PRACTICE_CLIENT_ENC_COLS}`
 
 /** What the signer sends: the drawing, and the title if it changed. */
 export interface DrawnSignature { signature_png?: unknown; signer_title?: unknown; agree?: unknown }
@@ -126,7 +126,7 @@ async function draftInput(sb: SupabaseClient, p: Practice, c: any): Promise<F882
   const { source: _s, ...designee } = designeeOf(p)
   return {
     taxpayer: { name: ent?.name ?? '', address: [ent?.address, [ent?.city, ent?.state, ent?.zip].filter(Boolean).join(' ')].filter(Boolean).join('\n') || undefined },
-    tin: c.tin ?? (c.tin_last4 ? `XX-XXX${c.tin_last4}` : ''), designee, scope: c.authorization_scope ?? {},
+    tin: c.tin ?? (c.tin_last4 ? `XX-XXX${c.tin_last4}` : ''), designee, scope: c.authorization_scope ?? {}, test: c.test === true,
   }
 }
 
@@ -178,6 +178,15 @@ export async function signedCopy(sb: SupabaseClient, clientId: string): Promise<
   if (createHash('sha256').update(pdf).digest('hex') !== copy.sha256) throw new PracticeError(500, 'The kept signed copy does not match its record.')
   const { data: ent } = await sb.from('tax_entity').select('name').eq('id', c.entity_id).single()
   return { pdf, filename: `${(ent?.name ?? 'client').replace(/[^A-Za-z0-9]+/g, '_')}_8821_signed.pdf`, sha256: copy.sha256 }
+}
+
+/** A test client's signed copy, for its own signature page (the end of the
+ *  test flow shows what was signed). Never a real client's: theirs carries
+ *  the full TIN and is served to staff only. */
+export async function testSignedCopy(sb: SupabaseClient, clientId: string) {
+  const c = await loadClient(sb, clientId)
+  if (c.test !== true) throw new PracticeError(404, 'Not available for this client.')
+  return signedCopy(sb, clientId)
 }
 
 // ─── Staff ──────────────────────────────────────────────────────────────────
