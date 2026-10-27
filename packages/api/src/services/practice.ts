@@ -44,7 +44,8 @@ export interface Practice {
   user_id: string
   name: string
   designee_mode: 'platform' | 'own'
-  designee: Record<string, string>
+  /** Line 2's designee fields; `second` (a second designee) and `isp` (line 3's ISP box) optional. */
+  designee: Record<string, any>
   provider: Provider
   /** The TaxNow org it reads through ('platform', or an org whose key we hold for it: taxnow/client.ts). */
   taxnow_org: string
@@ -123,9 +124,18 @@ export async function updatePractice(sb: SupabaseClient, p: Practice, body: { na
     patch.designee_mode = body.designee_mode
   }
   if (body.designee !== undefined) {
-    const d: Record<string, string> = {}
-    for (const k of DESIGNEE_KEYS) if (body.designee?.[k] != null) d[k] = String(body.designee[k]).trim().slice(0, 200)
-    if (d.caf && !/^[0-9A-Z-]{4,20}$/i.test(d.caf)) throw new PracticeError(400, 'A CAF number is letters and digits.')
+    const one = (src: Record<string, unknown> | undefined) => {
+      const d: Record<string, string> = {}
+      for (const k of DESIGNEE_KEYS) if (src?.[k] != null) d[k] = String(src[k]).trim().slice(0, 200)
+      if (d.caf && !/^[0-9A-Z-]{4,20}$/i.test(d.caf)) throw new PracticeError(400, 'A CAF number is letters and digits.')
+      return d
+    }
+    const d: Record<string, unknown> = one(body.designee)
+    // A second designee and line 3's ISP box: a TaxNow practice's 8821s name
+    // both of TaxNow's designees and authorize access through an ISP.
+    const second = body.designee?.second as Record<string, unknown> | undefined
+    if (second && typeof second === 'object' && second.name) d.second = one(second)
+    if (body.designee?.isp === true) d.isp = true
     patch.designee = d
   }
   const { data, error } = await sb.from('practice').update(patch).eq('id', p.id).select(PRACTICE_COLS).single()

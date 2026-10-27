@@ -40,6 +40,17 @@ const F = {
   ptin: `${P}f1_12[0]`,         // PTIN
   dPhone: `${P}f1_13[0]`,       // Telephone No.
   dFax: `${P}f1_14[0]`,         // Fax No.
+  // The second designee: the same block, one row down (widgets f1_15–f1_19
+  // sit 60pt below f1_10–f1_14 on Rev. 01-2021).
+  designee2: `${P}f1_15[0]`,    // 2. Name and address (second designee)
+  caf2: `${P}f1_16[0]`,         // CAF No.
+  ptin2: `${P}f1_17[0]`,        // PTIN
+  dPhone2: `${P}f1_18[0]`,      // Telephone No.
+  dFax2: `${P}f1_19[0]`,        // Fax No.
+  // 3. "By checking here, I authorize access to my IRS records via an
+  // Intermediate Service Provider." TaxNow reads under its designees' CAF as
+  // an ISP, and its own 8821s tick this (seen on BCL's, 2026-10-27).
+  isp: `${P}c1_10[0]`,
   rows: [                       // 3. (a) type, (b) form, (c) years or periods, (d) specific matters
     [`${P}Table_Line3[0].BodyRow1[0].f1_20[0]`, `${P}Table_Line3[0].BodyRow1[0].f1_21[0]`, `${P}Table_Line3[0].BodyRow1[0].f1_22[0]`, `${P}Table_Line3[0].BodyRow1[0].f1_23[0]`],
     [`${P}Table_Line3[0].BodyRow2[0].f1_24[0]`, `${P}Table_Line3[0].BodyRow2[0].f1_25[0]`, `${P}Table_Line3[0].BodyRow2[0].f1_26[0]`, `${P}Table_Line3[0].BodyRow2[0].f1_27[0]`],
@@ -55,10 +66,17 @@ const F = {
 const SIG_BOX = { x: 60, y: 124, width: 360, height: 34 }
 const DATE_AT = { x: 442, y: 135 }
 
+export interface Designee { name?: string; address?: string; city?: string; state?: string; zip?: string; caf?: string; ptin?: string; phone?: string; fax?: string }
+
 export interface F8821Input {
   taxpayer: { name: string; address?: string; phone?: string }
   tin: string                     // full TIN while pending, else masked (XX-XXX1234)
-  designee: { name?: string; address?: string; city?: string; state?: string; zip?: string; caf?: string; ptin?: string; phone?: string; fax?: string }
+  designee: Designee & {
+    /** A second designee, printed in line 2's second block (TaxNow's 8821s name two). */
+    second?: Designee
+    /** Tick line 3's Intermediate Service Provider box. */
+    isp?: boolean
+  }
   scope: { income?: string[]; payroll?: string[]; from_year?: number; to_year?: number; year_end_month?: number }
 }
 
@@ -116,6 +134,15 @@ async function filled(input: F8821Input): Promise<PDFDocument> {
   set(F.ptin, d.ptin)
   set(F.dPhone, d.phone)
   set(F.dFax, d.fax)
+  const d2 = d.second
+  if (d2?.name) {
+    set(F.designee2, [d2.name, d2.address, [d2.city, d2.state, d2.zip].filter(Boolean).join(' ')].filter(Boolean).join('\n'))
+    set(F.caf2, d2.caf)
+    set(F.ptin2, d2.ptin)
+    set(F.dPhone2, d2.phone)
+    set(F.dFax2, d2.fax)
+  }
+  if (d.isp) form.getCheckBox(F.isp).check()
   line3Rows(input.scope).forEach((row, i) => row.forEach((v, j) => set(F.rows[i][j], v)))
   form.updateFieldAppearances()
   return pdf

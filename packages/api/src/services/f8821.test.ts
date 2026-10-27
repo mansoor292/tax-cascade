@@ -30,6 +30,27 @@ describe('Form 8821', () => {
     expect(v('f1_32[0]') ?? '').toBe('')
     expect(v('f1_33[0]') ?? '').toBe('')
   })
+  // 2026-10-27: a TaxNow practice's 8821 names TaxNow's two designees and
+  // ticks line 3's Intermediate Service Provider box, as TaxNow's own do.
+  it('prints a second designee in the second block and ticks the ISP box when asked', async () => {
+    const bytes = await fill8821({
+      ...INPUT,
+      designee: { ...INPUT.designee, isp: true, second: { name: 'Lee Sample, CPA', address: '3 Sample St', city: 'Springfield', state: 'IL', zip: '62701', caf: '0000-00001R', ptin: 'P00000001', phone: '555-0101', fax: '555-0102' } },
+    })
+    const form = (await PDFDocument.load(bytes)).getForm()
+    const v = (n: string) => form.getTextField(`topmostSubform[0].Page1[0].${n}`).getText()
+    expect(v('f1_10[0]')).toMatch(/^Dana Fictional, EA/)
+    expect(v('f1_15[0]')).toBe('Lee Sample, CPA\n3 Sample St\nSpringfield IL 62701')
+    expect([v('f1_16[0]'), v('f1_17[0]'), v('f1_18[0]'), v('f1_19[0]')]).toEqual(['0000-00001R', 'P00000001', '555-0101', '555-0102'])
+    expect(form.getCheckBox('topmostSubform[0].Page1[0].c1_10[0]').isChecked()).toBe(true)
+  })
+
+  it('leaves the second block and the ISP box empty by default', async () => {
+    const form = (await PDFDocument.load(await fill8821(INPUT))).getForm()
+    expect(form.getTextField('topmostSubform[0].Page1[0].f1_15[0]').getText() ?? '').toBe('')
+    expect(form.getCheckBox('topmostSubform[0].Page1[0].c1_10[0]').isChecked()).toBe(false)
+  })
+
   it('the signed copy prints the verified name, is flattened, and ends with the signing record', async () => {
     const bytes = await signed8821(INPUT, {
       name: 'PAT EXAMPLE', title: 'President', signedAt: '2026-10-25T14:03:00Z', png: new Uint8Array(scribblePng()),
