@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { SignHere, IdentityStart, ProofUpload } from '@/pages/practice/Onboarding'
 import type { IdentityCheck, MembershipProof } from '@/hooks/use-practice'
+import { PdfPages } from '@/components/PdfPages'
 
 interface SignRequest {
   practice: string; taxpayer: string; form_type: string; tin_last4: string | null; business: boolean
@@ -76,7 +77,7 @@ export default function Sign() {
             <div><h1>Signed. Thank you.</h1><p className="text-muted-foreground mt-2">Your identity was verified and your Form 8821 is signed. {req.practice} sees it in Catipult. You can close this page.</p></div>
             {req.signed_copy && (
               <>
-                <iframe title="Signed Form 8821" src={`${BASE}/api/sign/${token}/signed.pdf`} className="w-full rounded border" style={{ height: '80vh', minHeight: 480 }} />
+                <PdfPages title="Signed Form 8821" url={`${BASE}/api/sign/${token}/signed.pdf`} />
                 <a className="ds-rowlink text-sm" href={`${BASE}/api/sign/${token}/signed.pdf`} target="_blank" rel="noreferrer">Open the signed PDF</a>
               </>
             )}

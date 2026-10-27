@@ -197,10 +197,11 @@ test.describe('P2 tax preparer — practice workspace (demo practice)', () => {
       await drawSignature(p)
       await p.getByRole('button', { name: 'Sign' }).click()
       await expect(p.getByRole('heading', { name: 'Signed. Thank you.' })).toBeVisible({ timeout: 20_000 })
-      // The end of the test: the signed 8821 itself, on the page.
-      const frame = p.locator('iframe[title="Signed Form 8821"]')
-      await expect(frame).toBeVisible()
-      const pdf = await p.request.get(new URL(await frame.getAttribute('src') ?? '', link).toString())
+      // The end of the test: the signed 8821 itself, drawn on the page — the
+      // form and its signing record.
+      await expect(p.getByRole('group', { name: 'Signed Form 8821' }).locator('canvas')).toHaveCount(2, { timeout: 30_000 })
+      await expect(p.getByText('Loading the signed form…')).toHaveCount(0)
+      const pdf = await p.request.get(new URL(await p.getByRole('link', { name: 'Open the signed PDF' }).getAttribute('href') ?? '', link).toString())
       expect(pdf.headers()['content-type']).toContain('application/pdf')
       expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-')
       await ctx.close()
