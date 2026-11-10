@@ -5,6 +5,7 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { lazyAnonClient, userClient, anonKeyConfigured } from '../lib/supabase.js'
 import { sendDbError } from '../lib/http_error.js'
+import { normalizeScopes } from '../lib/scopes.js'
 
 // Anon client for auth operations (signup/signin); the per-request
 // RLS-scoped userClient comes from lib/supabase.
@@ -61,6 +62,17 @@ router.post('/api-keys', async (req, res) => {
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return res.status(401).json({ error: 'Invalid token' })
 
+  // Optional scopes: '*' (default), 'read', 'write' — see lib/scopes.ts. Only
+  // written when asked for, so the column's default applies otherwise.
+  let scopes: string[] | undefined
+  if (req.body?.scopes !== undefined) {
+    try {
+      scopes = normalizeScopes(req.body.scopes)
+    } catch (e: any) {
+      return res.status(400).json({ error: e.message })
+    }
+  }
+
   const apiKey = `txk_${uuidv4().replace(/-/g, '').slice(0, 24)}`
   // Hash with argon2id for at-rest protection. key_value is still written
   // during dual-storage transition so existing auth middleware keeps working;
@@ -73,6 +85,7 @@ router.post('/api-keys', async (req, res) => {
     key_value_hash: hash,
     key_prefix: apiKey.slice(0, 8),
     name: req.body.name || 'API Key',
+    ...(scopes ? { scopes } : {}),
   }).select().single()
 
   if (error) return sendDbError(res, error)

@@ -34,6 +34,7 @@ import {
 import { FORM_INVENTORY, seedCacheFromSupabase } from './maps/field_maps.js'
 import authRoutes, { supabase } from './routes/auth.js'
 import { anonKeyConfigured } from './lib/supabase.js'
+import { ALL_SCOPES, scopesFromRow } from './lib/scopes.js'
 import scenarioRoutes from './routes/scenarios.js'
 import documentRoutes from './routes/documents.js'
 import returnRoutes from './routes/returns.js'
@@ -269,9 +270,12 @@ app.use('/api', async (req, res, next) => {
     res.status(401).json({ error: 'Missing API key or Bearer token' })
     return
   }
-  // Check static keys
+  // Check static keys. Every success path below also sets req.apiKeyScopes:
+  // lib/scopes.ts requireWrite fails closed, so a path that forgets it turns
+  // every write route into a 403 for that caller rather than a bypass.
   if (STATIC_KEYS.has(key)) {
     (req as any).userId = '00000000-0000-0000-0000-000000000000'
+    req.apiKeyScopes = ALL_SCOPES
     return next()
   }
   // Everything below needs the anon client. Answer 503 rather than let the
@@ -283,13 +287,17 @@ app.use('/api', async (req, res, next) => {
   }
   // Check Supabase JWT
   const { data: { user } } = await supabase.auth.getUser(key)
-  if (user) { (req as any).userId = user.id; return next() }
+  if (user) { (req as any).userId = user.id; req.apiKeyScopes = ALL_SCOPES; return next() }
   // Check Supabase-provisioned API keys. Prefer argon2 hash verification
   // (constant-time; no plaintext key exposure in the DB). Falls back to the
   // plaintext column during dual-storage transition.
   const prefix = key.slice(0, 8)
+  // `*` rather than a column list on purpose: `scopes` arrived in migration
+  // 20261110120000 and a deploy that outruns the migration would otherwise
+  // turn every txk_ key into a 401 (PostgREST rejects the whole select for
+  // one unknown column). Without the column, scopesFromRow() grants '*'.
   const { data: candidates } = await supabase.from('api_key')
-    .select('id, user_id, key_value, key_value_hash')
+    .select('*')
     .eq('is_active', true)
     .eq('key_prefix', prefix)
   if (candidates?.length) {
@@ -300,6 +308,7 @@ app.use('/api', async (req, res, next) => {
         : row.key_value === key
       if (match) {
         (req as any).userId = row.user_id
+        req.apiKeyScopes = scopesFromRow(row)
         supabase.from('api_key').update({ last_used_at: new Date().toISOString() }).eq('id', row.id).then()
         return next()
       }
@@ -307,9 +316,10 @@ app.use('/api', async (req, res, next) => {
   }
   // Legacy fallback for rows without key_prefix set yet
   const { data } = await supabase.from('api_key')
-    .select('id, user_id').eq('key_value', key).eq('is_active', true).single()
+    .select('*').eq('key_value', key).eq('is_active', true).single()
   if (data) {
     (req as any).userId = data.user_id
+    req.apiKeyScopes = scopesFromRow(data)
     supabase.from('api_key').update({ last_used_at: new Date().toISOString() }).eq('id', data.id).then()
     return next()
   }

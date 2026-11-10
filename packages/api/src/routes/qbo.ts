@@ -16,6 +16,7 @@ import { flattenReport } from '../maps/flatten_report.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 import { mapWithConcurrency } from '../lib/concurrency.js'
+import { requireWrite } from '../lib/scopes.js'
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://tax-api.catalogshub.com'
 // How many Gemini calls may be in flight at once. Bounded, not unlimited: the
@@ -176,6 +177,37 @@ async function qboPost(entityId: string, path: string, body: any, query?: Record
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+  })
+
+  if (!resp.ok) {
+    const text = await resp.text()
+    throw new Error(`QBO API ${resp.status}: ${text}`)
+  }
+
+  return resp.json()
+}
+
+/**
+ * A QuickBooks action that takes NO body: `POST /invoice/{id}/send`. Intuit
+ * wants `Content-Type: application/octet-stream` and an empty body there —
+ * JSON, even `{}`, is answered with a 400 — so this is a sibling of qboPost
+ * rather than a flag on it: qboPost's JSON contract stays exactly as it is.
+ */
+async function qboSendRaw(entityId: string, path: string, query?: Record<string, string>): Promise<any> {
+  const auth = await getAccessToken(entityId)
+  if (!auth) throw new Error('No active QBO connection for this entity')
+
+  const qs = query ? '?' + new URLSearchParams(query).toString() : ''
+  const url = `${qboBase()}/v3/company/${auth.realmId}${path}${qs}`
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${auth.token}`,
+      'Accept': 'application/json',
+      'Content-Type': 'application/octet-stream',
+    },
+    body: '',
   })
 
   if (!resp.ok) {
@@ -419,7 +451,7 @@ router.get('/:entity_id/status', async (req, res) => {
 })
 
 // ─── Disconnect ───
-router.delete('/:entity_id/disconnect', async (req, res) => {
+router.delete('/:entity_id/disconnect', requireWrite, async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
@@ -909,7 +941,7 @@ router.get('/:entity_id/resource/:resource', async (req, res) => {
 })
 
 // Create: POST /api/qbo/:entity_id/resource/:resource
-router.post('/:entity_id/resource/:resource', async (req, res) => {
+router.post('/:entity_id/resource/:resource', requireWrite, async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
@@ -926,7 +958,7 @@ router.post('/:entity_id/resource/:resource', async (req, res) => {
 })
 
 // Update: PUT /api/qbo/:entity_id/resource/:resource
-router.put('/:entity_id/resource/:resource', async (req, res) => {
+router.put('/:entity_id/resource/:resource', requireWrite, async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
@@ -951,7 +983,7 @@ router.put('/:entity_id/resource/:resource', async (req, res) => {
 // via /<resource>?operation=delete (best-effort) so partial state is
 // reversed. Reversals are tagged PrivateNote:'auto-reversed on batch error'
 // for auditability.
-router.post('/:entity_id/transactions_batch', async (req, res) => {
+router.post('/:entity_id/transactions_batch', requireWrite, async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
@@ -1042,7 +1074,7 @@ router.post('/:entity_id/transactions_batch', async (req, res) => {
 })
 
 // Delete: DELETE /api/qbo/:entity_id/resource/:resource
-router.delete('/:entity_id/resource/:resource', async (req, res) => {
+router.delete('/:entity_id/resource/:resource', requireWrite, async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
@@ -1077,7 +1109,7 @@ router.delete('/:entity_id/resource/:resource', async (req, res) => {
 //   { queried_from_accounts, total, classified, auto_applied, review_queue,
 //     suggestions: [{txn_id, txn_type, date, amount, description, from,
 //                    suggested_to, confidence, reasoning}] }
-router.post('/:entity_id/recategorize', async (req, res) => {
+router.post('/:entity_id/recategorize', requireWrite, async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
@@ -1308,7 +1340,7 @@ Return ONLY a JSON array, no prose, no markdown fences.`
 //   ],
 //   confirm: true   // safety: server refuses without it
 // }
-router.post('/:entity_id/recategorize/apply', async (req, res) => {
+router.post('/:entity_id/recategorize/apply', requireWrite, async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
@@ -1503,7 +1535,7 @@ router.post('/:entity_id/recategorize/apply', async (req, res) => {
 // Response:
 //   { summary, matched, missing_in_qbo: [{row, suggested_posting, confidence}],
 //     missing_in_bank, parser_issues, gemini_used }
-router.post('/:entity_id/reconcile_bank', async (req, res) => {
+router.post('/:entity_id/reconcile_bank', requireWrite, async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
@@ -1757,7 +1789,7 @@ Return ONLY a JSON array of objects, no prose, no markdown fences.`
 //   2. Review summary + schedule
 //   3. Post schedule[i].journal_entries to /:entity_id/transactions_batch
 //      (or to qbo_resource one-at-a-time).
-router.post('/:entity_id/loan-amortization-schedule', async (req, res) => {
+router.post('/:entity_id/loan-amortization-schedule', requireWrite, async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
   try {
@@ -1776,7 +1808,42 @@ router.post('/:entity_id/loan-amortization-schedule', async (req, res) => {
   }
 })
 
+// ─── Send an invoice by email ───
+// POST /api/qbo/:entity_id/invoice/:id/send[?sendTo=email]
+// QuickBooks emails the invoice to the customer's BillEmail, or to sendTo
+// when given (and records sendTo as the invoice's BillEmail). The answer is
+// Intuit's own Invoice envelope — EmailStatus flips to EmailSent and
+// DeliveryInfo carries the DeliveryTime — so the caller can confirm the
+// send from the response rather than re-reading the invoice.
+const QBO_ID_RE = /^[A-Za-z0-9_-]+$/
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+router.post('/:entity_id/invoice/:id/send', requireWrite, async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const id = req.params.id
+  if (!QBO_ID_RE.test(id)) return res.status(400).json({ error: 'id must be a QuickBooks invoice Id' })
+
+  const sendTo = req.query.sendTo
+  if (sendTo !== undefined && (typeof sendTo !== 'string' || !EMAIL_RE.test(sendTo))) {
+    return res.status(400).json({ error: 'sendTo must be an email address' })
+  }
+
+  try {
+    const data = await qboSendRaw(
+      req.params.entity_id, `/invoice/${encodeURIComponent(id)}/send`,
+      sendTo ? { sendTo } : undefined,
+    )
+    res.json(data)
+  } catch (e: any) {
+    sendError(res, e)
+  }
+})
+
 // ─── Query endpoint — run any QBO query ───
+// GET, and it only ever runs the SELECT the caller passes, so it stays
+// open to read-only keys like every other GET.
 router.get('/:entity_id/query', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })

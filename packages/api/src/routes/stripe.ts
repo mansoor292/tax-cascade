@@ -9,6 +9,7 @@ import { getDek, encrypt, decryptString } from '../lib/crypto.js'
 import { encryptionEnabled } from '../lib/row_crypto.js'
 import { lazyServiceClient, requestUserId as getUser } from '../lib/supabase.js'
 import { sendError, sendDbError } from '../lib/http_error.js'
+import { requireWrite } from '../lib/scopes.js'
 
 const supabase = lazyServiceClient()
 
@@ -62,10 +63,18 @@ async function getStripeKey(entityId: string): Promise<string | null> {
  */
 const STRIPE_SEARCH_VERSION = '2020-08-27'
 
+/**
+ * `extraHeaders` exists for Stripe's `Idempotency-Key`: the billing worker
+ * retries, and a retried invoice create without one is a second invoice.
+ * Stripe replays the first response for the same key + same parameters and
+ * rejects the same key with different parameters, which is the behaviour
+ * the caller wants on both counts.
+ */
 async function stripeFetch(
   stripeKey: string, path: string, params?: Record<string, string>,
   method: 'GET' | 'POST' | 'DELETE' = 'GET',
   apiVersion?: string,
+  extraHeaders?: Record<string, string>,
 ): Promise<any> {
   const encoded = params ? new URLSearchParams(params) : undefined
   const qs = method === 'GET' && encoded ? '?' + encoded.toString() : ''
@@ -75,6 +84,7 @@ async function stripeFetch(
       'Authorization': `Bearer ${stripeKey}`,
       ...(apiVersion ? { 'Stripe-Version': apiVersion } : {}),
       ...(method !== 'GET' && encoded ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+      ...(extraHeaders || {}),
     },
     ...(method !== 'GET' && encoded ? { body: encoded.toString() } : {}),
   })
@@ -180,7 +190,7 @@ router.param('entity_id', async (req, res, next, entityId) => {
 })
 
 // ─── Connect Stripe ───
-router.post('/:entity_id/connect', async (req, res) => {
+router.post('/:entity_id/connect', requireWrite, async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
@@ -229,7 +239,7 @@ router.get('/:entity_id/status', async (req, res) => {
 })
 
 // ─── Disconnect ───
-router.delete('/:entity_id/disconnect', async (req, res) => {
+router.delete('/:entity_id/disconnect', requireWrite, async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
@@ -261,26 +271,7 @@ router.get('/:entity_id/invoices', async (req, res) => {
       count: data.data?.length || 0,
       has_more: Boolean(data.has_more),
       next_cursor: nextCursor(data),
-      invoices: (data.data || []).map((inv: any) => ({
-        id: inv.id,
-        number: inv.number,
-        // The customer ID, not just the display name. Every write route
-        // (invoice create, and the `customer` filter on this route) is keyed
-        // by cus_..., so without it on the row there was no way to get from an
-        // invoice you can see to an action you can take — the caller had to go
-        // list customers and match on name, which only works if the name is
-        // unique and the customer is on the first page.
-        customer: inv.customer,
-        customer_name: inv.customer_name,
-        customer_email: inv.customer_email,
-        status: inv.status,
-        amount_due: inv.amount_due / 100,
-        amount_paid: inv.amount_paid / 100,
-        currency: inv.currency,
-        created: new Date(inv.created * 1000).toISOString().split('T')[0],
-        due_date: inv.due_date ? new Date(inv.due_date * 1000).toISOString().split('T')[0] : null,
-        description: inv.description,
-      })),
+      invoices: (data.data || []).map(invoiceRow),
     })
   } catch (e: any) {
     sendError(res, e)
@@ -311,7 +302,18 @@ router.get('/:entity_id/payments', async (req, res) => {
         currency: ch.currency,
         status: ch.status,
         description: ch.description,
+        // `customer` has always been the display name; the raw cus_ id rides
+        // next to it so a payment can be tied back to the invoice's customer
+        // without a name match.
         customer: ch.billing_details?.name || ch.billing_details?.email,
+        customer_id: idOf(ch.customer),
+        invoice: idOf(ch.invoice),
+        payment_intent: idOf(ch.payment_intent),
+        paid: Boolean(ch.paid),
+        refunded: Boolean(ch.refunded),
+        failure_code: ch.failure_code ?? null,
+        failure_message: ch.failure_message ?? null,
+        balance_transaction: idOf(ch.balance_transaction),
         created: new Date(ch.created * 1000).toISOString().split('T')[0],
         receipt_url: ch.receipt_url,
       })),
@@ -492,7 +494,7 @@ router.get('/:entity_id/revenue', async (req, res) => {
   }
 })
 
-// ─── Invoice writes: create / finalize / pay / void ───
+// ─── Invoice reads and writes: get / create / finalize / pay / void / delete ───
 // Real-money surface. Amounts cross this boundary in DOLLARS (matching the
 // read routes, which divide Stripe's cents by 100) and convert to cents
 // exactly once, here. `pay` charges the customer's default payment method
@@ -501,81 +503,362 @@ router.get('/:entity_id/revenue', async (req, res) => {
 
 const INVOICE_ID_RE = /^in_[A-Za-z0-9]+$/
 
-function invoiceSummary(inv: any) {
+/** A Stripe expandable field as its id — string, expanded object, or absent. */
+function idOf(v: any): string | null {
+  if (typeof v === 'string') return v
+  return v?.id ?? null
+}
+
+function dateOf(ts: any): string | null {
+  return ts ? new Date(ts * 1000).toISOString().split('T')[0] : null
+}
+
+function isoOf(ts: any): string | null {
+  return ts ? new Date(ts * 1000).toISOString() : null
+}
+
+/** One list row. Every field a caller needs to act on the invoice. */
+function invoiceRow(inv: any) {
   return {
     id: inv.id,
     number: inv.number,
-    status: inv.status,
-    customer: inv.customer,
+    // The customer ID, not just the display name. Every write route
+    // (invoice create, and the `customer` filter on the list) is keyed by
+    // cus_..., so without it on the row there was no way to get from an
+    // invoice you can see to an action you can take — the caller had to go
+    // list customers and match on name, which only works if the name is
+    // unique and the customer is on the first page.
+    customer: idOf(inv.customer),
     customer_name: inv.customer_name,
     customer_email: inv.customer_email,
+    status: inv.status,
     amount_due: inv.amount_due / 100,
     amount_paid: inv.amount_paid / 100,
     currency: inv.currency,
     collection_method: inv.collection_method,
-    due_date: inv.due_date ? new Date(inv.due_date * 1000).toISOString().split('T')[0] : null,
-    hosted_invoice_url: inv.hosted_invoice_url ?? null,
-    invoice_pdf: inv.invoice_pdf ?? null,
+    created: dateOf(inv.created),
+    due_date: dateOf(inv.due_date),
     description: inv.description,
+    // The billing worker stamps its own ids here and reads them back to
+    // reconcile, so metadata and the printed custom fields ride on every row.
+    metadata: inv.metadata ?? {},
+    custom_fields: inv.custom_fields ?? null,
+    charge: idOf(inv.charge),
   }
 }
 
-// Create a DRAFT invoice from explicit line items. Nothing is sent or
-// charged at this stage; the draft must be finalized to become payable.
-router.post('/:entity_id/invoices', async (req, res) => {
+/** The row plus everything a single-invoice read or a write answer carries. */
+function invoiceDetail(inv: any) {
+  const t = inv.status_transitions || {}
+  return {
+    ...invoiceRow(inv),
+    payment_intent: idOf(inv.payment_intent),
+    hosted_invoice_url: inv.hosted_invoice_url ?? null,
+    invoice_pdf: inv.invoice_pdf ?? null,
+    status_transitions: {
+      finalized_at: isoOf(t.finalized_at),
+      paid_at: isoOf(t.paid_at),
+      voided_at: isoOf(t.voided_at),
+      marked_uncollectible_at: isoOf(t.marked_uncollectible_at),
+    },
+  }
+}
+
+// ─── Pure input shaping for invoice create ───
+// Exported so the rules are tested without a network: which line shapes are
+// accepted, how dollars become cents, and the ceilings Stripe enforces on
+// custom_fields and metadata — caught here with a message that names the
+// field, instead of Stripe's parameter error after the draft already exists.
+
+export class InvoiceInputError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'InvoiceInputError'
+  }
+}
+
+/**
+ * Dollars → integer cents, half up. `Math.round(x * 100)` alone gets 1.005
+ * wrong (100.49999…) because the product is not exact in binary; trimming
+ * the product to 12 significant digits first puts it back on the half.
+ */
+export function dollarsToCents(dollars: number): number {
+  return Math.round(Number((dollars * 100).toPrecision(12)))
+}
+
+export interface NormalizedLine {
+  description: string
+  /** Cents, for a flat line. */
+  amount?: number
+  /** Whole units, for a qty line. */
+  quantity?: number
+  /** Cents per unit, for a qty line. Stripe computes quantity × unit_amount. */
+  unit_amount?: number
+}
+
+/**
+ * Each line is EITHER { description, amount } (dollars, as it always was) OR
+ * { description, quantity, unit_amount } (units × dollars per unit), so the
+ * invoice shows "3 × $117.00" instead of a flat $351.00. Never both, never
+ * neither, never a negative or zero amount.
+ */
+export function normalizeInvoiceLines(lines: unknown): NormalizedLine[] {
+  if (!Array.isArray(lines) || lines.length === 0) {
+    throw new InvoiceInputError('lines must be a non-empty array of { description, amount } or { description, quantity, unit_amount } (dollars)')
+  }
+  return lines.map((line: any, i: number) => {
+    const at = `lines[${i}]`
+    if (!line || typeof line !== 'object' || Array.isArray(line)) {
+      throw new InvoiceInputError(`${at} must be an object`)
+    }
+    if (typeof line.description !== 'string' || !line.description.trim()) {
+      throw new InvoiceInputError(`${at}.description is required`)
+    }
+    const hasAmount = line.amount !== undefined && line.amount !== null
+    const hasQty = line.quantity !== undefined && line.quantity !== null
+    const hasUnit = line.unit_amount !== undefined && line.unit_amount !== null
+    if (hasAmount && (hasQty || hasUnit)) {
+      throw new InvoiceInputError(`${at}: use either amount or quantity + unit_amount, not both`)
+    }
+    if (hasAmount) {
+      if (typeof line.amount !== 'number' || !isFinite(line.amount) || line.amount <= 0) {
+        throw new InvoiceInputError(`${at}.amount must be a positive dollar amount`)
+      }
+      return { description: line.description, amount: dollarsToCents(line.amount) }
+    }
+    if (!hasQty || !hasUnit) {
+      throw new InvoiceInputError(`${at}: give amount, or both quantity and unit_amount`)
+    }
+    if (typeof line.quantity !== 'number' || !Number.isInteger(line.quantity) || line.quantity < 1) {
+      throw new InvoiceInputError(`${at}.quantity must be a whole number of at least 1`)
+    }
+    if (typeof line.unit_amount !== 'number' || !isFinite(line.unit_amount) || line.unit_amount <= 0) {
+      throw new InvoiceInputError(`${at}.unit_amount must be a positive dollar amount per unit`)
+    }
+    return {
+      description: line.description,
+      quantity: line.quantity,
+      unit_amount: dollarsToCents(line.unit_amount),
+    }
+  })
+}
+
+export const CUSTOM_FIELDS_MAX = 4
+export const CUSTOM_FIELD_NAME_MAX = 40
+export const CUSTOM_FIELD_VALUE_MAX = 140
+export const METADATA_KEYS_MAX = 50
+export const METADATA_KEY_MAX = 40
+export const METADATA_VALUE_MAX = 500
+export const IDEMPOTENCY_KEY_MAX = 255
+
+/** Stripe's invoice custom_fields, as the form parameters it expects. */
+export function customFieldParams(input: unknown): Record<string, string> {
+  if (input === undefined || input === null) return {}
+  if (!Array.isArray(input)) throw new InvoiceInputError('custom_fields must be an array of { name, value }')
+  if (input.length > CUSTOM_FIELDS_MAX) {
+    throw new InvoiceInputError(`custom_fields allows at most ${CUSTOM_FIELDS_MAX} entries`)
+  }
+  const params: Record<string, string> = {}
+  input.forEach((cf: any, i: number) => {
+    const at = `custom_fields[${i}]`
+    if (!cf || typeof cf !== 'object') throw new InvoiceInputError(`${at} must be { name, value }`)
+    if (typeof cf.name !== 'string' || !cf.name.trim()) throw new InvoiceInputError(`${at}.name is required`)
+    if (typeof cf.value !== 'string' || !cf.value.trim()) throw new InvoiceInputError(`${at}.value is required`)
+    if (cf.name.length > CUSTOM_FIELD_NAME_MAX) {
+      throw new InvoiceInputError(`${at}.name is over ${CUSTOM_FIELD_NAME_MAX} characters`)
+    }
+    if (cf.value.length > CUSTOM_FIELD_VALUE_MAX) {
+      throw new InvoiceInputError(`${at}.value is over ${CUSTOM_FIELD_VALUE_MAX} characters`)
+    }
+    params[`${at}[name]`] = cf.name
+    params[`${at}[value]`] = cf.value
+  })
+  return params
+}
+
+/** Stripe metadata (string → string), as form parameters. */
+export function metadataParams(input: unknown): Record<string, string> {
+  if (input === undefined || input === null) return {}
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new InvoiceInputError('metadata must be an object of string values')
+  }
+  const entries = Object.entries(input as Record<string, unknown>)
+  if (entries.length > METADATA_KEYS_MAX) {
+    throw new InvoiceInputError(`metadata allows at most ${METADATA_KEYS_MAX} keys`)
+  }
+  const params: Record<string, string> = {}
+  for (const [k, v] of entries) {
+    if (!k || k.length > METADATA_KEY_MAX) {
+      throw new InvoiceInputError(`metadata key ${JSON.stringify(k)} must be 1-${METADATA_KEY_MAX} characters`)
+    }
+    if (typeof v !== 'string') throw new InvoiceInputError(`metadata.${k} must be a string`)
+    if (v.length > METADATA_VALUE_MAX) {
+      throw new InvoiceInputError(`metadata.${k} is over ${METADATA_VALUE_MAX} characters`)
+    }
+    params[`metadata[${k}]`] = v
+  }
+  return params
+}
+
+/**
+ * The caller's idempotency key, or null when none was sent. `lineCount` is
+ * how many `:line:N` suffixes will be derived from it — those have to fit
+ * under Stripe's 255 too, or the invoice is created and the lines bounce.
+ */
+export function idempotencyKey(input: unknown, lineCount = 0): string | null {
+  if (input === undefined || input === null) return null
+  if (typeof input !== 'string' || !input.trim()) {
+    throw new InvoiceInputError('idempotency_key must be a non-empty string')
+  }
+  if (input.length > IDEMPOTENCY_KEY_MAX) {
+    throw new InvoiceInputError(`idempotency_key is over ${IDEMPOTENCY_KEY_MAX} characters`)
+  }
+  const longest = lineCount > 0 ? lineIdempotencyKey(input, lineCount - 1).length : input.length
+  if (longest > IDEMPOTENCY_KEY_MAX) {
+    throw new InvoiceInputError(`idempotency_key is too long once the per-line suffix (:line:${lineCount - 1}) is added — keep it under ${IDEMPOTENCY_KEY_MAX - lineIdempotencyKey('', lineCount - 1).length} characters`)
+  }
+  return input
+}
+
+export function lineIdempotencyKey(key: string, i: number): string {
+  return `${key}:line:${i}`
+}
+
+export interface ParsedInvoiceCreate {
+  customer: string
+  currency: string
+  /** Form parameters for POST /v1/invoices. */
+  invoice: Record<string, string>
+  /** Form parameters for each POST /v1/invoiceitems; the route adds `invoice`. */
+  lines: Record<string, string>[]
+  idempotency_key: string | null
+}
+
+/** The whole create body, validated and shaped for Stripe. Throws InvoiceInputError. */
+export function parseInvoiceCreate(body: any): ParsedInvoiceCreate {
+  const {
+    customer, lines, currency = 'usd', description, footer,
+    collection_method = 'send_invoice', days_until_due,
+    metadata, custom_fields, idempotency_key,
+  } = body || {}
+  if (typeof customer !== 'string' || !/^cus_[A-Za-z0-9]+$/.test(customer)) {
+    throw new InvoiceInputError('customer must be a Stripe customer id (cus_...)')
+  }
+  if (typeof currency !== 'string' || !/^[A-Za-z]{3}$/.test(currency)) {
+    throw new InvoiceInputError('currency must be a 3-letter ISO code')
+  }
+  if (collection_method !== 'send_invoice' && collection_method !== 'charge_automatically') {
+    throw new InvoiceInputError("collection_method must be 'send_invoice' or 'charge_automatically'")
+  }
+  if (days_until_due !== undefined && days_until_due !== null
+    && (typeof days_until_due !== 'number' || !isFinite(days_until_due) || days_until_due < 0)) {
+    throw new InvoiceInputError('days_until_due must be a non-negative number of days')
+  }
+  for (const [name, v] of [['description', description], ['footer', footer]] as const) {
+    if (v !== undefined && v !== null && typeof v !== 'string') {
+      throw new InvoiceInputError(`${name} must be a string`)
+    }
+  }
+
+  const normalized = normalizeInvoiceLines(lines)
+  const cur = currency.toLowerCase()
+  const invoice: Record<string, string> = {
+    customer,
+    currency: cur,
+    collection_method,
+    auto_advance: 'false',
+    // Only the lines passed here may land on this invoice — never whatever
+    // pending items happen to exist on the customer.
+    pending_invoice_items_behavior: 'exclude',
+    ...(collection_method === 'send_invoice'
+      ? { days_until_due: String(Math.round(Number(days_until_due ?? 30))) } : {}),
+    ...(description ? { description } : {}),
+    ...(footer ? { footer } : {}),
+    ...metadataParams(metadata),
+    ...customFieldParams(custom_fields),
+  }
+  const lineParams = normalized.map(l => ({
+    customer,
+    currency: cur,
+    description: l.description,
+    ...(l.amount !== undefined
+      ? { amount: String(l.amount) }
+      : { quantity: String(l.quantity), unit_amount: String(l.unit_amount) }),
+  }))
+  return {
+    customer, currency: cur, invoice, lines: lineParams,
+    idempotency_key: idempotencyKey(idempotency_key, normalized.length),
+  }
+}
+
+/**
+ * Why an invoice may not be deleted, or null when it may. Stripe only
+ * deletes drafts; anything finalized is voided instead, and the message
+ * says so rather than relaying Stripe's error after a wasted call.
+ */
+export function deleteRefusal(inv: { status?: string } | null | undefined): string | null {
+  const status = inv?.status
+  if (status === 'draft') return null
+  if (!status) return 'invoice has no status; refusing to delete'
+  return `only a draft invoice can be deleted; this one is '${status}' — void it instead`
+}
+
+// Single invoice. The list route answers rows; this answers the row plus the
+// payment linkage (charge, payment_intent) and the lifecycle timestamps the
+// billing worker reconciles against.
+router.get('/:entity_id/invoices/:invoice_id', async (req, res) => {
   const userId = await getUser(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' })
 
   const stripeKey = await getStripeKey(req.params.entity_id)
   if (!stripeKey) return res.status(400).json({ error: 'No Stripe connection for this entity' })
 
-  const {
-    customer, lines, currency = 'usd', description, footer,
-    collection_method = 'send_invoice', days_until_due,
-  } = req.body || {}
-  if (typeof customer !== 'string' || !/^cus_[A-Za-z0-9]+$/.test(customer)) {
-    return res.status(400).json({ error: 'customer must be a Stripe customer id (cus_...)' })
-  }
-  if (!Array.isArray(lines) || lines.length === 0) {
-    return res.status(400).json({ error: 'lines must be a non-empty array of { description, amount } (amount in dollars)' })
-  }
-  for (const line of lines) {
-    if (typeof line?.description !== 'string' || !line.description.trim()
-      || typeof line?.amount !== 'number' || !isFinite(line.amount) || line.amount <= 0) {
-      return res.status(400).json({ error: 'each line needs a description and a positive dollar amount' })
-    }
-  }
-  if (collection_method !== 'send_invoice' && collection_method !== 'charge_automatically') {
-    return res.status(400).json({ error: "collection_method must be 'send_invoice' or 'charge_automatically'" })
+  const invoiceId = req.params.invoice_id
+  if (!INVOICE_ID_RE.test(invoiceId)) {
+    return res.status(400).json({ error: 'invoice_id must be a Stripe invoice id (in_...)' })
   }
 
   try {
-    // pending_invoice_items_behavior=exclude: only the lines passed here may
-    // land on this invoice — never whatever pending items happen to exist.
-    const invoice = await stripeFetch(stripeKey, '/invoices', {
-      customer,
-      currency,
-      collection_method,
-      auto_advance: 'false',
-      pending_invoice_items_behavior: 'exclude',
-      ...(collection_method === 'send_invoice'
-        ? { days_until_due: String(Math.max(0, Math.round(Number(days_until_due ?? 30)))) } : {}),
-      ...(description ? { description: String(description) } : {}),
-      ...(footer ? { footer: String(footer) } : {}),
-    }, 'POST')
+    const inv = await stripeFetch(stripeKey, `/invoices/${invoiceId}`)
+    res.json({ invoice: invoiceDetail(inv) })
+  } catch (e: any) {
+    sendError(res, e)
+  }
+})
 
-    for (const line of lines) {
-      await stripeFetch(stripeKey, '/invoiceitems', {
-        customer,
-        invoice: invoice.id,
-        currency,
-        amount: String(Math.round(line.amount * 100)),
-        description: line.description,
-      }, 'POST')
+// Create a DRAFT invoice from explicit line items. Nothing is sent or
+// charged at this stage; the draft must be finalized to become payable.
+router.post('/:entity_id/invoices', requireWrite, async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const stripeKey = await getStripeKey(req.params.entity_id)
+  if (!stripeKey) return res.status(400).json({ error: 'No Stripe connection for this entity' })
+
+  let parsed: ParsedInvoiceCreate
+  try {
+    parsed = parseInvoiceCreate(req.body)
+  } catch (e: any) {
+    if (e instanceof InvoiceInputError) return res.status(400).json({ error: e.message })
+    throw e
+  }
+
+  try {
+    const key = parsed.idempotency_key
+    const invoice = await stripeFetch(
+      stripeKey, '/invoices', parsed.invoice, 'POST', undefined,
+      key ? { 'Idempotency-Key': key } : undefined,
+    )
+
+    for (const [i, line] of parsed.lines.entries()) {
+      await stripeFetch(
+        stripeKey, '/invoiceitems', { ...line, invoice: invoice.id }, 'POST', undefined,
+        key ? { 'Idempotency-Key': lineIdempotencyKey(key, i) } : undefined,
+      )
     }
 
     const withLines = await stripeFetch(stripeKey, `/invoices/${invoice.id}`)
-    res.json({ created: true, invoice: invoiceSummary(withLines) })
+    res.json({ created: true, invoice: invoiceDetail(withLines) })
   } catch (e: any) {
     sendError(res, e)
   }
@@ -595,14 +878,23 @@ function invoiceAction(action: 'finalize' | 'pay' | 'void') {
       return res.status(400).json({ error: 'invoice_id must be a Stripe invoice id (in_...)' })
     }
 
+    let key: string | null
+    try {
+      key = idempotencyKey(req.body?.idempotency_key)
+    } catch (e: any) {
+      if (e instanceof InvoiceInputError) return res.status(400).json({ error: e.message })
+      throw e
+    }
+
     try {
       const inv = await stripeFetch(
         stripeKey, `/invoices/${invoiceId}/${action}`,
         action === 'finalize' ? { auto_advance: 'false' } : {},
-        'POST',
+        'POST', undefined,
+        key ? { 'Idempotency-Key': key } : undefined,
       )
       const doneFlag = { finalize: 'finalized', pay: 'paid', void: 'voided' }[action]
-      res.json({ [doneFlag]: true, invoice: invoiceSummary(inv) })
+      res.json({ [doneFlag]: true, invoice: invoiceDetail(inv) })
     } catch (e: any) {
       sendError(res, e)
     }
@@ -611,10 +903,36 @@ function invoiceAction(action: 'finalize' | 'pay' | 'void') {
 
 // Finalize: locks the draft, assigns a number, mints hosted_invoice_url.
 // auto_advance stays false — finalizing here never emails or auto-charges.
-router.post('/:entity_id/invoices/:invoice_id/finalize', invoiceAction('finalize'))
+router.post('/:entity_id/invoices/:invoice_id/finalize', requireWrite, invoiceAction('finalize'))
 // Pay: charges the customer's default payment method for the amount due, NOW.
-router.post('/:entity_id/invoices/:invoice_id/pay', invoiceAction('pay'))
+router.post('/:entity_id/invoices/:invoice_id/pay', requireWrite, invoiceAction('pay'))
 // Void: permanently cancels a finalized invoice. Not undoable.
-router.post('/:entity_id/invoices/:invoice_id/void', invoiceAction('void'))
+router.post('/:entity_id/invoices/:invoice_id/void', requireWrite, invoiceAction('void'))
+
+// Delete: drafts only. Read first and refuse with 409 when the invoice has
+// been finalized — Stripe would refuse too, but with a generic parameter
+// error, and the caller's next move (void) belongs in the message.
+router.delete('/:entity_id/invoices/:invoice_id', requireWrite, async (req, res) => {
+  const userId = await getUser(req)
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+
+  const stripeKey = await getStripeKey(req.params.entity_id)
+  if (!stripeKey) return res.status(400).json({ error: 'No Stripe connection for this entity' })
+
+  const invoiceId = req.params.invoice_id
+  if (!INVOICE_ID_RE.test(invoiceId)) {
+    return res.status(400).json({ error: 'invoice_id must be a Stripe invoice id (in_...)' })
+  }
+
+  try {
+    const inv = await stripeFetch(stripeKey, `/invoices/${invoiceId}`)
+    const refusal = deleteRefusal(inv)
+    if (refusal) return res.status(409).json({ error: refusal, status: inv.status })
+    const gone = await stripeFetch(stripeKey, `/invoices/${invoiceId}`, undefined, 'DELETE')
+    res.json({ deleted: Boolean(gone?.deleted), id: gone?.id ?? invoiceId })
+  } catch (e: any) {
+    sendError(res, e)
+  }
+})
 
 export default router
