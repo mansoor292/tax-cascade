@@ -89,10 +89,27 @@ async function stripeFetch(
     ...(method !== 'GET' && encoded ? { body: encoded.toString() } : {}),
   })
   if (!resp.ok) {
-    const err = await resp.json() as any
-    throw new Error(err?.error?.message || `Stripe API ${resp.status}`)
+    const err = await resp.json().catch(() => ({})) as any
+    throw new StripeApiError(err?.error?.message || `Stripe API ${resp.status}`, resp.status, err?.error?.code)
   }
   return resp.json()
+}
+
+/**
+ * A Stripe rejection keeps Stripe's status. Before this every failure became a
+ * 500: a missing invoice ("No such invoice") read as our server breaking, so
+ * the billing worker could not tell "that draft is gone" (404, stop looking)
+ * from "tax-api is down" (retry later). errorOutcome passes a 4xx through.
+ */
+export class StripeApiError extends Error {
+  status: number
+  code?: string
+  constructor(message: string, status: number, code?: string) {
+    super(message)
+    this.name = 'StripeApiError'
+    this.status = status
+    this.code = code
+  }
 }
 
 /**

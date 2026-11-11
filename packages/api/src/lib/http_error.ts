@@ -22,6 +22,11 @@ export function errorOutcome(e: any, fallback = 'Internal error'): HttpOutcome {
   }
 
   const msg = String(e?.message || fallback)
+  // Stripe said no with a 4xx: that is the caller's state (a missing invoice,
+  // a declined card, a bad parameter), never our server breaking.
+  if (e?.name === 'StripeApiError' && e.status >= 400 && e.status < 500) {
+    return { status: e.status, body: { error: msg, ...(e.code ? { code: e.code } : {}) } }
+  }
 
   // Postgres speaking directly to the client is always our bug, never
   // something the caller can act on. Translate the ones a user can actually
