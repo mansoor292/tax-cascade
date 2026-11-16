@@ -8,7 +8,13 @@
  * Why (2026-10-27): Mansoor asked for the Better Choice Lenders org "as its
  * own entity under this app", synced and reachable over MCP by other
  * sessions, and chose a new login for it so that login's API key sees that
- * practice and nothing of his. HRLogics will follow the same way.
+ * practice and nothing of his. HRLogics followed on 2026-11-16 (--org hrlogics,
+ * its own login, scope 941 + income returns).
+ *
+ * Check a new key's org before storing it: on 2026-11-15 the same key value
+ * came back in two share links labelled for two different orgs. /v1/accounts
+ * lists by key, not by X-Org-Id, so a wrong key lists the OTHER org's
+ * accounts with a 200 — compare the list against the org's known accounts.
  *
  * Its accounts' 8821s were signed outside Catipult, so they come in as
  * 'claimed'. TaxNow's record of an 8821 can overstate it (BCL's lists income
