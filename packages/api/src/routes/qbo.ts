@@ -767,13 +767,20 @@ router.get('/:entity_id/qbo-to-tax-inputs', async (req, res) => {
   if (!taxYear || isNaN(taxYear)) {
     return res.status(400).json({ error: 'tax_year (numeric) required' })
   }
-  if (formType !== '1120' && formType !== '1120S') {
-    return res.status(400).json({ error: 'form_type must be 1120 or 1120S' })
+  if (formType !== '1120' && formType !== '1120S' && formType !== '1065') {
+    return res.status(400).json({ error: 'form_type must be 1120, 1120S or 1065' })
   }
 
   try {
     const { booksPacket } = await import('../services/books.js')
-    const books = await booksPacket(userId, entityId, taxYear, formType as '1120' | '1120S')
+    const books = await booksPacket(userId, entityId, taxYear, (formType === '1065' ? '1120S' : formType) as '1120' | '1120S')
+    if (books && formType === '1065') {
+      // renumbered onto Form 1065 (maps/qbo_to_1065.ts)
+      const { corporateInputsTo1065 } = await import('../maps/qbo_to_1065.js')
+      const t = corporateInputsTo1065(books.packet.inputs)
+      books.packet.inputs = t.inputs
+      books.packet.warnings = [...books.packet.warnings.filter((w: any) => w.code !== 'OFFICER_COMP_SPLIT_NEEDED' && w.code !== 'SSTB_SUSPECTED'), ...t.warnings] as typeof books.packet.warnings
+    }
     if (!books) {
       return res.status(404).json({
         error: 'QBO P&L not available — entity may not be connected or no data for this year',

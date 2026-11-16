@@ -344,6 +344,51 @@ export function rateReturn(formType: string, fieldValues: Record<string, any>, c
       b.lineKeys.receipts, b.lineKeys.officer, b.lineKeys.advertising, b.lineKeys.other,
       formType === '1120' ? 'deductions.L13_salaries' : 'deductions.L8_salaries',
     ], flags)
+  } else if (formType === '1065') {
+    const b: BusinessLines = {
+      receipts: pick(fv, 'income.L1c_balance', 'income.L1a_gross_receipts'),
+      cogs: pick(fv, 'income.L2_cogs'),
+      totalDeductions: pick(fv, 'deductions.L22_total_deductions') + pick(fv, 'income.L2_cogs'),
+      otherDeductions: pick(fv, 'deductions.L21_other_deductions'),
+      advertising: 0, // no line of its own on a 1065 — it sits in line 21
+      officerComp: pick(fv, 'deductions.L10_guaranteed_payments'),
+      salaries: pick(fv, 'deductions.L9_salaries'),
+      charitable: pick(fv, 'schedK.L13a_cash_contributions'),
+      lineKeys: { receipts: 'income.L1c_balance', total: 'deductions.L22_total_deductions', other: 'deductions.L21_other_deductions', advertising: 'deductions.L21_other_deductions', officer: 'deductions.L10_guaranteed_payments' },
+    }
+    metrics.receipts = b.receipts
+    businessRatioFlags(b, ctx, 'other_deductions', flags, metrics)
+
+    // Schedule L, 1065 numbering: assets lines 1–13 → line 14, liabilities and capital 15–21 → line 22.
+    for (const col of ['boy_b', 'eoy_d']) {
+      const when = col.startsWith('boy') ? 'beginning' : 'end'
+      const total = num(fv[`schedL.L14_total_${col}`]), le = num(fv[`schedL.L22_total_${col}`])
+      if (!total && !le) continue
+      if (Math.abs(total - le) > 1) flags.push({ code: 'SCHED_L_UNBALANCED', kind: 'integrity', severity: 'high', title: `Schedule L does not balance (${when} of year)`, value: total - le, lines: [`schedL.L14_total_${col}`, `schedL.L22_total_${col}`], explanation: `Total assets ${usd(total)} vs liabilities and capital ${usd(le)}.` })
+      const assetLines = ['L1_cash', 'L2a_trade', 'L3_inv', 'L4_usgov', 'L5_taxexempt', 'L6_othercurr', 'L7a_loans_partners', 'L7b_mortgage', 'L8_otherinv', 'L9b_dep', 'L10b_depletion', 'L11_land', 'L12b_amort', 'L13_other']
+        .map(l => `schedL.${l}_${col}`).filter(k => fv[k] !== undefined && fv[k] !== null)
+      if (assetLines.length >= 2 && total) {
+        const sum = assetLines.reduce((t, k) => t + num(fv[k]), 0) - num(fv[`schedL.L2b_baddebt_${col}`])
+        if (Math.abs(sum - total) > 1) flags.push({ code: 'SCHED_L_LINES_VS_TOTAL', kind: 'integrity', severity: 'high', title: `Schedule L asset lines do not add to total assets (${when} of year)`, value: sum - total, lines: [...assetLines, `schedL.L14_total_${col}`], explanation: `The asset lines add to ${usd(sum)} against stated total assets of ${usd(total)}.` })
+      }
+    }
+    // M-1 line 9 must equal Analysis of Net Income line 1.
+    if (fv['schedM1.L9_income_analysis'] !== undefined) {
+      const m1 = num(fv['schedM1.L9_income_analysis']), a1 = num(fv['analysis.L1_net_income'])
+      if (Math.abs(m1 - a1) > 1) flags.push({ code: 'M1_NOT_TIED', kind: 'integrity', severity: 'high', title: 'Schedule M-1 does not reconcile to net income per return', value: m1 - a1, lines: ['schedM1.L9_income_analysis', 'analysis.L1_net_income'], explanation: `M-1 line 9 is ${usd(m1)}; Analysis line 1 is ${usd(a1)}.` })
+    }
+    // Tax-basis capital: M-2 ending balance should be Schedule L line 21.
+    const m2End = fv['schedM2.L9_end_balance'], lCap = fv['schedL.L21_capital_eoy_d']
+    if (m2End !== undefined && lCap !== undefined && Math.abs(num(m2End) - num(lCap)) > 1) {
+      flags.push({ code: 'CAPITAL_NOT_TIED', kind: 'integrity', severity: 'medium', title: 'Partners\' capital on Schedule M-2 differs from Schedule L', value: num(m2End) - num(lCap), lines: ['schedM2.L9_end_balance', 'schedL.L21_capital_eoy_d'], explanation: `M-2 ends at ${usd(num(m2End))}; Schedule L line 21 shows ${usd(num(lCap))}. Item L is on the tax basis; if the books are not, the difference needs explaining.` })
+    }
+    // Guaranteed payments that turn a profit into a loss.
+    const gp = b.officerComp, obi = pick(fv, 'tax.L23_ordinary_business_income')
+    metrics.guaranteed_payments = gp
+    if (gp > 0 && obi < 0 && obi + gp > 0) {
+      flags.push({ code: 'GP_CREATE_LOSS', kind: 'pattern', severity: 'medium', title: 'Guaranteed payments turn a profit into a loss', value: obi, lines: ['deductions.L10_guaranteed_payments', 'tax.L23_ordinary_business_income'], explanation: `Before guaranteed payments of ${usd(gp)} the partnership made ${usd(obi + gp)}; after them it reports a ${usd(-obi)} loss passed to the partners. Keep the partnership agreement terms that fix the payments.` })
+    }
+    changeFlags(fv, ctx.prior, [b.lineKeys.receipts, 'deductions.L10_guaranteed_payments', 'deductions.L9_salaries', b.lineKeys.other], flags)
   } else if (formType === '1040') {
     const agi = pick(fv, 'income.L11b_agi', 'income.L11_agi')
     const wages = pick(fv, 'income.L1z_total_wages', 'income.L1a_w2_wages')

@@ -113,7 +113,7 @@ export default function ReturnsTab({ entityId, entity, onUpdate, onOpenTab }: Pr
   const handleRecompute = async (r: TaxReturn) => {
     setRecomputing(r.id)
     try {
-      const isCorporate = r.form_type === '1120' || r.form_type === '1120S'
+      const isCorporate = r.form_type === '1120' || r.form_type === '1120S' || r.form_type === '1065'
       if (isCorporate) {
         await computeFromQbo({
           entity_id:  r.entity_id,

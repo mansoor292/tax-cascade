@@ -139,7 +139,7 @@ export function chooseSources(sources: Source[], want: { base?: string | null; w
 // ─── Order: as the form is printed ───
 
 const ROMAN: Record<string, number> = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 }
-const MAIN: Record<string, string> = { '1120S': 'f1120s', '1120': 'f1120', '1040': 'f1040' }
+const MAIN: Record<string, string> = { '1120S': 'f1120s', '1120': 'f1120', '1040': 'f1040', '1065': 'f1065' }
 
 function sectionKey(s: string): string {
   const m = /^Part ([IVX]+)\b(.*)$/.exec(s)

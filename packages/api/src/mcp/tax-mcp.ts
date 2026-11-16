@@ -523,7 +523,7 @@ All reports are cached; pass refresh=true only when the user explicitly wants fr
 
   // ─── Tool: validate_return ───
   server.tool('validate_return', 'Validate tax return inputs before computing. Returns errors and warnings.', {
-    form_type: z.string().describe('1040, 1120, or 1120S'),
+    form_type: z.string().describe('1040, 1120, 1120S, or 1065'),
     tax_year: z.number().describe('Tax year'),
     inputs: z.record(z.any()).describe('Tax return input fields'),
   }, async (params) => {
@@ -563,10 +563,12 @@ QBO auto-pull: for 1120/1120S with a QBO connection, compute_return maps the P&L
 
 Response: \`qbo_warnings\` (preparer-judgment items — surface to user), \`supporting_documents.auto_merged\` (values from W-2/1099/K-1 docs — echo for confirmation), \`missing_fields\` (critical lines at 0 that need user confirmation before get_pdf).
 
-S-Corp inputs require \`shareholders: [{ name, pct }]\` summing to 100.`, {
+S-Corp inputs require \`shareholders: [{ name, pct }]\` summing to 100.
+
+Partnership (form_type 1065) inputs require \`partners: [{ name, partner_type: 'general'|'limited'|'llc_member_manager'|'llc_member', entity, profit_pct, loss_pct, capital_pct, guaranteed_payments_services, guaranteed_payments_capital, capital_beginning, capital_contributed, distributions }]\` — each percentage set adds to 100. Pay to a partner is a guaranteed payment (line 10), never salaries. Items follow ownership percentage only (no special allocations or §704(c)); self-employment earnings default by partner type (limited partners: services payments only). The response carries \`k1s\` (tax-basis capital account per partner); get_pdf prints the 1065 with every partner's K-1 attached. Read get_schema('1065') for every field.`, {
     entity_id: z.string().describe('Entity UUID'),
     tax_year: z.number().describe('Tax year'),
-    form_type: z.string().describe('1040, 1120, or 1120S'),
+    form_type: z.string().describe('1040, 1120, 1120S, or 1065'),
     inputs: z.record(z.any()).describe('Tax return input fields'),
     save: z.boolean().optional().describe('Save as tax_return record (default true)'),
     return_id: z.string().optional().describe('Update this specific row. Rejected if it is a filed_import row.'),
@@ -580,10 +582,10 @@ S-Corp inputs require \`shareholders: [{ name, pct }]\` summing to 100.`, {
   // Returns the mapper packet WITHOUT computing so the caller can inspect
   // per-field classifications and override anything it disagrees with
   // before invoking compute_return.
-  server.tool('qbo_to_tax_inputs', 'Map QBO P&L + Balance Sheet into 1120/1120S input fields. Returns {inputs, audit, warnings} packet — each input has a per-line audit entry citing its QBO source + confidence rule, and the warnings flag preparer-judgment items (SSTB_SUSPECTED, OFFICER_COMP_UNSPLIT, CONTINGENCY_IN_REVENUE). Use this to inspect classifications BEFORE computing; edit inputs in place and pass to compute_return. Or skip inspection and call compute_return_from_qbo for a one-shot pipeline. Schedule K portfolio items (interest/dividends/cap gains) are intentionally skipped — those come from 1099 facts during compute to avoid double-counting QBO book entries.', {
+  server.tool('qbo_to_tax_inputs', 'Map QBO P&L + Balance Sheet into 1120/1120S/1065 input fields (a 1065 is classified as an S corporation and renumbered; officer pay is flagged — pay to a partner is a guaranteed payment). Returns {inputs, audit, warnings} packet — each input has a per-line audit entry citing its QBO source + confidence rule, and the warnings flag preparer-judgment items (SSTB_SUSPECTED, OFFICER_COMP_UNSPLIT, CONTINGENCY_IN_REVENUE). Use this to inspect classifications BEFORE computing; edit inputs in place and pass to compute_return. Or skip inspection and call compute_return_from_qbo for a one-shot pipeline. Schedule K portfolio items (interest/dividends/cap gains) are intentionally skipped — those come from 1099 facts during compute to avoid double-counting QBO book entries.', {
     entity_id: z.string().describe('Entity UUID'),
     tax_year: z.number().describe('Tax year to pull QBO data for'),
-    form_type: z.string().describe('1120 or 1120S'),
+    form_type: z.string().describe('1120, 1120S or 1065'),
   }, async ({ entity_id, tax_year, form_type }) => {
     return text(await call('GET', `/api/qbo/${entity_id}/qbo-to-tax-inputs?tax_year=${tax_year}&form_type=${form_type}`))
   })
@@ -613,7 +615,7 @@ Reconciliation: top-level \`reconciliation: { qbo_net_income, form_ordinary_inco
 Caller-provided overrides always win, INCLUDING explicit 0 or null (that's how you force-zero a QBO-defaulted field). Only fields you pass in overrides are touched; everything else stays at the mapper default.`, {
     entity_id: z.string().describe('Entity UUID'),
     tax_year: z.number().describe('Tax year'),
-    form_type: z.string().describe('1120 or 1120S'),
+    form_type: z.string().describe('1120, 1120S or 1065'),
     overrides: z.record(z.any()).optional().describe('Field-level overrides applied AFTER the mapper runs. E.g. {officer_compensation: 60000, salaries_wages: 137794, is_sstb: true}. Use this to correct any audit entry you disagree with.'),
     return_id: z.string().optional().describe('Update this specific row. Rejected if filed_import.'),
     amend_of: z.string().optional().describe('Start an amendment off this return_id.'),
@@ -754,7 +756,7 @@ format 'csv' returns the same rows as CSV for a spreadsheet.`, {
   })
 
   // ─── Tool: audit_risk ───
-  server.tool('audit_risk', `Screen a saved 1120, 1120-S or 1040 for audit risk — a transparent, rule-based stand-in for the IRS's confidential DIF score.
+  server.tool('audit_risk', `Screen a saved 1120, 1120-S, 1065 or 1040 for audit risk — a transparent, rule-based stand-in for the IRS's confidential DIF score.
 
 Returns score 0-100, band (low/elevated/high), the ratios it measured, and flags. Each flag carries the rule code, kind (ratio / integrity / pattern / change), the measured value, the threshold, the canonical lines it read and a plain explanation.
 
@@ -1583,10 +1585,11 @@ RULE — no exceptions: before 'pay' or 'void', state the invoice number, custom
   server.tool('generate_k1s', `Generate distributable Schedule K-1 PDFs — the ISSUER side of pass-throughs. Two modes:
 
 - S-corp: pass return_id of a computed/filed 1120S return whose inputs carry shareholders [{name, pct}] — one K-1 per shareholder from the engine's pro-rata allocation. Shareholder TIN/address fill in from the entity's meta.owners when names match; otherwise those boxes stay blank for hand completion.
-- Partnership: pass p1065 with the partnership header, Schedule K totals, and partners — Cati has NO 1065 return engine, so totals are the caller's numbers; the allocator splits pro-rata (profit_pct for income, capital_pct for distributions; guaranteed payments are per-partner; SE earnings computed for general partners only). Special allocations are NOT supported — say so instead of forcing them through.
+- Partnership, prepared: pass return_id of a computed 1065 — one K-1 per partner exactly as the return allocated it (item J/K1/L capital account and boxes 13/14/18/19/20 on the form). Prefer this.
+- Partnership, totals only: pass p1065 with the partnership header, Schedule K totals and partners, for a partnership whose return was prepared elsewhere; the allocator splits pro-rata. Special allocations are NOT supported in either mode — say so instead of forcing them through.
 
 Coded boxes (1120-S 10/12/16/17; 1065 13/14/19/20), including the Section 199A Statement A (QBI, W-2 wages, UBIA), are carried on an attached supplemental statement page. Returned URLs expire in 1 hour. These are filing documents: show the user the allocation summary and remind them to verify before distributing.`, {
-    return_id: z.string().optional().describe('1120S return UUID (S-corp mode)'),
+    return_id: z.string().optional().describe('Computed 1120S or 1065 return UUID'),
     p1065: z.object({
       tax_year: z.number(),
       partnership: z.object({

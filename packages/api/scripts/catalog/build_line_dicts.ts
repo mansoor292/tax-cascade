@@ -53,6 +53,7 @@ const CANONICAL: Record<string, Record<string, string>> = {
   'f1120--2025': M2025.F1120_2025,
   'f1120s--2024': M2024.F1120S_2024,
   'f1120s--2025': M2025.F1120S_2025,
+  'f1065--2025': M2025.F1065_2025,
 }
 
 async function fetchBlank(slug: string, rev: string): Promise<Uint8Array | null> {

@@ -84,7 +84,9 @@ const SECTION_PREFIX: Record<string, string> = {
   'Schedule B': 'schedB', 'Schedule C': 'schedC', 'Schedule J': 'schedJ', 'Schedule K': 'schedK',
   'Schedule L': 'schedL', 'Schedule M-1': 'schedM1', 'Schedule M-2': 'schedM2',
 }
-const MAIN = new Set(['f1040', 'f1120', 'f1120s'])
+// f1065 joined 2026-11-16 with 1065 preparation: its Schedules K/L/M-1/M-2
+// take the same section prefixes as the corporate returns.
+const MAIN = new Set(['f1040', 'f1120', 'f1120s', 'f1065'])
 
 export function prefixFor(form: string, section: string): string {
   if (MAIN.has(form)) return SECTION_PREFIX[section] ?? (form === 'f1040' && section === '' ? 'f1040' : 'meta')

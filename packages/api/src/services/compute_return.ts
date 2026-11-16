@@ -228,7 +228,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     //   - Balance Sheet → Schedule L canonical keys (schedL.L1_cash_eoy_d, ...)
     //   - Emits warnings (SSTB_SUSPECTED, OFFICER_COMP_UNSPLIT, ...)
     // setIfUnset semantics: caller-provided inputs always win.
-    if (mergeSources && entity_id && (form_type === '1120S' || form_type === '1120')) {
+    if (mergeSources && entity_id && (form_type === '1120S' || form_type === '1120' || form_type === '1065')) {
       try {
         const { data: conn } = await supabase.from('qbo_connection')
           .select('realm_id').eq('entity_id', entity_id).single()
@@ -257,14 +257,24 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
               pnl: pnlItems,
               bs: bsItems,
               priorBs,
-              form_type: form_type as '1120' | '1120S',
+              // A partnership's books are classified as an S corporation's and
+              // then renumbered onto Form 1065 (maps/qbo_to_1065.ts).
+              form_type: (form_type === '1065' ? '1120S' : form_type) as '1120' | '1120S',
               business_code: businessCode,
             })
+            let mappedInputs: Record<string, unknown> = packet.inputs
+            if (form_type === '1065') {
+              const { corporateInputsTo1065 } = await import('../maps/qbo_to_1065.js')
+              const t = corporateInputsTo1065(packet.inputs)
+              mappedInputs = t.inputs
+              packet.warnings = packet.warnings.filter((w: any) => w.code !== 'OFFICER_COMP_SPLIT_NEEDED' && w.code !== 'SSTB_SUSPECTED')
+              qboWarnings.push(...t.warnings)
+            }
             // Write mapped inputs with setIfUnset semantics + carry each
             // audit entry's confidence into the caller-visible log.
             const auditByField = new Map<string, string>()
             for (const a of packet.audit) auditByField.set(a.tax_field, a.confidence)
-            for (const [field, value] of Object.entries(packet.inputs)) {
+            for (const [field, value] of Object.entries(mappedInputs)) {
               if (typeof value === 'number') {
                 setIfUnset(field, value, 'QBO P&L/BS', 1, auditByField.get(field))
               }
@@ -342,7 +352,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     // columns on top of the QBO-derived ones. Maps prior._eoy_d → ._boy_b
     // and prior._eoy_c → ._boy_a (IRS Schedule L column convention).
     let priorSchedLEoy: Record<string, number> | null = null
-    if (entity_id && (form_type === '1120' || form_type === '1120S')) {
+    if (entity_id && (form_type === '1120' || form_type === '1120S' || form_type === '1065')) {
       try {
         const { data: priorRet } = await supabase.from('tax_return')
           .select(`id, field_values, ${RETURN_ENC_COLS}`)
@@ -579,6 +589,19 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         reconciliationIssues = deriveSupportingSchedules('1120S', engineResult.field_values, mergedInputs, tax_year,
           engineResult.computed)
       }
+    } else if (form_type === '1065') {
+      // Partnership preparation (engine/form1065.ts). Schedule L and the
+      // M-1/M-2 facts only the books know pass through from the inputs; the
+      // lines the form computes come from the engine and win.
+      const { calc1065 } = await import('../engine/form1065.js')
+      engineResult = calc1065({ ...mergedInputs, tax_year })
+      const passthrough = Object.entries(mergedInputs).filter(([k]) => isPassthroughScheduleKey(k))
+      for (const [k, v] of passthrough) if (engineResult.field_values[k] === undefined) engineResult.field_values[k] = v
+      applyPriorEoyToBoy(engineResult.field_values)
+      // Item F, total assets, is Schedule L line 14 at year end.
+      const totalAssets = Number(engineResult.field_values['schedL.L14_total_eoy_d'])
+      if (totalAssets) engineResult.field_values['meta.total_assets'] = totalAssets
+      if (engineResult.warnings?.length) qboWarnings.push(...engineResult.warnings.map((m: string) => ({ code: 'PARTNERSHIP', message: m })))
     } else if (form_type === '1040') {
       // Schedule E — compute first if structured inputs provided, then inject
       // its total into schedule1_income so it flows to Form 1040 line 8.
@@ -910,6 +933,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       '1040':  new Set(['wages', 'withholding', 'estimated_payments', 'ira_distributions', 'pensions_annuities', 'social_security', 'net_se_income', 'k1_ordinary_income', 'num_dependents', 'is_sstb']),
       '1120':  new Set(['gross_receipts', 'cost_of_goods_sold', 'officer_compensation', 'salaries_wages', 'depreciation', 'nol_deduction', 'estimated_tax_paid', 'foreign_tax_credit', 'general_business_credit']),
       '1120S': new Set(['gross_receipts', 'cost_of_goods_sold', 'officer_compensation', 'salaries_wages', 'depreciation', 'shareholders']),
+      '1065': new Set(['gross_receipts', 'cost_of_goods_sold', 'guaranteed_payments', 'salaries_wages', 'depreciation', 'distributions']),
     }
     const critical = criticalByForm[form_type] || new Set<string>()
 
@@ -993,6 +1017,10 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         field_values: engineResult.schedule_e.field_values,
       } : undefined,
       citations: engineResult?.citations,
+      // A partnership's K-1s are stored with the return (computed_data.k1s);
+      // TINs and addresses stay out of the response.
+      k1s: form_type === '1065' && Array.isArray(engineResult?.k1s)
+        ? engineResult.k1s.map(({ tin: _t, address: _a, ...k }: any) => k) : undefined,
       supporting_documents: supportingDocs.length > 0 ? {
         count: supportingDocs.length,
         types: supportingDocs.map(d => d.doc_type),

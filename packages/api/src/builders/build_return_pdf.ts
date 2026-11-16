@@ -18,6 +18,7 @@ import * as maps2024 from '../maps/pdf_field_map_2024.js'
 import * as maps2025 from '../maps/pdf_field_map_2025.js'
 import { dropInstructionPages } from './forms/acroform.js'
 import { fill1120SAnswers, parseAnswers } from './forms/f1120s_answers.js'
+import { checkBox } from './pdf_filler.js'
 
 // ─── Types ───
 
@@ -320,6 +321,8 @@ function buildModel(input: BuildPdfInput): Record<string, string | number> {
   if (e.meta?.business_activity) model['meta.business_activity'] = e.meta.business_activity
   if (e.meta?.product_service) model['meta.product_service'] = e.meta.product_service
   if (e.meta?.business_code) model['meta.business_activity_code'] = e.meta.business_code
+  // the 1065 map names the box meta.business_code
+  if (e.meta?.business_code && input.formType === '1065') model['meta.business_code'] = e.meta.business_code
   if (e.meta?.s_election_date) model['meta.s_election_date'] = usDate(e.meta.s_election_date)
   if (e.meta?.total_assets) model['meta.total_assets'] = e.meta.total_assets
   if (e.meta?.num_shareholders) model['meta.num_shareholders'] = e.meta.num_shareholders
@@ -835,9 +838,9 @@ async function generateStatements(
   model: Record<string, string | number>,
   inputData: Record<string, any> = {},
 ): Promise<PDFDocument | null> {
-  const otherDedAmount = Number(model['deductions.L26_other_deductions'] || model['deductions.L20_other'] || 0)
+  const otherDedAmount = Number(model['deductions.L26_other_deductions'] || model['deductions.L20_other'] || model['deductions.L21_other_deductions'] || 0)
   const cogsOtherAmount = Number(model['cogs.L5_other'] || 0)
-  const otherIncomeAmount = Number(model['income.L5_other_income'] || model['income.L10_other_income'] || 0)
+  const otherIncomeAmount = Number(formType === '1065' ? model['income.L7_other_income'] || 0 : model['income.L5_other_income'] || model['income.L10_other_income'] || 0)
 
   const otherDeductions = itemizationFor(
     otherDedAmount, inputData.other_deductions_detail, entity.meta?.other_deductions, 'other deductions')
@@ -923,13 +926,13 @@ async function generateStatements(
   // beside "(attach statement)" \u2014 1120-S line 20, 1120 line 26.
   const statements: Array<[boolean, string, Array<[string, number]>, number, string]> = [
     [hasOtherDed,
-      `${formType === '1120S' ? 'Form 1120-S, Line 20' : 'Form 1120, Line 26'} \u2014 Other Deductions`,
+      `${formType === '1120S' ? 'Form 1120-S, Line 20' : formType === '1065' ? 'Form 1065, Line 21' : 'Form 1120, Line 26'} \u2014 Other Deductions`,
       otherDeductions, otherDedAmount, 'Total Other Deductions'],
     [hasCogsCosts,
       'Form 1125-A, Line 5 \u2014 Other Costs (COGS)',
       cogsOtherCosts, cogsOtherAmount, 'Total Other Costs'],
     [hasOtherIncome,
-      `Form ${formType === '1120S' ? '1120-S' : formType}, Line ${formType === '1120S' ? '5' : '10'} \u2014 Other Income`,
+      `Form ${formType === '1120S' ? '1120-S' : formType}, Line ${formType === '1120S' ? '5' : formType === '1065' ? '7' : '10'} \u2014 Other Income`,
       otherIncome, otherIncomeAmount, 'Total Other Income'],
   ]
 
@@ -1220,6 +1223,40 @@ export function clearStaleAppearances(src: PDFDocument): number {
   return cleared
 }
 
+// ─── Fill 1065-specific extras on the main form ───
+
+/**
+ * Form 1065 check boxes the field map does not carry (2025 blank).
+ *  - item H accounting method from meta.accounting_method (c1_6[0..2]);
+ *  - Schedule B question 1, type of entity, from meta.partnership_type
+ *    (general_partnership | limited_partnership | llc | llp | foreign | other);
+ *  - Schedule B yes/no answers from meta.sched_b ({ '2a': 'no', … }). A
+ *    question with no recorded answer is left blank, never guessed.
+ */
+const SCHED_B_1065_2025: Record<string, string> = {
+  '2a': 'c2_2', '2b': 'c2_3', '3a': 'c2_4', '3b': 'c2_5', '4': 'c2_6', '5': 'c2_7', '6': 'c2_8', '7': 'c2_9',
+  '8': 'c2_10', '9': 'c2_11', '10a': 'c2_12', '10b': 'c2_13', '10c': 'c3_1', '10d': 'c3_2', '12': 'c3_5',
+  '14': 'c3_6', '16a': 'c3_7', '16b': 'c3_8', '19': 'c3_9', '20': 'c3_10', '21': 'c3_11', '22': 'c3_12',
+  '23': 'c3_13', '24': 'c3_14', '25': 'c3_15', '27': 'c3_16', '28': 'c4_1', '29a': 'c4_2', '29b': 'c4_3', '30': 'c4_4', '31': 'c4_6',
+}
+const ENTITY_TYPE_1065: Record<string, string> = {
+  general_partnership: 'c2_1[0]', limited_partnership: 'c2_1[1]', llc: 'c2_1[2]', llp: 'c2_1[3]', foreign: 'c2_1[4]', other: 'c2_1[5]',
+}
+function fill1065Extras(form: ReturnType<PDFDocument['getForm']>, entity: EntityData, _model: Record<string, string | number>) {
+  const method = String(entity.meta?.accounting_method || entity.meta?.sched_k?.accounting_method || '').toLowerCase()
+  const methodBox = { cash: 'c1_6[0]', accrual: 'c1_6[1]', other: 'c1_6[2]' }[method]
+  if (methodBox) checkBox(form, methodBox)
+  const kind = String(entity.meta?.partnership_type || entity.meta?.legal_form || '').toLowerCase()
+  const kindBox = ENTITY_TYPE_1065[kind] ?? (kind === 'limited_liability_company' ? ENTITY_TYPE_1065.llc : undefined)
+  if (kindBox) checkBox(form, kindBox)
+  const answers = (entity.meta?.sched_b || {}) as Record<string, string>
+  for (const [q, a] of Object.entries(answers)) {
+    const id = SCHED_B_1065_2025[q]
+    const v = String(a).toLowerCase()
+    if (id && (v === 'yes' || v === 'no')) checkBox(form, `${id}[${v === 'yes' ? 0 : 1}]`)
+  }
+}
+
 // ─── Main entry point ───
 
 /**
@@ -1256,6 +1293,8 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
     fill1120Extras(mainForm, entity, taxYear, model, input.inputData || {})
   } else if (formType === '1120S') {
     fill1120SExtras(mainForm, entity, model, taxYear, input.inputData || {})
+  } else if (formType === '1065') {
+    fill1065Extras(mainForm, entity, model)
   } else if (formType === '1040') {
     fill1040Extras(mainForm, entity, model, taxYear, input.inputData || {})
   }
@@ -1302,8 +1341,8 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
     }
   }
 
-  // 5. Supporting forms (1120 and 1120S)
-  if (formType === '1120' || formType === '1120S') {
+  // 5. Supporting forms (1120, 1120S, 1065)
+  if (formType === '1120' || formType === '1120S' || formType === '1065') {
     // 1125-A (COGS)
     if (model['cogs.L8_cogs'] || model['income.L2_cogs'] || model['cogs.L5_other']) {
       const cogs = await fill1125A(taxYear, entity, model)
@@ -1313,7 +1352,7 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
     // Schedule G, Form 4562 and the statements of a 1120 are registered
     // attachments (forms/registry_1120.ts). The 1120-S still uses the generic
     // statement pages (other deductions, COGS detail, other income).
-    if (formType === '1120S') {
+    if (formType === '1120S' || formType === '1065') {
       const stmts = await generateStatements(entity, taxYear, formType, model, input.inputData || {})
       if (stmts) await append(stmts, 'Statements')
     }

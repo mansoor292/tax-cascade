@@ -1965,8 +1965,10 @@ export function calcCascade(
 }
 
 // ─── Schedule K-1 (Form 1065) allocation ───
-// NOT a 1065 return engine — that rule stands (1065s enter Cati only as
-// filed imports). This allocates caller-supplied Schedule K totals across
+// The stateless allocator for a partnership whose return was prepared
+// elsewhere. A partnership prepared HERE uses engine/form1065.ts (2026-11-16),
+// which allocates with whole-dollar ties and keeps capital accounts. This
+// allocates caller-supplied Schedule K totals across
 // partners pro-rata so the ISSUER side can generate distributable K-1s
 // (SOP-04 tester: "as managing partner I had to send out the K-1s").
 // Special allocations are out of scope: income items follow profit_pct,

@@ -450,3 +450,137 @@ export async function build1065K1(
   }
   return { recipient: recipient.name, pct: alloc.profit_pct, pdf, filled }
 }
+
+// ─── 1065 K-1 from a PREPARED return (engine/form1065.ts) ───
+// The stateless builder above prints Part III boxes 1–12 and pushes every
+// coded box to a statement. A K-1 issued with a prepared 1065 must carry what
+// the partner's own return and basis depend on: item J percentages, item K1
+// liabilities, item L tax-basis capital account, and the coded boxes printed
+// on the form itself (13, 14, 18, 19, 20). Field ids from the 2025 blank's
+// widget list (data/line_dicts/f1065sk1--2025), checked on a filled render.
+const F1065SK1_FULL = {
+  partner_entity_type: 'f1_13',
+  profit_beg: 'f1_14', profit_end: 'f1_15', loss_beg: 'f1_16', loss_end: 'f1_17', capital_beg: 'f1_18', capital_end: 'f1_19',
+  nonrecourse_beg: 'f1_20', nonrecourse_end: 'f1_21', qnr_beg: 'f1_22', qnr_end: 'f1_23', recourse_beg: 'f1_24', recourse_end: 'f1_25',
+  cap_beginning: 'f1_26', cap_contributed: 'f1_27', cap_net_income: 'f1_28', cap_other: 'f1_29', cap_withdrawals: 'f1_30', cap_ending: 'f1_31',
+  L11: [['f1_50', 'f1_51'], ['f1_52', 'f1_53']],
+  L13: [['Line13', 'f1_55'], ['f1_56', 'f1_57'], ['f1_58', 'f1_59']],
+  L14: [['Line14', 'f1_60'], ['f1_61', 'f1_62']],
+  L18: [['Line18', 'f1_84'], ['f1_85', 'f1_86'], ['f1_87', 'f1_88']],
+  L19: [['Line19', 'f1_89'], ['f1_90', 'f1_91']],
+  L20: [['Line20', 'f1_92'], ['f1_93', 'f1_94'], ['f1_95', 'f1_96'], ['f1_97', 'f1_98']],
+  L21: 'f1_66',
+} as const
+
+const ENTITY_LABEL: Record<string, string> = {
+  individual: 'Individual', corporation: 'Corporation', s_corporation: 'S Corporation', partnership: 'Partnership',
+  trust: 'Trust', estate: 'Estate', exempt_org: 'Exempt Organization', nominee: 'Nominee',
+}
+
+export interface K1Prepared1065 {
+  name: string; tin?: string; address?: string; entity: string; general: boolean; foreign: boolean
+  profit_pct: number; loss_pct: number; capital_pct: number
+  profit_pct_beginning: number; loss_pct_beginning: number; capital_pct_beginning: number
+  ordinary_income: number; rental_real_estate: number; other_rental: number
+  guaranteed_payments_services: number; guaranteed_payments_capital: number
+  interest_income: number; dividends_ordinary: number; dividends_qualified: number; royalties: number
+  st_cap_gain: number; lt_cap_gain: number; net_1231_gain: number; other_income: number
+  section_179: number; charitable: number; charitable_noncash: number; investment_interest: number; other_deductions: number
+  se_earnings: number; tax_exempt_interest: number; other_tax_exempt: number; nondeductible: number
+  distributions: number; distributions_property: number; foreign_taxes: number
+  qbi_income: number; w2_wages: number; ubia: number; is_sstb: boolean
+  capital_beginning: number; capital_contributed: number; capital_net_income: number
+  capital_other_increase: number; capital_withdrawals: number; capital_ending: number
+  liabilities_nonrecourse: number; liabilities_qualified_nonrecourse: number; liabilities_recourse: number
+}
+
+/** Coded rows per box, in print order: [code, amount]. Rows past the form's lines go to the statement. */
+export function k1CodedRows1065(k: K1Prepared1065): Record<string, Array<[string, number]>> {
+  const rows: Record<string, Array<[string, number]>> = { L11: [], L13: [], L14: [], L18: [], L19: [], L20: [] }
+  const add = (box: string, code: string, v: number | undefined) => { const x = nz(v); if (x !== undefined) rows[box].push([code, x]) }
+  add('L11', 'ZZ', k.other_income)
+  add('L13', 'A', k.charitable); add('L13', 'C', k.charitable_noncash); add('L13', 'H', k.investment_interest); add('L13', 'ZZ', k.other_deductions)
+  add('L14', 'A', k.se_earnings)
+  add('L18', 'A', k.tax_exempt_interest); add('L18', 'B', k.other_tax_exempt); add('L18', 'C', k.nondeductible)
+  add('L19', 'A', k.distributions); add('L19', 'C', k.distributions_property)
+  add('L20', 'A', (k.interest_income || 0) + (k.dividends_ordinary || 0) + (k.royalties || 0))
+  if (nz(k.qbi_income) !== undefined || nz(k.w2_wages) !== undefined) rows.L20.push(['Z', Number.NaN])
+  return rows
+}
+
+export async function build1065K1Prepared(
+  taxYear: number, issuer: K1Issuer, k: K1Prepared1065,
+): Promise<K1Pdf> {
+  const pdf = await loadBlank('f1065sk1', taxYear)
+  const form = pdf.getForm()
+  let filled = 0
+  const put = (id: string, value: string | number | undefined) => {
+    if (value === undefined || value === '') return
+    if (setField(form, id, value)) filled++
+  }
+  const pct = (v: number) => `${Number(v.toFixed(4))}`
+  const F = F1065SK1_FULL
+
+  put(F1065SK1.partnership_ein, issuer.ein)
+  put(F1065SK1.partnership_block, issuerBlock(issuer))
+  put(F1065SK1.irs_center, 'e-file')
+  put(F1065SK1.partner_tin, k.tin)
+  put(F1065SK1.partner_block, recipientBlock({ name: k.name, address: k.address }))
+  put(F.partner_entity_type, ENTITY_LABEL[k.entity] || k.entity)
+  checkBox(form, k.general ? 'c1_4[0]' : 'c1_4[1]')
+  checkBox(form, k.foreign ? 'c1_5[1]' : 'c1_5[0]')
+  put(F.profit_beg, pct(k.profit_pct_beginning)); put(F.profit_end, pct(k.profit_pct))
+  put(F.loss_beg, pct(k.loss_pct_beginning)); put(F.loss_end, pct(k.loss_pct))
+  put(F.capital_beg, pct(k.capital_pct_beginning)); put(F.capital_end, pct(k.capital_pct))
+  put(F.nonrecourse_end, nz(k.liabilities_nonrecourse)); put(F.qnr_end, nz(k.liabilities_qualified_nonrecourse)); put(F.recourse_end, nz(k.liabilities_recourse))
+  // Item L prints every line, zeros included — it is a reconciliation.
+  put(F.cap_beginning, Math.round(k.capital_beginning || 0)); put(F.cap_contributed, Math.round(k.capital_contributed || 0))
+  put(F.cap_net_income, Math.round(k.capital_net_income || 0)); put(F.cap_other, Math.round(k.capital_other_increase || 0))
+  put(F.cap_withdrawals, Math.round(k.capital_withdrawals || 0)); put(F.cap_ending, Math.round(k.capital_ending || 0))
+
+  put(F1065SK1.L1_ordinary, nz(k.ordinary_income))
+  put(F1065SK1.L2_rental_re, nz(k.rental_real_estate))
+  put(F1065SK1.L3_other_rental, nz(k.other_rental))
+  put(F1065SK1.L4a_guaranteed_services, nz(k.guaranteed_payments_services))
+  put(F1065SK1.L4b_guaranteed_capital, nz(k.guaranteed_payments_capital))
+  put(F1065SK1.L4c_guaranteed_total, nz((k.guaranteed_payments_services || 0) + (k.guaranteed_payments_capital || 0)))
+  put(F1065SK1.L5_interest, nz(k.interest_income))
+  put(F1065SK1.L6a_dividends, nz(k.dividends_ordinary))
+  put(F1065SK1.L6b_qual_div, nz(k.dividends_qualified))
+  put(F1065SK1.L7_royalties, nz(k.royalties))
+  put(F1065SK1.L8_st_gain, nz(k.st_cap_gain))
+  put(F1065SK1.L9a_lt_gain, nz(k.lt_cap_gain))
+  put(F1065SK1.L10_1231, nz(k.net_1231_gain))
+  put(F1065SK1.L12_179, nz(k.section_179))
+  put(F.L21, nz(k.foreign_taxes))
+
+  const overflow: StatementLine[] = []
+  const rows = k1CodedRows1065(k)
+  for (const [box, list] of Object.entries(rows)) {
+    const slots = (F as any)[box] as ReadonlyArray<readonly [string, string]>
+    list.forEach(([code, amount], i) => {
+      const slot = slots[i]
+      const stmt = Number.isNaN(amount)
+      if (!slot) { if (!stmt) overflow.push({ label: `Box ${box.slice(1)}, code ${code}`, amount }); return }
+      put(slot[0], code)
+      put(slot[1], stmt ? '* STMT' : amount)
+    })
+  }
+
+  const qbi: StatementLine[] = [
+    { label: 'QBI — ordinary business income', amount: Math.round(k.qbi_income || 0) },
+    { label: 'W-2 wages', amount: Math.round(k.w2_wages || 0) },
+    { label: 'UBIA of qualified property', amount: Math.round(k.ubia || 0) },
+    { label: 'Specified service trade or business', text: k.is_sstb ? 'Yes' : 'No' },
+  ]
+  const sections: Array<{ heading: string; lines: StatementLine[] }> = [
+    { heading: 'Box 20, code Z — Statement A (Section 199A information)', lines: qbi },
+  ]
+  if (overflow.length) sections.unshift({ heading: 'Coded items continued', lines: overflow })
+  await appendStatement(pdf, await statementPage(
+    `Schedule K-1 (Form 1065) ${taxYear} — Supplemental Statement`,
+    `${issuer.name} — Partner: ${k.name} (${k.profit_pct}% profit)`,
+    sections,
+  ))
+  return { recipient: k.name, pct: k.profit_pct, pdf, filled }
+}

@@ -486,7 +486,12 @@ router.get('/:id/export', async (req, res) => {
   // missing the half of it the shareholder actually needs.
   let k1s: any[] = []
   const inputs = (data as any).input_data || {}
-  if ((data as any).form_type === '1120S' && Array.isArray(inputs.shareholders) && inputs.shareholders.length) {
+  if ((data as any).form_type === '1065') {
+    // The partnership engine stores its K-1s (engine/form1065.ts).
+    const stored = ((data as any).computed_data || {}).k1s
+    // TINs and addresses stay on the K-1 PDFs; an export is shared and logged.
+    if (Array.isArray(stored)) k1s = stored.map(({ tin: _t, address: _a, ...k }: any) => k)
+  } else if ((data as any).form_type === '1120S' && Array.isArray(inputs.shareholders) && inputs.shareholders.length) {
     try {
       k1s = calc1120S(inputs as any)?.computed?.k1s || []
     } catch (e: any) {
@@ -786,9 +791,9 @@ router.post('/compute_from_qbo', async (req, res) => {
   if (!entity_id || !tax_year || !form_type) {
     return res.status(400).json({ error: 'entity_id, tax_year, form_type required' })
   }
-  if (form_type !== '1120' && form_type !== '1120S') {
+  if (form_type !== '1120' && form_type !== '1120S' && form_type !== '1065') {
     return res.status(400).json({
-      error: 'compute_from_qbo currently supports 1120 and 1120S only',
+      error: 'compute_from_qbo supports 1120, 1120S and 1065',
       hint: 'For 1040 pass-through from K-1s, use compute with manual inputs or rely on the existing auto-merge of K-1 facts.',
     })
   }
@@ -820,9 +825,17 @@ router.post('/compute_from_qbo', async (req, res) => {
       pnl,
       bs: finResp?.balance_sheet?.items,
       priorBs: priorFinResp?.balance_sheet?.items,
-      form_type: form_type as '1120' | '1120S',
+      // a partnership's books are classified as an S corporation's, then
+      // renumbered onto Form 1065 (maps/qbo_to_1065.ts)
+      form_type: (form_type === '1065' ? '1120S' : form_type) as '1120' | '1120S',
       business_code: entityRow?.meta?.business_code,
     })
+    if (form_type === '1065') {
+      const { corporateInputsTo1065 } = await import('../maps/qbo_to_1065.js')
+      const t = corporateInputsTo1065(packet.inputs)
+      packet.inputs = t.inputs
+      packet.warnings = [...packet.warnings.filter((w: any) => w.code !== 'OFFICER_COMP_SPLIT_NEEDED' && w.code !== 'SSTB_SUSPECTED'), ...t.warnings] as typeof packet.warnings
+    }
 
     // Shallow-merge caller overrides onto mapper inputs.
     const mergedInputs = { ...packet.inputs, ...(overrides || {}) }
@@ -879,7 +892,7 @@ router.post('/compute_from_qbo', async (req, res) => {
     // Schedule K portfolio total (1120S) — interest + dividends + cap gains
     // + royalties + tax-exempt interest. For 1120 these flow to L4/L5 and
     // are already in formOrdinary, so portfolio total stays 0.
-    const schedKPortfolio: number = form_type === '1120S'
+    const schedKPortfolio: number = form_type === '1120S' || form_type === '1065'
       ? (mergedInputs.schedule_k_interest || 0)
         + (mergedInputs.schedule_k_dividends_ordinary || 0)
         + (mergedInputs.schedule_k_lt_cap_gain || 0)
@@ -1082,10 +1095,33 @@ router.post('/:id/k1s', async (req, res) => {
   if (!entity || entity.user_id !== userId) return res.status(403).json({ error: 'Forbidden' })
   // The corporation's EIN goes in Part I of every K-1 and is stored encrypted.
   await hydrate(supabase, entity, { ...ENCRYPTED_ENTITY_FIELDS, userId })
-  if (taxReturn.form_type !== '1120S') {
-    return res.status(400).json({ error: `K-1 generation from a return supports 1120S only (this is ${taxReturn.form_type}). For partnership K-1s use POST /api/returns/k1s/1065 with explicit totals and partners.` })
+  if (taxReturn.form_type !== '1120S' && taxReturn.form_type !== '1065') {
+    return res.status(400).json({ error: `K-1 generation from a return supports 1120-S and 1065 (this is ${taxReturn.form_type}).` })
   }
   await hydrateReturn(taxReturn, userId)
+  if (taxReturn.form_type === '1065') {
+    // A prepared partnership return carries its own allocation
+    // (engine/form1065.ts → computed_data.k1s): issue exactly those K-1s, the
+    // ones the Schedule K ties were checked against.
+    const stored = ((taxReturn.computed_data || {}) as any).k1s
+    if (!Array.isArray(stored) || !stored.length) {
+      return res.status(400).json({ error: 'This 1065 has no computed partner K-1s — compute it with partners: [{ name, profit_pct, partner_type }].' })
+    }
+    try {
+      const partners = Array.isArray((taxReturn.input_data as any)?.partners) ? (taxReturn.input_data as any).partners : []
+      const { build1065K1Prepared } = await import('../builders/build_k1_pdfs.js')
+      const built = []
+      for (const k of stored) {
+        const p = partners.find((x: any) => x?.name === k.name) || {}
+        built.push(await build1065K1Prepared(taxReturn.tax_year,
+          { name: entity.name, ein: entity.ein, address: entity.address, city: entity.city, state: entity.state, zip: entity.zip },
+          { ...k, tin: k.tin ?? p.tin, address: k.address ?? p.address }))
+      }
+      const k1s = await uploadK1s(userId, taxReturn.id, built)
+      return res.json({ form: '1065', tax_year: taxReturn.tax_year, return_id: taxReturn.id, count: k1s.length, k1s,
+        note: 'Item L (tax-basis capital), item J/K1, and boxes 13/14/18/19/20 print on the form; Section 199A Statement A is on the attached page. URLs expire in 1 hour.' })
+    } catch (e: any) { return sendError(res, e) }
+  }
   const inputs = (taxReturn.input_data || {}) as Record<string, any>
   if (!Array.isArray(inputs.shareholders) || inputs.shareholders.length === 0) {
     return res.status(400).json({ error: 'Return has no shareholders in input_data — recompute with shareholders: [{name, pct}]' })

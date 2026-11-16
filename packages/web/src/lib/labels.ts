@@ -29,9 +29,10 @@ export const FORM_TYPE_OPTIONS = [
 ]
 
 /**
- * What the engine can COMPUTE — deliberately narrower than
- * FORM_TYPE_OPTIONS: there is no calc1065, partnership returns only enter
- * as filed imports. Don't add 1065 here without engine support.
+ * What the compute FORMS here can fill — narrower than FORM_TYPE_OPTIONS.
+ * The engine prepares 1065s (since 2026-11-16) but a partnership needs a
+ * partners list, which these number-field forms cannot enter yet; 1065s are
+ * computed through the API/MCP until a partner editor exists.
  */
 export const COMPUTABLE_FORM_OPTIONS = [
   { value: '1040', label: '1040 (Individual)' },

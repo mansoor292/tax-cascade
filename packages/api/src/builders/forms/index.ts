@@ -6,6 +6,7 @@ import type { Attachment, AttachmentContext, AttachmentBuilder } from './types.j
 import { builders as b1120s } from './registry_1120s.js'
 import { builders as b1120 } from './registry_1120.js'
 import { builders as b1040 } from './registry_1040.js'
+import { builders as b1065 } from './registry_1065.js'
 import { builders as bState } from './registry_state.js'
 import { builders as bShared } from './registry_shared.js'
 
@@ -13,6 +14,7 @@ const BY_FORM: Record<string, AttachmentBuilder[]> = {
   '1120S': [...bShared, ...b1120s],
   '1120': [...bShared, ...b1120],
   '1040': b1040,
+  '1065': b1065,
 }
 
 /** Run every builder registered for the return's form type, sorted by attachment sequence. */

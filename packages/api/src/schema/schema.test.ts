@@ -293,7 +293,9 @@ describe('field_values hold only golden keys', () => {
     const { kept, rejected } = splitBySchema({ 'tax.L22_ordinary_income': 5, 'bogus.L1_thing': 7, 'nol.carryover_next_year': 3 }, '1120S')
     expect(kept).toEqual({ 'tax.L22_ordinary_income': 5, 'nol.carryover_next_year': 3 })
     expect(rejected).toEqual({ 'bogus.L1_thing': 7 })
-    expect(splitBySchema({ 'anything.at_all': 1 }, '1065').rejected).toEqual({}) // no 1065 engine: left alone
+    expect(splitBySchema({ 'anything.at_all': 1 }, '990').rejected).toEqual({}) // a return type the schema does not cover: left alone
+    // 1065 is prepared since 2026-11-16, so it is held to the schema like the others
+    expect(splitBySchema({ 'anything.at_all': 1, 'tax.L23_ordinary_business_income': 9 }, '1065').rejected).toEqual({ 'anything.at_all': 1 })
     expect(validateFieldValues({ 'income.L99_no_such_line': 1 }, '1120S').errors).toEqual(['income.L99_no_such_line: not in the golden schema'])
   })
 

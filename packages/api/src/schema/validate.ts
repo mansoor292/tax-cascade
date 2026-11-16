@@ -50,8 +50,8 @@ export function classifyKey(formType: string, key: string): KeyClass {
 export function splitBySchema<T>(fv: Record<string, T>, formType: string): { kept: Record<string, T>; rejected: Record<string, T> } {
   const kept: Record<string, T> = {}
   const rejected: Record<string, T> = {}
-  // a return type the schema does not cover (1065: no engine) is left as is
-  if (!['1120', '1120S', '1040'].includes(formType)) return { kept: { ...fv }, rejected }
+  // a return type the schema does not cover is left as is
+  if (!['1120', '1120S', '1040', '1065'].includes(formType)) return { kept: { ...fv }, rejected }
   for (const [k, v] of Object.entries(fv)) (classifyKey(formType, k) === 'rejected' ? rejected : kept)[k] = v
   return { kept, rejected }
 }
