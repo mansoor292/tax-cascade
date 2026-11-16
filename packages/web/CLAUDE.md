@@ -17,7 +17,8 @@ src/
 │   ├── format.ts        fmtMoney / fmtMoneyCompact / fmtDelta / fmtDate /
 │   │                    coerceNumericInputs — import these, never redefine
 │   ├── labels.ts        FORM_TYPE_LABEL, FORM_TYPE_OPTIONS,
-│   │                    COMPUTABLE_FORM_OPTIONS (≠ — engine has no calc1065),
+│   │                    COMPUTABLE_FORM_OPTIONS (narrower: a 1065 needs a
+│   │                    partner list these forms can't enter yet),
 │   │                    LEGAL_FORMS, SOURCE_LABEL/VARIANT
 │   ├── mask.ts          maskTaxId — EINs/SSNs are never rendered raw;
 │   │                    maskTaxIdsInText for prose that may quote one
@@ -106,8 +107,9 @@ the repo).
 - Redefine a money/date formatter or a label map in a page — import from
   `lib/format.ts` / `lib/labels.ts`.
 - Bypass `lib/api.ts` or the hooks for API data.
-- Add 1065 to `COMPUTABLE_FORM_OPTIONS` — entities can *be* partnerships,
-  but the engine cannot compute one.
+- Add 1065 to `COMPUTABLE_FORM_OPTIONS` before the compute form can enter
+  a partners list — the engine prepares 1065s (since 2026-11-16) but needs
+  `partners: [...]`, which a number-field form cannot supply.
 - Touch `netlify.toml` redirects without reading the ordering rules in the
   root CLAUDE.md.
 - Swallow a load error into an empty page state — hooks return `error`,
