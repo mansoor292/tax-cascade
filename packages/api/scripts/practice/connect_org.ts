@@ -33,7 +33,7 @@
  */
 import '../../src/bootstrap_env.js'
 import { serviceClient } from '../../src/lib/supabase.js'
-import { PRACTICE_COLS, claimAccounts, type Practice } from '../../src/services/practice.js'
+import { PRACTICE_COLS, allRows, claimAccounts, type Practice } from '../../src/services/practice.js'
 import { enqueue } from '../../src/services/practice_jobs.js'
 import { ORG_NAME, TaxNowError, taxnowFor } from '../../src/taxnow/client.js'
 
@@ -105,9 +105,10 @@ async function main() {
   const r = await claimAccounts(sb, p as Practice, 'all', { scope })
   console.log(`claimed ${r.claimed}, already held ${r.skipped}, unreadable ${r.unreadable}`)
   // Every claimed client, not only the new ones: a re-run re-reads them all.
-  const { data: held } = await sb.from('practice_client').select('id').eq('practice_id', p!.id).eq('stage', 'claimed')
-  for (const c of held ?? []) await enqueue(sb, { kind: 'read_client', practice_id: p!.id, user_id: userId, payload: { client_id: c.id } })
-  console.log(`reads queued: ${(held ?? []).length}`)
+  // Paged past PostgREST's 1,000-row page: the HRLogics run (1,266 clients) queued only 1,000 unpaged.
+  const held = await allRows<{ id: string }>((a, b) => sb.from('practice_client').select('id').eq('practice_id', p!.id).eq('stage', 'claimed').order('id').range(a, b))
+  for (const c of held) await enqueue(sb, { kind: 'read_client', practice_id: p!.id, user_id: userId, payload: { client_id: c.id } })
+  console.log(`reads queued: ${held.length}`)
 }
 
 main().then(() => process.exit(0), e => { console.error(e instanceof Error ? e.message : e); process.exit(1) })

@@ -26,7 +26,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { serviceClient } from '../lib/supabase.js'
 import { taxnowFor } from '../taxnow/client.js'
 import { readClient, recordIrsOutcome, type ClientRow } from './practice_read.js'
-import { onboardingCheck } from './practice.js'
+import { allRows, onboardingCheck } from './practice.js'
 import { runAnalysisBatch, runImportBatch, runImportStart } from './practice_import.js'
 
 export type JobKind = 'read_client' | 'onboarding_check' | 'irs_request' | 'daily' | 'import_start' | 'import_batch' | 'analysis_batch'
@@ -94,9 +94,11 @@ export async function runJob(sb: SupabaseClient, job: { id: string; kind: JobKin
     case 'import_batch': return runImportBatch(sb, job.payload.run_id, job.payload.numbers ?? [])
     case 'analysis_batch': return runAnalysisBatch(sb, job.payload.run_id, job.payload.client_ids ?? [])
     case 'daily': {
-      const { data: clients } = await sb.from('practice_client').select('id, practice_id, user_id, stage').in('stage', ['submitted', 'readable', 'claimed'])
+      // Paged: one select stops at PostgREST's 1,000 rows, and the HRLogics org alone holds 1,266 (2026-11-16).
+      const clients = await allRows<{ id: string; practice_id: string; user_id: string; stage: string }>((a, b) =>
+        sb.from('practice_client').select('id, practice_id, user_id, stage').in('stage', ['submitted', 'readable', 'claimed']).order('id').range(a, b))
       let n = 0
-      for (const c of clients ?? []) {
+      for (const c of clients) {
         await enqueue(sb, { kind: c.stage === 'submitted' ? 'onboarding_check' : 'read_client', practice_id: c.practice_id, user_id: c.user_id, payload: { client_id: c.id } })
         n++
       }

@@ -174,7 +174,7 @@ export interface ClientListRow {
 
 /** Every row of a practice-wide select, past PostgREST's 1,000-row page (an imported book has
  *  8,834 clients). After the first page, four pages at a time: one by one, 9 pages took 1.4 s. */
-async function allRows<T = any>(page: (from: number, to: number) => PromiseLike<{ data: any[] | null; error: { message: string } | null }>): Promise<T[]> {
+export async function allRows<T = any>(page: (from: number, to: number) => PromiseLike<{ data: any[] | null; error: { message: string } | null }>): Promise<T[]> {
   const take = (r: { data: any[] | null; error: { message: string } | null }) => {
     if (r.error) throw new PracticeError(500, r.error.message)
     return (r.data ?? []) as T[]
