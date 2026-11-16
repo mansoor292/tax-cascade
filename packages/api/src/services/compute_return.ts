@@ -228,7 +228,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     //   - Balance Sheet → Schedule L canonical keys (schedL.L1_cash_eoy_d, ...)
     //   - Emits warnings (SSTB_SUSPECTED, OFFICER_COMP_UNSPLIT, ...)
     // setIfUnset semantics: caller-provided inputs always win.
-    if (mergeSources && entity_id && (form_type === '1120S' || form_type === '1120' || form_type === '1065')) {
+    if (mergeSources && entity_id && (form_type === '1120S' || form_type === '1120' || form_type === '1065' || form_type === 'SchC')) {
       try {
         const { data: conn } = await supabase.from('qbo_connection')
           .select('realm_id').eq('entity_id', entity_id).single()
@@ -259,13 +259,20 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
               priorBs,
               // A partnership's books are classified as an S corporation's and
               // then renumbered onto Form 1065 (maps/qbo_to_1065.ts).
-              form_type: (form_type === '1065' ? '1120S' : form_type) as '1120' | '1120S',
+              form_type: (form_type === '1065' || form_type === 'SchC' ? '1120S' : form_type) as '1120' | '1120S',
               business_code: businessCode,
             })
             let mappedInputs: Record<string, unknown> = packet.inputs
             if (form_type === '1065') {
               const { corporateInputsTo1065 } = await import('../maps/qbo_to_1065.js')
               const t = corporateInputsTo1065(packet.inputs)
+              mappedInputs = t.inputs
+              packet.warnings = packet.warnings.filter((w: any) => w.code !== 'OFFICER_COMP_SPLIT_NEEDED' && w.code !== 'SSTB_SUSPECTED')
+              qboWarnings.push(...t.warnings)
+            } else if (form_type === 'SchC') {
+              // a single-member LLC's books, onto Schedule C (maps/qbo_to_schedule_c.ts)
+              const { corporateInputsToScheduleC } = await import('../maps/qbo_to_schedule_c.js')
+              const t = corporateInputsToScheduleC(packet.inputs)
               mappedInputs = t.inputs
               packet.warnings = packet.warnings.filter((w: any) => w.code !== 'OFFICER_COMP_SPLIT_NEEDED' && w.code !== 'SSTB_SUSPECTED')
               qboWarnings.push(...t.warnings)
@@ -589,6 +596,11 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         reconciliationIssues = deriveSupportingSchedules('1120S', engineResult.field_values, mergedInputs, tax_year,
           engineResult.computed)
       }
+    } else if (form_type === 'SchC') {
+      // A single-member LLC held as its own entity (engine/schedule_c.ts).
+      const { calcScheduleC } = await import('../engine/schedule_c.js')
+      engineResult = calcScheduleC({ ...mergedInputs, tax_year })
+      if (engineResult.warnings?.length) qboWarnings.push(...engineResult.warnings.map((m: string) => ({ code: 'SCHEDULE_C', message: m })))
     } else if (form_type === '1065') {
       // Partnership preparation (engine/form1065.ts). Schedule L and the
       // M-1/M-2 facts only the books know pass through from the inputs; the
@@ -610,6 +622,51 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         scheduleE = calcScheduleE({ ...mergedInputs.schedule_e, tax_year } as ScheduleE_Inputs)
         const prior = mergedInputs.schedule1_income || 0
         mergedInputs.schedule1_income = prior + scheduleE.computed.L41_total_income_loss
+      }
+      // Single-member LLCs held as their own entities and linked to this 1040
+      // by a `disregarded` link (owner decision 2026-11-16): each one's saved
+      // Schedule C flows in — line 31 to Schedule 1 line 3, Schedule SE for its
+      // owner, and §199A. A caller who passes schedule_c states it instead.
+      // Pulled fresh on every compute (a stored pull would go stale when the
+      // LLC's books change); only this call's own schedule_c overrides it.
+      if (entity_id && (inputs as any)?.schedule_c === undefined) {
+        delete mergedInputs.schedule_c
+        try {
+          const { listLinks } = await import('./entity_map.js')
+          const links = (await listLinks(supabase, userId)).filter(l => l.kind === 'disregarded' && !l.removed && !l.superseded_by
+            && l.from_entity_id === entity_id && l.to_entity_id
+            && (l.from_year === null || l.from_year <= tax_year) && (l.to_year === null || l.to_year >= tax_year))
+          const pulled: any[] = []
+          for (const l of links) {
+            const { data: ent } = await supabase.from('tax_entity').select('id, name, form_type, ein, ein_enc, address, city, state, zip, meta').eq('id', l.to_entity_id!).eq('user_id', userId).maybeSingle()
+            if (ent) await hydrate(supabase, ent, { ...ENCRYPTED_ENTITY_FIELDS, userId })
+            if (ent?.form_type !== 'SchC') continue
+            const { data: rows } = await supabase.from('tax_return').select(`id, source, input_data, field_values, ${RETURN_ENC_COLS}`)
+              .eq('entity_id', ent.id).eq('tax_year', tax_year).eq('form_type', 'SchC').in('source', ['amendment', 'proforma', 'filed_import'])
+              .order('computed_at', { ascending: false })
+            const pick = (rows || []).find((r: any) => r.source === 'amendment') ?? (rows || [])[0]
+            if (!pick) { qboWarnings.push({ code: 'SCHEDULE_C_MISSING', message: `${ent.name} is linked as a disregarded entity but has no ${tax_year} Schedule C computed — its profit is not on this return.` }); continue }
+            await hydrateReturn(pick, userId)
+            const fv = (pick.field_values || {}) as Record<string, number>
+            pulled.push({
+              name: ent.name, owner: l.subject === 'spouse' ? 'spouse' : 'taxpayer', entity_id: ent.id, return_id: pick.id,
+              net_profit: Number(fv['schedC.L31_net_profit']) || 0, w2_wages: Number(fv['schedC.L26_wages']) || 0,
+              ubia: Number((pick.input_data as any)?.ubia) || 0, is_sstb: !!(pick.input_data as any)?.is_sstb,
+              // for the Schedule C printed with the 1040 (builders/forms/f1040_schedC.ts)
+              field_values: fv,
+              business: {
+                name: ent.name, ein: ent.ein ?? null, address: ent.address ?? null,
+                city_state_zip: [ent.city, ent.state, ent.zip].filter(Boolean).join(', ') || null,
+                activity: ent.meta?.business_activity ?? null, code: ent.meta?.business_code ?? null,
+                accounting_method: ent.meta?.accounting_method ?? null,
+              },
+            })
+          }
+          if (pulled.length) {
+            mergedInputs.schedule_c = pulled
+            autoMergeLog.push({ field: 'schedule_c', value: pulled.reduce((t, c) => t + c.net_profit, 0), sources: pulled.map(c => `Schedule C — ${c.name}`) })
+          }
+        } catch (e: any) { console.error('[compute] schedule_c pull failed:', e?.message) }
       }
       engineResult = calc1040({ ...mergedInputs, tax_year })
       if (scheduleE) {

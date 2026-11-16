@@ -60,7 +60,7 @@ const preparerBlock: Check = {
   description: 'The paid-preparer block is for a preparer paid by the taxpayer. An officer preparing the company\'s own return, or a taxpayer preparing their own, is not a paid preparer.',
   run(ctx) {
     const cat = filed(ctx.catalogs, ctx.year)
-    const form = { '1040': 'f1040', '1120': 'f1120', '1120S': 'f1120s', '1065': 'f1065' }[ctx.entity.form_type]
+    const form = ({ '1040': 'f1040', '1120': 'f1120', '1120S': 'f1120s', '1065': 'f1065', SchC: 'f1040sc' } as Record<string, string>)[ctx.entity.form_type] ?? 'f1040'
     const prep = formEntries(cat, form).find(e => /Print\/Type preparer|Preparer.s name/i.test(e.label) && e.raw)
     if (!prep) return [{ check: this.id, status: cat ? 'pass' : 'n/a', severity: 'info', title: 'No paid preparer named', detail: '', evidence: [] }]
     const owners = (ctx.entity.meta?.owners as Array<{ name?: string }> | undefined) ?? []

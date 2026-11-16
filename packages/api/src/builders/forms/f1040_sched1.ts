@@ -12,6 +12,8 @@ export const buildSchedule1 = specBuilder({
   when: c => any(c, 'sched1.L10_additional_income', 'sched1.L26_adjustments'),
   header: { name: 'f1_01', ssn: 'f1_02' },
   fields: {
+    // line 3: single-member LLCs held as their own entities (f1040_schedC.ts)
+    f1_07: 'sched1.L3_business_income',
     f1_09: 'sched1.L5_rental_partnership_scorp',
     // 8z: a description box, then the amount. Itemized other income is
     // described by reference to its statement.
@@ -19,5 +21,7 @@ export const buildSchedule1 = specBuilder({
     f1_36: 'sched1.L8z_other_income',
     f1_37: 'sched1.L9_total_other_income',
     f1_38: 'sched1.L10_additional_income',
+    f2_05: 'sched1.L15_se_tax_deduction',
+    f2_30: 'sched1.L26_adjustments',
   },
 })

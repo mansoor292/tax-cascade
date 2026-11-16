@@ -114,7 +114,8 @@ function parseBSVal(s: string): number {
 }
 
 function mapForYear(formType: string, year: number): Record<string, string> | null {
-  const base = `F${formType.replace('-', '')}`
+  // a single-member LLC's own return is a Schedule C (F1040SC_<year>)
+  const base = formType === 'SchC' ? 'F1040SC' : `F${formType.replace('-', '')}`
   const map = (maps2025 as any)[`${base}_${year}`] || (maps2024 as any)[`${base}_${year}`]
   return map && Object.keys(map).length > 0 ? map : null
 }
@@ -322,7 +323,10 @@ function buildModel(input: BuildPdfInput): Record<string, string | number> {
   if (e.meta?.product_service) model['meta.product_service'] = e.meta.product_service
   if (e.meta?.business_code) model['meta.business_activity_code'] = e.meta.business_code
   // the 1065 map names the box meta.business_code
-  if (e.meta?.business_code && input.formType === '1065') model['meta.business_code'] = e.meta.business_code
+  if (e.meta?.business_code && (input.formType === '1065' || input.formType === 'SchC')) model['meta.business_code'] = e.meta.business_code
+  // Schedule C names the proprietor; the LLC's own entity holds who that is
+  // (the 1040's copy prints the owner's name and SSN from the 1040 itself).
+  if (input.formType === 'SchC' && e.meta?.owner_name) model['meta.proprietor_name'] = e.meta.owner_name
   if (e.meta?.s_election_date) model['meta.s_election_date'] = usDate(e.meta.s_election_date)
   if (e.meta?.total_assets) model['meta.total_assets'] = e.meta.total_assets
   if (e.meta?.num_shareholders) model['meta.num_shareholders'] = e.meta.num_shareholders
@@ -1278,7 +1282,7 @@ export async function buildReturnPdf(input: BuildPdfInput): Promise<BuildPdfResu
     extractScheduleL(input.textractKvs, model)
   }
 
-  const formName = formType === '1120S' ? 'f1120s' : `f${formType.toLowerCase()}`
+  const formName = formType === '1120S' ? 'f1120s' : formType === 'SchC' ? 'f1040sc' : `f${formType.toLowerCase()}`
   const forms: string[] = []
 
   // 1. Fill main form

@@ -466,10 +466,10 @@ export function createServer(apiKey: string): McpServer {
   })
 
   // ─── Tool: create_entity ───
-  server.tool('create_entity', 'Create a new tax entity. form_type is the return it files (1040, 1120, 1120S, 1065) and drives all calculation; entity_type is auto-derived from it. Pass legal_form separately when the entity is an LLC, trust or similar — an LLC taxed as an S-corp is legal_form=llc with form_type=1120S, and an ordinary pass-through LLC is legal_form=llc with form_type=1065.', {
+  server.tool('create_entity', 'Create a new tax entity. form_type is the return it files (1040, 1120, 1120S, 1065, or SchC) and drives all calculation; entity_type is auto-derived from it. A single-member LLC with no election is its own entity with form_type=SchC (legal_form=llc): it keeps its own books and documents, computes a Schedule C, and must be linked to its owner\'s 1040 with record_link(kind "disregarded", from the owner\'s 1040 entity to the LLC, subject "taxpayer" or "spouse") so the 1040 pulls its profit in. Pass legal_form separately when the entity is an LLC, trust or similar — an LLC taxed as an S-corp is legal_form=llc with form_type=1120S, and an ordinary pass-through LLC is legal_form=llc with form_type=1065.', {
     name: z.string().describe('Entity name (person or business)'),
-    form_type: z.string().optional().describe('Tax form the entity FILES — 1040, 1120, 1120S or 1065. This drives every calculation and deadline.'),
-    entity_type: z.string().optional().describe('individual, c_corp, s_corp or partnership. Auto-derived from form_type if omitted; there is no separate llc or nonprofit value here — see legal_form.'),
+    form_type: z.string().optional().describe('Tax form the entity FILES — 1040, 1120, 1120S, 1065, or SchC (single-member LLC with no election, reported on its owner\'s Schedule C). This drives every calculation and deadline.'),
+    entity_type: z.string().optional().describe('individual, c_corp, s_corp, partnership or disregarded_llc. Auto-derived from form_type if omitted; there is no separate llc or nonprofit value here — see legal_form.'),
     legal_form: z.string().optional().describe('What the entity legally IS, independent of how it is taxed: llc, corporation, partnership, sole_proprietor, trust, estate, individual. An LLC that elected S-corp treatment on Form 2553 is legal_form=llc with form_type=1120S; an ordinary pass-through LLC is legal_form=llc with form_type=1065.'),
     ein: z.string().optional().describe('EIN (business) or SSN (individual)'),
     address: z.string().optional().describe('Street address'),
@@ -564,6 +564,8 @@ QBO auto-pull: for 1120/1120S with a QBO connection, compute_return maps the P&L
 Response: \`qbo_warnings\` (preparer-judgment items — surface to user), \`supporting_documents.auto_merged\` (values from W-2/1099/K-1 docs — echo for confirmation), \`missing_fields\` (critical lines at 0 that need user confirmation before get_pdf).
 
 S-Corp inputs require \`shareholders: [{ name, pct }]\` summing to 100.
+
+Single-member LLC (form_type SchC — an entity of its own, linked to the owner's 1040 by a disregarded link from the 1040 to the LLC with subject taxpayer|spouse): Schedule C lines (gross_receipts, advertising, wages, meals as paid, other_expenses_detail, …; see get_schema('SchC')). The owner's 1040 then pulls line 31 in automatically on its next compute: Schedule 1 line 3, Schedule SE per person (net of that person's W-2 social security wages) and the §199A deduction; the 1040 PDF carries each Schedule C and the Schedule SE.
 
 Partnership (form_type 1065) inputs require \`partners: [{ name, partner_type: 'general'|'limited'|'llc_member_manager'|'llc_member', entity, profit_pct, loss_pct, capital_pct, guaranteed_payments_services, guaranteed_payments_capital, capital_beginning, capital_contributed, distributions }]\` — each percentage set adds to 100. Pay to a partner is a guaranteed payment (line 10), never salaries. Items follow ownership percentage only (no special allocations or §704(c)); self-employment earnings default by partner type (limited partners: services payments only). The response carries \`k1s\` (tax-basis capital account per partner); get_pdf prints the 1065 with every partner's K-1 attached. Read get_schema('1065') for every field.`, {
     entity_id: z.string().describe('Entity UUID'),

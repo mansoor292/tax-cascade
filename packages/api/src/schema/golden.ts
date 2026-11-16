@@ -72,6 +72,7 @@ const FAMILY: Record<string, string[]> = {
   '1120S': ['f1120s', 'f1125a', 'f1125e', 'f1120ssd', 'f1120ssk', 'f4562', 'f8825', 'f4797', 'f7004'],
   '1120': ['f1120', 'f1125a', 'f1125e', 'f4562', 'f1120sg', 'f1120so', 'f2220', 'f4797', 'f7004', 'f1120x'],
   '1065': ['f1065', 'f1125a', 'f4562', 'f8825', 'f4797', 'f7004'],
+  SchC: ['f1040sc', 'f4562'],
   '1040': ['f1040', 'f1040s1', 'f1040s2', 'f1040s3', 'f1040sa', 'f1040sb', 'f1040sc', 'f1040sd', 'f1040se', 'f1040sse', 'f1040s8', 'f7203', 'f8582', 'f8959', 'f8960', 'f8995', 'f8995a', 'f4562', 'f2210', 'f8949', 'f4868'],
 }
 
@@ -80,6 +81,7 @@ const HEADLINE: Record<string, string[]> = {
   '1120S': ['f1120s||1a|', 'f1120s||6|', 'f1120s||21|', 'f1120s||22|'],
   '1120': ['f1120||1a|', 'f1120||11|', 'f1120||27|', 'f1120||31|'],
   '1065': ['f1065||1a|', 'f1065||8|', 'f1065||22|', 'f1065||23|'],
+  SchC: ['f1040sc|Part I|1|', 'f1040sc|Part I|7|', 'f1040sc|Part II|28|', 'f1040sc|Part II|31|'],
   '1040': ['f1040||9|', 'f1040||11a|', 'f1040||15|', 'f1040||24|', 'f1040||33|'],
 }
 export function headlineKeys(formType: string): Set<string> {
@@ -87,7 +89,7 @@ export function headlineKeys(formType: string): Set<string> {
 }
 
 /** The main form of a return type, whose numbered lines are all key lines. */
-const MAIN: Record<string, string> = { '1120S': 'f1120s', '1120': 'f1120', '1040': 'f1040', '1065': 'f1065' }
+const MAIN: Record<string, string> = { '1120S': 'f1120s', '1120': 'f1120', '1040': 'f1040', '1065': 'f1065', SchC: 'f1040sc' }
 /** The schedule lines a reader checks first besides the main form's: income
  *  items, distributions, tax, and the balance-sheet lines a misposting or a
  *  books gap shows on. Newest-form locations, form|section|line, any column. */
@@ -100,6 +102,10 @@ const KEY_LINES: Record<string, string[]> = {
   '1120': [
     'f1120|Schedule J|1a', 'f1120|Schedule J|2', 'f1120|Schedule J|11',
     ...['1', '7', '15', '25', '28'].map(l => `f1120|Schedule L|${l}`),
+  ],
+  SchC: [
+    ...['1', '3', '4', '5', '7'].map(l => `f1040sc|Part I|${l}`),
+    ...['8', '13', '24b', '26', '27b', '28', '29', '30', '31'].map(l => `f1040sc|Part II|${l}`),
   ],
   '1065': [
     ...['1', '2', '3c', '4c', '5', '6a', '7', '8', '9a', '10', '11', '12', '13a', '14a', '19a'].map(l => `f1065|Schedule K|${l}`),

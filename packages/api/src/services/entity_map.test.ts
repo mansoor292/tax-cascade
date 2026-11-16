@@ -15,6 +15,25 @@ const SC = '00000000-0000-4000-8000-000000000002'
 const CC = '00000000-0000-4000-8000-000000000003'
 const ENTS = [{ id: IND, form_type: '1040' as const }, { id: SC, form_type: '1120S' as const }, { id: CC, form_type: '1120' as const }]
 
+describe('single-member LLC (form type SchC) disregarded into its owner (2026-11-16)', () => {
+  const LLC = '00000000-0000-4000-8000-000000000004'
+  const ents = [...ENTS, { id: LLC, form_type: 'SchC' as const }]
+  const link = { kind: 'disregarded' as const, from_entity_id: IND, to_entity_id: LLC, subject: 'spouse' }
+  it("may link to the owner's 1040, naming which spouse", () => {
+    expect(checkLinkComplete(link, ents)).toMatchObject({ ok: true })
+    expect(checkLinkComplete({ ...link, subject: null }, ents)).toMatchObject({ ok: true })
+    expect(checkLinkComplete({ ...link, subject: 'Patrick Example' }, ents)).toMatchObject({ ok: false, field: 'subject' })
+    expect(checkLinkComplete({ ...link, pct: 100 }, ents)).toMatchObject({ ok: false, field: 'pct' })
+  })
+  it('may be disregarded into a business, without a subject', () => {
+    expect(checkLinkComplete({ ...link, from_entity_id: SC, subject: null }, ents)).toMatchObject({ ok: true })
+    expect(checkLinkComplete({ ...link, from_entity_id: SC }, ents)).toMatchObject({ ok: false, field: 'subject' })
+  })
+  it('a disregarded link to a 1040 still needs an LLC on the other end', () => {
+    expect(checkLinkComplete({ ...link, to_entity_id: SC, subject: null }, ents)).toMatchObject({ ok: false, field: 'from_entity_id' })
+  })
+})
+
 describe('link fields', () => {
   it('refuses unknown fields and bad values', () => {
     expect(checkLinkFields({ owner: 'x' })).toMatchObject({ ok: false, field: 'owner' })

@@ -21,10 +21,15 @@ src/
 ├── engine/            deterministic tax computation + tax tables 2018–2025
 │                      + calendar rules. calc1120 / calc1120S / calc1040 /
 │                      calcCascade / calcExtension / calc4562 / calc8594 /
-│                      calcScheduleE / calcForm8582 / calc1065K1s (K-1
-│                      ISSUER allocator — splits caller-supplied Schedule K
-│                      totals; still NO calc1065 return engine: 1065
-│                      returns only enter as filed imports).
+│                      calcScheduleE / calcForm8582. form1065.ts calc1065:
+│                      partnership PREPARATION since 2026-11-16 (page 1,
+│                      Schedule K, analysis, M-1/M-2, per-partner K-1s with
+│                      tax-basis capital; allocation by ownership % only);
+│                      calc1065K1s is the stateless allocator for a 1065
+│                      prepared elsewhere. schedule_c.ts: Schedule C for a
+│                      single-member LLC held as its own entity (form type
+│                      SchC, disregarded link from the owner's 1040), and
+│                      Schedule SE per person.
 ├── intake/            Textract / Gemini / QBO → canonical model
 ├── maps/              canonical_schema.ts (THE data contract), PDF field
 │                      maps per form/year, qbo_to_inputs. The flat-metric ↔

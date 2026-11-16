@@ -51,7 +51,7 @@ export function splitBySchema<T>(fv: Record<string, T>, formType: string): { kep
   const kept: Record<string, T> = {}
   const rejected: Record<string, T> = {}
   // a return type the schema does not cover is left as is
-  if (!['1120', '1120S', '1040', '1065'].includes(formType)) return { kept: { ...fv }, rejected }
+  if (!['1120', '1120S', '1040', '1065', 'SchC'].includes(formType)) return { kept: { ...fv }, rejected }
   for (const [k, v] of Object.entries(fv)) (classifyKey(formType, k) === 'rejected' ? rejected : kept)[k] = v
   return { kept, rejected }
 }

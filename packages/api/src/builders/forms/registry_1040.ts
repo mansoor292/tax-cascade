@@ -4,6 +4,7 @@
  */
 import type { AttachmentBuilder } from './types.js'
 import { buildSchedule1 } from './f1040_sched1.js'
+import { buildSchedulesC, buildScheduleSE } from './f1040_schedC.js'
 import { buildSchedule1Statement } from './f1040_statements.js'
 import { buildSchedule2 } from './f1040_sched2.js'
 import { buildSchedule3 } from './f1040_sched3.js'
@@ -23,8 +24,10 @@ export const builders: AttachmentBuilder[] = [
   buildSchedule2,
   buildSchedule3,
   buildScheduleB,
+  buildSchedulesC,
   buildScheduleD,
   buildScheduleEK1,
+  buildScheduleSE,
   buildSchedule8812,
   buildForm7203,
   buildForm8995A,

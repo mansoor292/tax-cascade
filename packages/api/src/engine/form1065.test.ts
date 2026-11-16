@@ -141,3 +141,19 @@ describe('Form 1065 — audit-risk screen', () => {
     expect(codes).toEqual(expect.arrayContaining(['M1_NOT_TIED', 'SCHED_L_LINES_VS_TOTAL']))
   })
 })
+
+describe('QuickBooks onto Form 1065', () => {
+  it('renumbers Schedule L, keeps investment income, and refuses officer pay', async () => {
+    const { corporateInputsTo1065 } = await import('../maps/qbo_to_1065.js')
+    const t = corporateInputsTo1065({
+      gross_receipts: 100, schedule_k_interest: 3, pension_plans: 4, advertising: 2, other_deductions: 5, officer_compensation: 50,
+      'schedL.L7_loans_eoy_d': 10, 'schedL.L10b_dep_eoy_d': 20, 'schedL.L23_paidin_eoy_d': 30, 'schedL.L25_retained_eoy_d': 40, 'schedL.L28_total_eoy_d': 70,
+      'schedM2.L1_beg_balance': 99,
+    })
+    expect(t.inputs).toEqual({
+      gross_receipts: 100, schedule_k_interest: 3, retirement_plans: 4, other_deductions: 7,
+      'schedL.L7a_loans_partners_eoy_d': 10, 'schedL.L9b_dep_eoy_d': 20, 'schedL.L21_capital_eoy_d': 70, 'schedL.L22_total_eoy_d': 70,
+    })
+    expect(t.warnings.map(w => w.code)).toEqual(['PARTNER_PAY_NOT_WAGES'])
+  })
+})

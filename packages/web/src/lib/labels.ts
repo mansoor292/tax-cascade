@@ -14,6 +14,7 @@ export const FORM_TYPE_LABEL: Record<string, string> = {
   '1120S': 'S-Corp',
   '1120-S': 'S-Corp',
   '1065': 'Partnership',
+  SchC: 'Single-member LLC',
 }
 
 /**
@@ -26,6 +27,9 @@ export const FORM_TYPE_OPTIONS = [
   { value: '1120', label: 'C-Corporation (1120)' },
   { value: '1120S', label: 'S-Corporation (1120-S)' },
   { value: '1065', label: 'Partnership (1065)' },
+  // a single-member LLC with no election, held as its own entity and linked
+  // to its owner's 1040 (owner decision 2026-11-16)
+  { value: 'SchC', label: 'Single-member LLC (Schedule C)' },
 ]
 
 /**
@@ -46,6 +50,7 @@ export const FORM_TYPE_COLOR: Record<string, string> = {
   '1120S': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
   '1120-S': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
   '1065': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  SchC: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
 }
 
 // What the entity legally IS, as distinct from how it is taxed. An LLC may

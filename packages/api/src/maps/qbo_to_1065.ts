@@ -62,7 +62,7 @@ export function corporateInputsTo1065(corp: Record<string, unknown>): Translated
       if (to) add(`schedL.${to}_${col}`, raw)
       continue
     }
-    if (k.startsWith('sched')) continue // the corporate M-1/M-2/K keys do not carry over
+    if (k.includes('.')) continue // the corporate M-1/M-2/K keys do not carry over (schedule_k_* inputs do)
     if (k === 'officer_compensation') {
       warnings.push({
         code: 'PARTNER_PAY_NOT_WAGES',

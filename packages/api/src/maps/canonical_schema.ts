@@ -53,6 +53,8 @@ const FIELD_VALUE_SECTION_PREFIXES = new Set([
   'f8995a',
   // Form 1065: Analysis of Net Income (Loss) per Return
   'analysis',
+  // Schedule SE (Form 1040)
+  'f1040sse',
   // 1040 line 38 (Form 2210), Schedule 8812 and Form 7203 — added with the
   // 2025 parity work; penalty.L38_est_penalty was already being written and
   // tripped this validator on every 1040.
@@ -116,7 +118,7 @@ export function validateFieldValues(
   // non-box value. The persist path moves the rest out of field_values.
   for (const k of Object.keys(fv)) {
     if (errors.some(e => e.startsWith(`${k}:`))) continue
-    if (classifyKey(form_type, k) === 'rejected' && ['1120', '1120S', '1040', '1065'].includes(form_type)) errors.push(`${k}: not in the golden schema`)
+    if (classifyKey(form_type, k) === 'rejected' && ['1120', '1120S', '1040', '1065', 'SchC'].includes(form_type)) errors.push(`${k}: not in the golden schema`)
   }
   return { ok: errors.length === 0, errors }
 }

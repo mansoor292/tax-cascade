@@ -115,6 +115,16 @@ export function checkLinkComplete(
     if (link.nature !== null) return bad('nature', 'nature applies to intercompany links only')
     if (link.subject && from.form_type !== '1040') return bad('subject', 'subject names the person on a 1040 who holds the interest; a business owner is the entity itself')
     if (to && to.form_type === '1040') return bad('to_entity_id', 'an individual return cannot be owned')
+  } else if (link.kind === 'disregarded' && to?.form_type === 'SchC') {
+    // A single-member LLC held as its own entity (owner decision 2026-11-16)
+    // is disregarded into its owner (`from`): an individual's 1040, which
+    // reports it on Schedule C — subject names which spouse — or a business
+    // that reports it on its own return.
+    if (link.pct !== null) return bad('pct', 'a disregarded entity is wholly owned; pct does not apply')
+    if (link.nature !== null) return bad('nature', 'nature applies to intercompany links only')
+    if (from.form_type === '1040') {
+      if (link.subject !== null && link.subject !== 'taxpayer' && link.subject !== 'spouse') return bad('subject', "subject names who on the 1040 owns it: 'taxpayer' or 'spouse'")
+    } else if (link.subject !== null) return bad('subject', 'subject applies only when the owner is a 1040')
   } else {
     if (link.pct !== null) return bad('pct', 'pct applies to ownership links only')
     if (link.subject !== null) return bad('subject', 'subject applies to ownership links only')

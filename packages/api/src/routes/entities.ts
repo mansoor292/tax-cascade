@@ -84,7 +84,7 @@ router.post('/', async (req, res) => {
   // extension forms were never entity types at all; they are filings an entity
   // makes, and 990 is not supported yet.
   const FORM_TO_ENTITY: Record<string, string> = {
-    '1040': 'individual', '1120': 'c_corp', '1120S': 's_corp', '1065': 'partnership',
+    '1040': 'individual', '1120': 'c_corp', '1120S': 's_corp', '1065': 'partnership', 'SchC': 'disregarded_llc',
   }
   // form_type is NOT NULL in the database, but this handler used to write
   // `form_type || null` — so creating an entity without one answered 500 with
@@ -151,7 +151,7 @@ router.put('/:id', async (req, res) => {
     // and avoids stale c_corp on a 1120S-switched entity (which confuses both
     // the compute engine and any downstream filtering).
     const FORM_TO_ENTITY: Record<string, string> = {
-      '1040': 'individual', '1120': 'c_corp', '1120S': 's_corp', '1065': 'partnership',
+      '1040': 'individual', '1120': 'c_corp', '1120S': 's_corp', '1065': 'partnership', 'SchC': 'disregarded_llc',
     }
     if (FORM_TO_ENTITY[form_type]) updates.entity_type = FORM_TO_ENTITY[form_type]
   }

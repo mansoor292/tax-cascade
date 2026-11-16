@@ -15,7 +15,7 @@
  */
 import type { CatalogEntry, CatalogCoverage } from '../catalog/types.js'
 
-export type FormType = '1040' | '1120' | '1120S' | '1065'
+export type FormType = '1040' | '1120' | '1120S' | '1065' | 'SchC'
 
 export type Area =
   | 'catalog' | 'corporate' | 'income' | 'k1' | 'balance_sheet' | 'basis' | 'niit'

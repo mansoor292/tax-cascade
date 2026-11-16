@@ -353,6 +353,9 @@ export interface Form1040_Inputs {
   estimated_tax_penalty?: number
   /** Form 7203 basis facts for the S corporation behind the K-1. */
   form7203?: Form7203Input
+  /** Linked single-member LLCs (form type SchC): each one's Schedule C line 31
+   *  and its owner. compute_return fills this from the disregarded links. */
+  schedule_c?: Array<{ name?: string; owner?: 'taxpayer' | 'spouse'; net_profit: number; w2_wages?: number; ubia?: number; is_sstb?: boolean }>
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -361,7 +364,7 @@ export interface Form1040_Inputs {
 import { scheduleD1120STotals } from './schedule_d_1120s.js'
 import {
   ordinaryTax, standardDeduction, qbiDeduction,
-  ltcgTax, niitTax, amtTax, seTax, childTaxCredit, additionalMedicareTax, TAX_TABLES,
+  ltcgTax, niitTax, amtTax, childTaxCredit, additionalMedicareTax, TAX_TABLES,
   SECTION_179_LIMITS,
 } from './tax_tables.js'
 import {
@@ -369,6 +372,13 @@ import {
   type W2Input, type DetailItem, type CapitalTransaction, type K1PortfolioItems, type CapitalLossCarryover,
   type Form7203Input,
 } from './form1040_detail.js'
+import { scheduleSE } from './schedule_c.js'
+
+/** Schedule SE line → key label (f1040sse.<line>_<label>). */
+const SE_LABEL: Record<string, string> = {
+  L2: 'net_profit', L3: 'combine', L4a: 'times_9235', L4c: 'net_earnings', L6: 'add_4c_5b', L7: 'max_wage_base',
+  L8a: 'ss_wages', L8d: 'total_wages', L9: 'subtract', L10: 'social_security', L11: 'medicare', L12: 'se_tax', L13: 'deduction',
+}
 import { calc2220, type Form2220Inputs } from './form2220.js'
 
 /**
@@ -862,13 +872,17 @@ export function calc1040(raw: Form1040_Inputs): {
     inp.capital_gains = Math.max(inp.capital_gains, s === 'mfs' ? -1500 : -3000)
   }
 
+  // Linked single-member LLCs — Schedule 1 line 3.
+  const schedC = (detailIn.schedule_c || []).map(c => ({ ...c, net_profit: Math.round(n0(c.net_profit)) }))
+  const business_income = schedC.reduce((t, c) => t + c.net_profit, 0)
+
   // ── Social Security taxability (§86) ──────────────────────────
   // Provisional income = AGI (before SS) + tax-exempt interest + 50% of SS
   const ss_threshold_1 = s === 'mfj' ? 32000 : 25000
   const ss_threshold_2 = s === 'mfj' ? 44000 : 34000
   const provisional = inp.wages + inp.taxable_interest + inp.ordinary_dividends +
     inp.ira_distributions + inp.pensions_annuities + inp.capital_gains +
-    inp.schedule1_income + inp.k1_ordinary_income + (inp.net_se_income || 0) +
+    inp.schedule1_income + inp.k1_ordinary_income + (inp.net_se_income || 0) + business_income +
     inp.social_security * 0.5
   let ss_taxable = 0
   if (provisional > ss_threshold_2) {
@@ -886,11 +900,19 @@ export function calc1040(raw: Form1040_Inputs): {
     inp.wages + inp.taxable_interest + inp.ordinary_dividends +
     inp.ira_distributions + inp.pensions_annuities + ss_taxable +
     inp.capital_gains + inp.schedule1_income + inp.k1_ordinary_income +
-    other_income + (inp.net_se_income || 0)
+    other_income + (inp.net_se_income || 0) + business_income
   )
 
   // ── Line 10: Adjustments ──────────────────────────────────────
-  const se_detail = seTax(inp.net_se_income || 0, inp.tax_year)
+  // Schedule SE per person (engine/schedule_c.ts): the wage base is reduced by
+  // that person's own W-2 social security wages. Legacy net_se_income is the
+  // taxpayer's.
+  const seBy: Record<'taxpayer' | 'spouse', number> = { taxpayer: (inp.net_se_income || 0), spouse: 0 }
+  for (const c of schedC) seBy[c.owner ?? 'taxpayer'] += c.net_profit
+  const ssWagesOf = (who: 'taxpayer' | 'spouse') => Math.round((detailIn.w2s || [])
+    .filter(w => (w.owner ?? 'taxpayer') === who).reduce((t, w) => t + n0(w.box3 ?? w.box1) + n0((w as any).box7), 0))
+  const sePerson = (['taxpayer', 'spouse'] as const).map(who => ({ who, ...scheduleSE(seBy[who], ssWagesOf(who), inp.tax_year) }))
+  const se_detail = { se_tax: sePerson.reduce((t, p) => t + p.se_tax, 0), deduction: sePerson.reduce((t, p) => t + p.deduction, 0) }
   const se_deduction = se_detail.deduction  // §164(f) — half SE tax
   const adjustments = inp.student_loan_interest + inp.educator_expenses + se_deduction
 
@@ -900,15 +922,28 @@ export function calc1040(raw: Form1040_Inputs): {
   const std = standardDeduction(s, inp.tax_year)
   const deduction = inp.use_itemized ? Math.max(inp.itemized_deductions, std) : std
   const tentative_taxable = Math.max(0, agi - deduction)
-  const qbi_deduction = qbiDeduction(
+  const ncgForQbi = inp.qualified_dividends + Math.max(0, inp.ltcg_portion || 0)
+  const qbi_k1 = qbiDeduction(
     inp.k1_ordinary_income + inp.qbi_from_k1,
     inp.k1_w2_wages,
     inp.k1_ubia,
     tentative_taxable,
     s, inp.tax_year,
     inp.is_sstb || false,
-    inp.qualified_dividends + Math.max(0, inp.ltcg_portion || 0),
+    ncgForQbi,
   )
+  // Each Schedule C business is its own trade or business for §199A: its QBI
+  // is the profit less the deductible part of the SE tax on it
+  // (Reg. 1.199A-3(b)(1)(vi)), limited by its own wages and UBIA. The 20%
+  // taxable-income cap applies once, across all of them.
+  const seTotalSubject = sePerson.reduce((t, p) => t + Math.max(0, seBy[p.who]), 0)
+  const qbi_c_items = schedC.map(c => {
+    const seShare = seTotalSubject > 0 && c.net_profit > 0 ? se_deduction * c.net_profit / seTotalSubject : 0
+    const qbi = Math.round(c.net_profit - seShare)
+    return { qbi, deduction: qbiDeduction(qbi, n0(c.w2_wages), n0(c.ubia), tentative_taxable, s, inp.tax_year, !!c.is_sstb, ncgForQbi) }
+  })
+  const qbi_cap = Math.round(Math.max(0, tentative_taxable - ncgForQbi) * 0.20)
+  const qbi_deduction = Math.min(qbi_cap, qbi_k1 + qbi_c_items.reduce((t, x) => t + x.deduction, 0))
   const taxable_income = Math.max(0, tentative_taxable - qbi_deduction)  // Line 15
 
   // ── Line 16: Tax (separate ordinary vs LTCG/qualified dividends) ──
@@ -939,7 +974,7 @@ export function calc1040(raw: Form1040_Inputs): {
   const niit = niitTax(nii, agi, niit_status, inp.tax_year)
   // Form 8959 runs on Medicare wages (box 5), not box 1.
   const medicare_wages = w2.count ? w2.medicareWages : inp.wages
-  const additional_medicare = additionalMedicareTax(medicare_wages, inp.net_se_income || 0, s)
+  const additional_medicare = additionalMedicareTax(medicare_wages, (inp.net_se_income || 0) + business_income, s)
 
   // ── Credits ───────────────────────────────────────────────────
   const ctc_detail = childTaxCredit(inp.num_dependents || 0, agi, s, inp.tax_year)
@@ -1027,7 +1062,7 @@ export function calc1040(raw: Form1040_Inputs): {
     'income.L7a_capital_gains':    inp.capital_gains,
     // Schedule 1 line 10: K-1 ordinary income is Schedule 1 line 5, so it
     // belongs here — it was in line 9's total and missing from line 8.
-    'income.L8_schedule1':         inp.schedule1_income + inp.k1_ordinary_income + other_income,
+    'income.L8_schedule1':         inp.schedule1_income + inp.k1_ordinary_income + other_income + business_income,
     'income.L9_total_income':      total_income,
     'income.L10_adjustments':      adjustments,
     // 2025 prints AGI twice: 11a closes page 1, 11b opens page 2. Only 11b
@@ -1087,15 +1122,22 @@ export function calc1040(raw: Form1040_Inputs): {
   // identifier.
   const put = (k: string, v: number) => { if (v) field_values[k] = Math.round(v) }
   // Schedule 1
+  put('sched1.L3_business_income', business_income)
   put('sched1.L5_rental_partnership_scorp', inp.schedule1_income + inp.k1_ordinary_income)
   put('sched1.L8z_other_income', other_income)
   put('sched1.L9_total_other_income', other_income)
-  put('sched1.L10_additional_income', inp.schedule1_income + inp.k1_ordinary_income + other_income)
+  put('sched1.L10_additional_income', inp.schedule1_income + inp.k1_ordinary_income + other_income + business_income)
   put('sched1.L26_adjustments', adjustments)
   // Schedule 2
   put('sched2.L2_amt', amt)
   put('sched2.L3_add_1z_2', amt)
   put('sched2.L4_se_tax', se_tax)
+  put('sched1.L15_se_tax_deduction', se_deduction)
+  // Schedule SE for the person with self-employment income (the taxpayer's
+  // when both have it; every person's lines are in computed.schedule_se).
+  const seForm = sePerson.find(p => p.who === 'taxpayer' && p.subject) ?? sePerson.find(p => p.subject)
+  // line 7 (the wage base) is preprinted on the form, not a box
+  if (seForm) for (const [l, v] of Object.entries(seForm.lines)) if (l !== 'L7') put(`f1040sse.${l}_${SE_LABEL[l] ?? 'amount'}`, v)
   put('sched2.L11_additional_medicare', additional_medicare)
   put('sched2.L12_niit', niit)
   put('sched2.L21_total_other_taxes', niit + additional_medicare + se_tax)
@@ -1169,7 +1211,7 @@ export function calc1040(raw: Form1040_Inputs): {
     put('f8960.L17_niit', niit)
   }
   // Form 8995-A — QBI deduction above the threshold (8995 below it)
-  const qbi = inp.k1_ordinary_income + inp.qbi_from_k1
+  const qbi = inp.k1_ordinary_income + inp.qbi_from_k1 + qbi_c_items.reduce((t, x) => t + x.qbi, 0)
   if (qbi > 0) {
     const ncg = inp.qualified_dividends + Math.max(0, inp.ltcg_portion || 0)
     put('f8995a.L2_qbi', qbi)
