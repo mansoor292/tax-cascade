@@ -899,7 +899,19 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
     for (const [k, v] of Object.entries(schedFv)) {
       if (v !== undefined && v !== null && v !== 0) filledCanonKeys.add(k)
     }
-    const totalMapFields = fieldMapEntries.length
+    // Forms with only a typed fill map (1065, Schedule C) have no
+    // discovered map: count against the typed one instead of reporting 0 of 0.
+    let typedTotal = 0
+    if (!fieldMapEntries.length) {
+      const m25 = await import('../maps/pdf_field_map_2025.js') as Record<string, unknown>
+      const typed = (m25[`F${form_type === 'SchC' ? '1040SC' : form_type}_${tax_year}`] ?? m25[`F${form_type === 'SchC' ? '1040SC' : form_type}_2025`]) as Record<string, string> | undefined
+      if (typed) {
+        const keys = Object.keys(typed).filter(k => !k.startsWith('meta.') && !k.startsWith('preparer.'))
+        typedTotal = keys.length
+        for (const k of [...filledCanonKeys]) if (!keys.includes(k)) filledCanonKeys.delete(k)
+      }
+    }
+    const totalMapFields = fieldMapEntries.length || typedTotal
     const filledCount = filledCanonKeys.size
     const coveragePct = totalMapFields > 0 ? Math.round((filledCount / totalMapFields) * 100) : 0
 
@@ -1019,6 +1031,9 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
         capital_gains: ['capital_transactions_detail', 'k1_portfolio'],
         ltcg_portion: ['capital_transactions_detail', 'k1_portfolio'],
         qbi_from_k1: ['k1_ordinary_income'],
+        // 1065: line 10 and Schedule K 19a total the partners' own figures
+        guaranteed_payments: ['partners'],
+        distributions: ['partners'],
       }
       const hasSource = (name: string) => (derivedFrom[name] || []).some(src => {
         const v = mergedInputs[src]
@@ -1026,7 +1041,7 @@ export async function computeReturn(userId: string, body: any): Promise<HttpOutc
       })
       for (const f of schema.fields) {
         if (f.type !== 'number') continue
-        if (form_type === '1040' && hasSource(f.name)) continue
+        if ((form_type === '1040' || form_type === '1065') && hasSource(f.name)) continue
         const v = mergedInputs[f.name]
         if (v === undefined || v === null || v === 0) {
           const prior = priorByInputName(f.name)
