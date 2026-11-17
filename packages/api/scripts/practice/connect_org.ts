@@ -15,6 +15,7 @@
  * came back in two share links labelled for two different orgs. /v1/accounts
  * lists by key, not by X-Org-Id, so a wrong key lists the OTHER org's
  * accounts with a 200 — compare the list against the org's known accounts.
+ * (BCL's working key came on 2026-11-16, checked this way: all 61 accounts read.)
  *
  * Its accounts' 8821s were signed outside Catipult, so they come in as
  * 'claimed'. TaxNow's record of an 8821 can overstate it (BCL's lists income
